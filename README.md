@@ -1,25 +1,25 @@
-# twemproxy (nutcracker) [![Build Status](https://secure.travis-ci.org/twitter/twemproxy.png)](http://travis-ci.org/twitter/twemproxy)
+# Dynomite
 
-**twemproxy** (pronounced "two-em-proxy"), aka **nutcracker** is a fast and lightweight proxy for [memcached](http://www.memcached.org/) and [redis](http://redis.io/) protocol. It was primarily built to reduce the connection count on the backend caching servers.
+**Dynomite** is a thin dynomite layer for [memcached](http://www.memcached.org/) protocol. 
 
 ## Build
 
-To build nutcracker from [distribution tarball](http://code.google.com/p/twemproxy/downloads/list):
+To build Dynomite from distribution tarbal:
 
     $ ./configure
     $ make
     $ sudo make install
 
-To build nutcracker from [distribution tarball](http://code.google.com/p/twemproxy/downloads/list) in _debug mode_:
+To build Dynomite in _debug mode_:
 
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
 
-To build nutcracker from source with _debug logs enabled_ and _assertions disabled_:
+To build Dynomite from source with _debug logs enabled_ and _assertions disabled_:
 
-    $ git clone git@github.com:twitter/twemproxy.git
-    $ cd twemproxy
+    $ git clone git@github.com:Netflix/dynomite.git
+    $ cd dynomite
     $ autoreconf -fvi
     $ ./configure --enable-debug=log
     $ make
@@ -210,15 +210,9 @@ Logging in nutcracker is only available when nutcracker is built with logging en
 ## Pipelining
 
 
-Nutcracker enables proxying multiple client connections onto one or few server connections. This architectural setup makes it ideal for pipelining requests and responses and hence saving on the round trip time.
+Dynomite enables proxying multiple client connections onto one or few server connections. This architectural setup makes it ideal for pipelining requests and responses and hence saving on the round trip time.  In addition, Dynomite will be responsible for data replications across nodes.
 
-For example, if nutcracker is proxing three client connections onto a single server and we get requests - 'get key\r\n', 'set key 0 0 3\r\nval\r\n' and 'delete key\r\n' on these three connections respectively, nutcracker would try to batch these requests and send them as a single message onto the server connection as 'get key\r\nset key 0 0 3\r\nval\r\ndelete key\r\n'.
 
-Pipelining is the reason why nutcracker ends up doing better in terms of throughput even though it introduces an extra hop between the client and server.
-
-## Deployment
-
-If you are deploying nutcracker in production, you might consider reading through the [recommendation document](notes/recommendation.md) to understand the parameters you could tune in nutcracker to run it efficiently in the production environment.
 
 ## Utils
 + [nagios checks](https://github.com/wanelo/nagios-checks/blob/master/check_twemproxy)
@@ -228,30 +222,20 @@ If you are deploying nutcracker in production, you might consider reading throug
 + [munin-plugin](https://github.com/eveiga/contrib/tree/nutcracker/plugins/nutcracker)
 + [redis-twemproxy agent](https://github.com/Stono/redis-twemproxy-agent)
 
-## Users
-+ [Pinterest](http://pinterest.com/)
-+ [Tumblr](https://www.tumblr.com/)
-+ [Twitter](https://twitter.com/)
-+ [Vine](http://vine.co/)
-+ [Kiip](http://www.kiip.me/)
-+ [Wuaki.tv](https://wuaki.tv/)
-+ [Wanelo](http://wanelo.com/)
-+ [Kontera](http://kontera.com/)
-+ [Wikimedia](http://www.wikimedia.org/)
-+ [Bright](http://www.bright.com/)
 
 ## Issues and Support
 
 Have a bug or a question? Please create an issue here on GitHub!
 
-https://github.com/twitter/twemproxy/issues
+https://github.com/Netflix/dynomite/issues
 
 ## Contributors
 
-* Manju Rajashekhar ([@manju](https://twitter.com/manju))
+* Jason Brown 
+* Minh Do
 
 ## License
 
-Copyright 2012 Twitter, Inc.
+Copyright 2013 Netflix, Inc.
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
