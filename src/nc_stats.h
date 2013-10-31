@@ -91,7 +91,7 @@ struct stats {
     int                 interval;       /* stats aggregation interval */
     struct string       addr;           /* stats monitoring address */
 
-    int64_t             start_ts;       /* start timestamp of nutcracker */
+    int64_t             start_ts;       /* start timestamp of dynomite */
     struct stats_buffer buf;            /* output buffer */
 
     struct array        current;        /* stats_pool[] (a) */
