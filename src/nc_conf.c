@@ -94,10 +94,26 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, server_failure_limit) },
 
+    { string("dyn_read_timeout"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_read_timeout) },
+
+    { string("dyn_write_timeout"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_write_timeout) },
+
+    { string("dyn_listen"),
+      conf_set_listen,
+      offsetof(struct conf_pool, dyn_listen) },
+    
+    { string("seed_provider"),
+      conf_set_string,
+      offsetof(struct conf_pool, seed_provider) },
+
     { string("servers"),
       conf_add_server,
       offsetof(struct conf_pool, server) },
-
+ 
     null_command
 };
 
@@ -189,6 +205,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->dyn_read_timeout = CONF_UNSET_NUM;
+    cp->dyn_write_timeout = CONF_UNSET_NUM;
 
     array_null(&cp->server);
 
@@ -1232,6 +1250,14 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->server_failure_limit == CONF_UNSET_NUM) {
         cp->server_failure_limit = CONF_DEFAULT_SERVER_FAILURE_LIMIT;
+    }
+
+    if (cp->dyn_read_timeout == CONF_UNSET_NUM) {
+        cp->dyn_read_timeout = CONF_DEFAULT_DYN_READ_TIMEOUT;
+    }
+
+    if (cp->dyn_write_timeout == CONF_UNSET_NUM) {
+        cp->dyn_write_timeout = CONF_DEFAULT_DYN_WRITE_TIMEOUT;
     }
 
     status = conf_validate_server(cf, cp);

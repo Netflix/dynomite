@@ -54,6 +54,9 @@
 #define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
 
+#define CONF_DEFAULT_DYN_READ_TIMEOUT        30000
+#define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
+
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
     struct string   name;    /* name */
@@ -61,6 +64,7 @@ struct conf_listen {
     struct sockinfo info;    /* listen socket info */
     unsigned        valid:1; /* valid? */
 };
+
 
 struct conf_server {
     struct string   pname;      /* server: as "name:port:weight" */
@@ -86,8 +90,12 @@ struct conf_pool {
     int                server_connections;    /* server_connections: */
     int                server_retry_timeout;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
+    int                dyn_read_timeout;          /* inter dyn nodes' read timeout in ms */
+    int                dyn_write_timeout;         /* inter dyn nodes' write timeout in ms */
     struct array       server;                /* servers: conf_server[] */
     unsigned           valid:1;               /* valid? */
+    struct conf_listen dyn_listen;            /* dyn_listen  */ 
+    struct string      seed_provider;         /* seed provider */ 
 };
 
 struct conf {

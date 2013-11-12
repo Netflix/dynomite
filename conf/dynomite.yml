@@ -1,13 +1,15 @@
-local_memcached:
-  listen: 127.0.0.1:22123
+root:
+  listen: 127.0.0.1:22220
   hash: fnv1a_64
   distribution: ketama
-  timeout: 400
-  backlog: 1024
   preconnect: true
-  auto_eject_hosts: true
+  auto_eject_hosts: false
   server_retry_timeout: 2000
-  server_failure_limit: 3
+  timeout: 1500
   servers:
-   - 127.0.0.1:11212:1
+   - 127.0.0.1:11211:1
 
+  seed_provider: local_config_file
+  dyn_listen: 127.0.0.1:33331
+  dyn_read_timeout: 2000
+  dyn_write_timeout: 2000
