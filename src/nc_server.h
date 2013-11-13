@@ -119,6 +119,18 @@ struct server_pool {
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */
     unsigned           redis:1;              /* redis? */
+    /* dynomite */
+    struct array       peers;
+    struct conn        *d_conn;              /* dnode connection (listener) */
+    struct string      d_addrstr;            /* pool address (ref in conf_pool) */
+    uint16_t           d_port;               /* port */
+    int                d_family;             /* socket family */
+    socklen_t          d_addrlen;            /* socket length */
+    struct sockaddr    * d_addr;             /* socket address (ref in conf_pool) */
+    int                peer_timeout;         /* peer timeout in msec */
+    int                d_backlog;            /* listen backlog */ 
+    int64_t            peer_retry_timeout;   /* peer retry timeout in usec */
+    uint32_t           peer_failure_limit;   /* peer failure limit */
 };
 
 void server_ref(struct conn *conn, void *owner);

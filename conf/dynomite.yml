@@ -1,4 +1,4 @@
-root:
+local_memcached:
   listen: 127.0.0.1:22220
   hash: fnv1a_64
   distribution: ketama

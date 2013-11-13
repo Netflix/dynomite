@@ -21,6 +21,9 @@
 #include <nc_conf.h>
 #include <nc_server.h>
 #include <nc_proxy.h>
+#include <dyn_dnode.h>
+
+
 
 static uint32_t ctx_id; /* context generation */
 
@@ -91,6 +94,18 @@ core_ctx_create(struct instance *nci)
 
     /* initialize proxy per server pool */
     status = proxy_init(ctx);
+    if (status != NC_OK) {
+        server_pool_disconnect(ctx);
+        event_base_destroy(ctx->evb);
+        stats_destroy(ctx->stats);
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        nc_free(ctx);
+        return NULL;
+    }
+
+    /* initialize dnode listener per server pool */
+    status = dnode_init(ctx);
     if (status != NC_OK) {
         server_pool_disconnect(ctx);
         event_base_destroy(ctx->evb);

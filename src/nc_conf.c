@@ -94,6 +94,10 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, server_failure_limit) },
 
+    { string("servers"),
+      conf_add_server,
+      offsetof(struct conf_pool, server) },
+
     { string("dyn_read_timeout"),
       conf_set_num,
       offsetof(struct conf_pool, dyn_read_timeout) },
@@ -110,10 +114,6 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, seed_provider) },
 
-    { string("servers"),
-      conf_add_server,
-      offsetof(struct conf_pool, server) },
- 
     null_command
 };
 
@@ -186,6 +186,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     string_init(&cp->listen.pname);
     string_init(&cp->listen.name);
+
     cp->listen.port = 0;
     memset(&cp->listen.info, 0, sizeof(cp->listen.info));
     cp->listen.valid = 0;
@@ -205,6 +206,15 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+
+    //initialization for dynomite
+    string_init(&cp->seed_provider);
+    string_init(&cp->dyn_listen.pname);
+    string_init(&cp->dyn_listen.name);
+    cp->dyn_listen.port = 0;
+    memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
+    cp->dyn_listen.valid = 0;
+
     cp->dyn_read_timeout = CONF_UNSET_NUM;
     cp->dyn_write_timeout = CONF_UNSET_NUM;
 
@@ -241,6 +251,11 @@ conf_pool_deinit(struct conf_pool *cp)
         conf_server_deinit(array_pop(&cp->server));
     }
     array_deinit(&cp->server);
+
+    //deinit dynomite
+    string_deinit(&cp->seed_provider);
+    string_deinit(&cp->dyn_listen.pname);
+    string_deinit(&cp->dyn_listen.name);
 
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }

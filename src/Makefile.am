@@ -32,6 +32,8 @@ dynomite_SOURCES =			\
 	nc_core.c nc_core.h		\
 	nc_connection.c nc_connection.h	\
 	nc_client.c nc_client.h		\
+        dyn_dnode.c dyn_dnode.h         \
+        dyn_peer.c  dyn_peer.h          \
 	nc_server.c nc_server.h		\
 	nc_proxy.c nc_proxy.h		\
 	nc_message.c nc_message.h	\
