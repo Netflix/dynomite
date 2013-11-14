@@ -21,6 +21,9 @@
 #include <nc_server.h>
 #include <nc_client.h>
 #include <nc_proxy.h>
+#include <dyn_dnode.h>
+#include <dyn_peer.h>
+#include <dyn_client.h>
 #include <proto/nc_proto.h>
 
 /*
@@ -159,7 +162,7 @@ _conn_get(void)
 
 
 struct conn *
-conn_dnode_get(void *owner, bool client)
+conn_get_dnode_peer(void *owner, bool client)
 {
     struct conn *conn;
 
@@ -168,62 +171,61 @@ conn_dnode_get(void *owner, bool client)
         return NULL;
     }
 
-    conn->redis = 0;
-    conn->client = 0;
-    conn->dnode = client? 1 : 0;   
-    
+    conn->dyn_client = client? 1 : 0;   
 
-    if (conn->dnode) {
+    if (conn->dyn_client) {
+        loga("minh is here 1109");
         /*
-         * client receives a request, possibly parsing it, and sends a
+         * dyn client receives a request, possibly parsing it, and sends a
          * response downstream.
          */
         conn->recv = msg_recv;
-        conn->recv_next = req_recv_next;
-        conn->recv_done = req_recv_done;
+        conn->recv_next = dyn_req_recv_next;
+        conn->recv_done = dyn_req_recv_done;
 
         conn->send = msg_send;
-        conn->send_next = rsp_send_next;
-        conn->send_done = rsp_send_done;
+        conn->send_next = dyn_rsp_send_next;
+        conn->send_done = dyn_rsp_send_done;
 
-        conn->close = client_close;
-        conn->active = client_active;
+        conn->close = dyn_client_close;
+        conn->active = dyn_client_active;
 
-        conn->ref = client_ref;
-        conn->unref = client_unref;
+        conn->ref = dyn_client_ref;
+        conn->unref = dyn_client_unref;
 
         conn->enqueue_inq = NULL;
         conn->dequeue_inq = NULL;
-        conn->enqueue_outq = req_client_enqueue_omsgq;
-        conn->dequeue_outq = req_client_dequeue_omsgq;
+        conn->enqueue_outq = dyn_req_client_enqueue_omsgq;
+        conn->dequeue_outq = dyn_req_client_dequeue_omsgq;
     } else {
+        loga("minh 2222");
         /*
-         * server receives a response, possibly parsing it, and sends a
+         * dyn server receives a response, possibly parsing it, and sends a
          * request upstream.
          */
         conn->recv = msg_recv;
-        conn->recv_next = rsp_recv_next;
-        conn->recv_done = rsp_recv_done;
+        conn->recv_next = dyn_rsp_recv_next;
+        conn->recv_done = dyn_rsp_recv_done;
 
         conn->send = msg_send;
-        conn->send_next = req_send_next;
-        conn->send_done = req_send_done;
+        conn->send_next = dyn_req_send_next;
+        conn->send_done = dyn_req_send_done;
 
-        conn->close = server_close;
-        conn->active = server_active;
+        conn->close = dyn_peer_close;
+        conn->active = dyn_peer_active;
 
-        conn->ref = server_ref;
-        conn->unref = server_unref;
+        conn->ref = dyn_peer_ref;
+        conn->unref = dyn_peer_unref;
 
-        conn->enqueue_inq = req_server_enqueue_imsgq;
-        conn->dequeue_inq = req_server_dequeue_imsgq;
-        conn->enqueue_outq = req_server_enqueue_omsgq;
-        conn->dequeue_outq = req_server_dequeue_omsgq;
+        conn->enqueue_inq = dyn_req_server_enqueue_imsgq;
+        conn->dequeue_inq = dyn_req_server_dequeue_imsgq;
+        conn->enqueue_outq = dyn_req_server_enqueue_omsgq;
+        conn->dequeue_outq = dyn_req_server_dequeue_omsgq;
     }
 
     conn->ref(conn, owner);
 
-    log_debug(LOG_VVERB, "get conn %p client %d", conn, conn->client);
+    log_debug(LOG_VVERB, "get dnode conn %p client %d", conn, conn->client);
 
     return conn;
 }
@@ -313,9 +315,10 @@ conn_get_dnode(void *owner)
 
     conn->redis = pool->redis;
 
-    conn->proxy = 1;
+    conn->proxy = 0;
+    conn->dnode = 1;
 
-    conn->recv = proxy_recv;
+    conn->recv = dnode_recv;
     conn->recv_next = NULL;
     conn->recv_done = NULL;
 
@@ -323,11 +326,11 @@ conn_get_dnode(void *owner)
     conn->send_next = NULL;
     conn->send_done = NULL;
 
-    conn->close = proxy_close;
+    conn->close = dnode_close;
     conn->active = NULL;
 
-    conn->ref = proxy_ref;
-    conn->unref = proxy_unref;
+    conn->ref = dnode_ref;
+    conn->unref = dnode_unref;
 
     conn->enqueue_inq = NULL;
     conn->dequeue_inq = NULL;
@@ -336,7 +339,7 @@ conn_get_dnode(void *owner)
 
     conn->ref(conn, owner);
 
-    log_debug(LOG_VVERB, "get conn %p proxy %d", conn, conn->proxy);
+    log_debug(LOG_VVERB, "get conn %p dnode %d", conn, conn->proxy);
 
     return conn;
 }

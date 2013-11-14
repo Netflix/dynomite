@@ -85,6 +85,7 @@ struct conn {
     unsigned           done:1;        /* done? aka close? */
     unsigned           redis:1;       /* redis? */
     unsigned           dnode:1;       /* dynnomite connection? */
+    unsigned           dyn_client:1;  /* dnode client? */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
@@ -92,6 +93,8 @@ TAILQ_HEAD(conn_tqh, conn);
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *conn_get(void *owner, bool client, bool redis);
 struct conn *conn_get_proxy(void *owner);
+struct conn *conn_get_dnode_peer(void *owner, bool client);
+struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 ssize_t conn_recv(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv(struct conn *conn, struct array *sendv, size_t nsend);

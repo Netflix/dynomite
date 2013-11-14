@@ -317,6 +317,14 @@ conf_pool_each_transform(void *elem, void *data)
         return status;
     }
 
+    /* dynomite init */
+    sp->d_addrstr = cp->dyn_listen.pname;
+    sp->d_port = (uint16_t)cp->dyn_listen.port;
+    sp->d_family = cp->dyn_listen.info.family;
+    sp->d_addrlen = cp->dyn_listen.info.addrlen;
+    sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
+   
+
     log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
               sp->name.len, sp->name.data);
 
