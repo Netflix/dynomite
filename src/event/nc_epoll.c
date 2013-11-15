@@ -60,7 +60,7 @@ event_base_create(int nevent, event_cb_t cb)
     evb->nevent = nevent;
     evb->cb = cb;
 
-    log_debug(LOG_INFO, "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee %d with nevent %d", evb->ep, evb->nevent);
+    log_debug(LOG_INFO, "e %d with nevent %d", evb->ep, evb->nevent);
 
     return evb;
 }
@@ -196,7 +196,6 @@ event_add_conn(struct event_base *evb, struct conn *c)
     event.events = (uint32_t)(EPOLLIN | EPOLLOUT | EPOLLET);
     event.data.ptr = c;
 
-    log_debug(LOG_VVERB, "minh: ep = %d ", ep);
     status = epoll_ctl(ep, EPOLL_CTL_ADD, c->sd, &event);
     if (status < 0) {
         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
