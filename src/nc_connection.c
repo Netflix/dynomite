@@ -95,7 +95,7 @@ conn_to_ctx(struct conn *conn)
 {
     struct server_pool *pool;
 
-    if (conn->proxy || conn->client) {
+    if (conn->proxy || conn->client || conn->dnode || conn->dyn_client) {
         pool = conn->owner;
     } else {
         struct server *server = conn->owner;
@@ -157,6 +157,10 @@ _conn_get(void)
     conn->done = 0;
     conn->redis = 0;
 
+    /* for dynomite */
+    conn->dyn_client = 0;
+    conn->dnode = 0;
+
     return conn;
 }
 
@@ -174,7 +178,6 @@ conn_get_dnode_peer(void *owner, bool client)
     conn->dyn_client = client? 1 : 0;   
 
     if (conn->dyn_client) {
-        loga("minh is here 1109");
         /*
          * dyn client receives a request, possibly parsing it, and sends a
          * response downstream.
@@ -198,7 +201,6 @@ conn_get_dnode_peer(void *owner, bool client)
         conn->enqueue_outq = dyn_req_client_enqueue_omsgq;
         conn->dequeue_outq = dyn_req_client_dequeue_omsgq;
     } else {
-        loga("minh 2222");
         /*
          * dyn server receives a response, possibly parsing it, and sends a
          * request upstream.
@@ -225,7 +227,7 @@ conn_get_dnode_peer(void *owner, bool client)
 
     conn->ref(conn, owner);
 
-    log_debug(LOG_VVERB, "get dnode conn %p client %d", conn, conn->client);
+    log_debug(LOG_VVERB, "get dnode conn %p client %d", conn, conn->dyn_client);
 
     return conn;
 }
@@ -315,7 +317,6 @@ conn_get_dnode(void *owner)
 
     conn->redis = pool->redis;
 
-    conn->proxy = 0;
     conn->dnode = 1;
 
     conn->recv = dnode_recv;

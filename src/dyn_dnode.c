@@ -113,13 +113,13 @@ dnode_listen(struct context *ctx, struct conn *p)
 
     p->sd = socket(p->family, SOCK_STREAM, 0);
     if (p->sd < 0) {
-        log_error("dnode socket failed: %s", strerror(errno));
+        log_error("dyn: socket failed: %s", strerror(errno));
         return NC_ERROR;
     }
 
     status = dnode_reuse(p);
     if (status < 0) {
-        log_error("reuse of addr '%.*s' for listening on p %d failed: %s",
+        log_error("dyn: reuse of addr '%.*s' for listening on p %d failed: %s",
                   pool->d_addrstr.len, pool->d_addrstr.data, p->sd,
                   strerror(errno));
         return NC_ERROR;
@@ -127,28 +127,29 @@ dnode_listen(struct context *ctx, struct conn *p)
 
     status = bind(p->sd, p->addr, p->addrlen);
     if (status < 0) {
-        log_error("bind on p %d to addr '%.*s' failed: %s", p->sd,
+        log_error("dyn: bind on p %d to addr '%.*s' failed: %s", p->sd,
                   pool->addrstr.len, pool->addrstr.data, strerror(errno));
         return NC_ERROR;
     }
 
-    status = listen(p->sd, pool->d_backlog);
+    status = listen(p->sd, pool->backlog);
     if (status < 0) {
-        log_error("listen on p %d on addr '%.*s' failed: %s", p->sd,
+        log_error("dyn: listen on p %d on addr '%.*s' failed: %s", p->sd,
                   pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
         return NC_ERROR;
     }
 
     status = nc_set_nonblocking(p->sd);
     if (status < 0) {
-        log_error("set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
+        log_error("dyn: set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
                   pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
         return NC_ERROR;
     }
 
+    log_debug(LOG_INFO, "dyn: e %d with nevent %d", ctx->evb->ep, ctx->evb->nevent);
     status = event_add_conn(ctx->evb, p);
     if (status < 0) {
-        log_error("event add conn p %d on addr '%.*s' failed: %s",
+        log_error("dyn: event add conn p %d on addr '%.*s' failed: %s",
                   p->sd, pool->d_addrstr.len, pool->d_addrstr.data,
                   strerror(errno));
         return NC_ERROR;
@@ -156,7 +157,7 @@ dnode_listen(struct context *ctx, struct conn *p)
 
     status = event_del_out(ctx->evb, p);
     if (status < 0) {
-        log_error("event del out p %d on addr '%.*s' failed: %s",
+        log_error("dyn: event del out p %d on addr '%.*s' failed: %s",
                   strerror(errno));
         return NC_ERROR;
     }
@@ -182,7 +183,7 @@ dnode_each_init(void *elem, void *data)
         return status;
     }
 
-    log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool %"PRIu32" '%.*s'"
+    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool %"PRIu32" '%.*s'"
               " with %"PRIu32" servers", p->sd, pool->addrstr.len,
               pool->d_addrstr.data, pool->redis ? "redis" : "memcache",
               pool->idx, pool->name.len, pool->name.data,
@@ -194,8 +195,6 @@ rstatus_t
 dnode_init(struct context *ctx)
 {
     rstatus_t status;
-
-    loga("Minh:  dnode_init");
 
     ASSERT(array_n(&ctx->pool) != 0);
 
@@ -252,6 +251,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     ASSERT(p->sd > 0);
     ASSERT(p->recv_active && p->recv_ready);
 
+    
     for (;;) {
         sd = accept(p->sd, NULL, NULL);
         if (sd < 0) {
@@ -278,6 +278,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         break;
     }
 
+    log_debug(LOG_NOTICE, "accept on sd  %d", sd);
     c = conn_get_dnode_peer(p->owner, true);
     if (c == NULL) {
         log_error("dyn: get conn client peer for c %d from p %d failed: %s", sd, p->sd,
@@ -327,9 +328,9 @@ dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->dnode && !conn->proxy && !conn->client);
+    ASSERT(conn->dnode && !conn->dnode_client);
     ASSERT(conn->recv_active);
-
+ 
     conn->recv_ready = 1;
     do {
         status = dnode_accept(ctx, conn);
