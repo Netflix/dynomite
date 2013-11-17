@@ -166,7 +166,7 @@ _conn_get(void)
 
 
 struct conn *
-conn_get_dnode_peer(void *owner, bool client)
+conn_get_peer(void *owner, bool client)
 {
     struct conn *conn;
 
@@ -227,7 +227,7 @@ conn_get_dnode_peer(void *owner, bool client)
 
     conn->ref(conn, owner);
 
-    log_debug(LOG_VVERB, "get dnode conn %p client %d", conn, conn->dyn_client);
+    log_debug(LOG_VVERB, "get dyn peer  conn %p client %d", conn, conn->dyn_client);
 
     return conn;
 }

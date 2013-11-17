@@ -22,6 +22,7 @@ struct peer {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
+    unsigned           is_seed:1;     /* seed? */    
 };
 
 
@@ -30,10 +31,10 @@ void dyn_peer_ref(struct conn *conn, void *owner);
 void dyn_peer_unref(struct conn *conn);
 int dyn_peer_timeout(struct conn *conn);
 bool dyn_peer_active(struct conn *conn);
-rstatus_t dyn_peer_init(struct array *server, struct array *conf_server, struct server_pool *sp);
+rstatus_t dyn_peer_init(struct array *conf_seeds, struct server_pool *sp);
 void dyn_peer_deinit(struct array *server);
-struct conn *dyn_peer_conn(struct server *server);
-rstatus_t dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn);
+struct conn *dyn_peer_conn(struct peer *server);
+rstatus_t dyn_peer_connect(struct context *ctx, struct peer *server, struct conn *conn);
 void dyn_peer_close(struct context *ctx, struct conn *conn);
 void dyn_peer_connected(struct context *ctx, struct conn *conn);
 void dyn_peer_ok(struct context *ctx, struct conn *conn);

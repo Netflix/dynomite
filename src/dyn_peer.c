@@ -11,47 +11,47 @@
 void
 dyn_peer_ref(struct conn *conn, void *owner)
 {
-    struct server *server = owner;
+    struct peer *pn = owner;
 
     ASSERT(!conn->dnode && !conn->dyn_client);
     ASSERT(conn->owner == NULL);
 
-    conn->family = server->family;
-    conn->addrlen = server->addrlen;
-    conn->addr = server->addr;
+    conn->family = pn->family;
+    conn->addrlen = pn->addrlen;
+    conn->addr = pn->addr;
 
-    server->ns_conn_q++;
-    TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
+    pn->ns_conn_q++;
+    TAILQ_INSERT_TAIL(&pn->s_conn_q, conn, conn_tqe);
 
     conn->owner = owner;
 
-    log_debug(LOG_VVERB, "ref peer conn %p owner %p into '%.*s", conn, server,
-              server->pname.len, server->pname.data);
+    log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, pn,
+              pn->pname.len, pn->pname.data);
 }
 
 void
 dyn_peer_unref(struct conn *conn)
 {
-    struct server *server;
+    struct peer *pn;
 
     ASSERT(!conn->dnode && !conn->dyn_client);
     ASSERT(conn->owner != NULL);
 
-    server = conn->owner;
+    pn = conn->owner;
     conn->owner = NULL;
 
-    ASSERT(server->ns_conn_q != 0);
-    server->ns_conn_q--;
-    TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
+    ASSERT(pn->ns_conn_q != 0);
+    pn->ns_conn_q--;
+    TAILQ_REMOVE(&pn->s_conn_q, conn, conn_tqe);
 
-    log_debug(LOG_VVERB, "unref peer conn %p owner %p from '%.*s'", conn, server,
-              server->pname.len, server->pname.data);
+    log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, pn,
+              pn->pname.len, pn->pname.data);
 }
 
 int
 dyn_peer_timeout(struct conn *conn)
 {
-    struct server *server;
+    struct peer *server;
     struct server_pool *pool;
 
     ASSERT(!conn->dnode && !conn->dyn_client);
@@ -59,7 +59,7 @@ dyn_peer_timeout(struct conn *conn)
     server = conn->owner;
     pool = server->owner;
 
-    return pool->timeout;
+    return pool->d_timeout;
 }
 
 bool
@@ -68,26 +68,26 @@ dyn_peer_active(struct conn *conn)
     ASSERT(!conn->dnode && !conn->dyn_client);
 
     if (!TAILQ_EMPTY(&conn->imsg_q)) {
-        log_debug(LOG_VVERB, "s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
         return true;
     }
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
         return true;
     }
 
-    log_debug(LOG_VVERB, "s %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "dyn: s %d is inactive", conn->sd);
 
     return false;
 }
@@ -95,7 +95,7 @@ dyn_peer_active(struct conn *conn)
 static rstatus_t
 dyn_peer_each_set_owner(void *elem, void *data)
 {
-    struct server *s = elem;
+    struct peer *s = elem;
     struct server_pool *sp = data;
 
     s->owner = sp;
@@ -104,110 +104,113 @@ dyn_peer_each_set_owner(void *elem, void *data)
 }
 
 rstatus_t
-dyn_peer_init(struct array *server, struct array *conf_server,
+dyn_peer_init(struct array *conf_seeds,
             struct server_pool *sp)
 {
+    struct array * seeds = &sp->seeds;
+    struct array * peers = &sp->peers;
     rstatus_t status;
-    uint32_t nserver;
+    uint32_t nseed, npeer;
 
-    nserver = array_n(conf_server);
-    ASSERT(nserver != 0);
-    ASSERT(array_n(server) == 0);
+    /* init seeds list */
+    nseed = array_n(conf_seeds);
+    ASSERT(nseed != 0);
+    ASSERT(array_n(seeds) == 0);
 
-    status = array_init(server, nserver, sizeof(struct server));
+    status = array_init(seeds, nseed, sizeof(struct peer));
     if (status != NC_OK) {
         return status;
     }
 
-    /* transform conf server to server */
-    status = array_each(conf_server, conf_server_each_transform, server);
+    /* transform conf seeds to seeds */
+    status = array_each(conf_seeds, conf_seed_each_transform, seeds);
     if (status != NC_OK) {
-        server_deinit(server);
+        dyn_peer_deinit(seeds);
         return status;
     }
-    ASSERT(array_n(server) == nserver);
+    ASSERT(array_n(seeds) == nseed);
 
-    /* set server owner */
-    status = array_each(server, dyn_peer_each_set_owner, sp);
+    /* set seed owner */
+    status = array_each(peers, dyn_peer_each_set_owner, sp);
     if (status != NC_OK) {
-        server_deinit(server);
+        dyn_peer_deinit(seeds);
         return status;
     }
 
-    log_debug(LOG_DEBUG, "init %"PRIu32" peers in pool %"PRIu32" '%.*s'",
-              nserver, sp->idx, sp->name.len, sp->name.data);
+ 
+    /* initialize peers list = seeds list */
+    ASSERT(array_n(peers) == 0); 
+    
+    status = array_init(peers, nseed, sizeof(struct peer));
+    if (status != NC_OK) {
+        return status;
+    }
+ 
+    status = array_each(conf_seeds, conf_seed_each_transform, peers);
+    if (status != NC_OK) {
+        dyn_peer_deinit(seeds);
+        dyn_peer_deinit(peers);
+        return status;
+    }
+    ASSERT(array_n(peers) == nseed);
+   
+    status = array_each(peers, dyn_peer_each_set_owner, sp);
+    if (status != NC_OK) {
+        dyn_peer_deinit(seeds);
+        dyn_peer_deinit(peers);
+        return status;
+    }
+
+    log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool %"PRIu32" '%.*s'",
+              nseed, sp->idx, sp->name.len, sp->name.data);
 
     return NC_OK;
 }
 
 void
-dyn_peer_deinit(struct array *server)
+dyn_peer_deinit(struct array *nodes)
 {
-    uint32_t i, nserver;
+    uint32_t i, nnode;
 
-    for (i = 0, nserver = array_n(server); i < nserver; i++) {
-        struct server *s;
+    for (i = 0, nnode = array_n(nodes); i < nnode; i++) {
+        struct peer *s;
 
-        s = array_pop(server);
+        s = array_pop(nodes);
         ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
     }
-    array_deinit(server);
+    array_deinit(nodes);
 }
 
 struct conn *
-dyn_peer_conn(struct server *server)
+dyn_peer_conn(struct peer *pn)
 {
-    struct server_pool *pool;
-    struct conn *conn;
+    /* any connection leak? */
+    return conn_get_peer(pn, false);
 
-    pool = server->owner;
-
-    /*
-     * FIXME: handle multiple server connections per server and do load
-     * balancing on it. Support multiple algorithms for
-     * 'server_connections:' > 0 key
-     */
-
-    if (server->ns_conn_q < pool->server_connections) {
-        return conn_get(server, false, pool->redis);
-    }
-    ASSERT(server->ns_conn_q == pool->server_connections);
-
-    /*
-     * Pick a server connection from the head of the queue and insert
-     * it back into the tail of queue to maintain the lru order
-     */
-    conn = TAILQ_FIRST(&server->s_conn_q);
-    ASSERT(!conn->dnode && !conn->dyn_client);
-
-    TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
-    TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
-
-    return conn;
 }
 
 static rstatus_t
 dyn_peer_each_preconnect(void *elem, void *data)
 {
     rstatus_t status;
-    struct server *server;
+    struct peer *pn;
     struct server_pool *pool;
     struct conn *conn;
 
-    server = elem;
-    pool = server->owner;
+    pn = elem;
+    pool = pn->owner;
 
     
-    conn = server_conn(server);
+    conn = dyn_peer_conn(pn);
     if (conn == NULL) {
         return NC_ENOMEM;
     }
 
-    status = server_connect(pool->ctx, server, conn);
+    status = dyn_peer_connect(pool->ctx, pn, conn);
     if (status != NC_OK) {
-        log_warn("connect to peer '%.*s' failed, ignored: %s",
-                 server->pname.len, server->pname.data, strerror(errno));
-        server_close(pool->ctx, conn);
+        log_warn("dyn: connect to peer '%.*s' failed, ignored: %s",
+                 pn->pname.len, pn->pname.data, strerror(errno));
+        dyn_peer_close(pool->ctx, conn);
     }
 
     return NC_OK;
@@ -216,12 +219,13 @@ dyn_peer_each_preconnect(void *elem, void *data)
 static rstatus_t
 dyn_peer_each_disconnect(void *elem, void *data)
 {
-    struct server *server;
+    struct peer *server;
     struct server_pool *pool;
 
     server = elem;
     pool = server->owner;
 
+    //fixe me not to use s_conn_q
     while (!TAILQ_EMPTY(&server->s_conn_q)) {
         struct conn *conn;
 
@@ -235,19 +239,20 @@ dyn_peer_each_disconnect(void *elem, void *data)
 }
 
 static void
-dyn_peer_failure(struct context *ctx, struct server *server)
+dyn_peer_failure(struct context *ctx, struct peer *server)
 {
     struct server_pool *pool = server->owner;
     int64_t now, next;
     rstatus_t status;
 
+    //fix me
     if (!pool->auto_eject_hosts) {
         return;
     }
 
     server->failure_count++;
 
-    log_debug(LOG_VERB, "peer '%.*s' failure count %"PRIu32" limit %"PRIu32,
+    log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" limit %"PRIu32,
               server->pname.len, server->pname.data, server->failure_count,
               pool->server_failure_limit);
 
@@ -260,43 +265,47 @@ dyn_peer_failure(struct context *ctx, struct server *server)
         return;
     }
 
-    stats_server_set_ts(ctx, server, server_ejected_at, now);
+    //fix me
+    //stats_server_set_ts(ctx, server, server_ejected_at, now);
 
+    //fix me
     next = now + pool->server_retry_timeout;
 
-    log_debug(LOG_INFO, "update peer pool %"PRIu32" '%.*s' to delete peer '%.*s' "
+    log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' to delete peer '%.*s' "
               "for next %"PRIu32" secs", pool->idx, pool->name.len,
               pool->name.data, server->pname.len, server->pname.data,
               pool->server_retry_timeout / 1000 / 1000);
 
-    stats_pool_incr(ctx, pool, server_ejects);
+    //stats_pool_incr(ctx, pool, server_ejects);
 
     server->failure_count = 0;
     server->next_retry = next;
 
-    status = server_pool_run(pool);
+    status = dyn_peer_pool_run(pool);
     if (status != NC_OK) {
-        log_error("updating peer pool %"PRIu32" '%.*s' failed: %s", pool->idx,
+        log_error("dyn: updating peer pool %"PRIu32" '%.*s' failed: %s", pool->idx,
                   pool->name.len, pool->name.data, strerror(errno));
     }
 }
 
 static void
-dyn_peer_close_stats(struct context *ctx, struct server *server, err_t err,
+dyn_peer_close_stats(struct context *ctx, struct peer *server, err_t err,
                    unsigned eof, unsigned connected)
 {
     if (connected) {
-        stats_server_decr(ctx, server, server_connections);
+        //fix me
+        //stats_server_decr(ctx, server, server_connections);
     }
 
     if (eof) {
-        stats_server_incr(ctx, server, server_eof);
+        //fix me
+        //stats_server_incr(ctx, server, server_eof);
         return;
     }
 
     switch (err) {
     case ETIMEDOUT:
-        stats_server_incr(ctx, server, server_timedout);
+        //stats_server_incr(ctx, server, server_timedout);
         break;
     case EPIPE:
     case ECONNRESET:
@@ -308,7 +317,7 @@ dyn_peer_close_stats(struct context *ctx, struct server *server, err_t err,
     case EHOSTDOWN:
     case EHOSTUNREACH:
     default:
-        stats_server_incr(ctx, server, server_err);
+        //stats_server_incr(ctx, server, server_err);
         break;
     }
 }
@@ -344,7 +353,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
          * 2. client has already closed its connection
          */
         if (msg->swallow || msg->noreply) {
-            log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
+            log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
                       " type %d", conn->sd, msg->id, msg->mlen, msg->type);
             req_put(msg);
         } else {
@@ -359,7 +368,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
                 event_add_out(ctx->evb, msg->owner);
             }
 
-            log_debug(LOG_INFO, "close s %d schedule error for req %"PRIu64" "
+            log_debug(LOG_INFO, "dyn: close s %d schedule error for req %"PRIu64" "
                       "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
                       msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
                       conn->err ? strerror(conn->err): " ");
@@ -374,7 +383,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
         conn->dequeue_outq(ctx, conn, msg);
 
         if (msg->swallow) {
-            log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
+            log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
                       " type %d", conn->sd, msg->id, msg->mlen, msg->type);
             req_put(msg);
         } else {
@@ -389,7 +398,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
                 event_add_out(ctx->evb, msg->owner);
             }
 
-            log_debug(LOG_INFO, "close s %d schedule error for req %"PRIu64" "
+            log_debug(LOG_INFO, "dyn: close s %d schedule error for req %"PRIu64" "
                       "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
                       msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
                       conn->err ? strerror(conn->err): " ");
@@ -406,7 +415,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
 
         rsp_put(msg);
 
-        log_debug(LOG_INFO, "close s %d discarding rsp %"PRIu64" len %"PRIu32" "
+        log_debug(LOG_INFO, "dyn: close s %d discarding rsp %"PRIu64" len %"PRIu32" "
                   "in error", conn->sd, msg->id, msg->mlen);
     }
 
@@ -418,7 +427,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
 
     status = close(conn->sd);
     if (status < 0) {
-        log_error("close s %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
 
@@ -426,23 +435,23 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
 }
 
 rstatus_t
-dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
+dyn_peer_connect(struct context *ctx, struct peer *server, struct conn *conn)
 {
     rstatus_t status;
 
     ASSERT(!conn->dnode && !conn->dyn_client);
 
     if (conn->sd > 0) {
-        /* already connected on server connection */
+        /* already connected on peer connection */
         return NC_OK;
     }
 
-    log_debug(LOG_VVERB, "connect to peer '%.*s'", server->pname.len,
+    log_debug(LOG_VVERB, "dyn: connect to peer '%.*s'", server->pname.len,
               server->pname.data);
 
     conn->sd = socket(conn->family, SOCK_STREAM, 0);
     if (conn->sd < 0) {
-        log_error("socket for peer '%.*s' failed: %s", server->pname.len,
+        log_error("dyn: socket for peer '%.*s' failed: %s", server->pname.len,
                   server->pname.data, strerror(errno));
         status = NC_ERROR;
         goto error;
@@ -450,7 +459,7 @@ dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
 
     status = nc_set_nonblocking(conn->sd);
     if (status != NC_OK) {
-        log_error("set nonblock on s %d for peer '%.*s' failed: %s",
+        log_error("dyn: set nonblock on s %d for peer '%.*s' failed: %s",
                   conn->sd,  server->pname.len, server->pname.data,
                   strerror(errno));
         goto error;
@@ -459,7 +468,7 @@ dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
     if (server->pname.data[0] != '/') {
         status = nc_set_tcpnodelay(conn->sd);
         if (status != NC_OK) {
-            log_warn("set tcpnodelay on s %d for peer '%.*s' failed, ignored: %s",
+            log_warn("dyn: set tcpnodelay on s %d for peer '%.*s' failed, ignored: %s",
                      conn->sd, server->pname.len, server->pname.data,
                      strerror(errno));
         }
@@ -467,7 +476,7 @@ dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
 
     status = event_add_conn(ctx->evb, conn);
     if (status != NC_OK) {
-        log_error("event add conn s %d for peer '%.*s' failed: %s",
+        log_error("dyn: event add conn s %d for peer '%.*s' failed: %s",
                   conn->sd, server->pname.len, server->pname.data,
                   strerror(errno));
         goto error;
@@ -479,12 +488,12 @@ dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
     if (status != NC_OK) {
         if (errno == EINPROGRESS) {
             conn->connecting = 1;
-            log_debug(LOG_DEBUG, "connecting on s %d to peer '%.*s'",
+            log_debug(LOG_DEBUG, "dyn: connecting on s %d to peer '%.*s'",
                       conn->sd, server->pname.len, server->pname.data);
             return NC_OK;
         }
 
-        log_error("connect on s %d to peer '%.*s' failed: %s", conn->sd,
+        log_error("dyn: connect on s %d to peer '%.*s' failed: %s", conn->sd,
                   server->pname.len, server->pname.data, strerror(errno));
 
         goto error;
@@ -492,7 +501,7 @@ dyn_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
 
     ASSERT(!conn->connecting);
     conn->connected = 1;
-    log_debug(LOG_INFO, "connected on s %d to peer '%.*s'", conn->sd,
+    log_debug(LOG_INFO, "dyn: connected on s %d to peer '%.*s'", conn->sd,
               server->pname.len, server->pname.data);
 
     return NC_OK;
@@ -505,7 +514,7 @@ error:
 void
 dyn_peer_connected(struct context *ctx, struct conn *conn)
 {
-    struct server *server = conn->owner;
+    struct peer *server = conn->owner;
 
     ASSERT(!conn->dnode && !conn->dyn_client);
     ASSERT(conn->connecting && !conn->connected);
@@ -516,20 +525,20 @@ dyn_peer_connected(struct context *ctx, struct conn *conn)
     conn->connecting = 0;
     conn->connected = 1;
 
-    log_debug(LOG_INFO, "peer connected on s %d to server '%.*s'", conn->sd,
+    log_debug(LOG_INFO, "dyn: peer connected on s %d to server '%.*s'", conn->sd,
               server->pname.len, server->pname.data);
 }
 
 void
 dyn_peer_ok(struct context *ctx, struct conn *conn)
 {
-    struct server *server = conn->owner;
+    struct peer *server = conn->owner;
 
     ASSERT(!conn->dnode && !conn->dyn_client);
     ASSERT(conn->connected);
 
     if (server->failure_count != 0) {
-        log_debug(LOG_VERB, "reset peer '%.*s' failure count from %"PRIu32
+        log_debug(LOG_VERB, "dyn: reset peer '%.*s' failure count from %"PRIu32
                   " to 0", server->pname.len, server->pname.data,
                   server->failure_count);
         server->failure_count = 0;
@@ -544,10 +553,12 @@ dyn_peer_pool_update(struct server_pool *pool)
     int64_t now;
     uint32_t pnlive_server; /* prev # live server */
 
+    //fix me
     if (!pool->auto_eject_hosts) {
         return NC_OK;
     }
 
+    //fix me
     if (pool->next_rebuild == 0LL) {
         return NC_OK;
     }
@@ -557,6 +568,7 @@ dyn_peer_pool_update(struct server_pool *pool)
         return NC_ERROR;
     }
 
+    //fix me
     if (now <= pool->next_rebuild) {
         if (pool->nlive_server == 0) {
             errno = ECONNREFUSED;
@@ -565,16 +577,17 @@ dyn_peer_pool_update(struct server_pool *pool)
         return NC_OK;
     }
 
+    //fixe me to use anotehr variable
     pnlive_server = pool->nlive_server;
 
     status = dyn_peer_pool_run(pool);
     if (status != NC_OK) {
-        log_error("updating peer pool %"PRIu32" with dist %d failed: %s", pool->idx,
+        log_error("dyn: updating peer pool %"PRIu32" with dist %d failed: %s", pool->idx,
                   pool->dist_type, strerror(errno));
         return status;
     }
 
-    log_debug(LOG_INFO, "update peer pool %"PRIu32" '%.*s' to add %"PRIu32" servers",
+    log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' to add %"PRIu32" servers",
               pool->idx, pool->name.len, pool->name.data,
               pool->nlive_server - pnlive_server);
 
@@ -585,9 +598,9 @@ dyn_peer_pool_update(struct server_pool *pool)
 static uint32_t
 dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
-    ASSERT(array_n(&pool->server) != 0);
+    ASSERT(array_n(&pool->peers) != 0);
 
-    if (array_n(&pool->server) == 1) {
+    if (array_n(&pool->peers) == 1) {
         return 0;
     }
 
@@ -596,13 +609,13 @@ dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     return pool->key_hash((char *)key, keylen);
 }
 
-static struct server *
+static struct peer *
 dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
-    struct server *server;
+    struct peer *server;
     uint32_t hash, idx;
 
-    ASSERT(array_n(&pool->server) != 0);
+    ASSERT(array_n(&pool->peers) != 0);
     ASSERT(key != NULL && keylen != 0);
 
     switch (pool->dist_type) {
@@ -624,11 +637,11 @@ dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
         NOT_REACHED();
         return NULL;
     }
-    ASSERT(idx < array_n(&pool->server));
+    ASSERT(idx < array_n(&pool->peers));
 
-    server = array_get(&pool->server, idx);
+    server = array_get(&pool->peers, idx);
 
-    log_debug(LOG_VERB, "key '%.*s' on dist %d maps to server '%.*s'", keylen,
+    log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
               key, pool->dist_type, server->pname.len, server->pname.data);
 
     return server;
@@ -639,7 +652,7 @@ dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
                  uint32_t keylen)
 {
     rstatus_t status;
-    struct server *server;
+    struct peer *server;
     struct conn *conn;
 
     status = dyn_peer_pool_update(pool);
@@ -678,7 +691,7 @@ dyn_peer_pool_each_preconnect(void *elem, void *data)
         return NC_OK;
     }
 
-    status = array_each(&sp->server, dyn_peer_each_preconnect, NULL);
+    status = array_each(&sp->peers, dyn_peer_each_preconnect, NULL);
     if (status != NC_OK) {
         return status;
     }
@@ -705,7 +718,7 @@ dyn_peer_pool_each_disconnect(void *elem, void *data)
     rstatus_t status;
     struct server_pool *sp = elem;
 
-    status = array_each(&sp->server, dyn_peer_each_disconnect, NULL);
+    status = array_each(&sp->peers, dyn_peer_each_disconnect, NULL);
     if (status != NC_OK) {
         return status;
     }
@@ -733,7 +746,7 @@ dyn_peer_pool_each_set_owner(void *elem, void *data)
 rstatus_t
 dyn_peer_pool_run(struct server_pool *pool)
 {
-    ASSERT(array_n(&pool->server) != 0);
+    ASSERT(array_n(&pool->peers) != 0);
 
     switch (pool->dist_type) {
     case DIST_KETAMA:
@@ -797,7 +810,7 @@ dyn_peer_pool_init(struct array *server_pool, struct array *conf_pool,
         return status;
     }
 
-    log_debug(LOG_DEBUG, "init %"PRIu32" peer pools", npool);
+    log_debug(LOG_DEBUG, "dyn: init %"PRIu32" peer pools", npool);
 
     return NC_OK;
 }
@@ -812,6 +825,7 @@ dyn_peer_pool_deinit(struct array *server_pool)
 
         sp = array_pop(server_pool);
         ASSERT(sp->p_conn == NULL);
+        //fixe me to use different variables
         ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->nc_conn_q == 0);
 
         if (sp->continuum != NULL) {
@@ -821,13 +835,13 @@ dyn_peer_pool_deinit(struct array *server_pool)
             sp->nlive_server = 0;
         }
 
-        dyn_peer_deinit(&sp->server);
+        dyn_peer_deinit(&sp->peers);
 
-        log_debug(LOG_DEBUG, "deinit peer pool %"PRIu32" '%.*s'", sp->idx,
+        log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,
                   sp->name.len, sp->name.data);
     }
 
-    array_deinit(server_pool);
+    //array_deinit(server_pool);
 
     log_debug(LOG_DEBUG, "deinit %"PRIu32" peer pools", npool);
 }

@@ -116,6 +116,21 @@ core_ctx_create(struct instance *nci)
         return NULL;
     }
 
+
+    /* preconntect peers - probably start gossip here */
+    status = dyn_peer_pool_preconnect(ctx);
+    if (status != NC_OK) {
+        dnode_deinit(ctx);
+        server_pool_disconnect(ctx);
+        event_base_destroy(ctx->evb);
+        stats_destroy(ctx->stats);
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        nc_free(ctx);
+        return NULL;
+    }
+
+
     log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 
     return ctx;
@@ -312,7 +327,7 @@ core_core(void *arg, uint32_t events)
         }
     }
 
-    /*
+    
     if (events & EVENT_WRITE) {
         status = core_send(ctx, conn);
         if (status != NC_OK || conn->done || conn->err) {
@@ -320,7 +335,7 @@ core_core(void *arg, uint32_t events)
             return NC_ERROR;
         }
     }
-    */
+    
 
     return NC_OK;
 }

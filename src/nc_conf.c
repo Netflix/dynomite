@@ -18,6 +18,7 @@
 #include <nc_core.h>
 #include <nc_conf.h>
 #include <nc_server.h>
+#include <dyn_peer.h>
 #include <proto/nc_proto.h>
 
 #define DEFINE_ACTION(_hash, _name) string(#_name),
@@ -185,6 +186,46 @@ conf_server_each_transform(void *elem, void *data)
     return NC_OK;
 }
 
+
+rstatus_t
+conf_seed_each_transform(void *elem, void *data)
+{
+    struct conf_server *cseed = elem;
+    struct array *seeds = data;
+    struct peer *s;
+
+    ASSERT(cseed->valid);
+
+    s = array_push(seeds);
+    ASSERT(s != NULL);
+
+    s->idx = array_idx(seeds, s);
+    s->owner = NULL;
+
+    s->pname = cseed->pname;
+    s->name = cseed->name;
+    s->port = (uint16_t)cseed->port;
+    s->weight = (uint32_t)cseed->weight;
+
+    s->family = cseed->info.family;
+    s->addrlen = cseed->info.addrlen;
+    s->addr = (struct sockaddr *)&cseed->info.addr;
+
+    s->ns_conn_q = 0;
+    TAILQ_INIT(&s->s_conn_q);
+
+    s->next_retry = 0LL;
+    s->failure_count = 0;
+    s->is_seed = 1;
+
+    log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
+              s->idx, s->pname.len, s->pname.data);
+
+    return NC_OK;
+}
+
+
+
 static rstatus_t
 conf_pool_init(struct conf_pool *cp, struct string *name)
 {
@@ -343,6 +384,19 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
    
+
+    array_null(&sp->seeds);
+    array_null(&sp->peers);
+    status = dyn_peer_init(&cp->dyn_seeds, sp);
+    if (status != NC_OK) {
+        return status;
+    }
+
+    //array_null(&sp->peers);
+    //status = peer_init(&sp->peers, &sp->seeds);
+    //if (status != NC_OK) {
+    //    return status;
+    //}
 
     log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
               sp->name.len, sp->name.data);
