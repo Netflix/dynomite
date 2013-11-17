@@ -123,6 +123,10 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, dyn_port) },
 
+    { string("dyn_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_connections) },
+
     null_command
 };
 
@@ -267,6 +271,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->dyn_read_timeout = CONF_UNSET_NUM;
     cp->dyn_write_timeout = CONF_UNSET_NUM;
     cp->dyn_port = CONF_UNSET_NUM;
+    cp->dyn_connections = CONF_UNSET_NUM;
 
     array_null(&cp->server);
     array_null(&cp->dyn_seeds);
@@ -383,7 +388,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_family = cp->dyn_listen.info.family;
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
-   
+    sp->d_connections = (uint32_t)cp->dyn_connections;   
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
@@ -465,6 +470,7 @@ conf_dump(struct conf *cf)
                   cp->dyn_listen.pname.len, cp->dyn_listen.pname.data);
         log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
         log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
+        log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
     }
 }
 
@@ -1371,6 +1377,13 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->dyn_write_timeout == CONF_UNSET_NUM) {
         cp->dyn_write_timeout = CONF_DEFAULT_DYN_WRITE_TIMEOUT;
+    }
+
+    if (cp->dyn_connections == CONF_UNSET_NUM) {
+        cp->dyn_connections = CONF_DEFAULT_DYN_CONNECTIONS;
+    } else if (cp->dyn_connections == 0) {
+        log_error("conf: directive \"dyn_connections:\" cannot be 0");
+        return NC_ERROR;
     }
 
     status = conf_validate_server(cf, cp);

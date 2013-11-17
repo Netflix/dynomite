@@ -57,6 +57,8 @@
 #define CONF_DEFAULT_SEEDS                   5
 #define CONF_DEFAULT_DYN_READ_TIMEOUT        30000
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
+#define CONF_DEFAULT_DYN_CONNECTIONS         10
+
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -99,6 +101,7 @@ struct conf_pool {
     struct string      dyn_seed_provider;     /* seed provider */ 
     struct array       dyn_seeds;             /* seed nodes */
     int                dyn_port;
+    int                dyn_connections;       /* dyn connections */
 };
 
 struct conf {

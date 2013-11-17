@@ -181,13 +181,33 @@ dyn_peer_deinit(struct array *nodes)
     array_deinit(nodes);
 }
 
-struct conn *
-dyn_peer_conn(struct peer *pn)
-{
-    /* any connection leak? */
-    return conn_get_peer(pn, false);
 
+struct conn *
+dyn_peer_conn(struct peer *server)
+{
+    struct server_pool *pool;
+    struct conn *conn;
+
+    pool = server->owner;
+
+    if (server->ns_conn_q < pool->d_connections) {
+        return conn_get_peer(server, false);
+    }
+    ASSERT(server->ns_conn_q == pool->d_connections);
+
+    /*
+     * Pick a server connection from the head of the queue and insert
+     * it back into the tail of queue to maintain the lru order
+     */
+    conn = TAILQ_FIRST(&server->s_conn_q);
+    ASSERT(!conn->dyn_client && !conn->dnode);
+
+    TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
+    TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
+
+    return conn;
 }
+
 
 static rstatus_t
 dyn_peer_each_preconnect(void *elem, void *data)
