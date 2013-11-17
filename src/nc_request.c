@@ -434,7 +434,6 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
 {
     rstatus_t status;
     struct conn *s_conn;
-    struct server_pool *pool;
     
     //loga("key = %d", key);
     loga("keylen = %d", keylen);
@@ -445,8 +444,6 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
     if (!msg->noreply) {
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
-
-    pool = c_conn->owner;
 
     s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
     if (s_conn == NULL) {
@@ -474,13 +471,11 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
 }
 
 
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
+                        uint8_t *key, uint32_t keylen)
 {
     rstatus_t status;
     struct conn *s_conn;
-    struct server_pool *pool;
-    uint8_t *key;
-    uint32_t keylen;
 
     ASSERT(c_conn->client && !c_conn->dyn_client && !c_conn->proxy && !c_conn->dnode);
 
@@ -489,41 +484,12 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
-    pool = c_conn->owner;
-    key = NULL;
-    keylen = 0;
-
-    /*
-     * If hash_tag: is configured for this server pool, we use the part of
-     * the key within the hash tag as an input to the distributor. Otherwise
-     * we use the full key
-     */
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
-        uint8_t *tag_start, *tag_end;
-
-        tag_start = nc_strchr(msg->key_start, msg->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = nc_strchr(tag_start + 1, msg->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
-
-    if (keylen == 0) {
-        key = msg->key_start;
-        keylen = (uint32_t)(msg->key_end - msg->key_start);
-    }
-
     s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, key, keylen);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;
     }
 
-    loga("minh 222");
     ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dyn_client && !s_conn->dnode);
 
     /* enqueue the message (request) into server inq */
@@ -584,7 +550,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     if (keylen == 3) {
         return local_req_forward(ctx, c_conn, msg, key, keylen);
     } else {  //remote req_forward
-        return remote_req_forward(ctx, c_conn, msg);
+        return remote_req_forward(ctx, c_conn, msg, key, keylen);
     } 
 
 }
