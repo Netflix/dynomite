@@ -312,6 +312,7 @@ core_core(void *arg, uint32_t events)
         }
     }
 
+    /*
     if (events & EVENT_WRITE) {
         status = core_send(ctx, conn);
         if (status != NC_OK || conn->done || conn->err) {
@@ -319,6 +320,7 @@ core_core(void *arg, uint32_t events)
             return NC_ERROR;
         }
     }
+    */
 
     return NC_OK;
 }

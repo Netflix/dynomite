@@ -54,6 +54,7 @@
 #define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
 
+#define CONF_DEFAULT_SEEDS                   5
 #define CONF_DEFAULT_DYN_READ_TIMEOUT        30000
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
 
@@ -93,9 +94,11 @@ struct conf_pool {
     struct array       server;                /* servers: conf_server[] */
     unsigned           valid:1;               /* valid? */
     struct conf_listen dyn_listen;            /* dyn_listen  */
-    int                dyn_read_timeout;          /* inter dyn nodes' read timeout in ms */
-    int                dyn_write_timeout;         /* inter dyn nodes' write timeout in ms */ 
-    struct string      seed_provider;         /* seed provider */ 
+    int                dyn_read_timeout;      /* inter dyn nodes' read timeout in ms */
+    int                dyn_write_timeout;     /* inter dyn nodes' write timeout in ms */ 
+    struct string      dyn_seed_provider;     /* seed provider */ 
+    struct array       dyn_seeds;             /* seed nodes */
+    int                dyn_port;
 };
 
 struct conf {

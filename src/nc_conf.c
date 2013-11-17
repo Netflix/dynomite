@@ -110,9 +110,17 @@ static struct command conf_commands[] = {
       conf_set_listen,
       offsetof(struct conf_pool, dyn_listen) },
     
-    { string("seed_provider"),
+    { string("dyn_seed_provider"),
       conf_set_string,
-      offsetof(struct conf_pool, seed_provider) },
+      offsetof(struct conf_pool, dyn_seed_provider) },
+
+    { string("dyn_seeds"),
+      conf_add_server,
+      offsetof(struct conf_pool, dyn_seeds) }, 
+
+    { string("dyn_port"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_port) },
 
     null_command
 };
@@ -208,7 +216,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_failure_limit = CONF_UNSET_NUM;
 
     //initialization for dynomite
-    string_init(&cp->seed_provider);
+    string_init(&cp->dyn_seed_provider);
     string_init(&cp->dyn_listen.pname);
     string_init(&cp->dyn_listen.name);
     cp->dyn_listen.port = 0;
@@ -217,8 +225,10 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->dyn_read_timeout = CONF_UNSET_NUM;
     cp->dyn_write_timeout = CONF_UNSET_NUM;
+    cp->dyn_port = CONF_UNSET_NUM;
 
     array_null(&cp->server);
+    array_null(&cp->dyn_seeds);
 
     cp->valid = 0;
 
@@ -231,6 +241,14 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
                         sizeof(struct conf_server));
     if (status != NC_OK) {
         string_deinit(&cp->name);
+        return status;
+    }
+
+    status = array_init(&cp->dyn_seeds, CONF_DEFAULT_SEEDS,
+                        sizeof(struct conf_server));
+    if (status != NC_OK) {
+        string_deinit(&cp->name);
+        array_deinit(&cp->server);
         return status;
     }
 
@@ -253,9 +271,10 @@ conf_pool_deinit(struct conf_pool *cp)
     array_deinit(&cp->server);
 
     //deinit dynomite
-    string_deinit(&cp->seed_provider);
+    string_deinit(&cp->dyn_seed_provider);
     string_deinit(&cp->dyn_listen.pname);
     string_deinit(&cp->dyn_listen.name);
+    array_deinit(&cp->dyn_seeds);
 
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }
@@ -377,6 +396,21 @@ conf_dump(struct conf *cf)
             s = array_get(&cp->server, j);
             log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
         }
+ 
+        log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
+        
+        int nseeds = array_n(&cp->dyn_seeds);
+        log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
+
+        for (j = 0; j < nseeds; j++) {
+            s = array_get(&cp->dyn_seeds, j);
+            log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
+        }
+
+        log_debug(LOG_VVERB, "  dyn_listen: %.*s",
+                  cp->dyn_listen.pname.len, cp->dyn_listen.pname.data);
+        log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
+        log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
     }
 }
 
@@ -1065,10 +1099,10 @@ conf_validate_structure(struct conf *cf)
             if (depth == CONF_MAX_DEPTH) {
                 if (seq) {
                     seq = false;
-                } else {
-                    error = true;
-                    log_error("conf: '%s' missing sequence directive at depth "
-                              "%d", cf->fname, depth);
+                //} else {
+                //    error = true;
+                //    log_error("conf: '%s' missing sequence directive at depth "
+                //              "%d", cf->fname, depth);
                 }
             }
             depth--;
@@ -1095,6 +1129,7 @@ conf_validate_structure(struct conf *cf)
         case YAML_SEQUENCE_END_EVENT:
             ASSERT(depth == CONF_MAX_DEPTH);
             count[depth] = 0;
+            seq = false;
             break;
 
         case YAML_SCALAR_EVENT:
@@ -1129,6 +1164,7 @@ static rstatus_t
 conf_pre_validate(struct conf *cf)
 {
     rstatus_t status;
+
 
     status = conf_validate_document(cf);
     if (status != NC_OK) {

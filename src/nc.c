@@ -328,6 +328,7 @@ nc_get_options(int argc, char **argv, struct instance *nci)
 
         case 't':
             test_conf = 1;
+            nci->log_level = 11;
             break;
 
         case 'd':
