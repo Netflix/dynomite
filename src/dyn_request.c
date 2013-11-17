@@ -381,7 +381,7 @@ dyn_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
     ASSERT(conn->dyn_client && !conn->dnode);
 
-    log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
+    log_debug(LOG_INFO, "dyn: forward req %"PRIu64" len %"PRIu32" type %d from "
               "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
               strerror(errno));
 
@@ -407,23 +407,24 @@ static void
 dyn_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
     ASSERT(msg->request);
-
-    stats_server_incr(ctx, server, requests);
-    stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
+     
+    //fix me
+    //stats_server_incr(ctx, server, requests);
+    //stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
 static void
-dyn_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 {
     rstatus_t status;
-    struct conn *s_conn;
+    struct conn *l_s_conn;
     struct server_pool *pool;
     uint8_t *key;
     uint32_t keylen;
 
-    loga("minh : processing message and about to forward it to a peer");
-    //ASSERT(c_conn->dyn_client && !c_conn->dnode);
+    ASSERT(dyn_c_conn->dyn_client && !dyn_c_conn->dnode);
 
+    local_req_forward(ctx, dyn_c_conn, msg);
 }
 
 void

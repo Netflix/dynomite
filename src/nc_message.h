@@ -277,4 +277,8 @@ struct msg *dyn_rsp_send_next(struct context *ctx, struct conn *conn);
 void dyn_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
+void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg);
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg);
+
+
 #endif

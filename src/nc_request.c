@@ -428,8 +428,7 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
     stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
-static void
-req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg) 
 {
     rstatus_t status;
     struct conn *s_conn;
@@ -437,7 +436,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     uint8_t *key;
     uint32_t keylen;
 
-    ASSERT(c_conn->client && !c_conn->proxy);
+    ASSERT((c_conn->client || c_conn->dyn_client) && !c_conn->proxy && !c_conn->dnode);
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
@@ -492,10 +491,126 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
     req_forward_stats(ctx, s_conn->owner, msg);
 
-    log_debug(LOG_VERB, "forward from c %d to s %d req %"PRIu64" len %"PRIu32
+    log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
               " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
               msg->mlen, msg->type, keylen, key);
 }
+
+
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+{
+    rstatus_t status;
+    struct conn *s_conn;
+    struct server_pool *pool;
+    uint8_t *key;
+    uint32_t keylen;
+
+    ASSERT(c_conn->client && !c_conn->dyn_client && !c_conn->proxy && !c_conn->dnode);
+
+    /* enqueue message (request) into client outq, if response is expected */
+    if (!msg->noreply) {
+        c_conn->enqueue_outq(ctx, c_conn, msg);
+    }
+
+    pool = c_conn->owner;
+    key = NULL;
+    keylen = 0;
+
+    /*
+     * If hash_tag: is configured for this server pool, we use the part of
+     * the key within the hash tag as an input to the distributor. Otherwise
+     * we use the full key
+     */
+    if (!string_empty(&pool->hash_tag)) {
+        struct string *tag = &pool->hash_tag;
+        uint8_t *tag_start, *tag_end;
+
+        tag_start = nc_strchr(msg->key_start, msg->key_end, tag->data[0]);
+        if (tag_start != NULL) {
+            tag_end = nc_strchr(tag_start + 1, msg->key_end, tag->data[1]);
+            if (tag_end != NULL) {
+                key = tag_start + 1;
+                keylen = (uint32_t)(tag_end - key);
+            }
+        }
+    }
+
+    if (keylen == 0) {
+        key = msg->key_start;
+        keylen = (uint32_t)(msg->key_end - msg->key_start);
+    }
+
+    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, key, keylen);
+    if (s_conn == NULL) {
+        req_forward_error(ctx, c_conn, msg);
+        return;
+    }
+    ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dyn_client && !s_conn->dnode);
+
+    /* enqueue the message (request) into server inq */
+    if (TAILQ_EMPTY(&s_conn->imsg_q)) {
+        status = event_add_out(ctx->evb, s_conn);
+        if (status != NC_OK) {
+            req_forward_error(ctx, c_conn, msg);
+            s_conn->err = errno;
+            return;
+        }
+    }
+    s_conn->enqueue_inq(ctx, s_conn, msg);
+
+    //fix me - coordinator stats
+    //req_forward_stats(ctx, s_conn->owner, msg);
+
+    log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+              " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
+              msg->mlen, msg->type, keylen, key);
+}
+
+static void
+req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+{
+    rstatus_t status;
+    struct conn *s_conn;
+    struct server_pool *pool;
+    uint8_t *key;
+    uint32_t keylen;
+
+    ASSERT(c_conn->client && !c_conn->proxy);
+
+
+    pool = c_conn->owner;
+    key = NULL;
+    keylen = 0;
+
+    if (!string_empty(&pool->hash_tag)) {
+        struct string *tag = &pool->hash_tag;
+        uint8_t *tag_start, *tag_end;
+
+        tag_start = nc_strchr(msg->key_start, msg->key_end, tag->data[0]);
+        if (tag_start != NULL) {
+            tag_end = nc_strchr(tag_start + 1, msg->key_end, tag->data[1]);
+            if (tag_end != NULL) {
+                key = tag_start + 1;
+                keylen = (uint32_t)(tag_end - key);
+            }
+        }
+    }
+
+    if (keylen == 0) {
+        key = msg->key_start;
+        keylen = (uint32_t)(msg->key_end - msg->key_start);
+    }
+
+    
+    if (keylen == 3) {
+        return local_req_forward(ctx, c_conn, msg);
+    } else {  //remote req_forward
+        return remote_req_forward(ctx, c_conn, msg);
+    } 
+
+}
+
+
 
 void
 req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
