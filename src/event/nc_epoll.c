@@ -241,6 +241,8 @@ event_wait(struct event_base *evb, int timeout)
     ASSERT(event != NULL);
     ASSERT(nevent > 0);
 
+    log_debug(LOG_VVERB, "epoll ep %d", ep);
+
     for (;;) {
         int i, nsd;
 

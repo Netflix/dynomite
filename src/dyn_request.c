@@ -1,29 +1,13 @@
-/*
- * twemproxy - A fast and lightweight proxy for memcached protocol.
- * Copyright (C) 2011 Twitter, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #include <nc_core.h>
 #include <nc_server.h>
 
 struct msg *
-req_get(struct conn *conn)
+dyn_req_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
 
     msg = msg_get(conn, true, conn->redis);
     if (msg == NULL) {
@@ -34,7 +18,7 @@ req_get(struct conn *conn)
 }
 
 void
-req_put(struct msg *msg)
+dyn_req_put(struct msg *msg)
 {
     struct msg *pmsg; /* peer message (response) */
 
@@ -61,13 +45,13 @@ req_put(struct msg *msg)
  * fragments.
  */
 bool
-req_done(struct conn *conn, struct msg *msg)
+dyn_req_done(struct conn *conn, struct msg *msg)
 {
     struct msg *cmsg, *pmsg; /* current and previous message */
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
     ASSERT(msg->request);
 
     if (!msg->done) {
@@ -151,13 +135,13 @@ req_done(struct conn *conn, struct msg *msg)
  * receiving response for any its fragments.
  */
 bool
-req_error(struct conn *conn, struct msg *msg)
+dyn_req_error(struct conn *conn, struct msg *msg)
 {
     struct msg *cmsg; /* current message */
     uint64_t id;
     uint32_t nfragment;
 
-    ASSERT(msg->request && req_done(conn, msg));
+    ASSERT(msg->request && dyn_req_done(conn, msg));
 
     if (msg->error) {
         return true;
@@ -226,10 +210,10 @@ ferror:
 }
 
 void
-req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -250,10 +234,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 }
 
 void
-req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
 
@@ -262,19 +246,19 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 }
 
 void
-req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
 }
 
 void
-req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
 
@@ -283,19 +267,19 @@ req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 }
 
 void
-req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
 
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
 }
 
 void
-req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     msg_tmo_delete(msg);
 
@@ -306,11 +290,11 @@ req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 }
 
 struct msg *
-req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
+dyn_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -325,7 +309,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             log_error("eof c %d discarding incomplete req %"PRIu64" len "
                       "%"PRIu32"", conn->sd, msg->id, msg->mlen);
 
-            req_put(msg);
+            dyn_req_put(msg);
         }
 
         /*
@@ -352,7 +336,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
         return NULL;
     }
 
-    msg = req_get(conn);
+    msg = dyn_req_get(conn);
     if (msg != NULL) {
         conn->rmsg = msg;
     }
@@ -361,15 +345,15 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 }
 
 static bool
-req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
         log_debug(LOG_VERB, "filter empty req %"PRIu64" from c %d", msg->id,
                   conn->sd);
-        req_put(msg);
+        dyn_req_put(msg);
         return true;
     }
 
@@ -383,7 +367,7 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
                   conn->sd);
         conn->eof = 1;
         conn->recv_ready = 0;
-        req_put(msg);
+        dyn_req_put(msg);
         return true;
     }
 
@@ -391,13 +375,13 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     rstatus_t status;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
 
-    log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
+    log_debug(LOG_INFO, "dyn: forward req %"PRIu64" len %"PRIu32" type %d from "
               "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
               strerror(errno));
 
@@ -407,11 +391,11 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
     /* noreply request don't expect any response */
     if (msg->noreply) {
-        req_put(msg);
+        dyn_req_put(msg);
         return;
     }
 
-    if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
+    if (dyn_req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
         status = event_add_out(ctx->evb, conn);
         if (status != NC_OK) {
             conn->err = errno;
@@ -420,110 +404,27 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
+dyn_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
     ASSERT(msg->request);
-
-    stats_server_incr(ctx, server, requests);
-    stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
-}
-
-
-void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
-		               uint8_t *key, uint32_t keylen)
-{
-    rstatus_t status;
-    struct conn *s_conn;
-    
-    //loga("key = %d", key);
-    loga("keylen = %d", keylen);
-
-    ASSERT((c_conn->client || c_conn->dyn_client) && !c_conn->proxy && !c_conn->dnode);
-
-    /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
-        c_conn->enqueue_outq(ctx, c_conn, msg);
-    }
-
-    s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
-    if (s_conn == NULL) {
-        req_forward_error(ctx, c_conn, msg);
-        return;
-    }
-    ASSERT(!s_conn->client && !s_conn->proxy);
-
-    /* enqueue the message (request) into server inq */
-    if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-        status = event_add_out(ctx->evb, s_conn);
-        if (status != NC_OK) {
-            req_forward_error(ctx, c_conn, msg);
-            s_conn->err = errno;
-            return;
-        }
-    }
-    s_conn->enqueue_inq(ctx, s_conn, msg);
-
-    req_forward_stats(ctx, s_conn->owner, msg);
-
-    log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
-              msg->mlen, msg->type, keylen, key);
-}
-
-
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        uint8_t *key, uint32_t keylen)
-{
-    rstatus_t status;
-    struct conn *s_conn;
-
-    ASSERT(c_conn->client && !c_conn->dyn_client && !c_conn->proxy && !c_conn->dnode);
-
-    /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
-        c_conn->enqueue_outq(ctx, c_conn, msg);
-    }
-
-    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, key, keylen);
-    if (s_conn == NULL) {
-        req_forward_error(ctx, c_conn, msg);
-        return;
-    }
-
-    ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dyn_client && !s_conn->dnode);
-
-    /* enqueue the message (request) into server inq */
-    if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-        status = event_add_out(ctx->evb, s_conn);
-        if (status != NC_OK) {
-            req_forward_error(ctx, c_conn, msg);
-            s_conn->err = errno;
-            return;
-        }
-    }
-    s_conn->enqueue_inq(ctx, s_conn, msg);
-
-    //fix me - coordinator stats
-    //req_forward_stats(ctx, s_conn->owner, msg);
-
-    log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
-              msg->mlen, msg->type, keylen, key);
+     
+    //fix me
+    //stats_server_incr(ctx, server, requests);
+    //stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
 static void
-req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 {
     rstatus_t status;
-    struct conn *s_conn;
+    struct conn *l_s_conn;
     struct server_pool *pool;
     uint8_t *key;
     uint32_t keylen;
 
-    ASSERT(c_conn->client && !c_conn->proxy);
+    ASSERT(dyn_c_conn->dyn_client && !dyn_c_conn->dnode);
 
-
-    pool = c_conn->owner;
+    pool = dyn_c_conn->owner;
     key = NULL;
     keylen = 0;
 
@@ -546,22 +447,14 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         keylen = (uint32_t)(msg->key_end - msg->key_start);
     }
 
-    
-    if (keylen == 3) {
-        return local_req_forward(ctx, c_conn, msg, key, keylen);
-    } else {  //remote req_forward
-        return remote_req_forward(ctx, c_conn, msg, key, keylen);
-    } 
-
+    local_req_forward(ctx, dyn_c_conn, msg, key, keylen);
 }
 
-
-
 void
-req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
+dyn_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
               struct msg *nmsg)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
     ASSERT(msg->request);
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
@@ -570,20 +463,20 @@ req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
     /* enqueue next message (request), if any */
     conn->rmsg = nmsg;
 
-    if (req_filter(ctx, conn, msg)) {
+    if (dyn_req_filter(ctx, conn, msg)) {
         return;
     }
 
-    req_forward(ctx, conn, msg);
+    dyn_req_forward(ctx, conn, msg);
 }
 
 struct msg *
-req_send_next(struct context *ctx, struct conn *conn)
+dyn_req_send_next(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     if (conn->connecting) {
         server_connected(ctx, conn);
@@ -621,9 +514,9 @@ req_send_next(struct context *ctx, struct conn *conn)
 }
 
 void
-req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
+dyn_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
     ASSERT(msg->owner != conn);
@@ -642,6 +535,6 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     if (!msg->noreply) {
         conn->enqueue_outq(ctx, conn, msg);
     } else {
-        req_put(msg);
+        dyn_req_put(msg);
     }
 }

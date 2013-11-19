@@ -252,4 +252,33 @@ void rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, stru
 struct msg *rsp_send_next(struct context *ctx, struct conn *conn);
 void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
+
+/* for dynomite  */
+struct msg *dyn_req_get(struct conn *conn);
+void dyn_req_put(struct msg *msg);
+bool dyn_req_done(struct conn *conn, struct msg *msg);
+bool dyn_req_error(struct conn *conn, struct msg *msg);
+void dyn_req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
+void dyn_req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
+void dyn_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
+void dyn_req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
+void dyn_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
+void dyn_req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
+struct msg *dyn_req_recv_next(struct context *ctx, struct conn *conn, bool alloc);
+void dyn_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
+struct msg *dyn_req_send_next(struct context *ctx, struct conn *conn);
+void dyn_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
+
+struct msg *dyn_rsp_get(struct conn *conn);
+void dyn_rsp_put(struct msg *msg);
+struct msg *dyn_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
+void dyn_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
+struct msg *dyn_rsp_send_next(struct context *ctx, struct conn *conn);
+void dyn_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
+
+
+void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
+
+
 #endif

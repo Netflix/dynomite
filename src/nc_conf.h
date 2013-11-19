@@ -51,8 +51,14 @@
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        false
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    30 * 1000      /* in msec */
 #define CONF_DEFAULT_SERVER_FAILURE_LIMIT    2
-#define CONF_DEFAULT_SERVER_CONNECTIONS      1
+#define CONF_DEFAULT_SERVER_CONNECTIONS      2
 #define CONF_DEFAULT_KETAMA_PORT             11211
+
+#define CONF_DEFAULT_SEEDS                   5
+#define CONF_DEFAULT_DYN_READ_TIMEOUT        30000
+#define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
+#define CONF_DEFAULT_DYN_CONNECTIONS         10
+
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -61,6 +67,7 @@ struct conf_listen {
     struct sockinfo info;    /* listen socket info */
     unsigned        valid:1; /* valid? */
 };
+
 
 struct conf_server {
     struct string   pname;      /* server: as "name:port:weight" */
@@ -88,6 +95,13 @@ struct conf_pool {
     int                server_failure_limit;  /* server_failure_limit: */
     struct array       server;                /* servers: conf_server[] */
     unsigned           valid:1;               /* valid? */
+    struct conf_listen dyn_listen;            /* dyn_listen  */
+    int                dyn_read_timeout;      /* inter dyn nodes' read timeout in ms */
+    int                dyn_write_timeout;     /* inter dyn nodes' write timeout in ms */ 
+    struct string      dyn_seed_provider;     /* seed provider */ 
+    struct array       dyn_seeds;             /* seed nodes */
+    int                dyn_port;
+    int                dyn_connections;       /* dyn connections */
 };
 
 struct conf {
@@ -127,6 +141,8 @@ char *conf_set_hashtag(struct conf *cf, struct command *cmd, void *conf);
 
 rstatus_t conf_server_each_transform(void *elem, void *data);
 rstatus_t conf_pool_each_transform(void *elem, void *data);
+
+rstatus_t conf_seed_each_transform(void *elem, void *data);
 
 struct conf *conf_create(char *filename);
 void conf_destroy(struct conf *cf);

@@ -898,7 +898,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->sd = -1;
 
     string_set_text(&st->service_str, "service");
-    string_set_text(&st->service, "nutcracker");
+    string_set_text(&st->service, "dynomite");
 
     string_set_text(&st->source_str, "source");
     string_set_raw(&st->source, source);
