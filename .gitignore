@@ -25,8 +25,11 @@
 # Temporary
 *.swp
 *.~
+*~
 *.project
 *.cproject
+nbproject/*
+TAGS
 
 # Core and executable
 core*

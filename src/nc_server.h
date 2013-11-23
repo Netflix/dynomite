@@ -19,6 +19,7 @@
 #define _NC_SERVER_H_
 
 #include <nc_core.h>
+#include <dyn_token.h>
 
 /*
  * server_pool is a collection of servers and their continuum. Each
@@ -59,7 +60,7 @@
  *            //
  */
 
-typedef uint32_t (*hash_t)(const char *, size_t);
+typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 
 struct continuum {
     uint32_t index;  /* server index */
@@ -83,6 +84,8 @@ struct server {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
+    struct string      dc;            /* datacenter for the sever */
+    struct array       tokens;        /* the DHT tokens for the server */
 };
 
 struct server_pool {
@@ -133,6 +136,8 @@ struct server_pool {
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
     uint32_t           d_connections;        /* maximum # dyn connections */
+    struct string      dc;                   /* the datacenter for this node */  
+    struct array       tokens;               /* the DHT tokens for this server */
 };
 
 void server_ref(struct conn *conn, void *owner);

@@ -6,6 +6,7 @@
 #include <dyn_peer.h>
 #include <nc_server.h>
 #include <dyn_peer.h>
+#include <dyn_token.h>
 
 
 void
@@ -615,7 +616,7 @@ dyn_peer_pool_update(struct server_pool *pool)
     return NC_OK;
 }
 
-static uint32_t
+static struct dyn_token *
 dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     ASSERT(array_n(&pool->peers) != 0);
@@ -625,8 +626,18 @@ dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     }
 
     ASSERT(key != NULL && keylen != 0);
+    struct dyn_token *token = nc_alloc(sizeof(struct dyn_token));
+    if (token == NULL) {
+        return NULL;
+    }
+    init_dyn_token(token);
 
-    return pool->key_hash((char *)key, keylen);
+    rstatus_t status = pool->key_hash((char *)key, keylen, token);
+    if (status == 0) {
+        return NULL;
+    }
+
+    return token;
 }
 
 static struct peer *
@@ -634,18 +645,26 @@ dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     struct peer *server;
     uint32_t hash, idx;
+    struct dyn_token *token;
 
     ASSERT(array_n(&pool->peers) != 0);
     ASSERT(key != NULL && keylen != 0);
 
     switch (pool->dist_type) {
     case DIST_KETAMA:
-        hash = dyn_peer_pool_hash(pool, key, keylen);
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        hash = token->mag[0];
         idx = ketama_dispatch(pool->continuum, pool->ncontinuum, hash);
         break;
 
+    case DIST_VNODE:
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        idx = vnode_dispatch(pool->continuum, pool->ncontinuum, token);
+        break;
+
     case DIST_MODULA:
-        hash = dyn_peer_pool_hash(pool, key, keylen);
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        hash = token->mag[0];
         idx = modula_dispatch(pool->continuum, pool->ncontinuum, hash);
         break;
 
@@ -771,6 +790,9 @@ dyn_peer_pool_run(struct server_pool *pool)
     switch (pool->dist_type) {
     case DIST_KETAMA:
         return ketama_update(pool);
+
+    case DIST_VNODE:
+        return vnode_update(pool);
 
     case DIST_MODULA:
         return modula_update(pool);
