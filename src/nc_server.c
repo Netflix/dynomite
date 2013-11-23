@@ -21,6 +21,7 @@
 #include <nc_core.h>
 #include <nc_server.h>
 #include <nc_conf.h>
+#include <dyn_token.h>
 
 void
 server_ref(struct conn *conn, void *owner)
@@ -594,7 +595,7 @@ server_pool_update(struct server_pool *pool)
     return NC_OK;
 }
 
-static uint32_t
+static struct dyn_token *
 server_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     ASSERT(array_n(&pool->server) != 0);
@@ -604,8 +605,18 @@ server_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     }
 
     ASSERT(key != NULL && keylen != 0);
+    struct dyn_token *token = nc_alloc(sizeof(struct dyn_token));
+    if (token == NULL) {
+        return NULL;
+    }
+    init_dyn_token(token);
 
-    return pool->key_hash((char *)key, keylen);
+    rstatus_t status = pool->key_hash((char *)key, keylen, token);
+    if (status == 0) {
+        return NULL;
+    }
+
+    return token;
 }
 
 static struct server *
@@ -613,18 +624,26 @@ server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     struct server *server;
     uint32_t hash, idx;
+    struct dyn_token *token;
 
     ASSERT(array_n(&pool->server) != 0);
     ASSERT(key != NULL && keylen != 0);
 
     switch (pool->dist_type) {
     case DIST_KETAMA:
-        hash = server_pool_hash(pool, key, keylen);
+        token = server_pool_hash(pool, key, keylen);
+        hash = token->mag[0];
         idx = ketama_dispatch(pool->continuum, pool->ncontinuum, hash);
         break;
 
+    case DIST_VNODE:
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        idx = vnode_dispatch(pool->continuum, pool->ncontinuum, token);
+        break;
+
     case DIST_MODULA:
-        hash = server_pool_hash(pool, key, keylen);
+        token = server_pool_hash(pool, key, keylen);
+        hash = token->mag[0];
         idx = modula_dispatch(pool->continuum, pool->ncontinuum, hash);
         break;
 

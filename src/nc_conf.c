@@ -127,14 +127,33 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, dyn_connections) },
 
+    { string("datacenter"),
+      conf_set_string,
+      offsetof(struct conf_pool, dc) },
+
+    { string("tokens"),
+      conf_set_tokens,
+      offsetof(struct conf_pool, tokens) },
+
     null_command
 };
 
-static void
+static rstatus_t
 conf_server_init(struct conf_server *cs)
 {
     string_init(&cs->pname);
     string_init(&cs->name);
+    string_init(&cs->dc);
+    
+    rstatus_t status = array_init(&cs->tokens, CONF_DEFAULT_VNODE_TOKENS,
+                        sizeof(struct dyn_token));
+    if (status != NC_OK) {
+        string_deinit(&cs->pname);
+        string_deinit(&cs->name);
+        string_deinit(&cs->dc);
+        return status;
+    }
+
     cs->port = 0;
     cs->weight = 0;
 
@@ -143,6 +162,7 @@ conf_server_init(struct conf_server *cs)
     cs->valid = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
+    return NC_OK;
 }
 
 static void
@@ -150,10 +170,13 @@ conf_server_deinit(struct conf_server *cs)
 {
     string_deinit(&cs->pname);
     string_deinit(&cs->name);
+    string_deinit(&cs->dc);
+    array_deinit(&cs->tokens);
     cs->valid = 0;
     log_debug(LOG_VVERB, "deinit conf server %p", cs);
 }
 
+// copy the server info from the config struct over to the real one
 rstatus_t
 conf_server_each_transform(void *elem, void *data)
 {
@@ -210,6 +233,10 @@ conf_seed_each_transform(void *elem, void *data)
     s->name = cseed->name;
     s->port = (uint16_t)cseed->port;
     s->weight = (uint32_t)cseed->weight;
+    s->dc = cseed->dc;
+
+    //TODO-jeb need to copy over tokens, not sure if this is good enough
+    s->tokens = cseed->tokens;
 
     s->family = cseed->info.family;
     s->addrlen = cseed->info.addrlen;
@@ -239,6 +266,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     string_init(&cp->listen.pname);
     string_init(&cp->listen.name);
+
+    string_init(&cp->dc);
 
     cp->listen.port = 0;
     memset(&cp->listen.info, 0, sizeof(cp->listen.info));
@@ -298,6 +327,15 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
         return status;
     }
 
+    status = array_init(&cp->tokens, CONF_DEFAULT_VNODE_TOKENS,
+                        sizeof(struct dyn_token));
+    if (status != NC_OK) {
+        string_deinit(&cp->name);
+        array_deinit(&cp->server);
+        array_deinit(&cp->dyn_seeds);
+        return status;
+    }
+
     log_debug(LOG_VVERB, "init conf pool %p, '%.*s'", cp, name->len, name->data);
 
     return NC_OK;
@@ -321,6 +359,7 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->dyn_listen.pname);
     string_deinit(&cp->dyn_listen.name);
     array_deinit(&cp->dyn_seeds);
+    array_deinit(&cp->tokens);
 
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }
@@ -1637,7 +1676,10 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
-    conf_server_init(field);
+    status = conf_server_init(field);
+    if (status != NC_OK) {
+        return CONF_ERROR;
+    }
 
     value = array_top(&cf->arg);
 
@@ -1753,6 +1795,14 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     field->valid = 1;
 
     return CONF_OK;
+}
+
+char *
+conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
+{
+  //TODOjeb
+  //  struct array tokens = array_create(1, sizeof(dyn_token));
+
 }
 
 char *
