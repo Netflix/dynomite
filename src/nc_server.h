@@ -84,8 +84,6 @@ struct server {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
-    struct string      dc;            /* datacenter for the sever */
-    struct array       tokens;        /* the DHT tokens for the server */
 };
 
 struct server_pool {

@@ -30,10 +30,12 @@
 *.cproject
 nbproject/*
 TAGS
+TODO
 
 # Core and executable
 core*
 nutcracker
+dynomite
 
 # extracted yaml
 !/contrib/yaml-0.1.4.tar.gz

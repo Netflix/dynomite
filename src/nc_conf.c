@@ -1,4 +1,4 @@
-/*
+ /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
  * Copyright (C) 2011 Twitter, Inc.
  *
@@ -19,6 +19,7 @@
 #include <nc_conf.h>
 #include <nc_server.h>
 #include <dyn_peer.h>
+#include <dyn_token.h>
 #include <proto/nc_proto.h>
 
 #define DEFINE_ACTION(_hash, _name) string(#_name),
@@ -94,7 +95,6 @@ static struct command conf_commands[] = {
     { string("server_failure_limit"),
       conf_set_num,
       offsetof(struct conf_pool, server_failure_limit) },
-
     { string("servers"),
       conf_add_server,
       offsetof(struct conf_pool, server) },
@@ -1800,9 +1800,33 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 char *
 conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
 {
-  //TODOjeb
-  //  struct array tokens = array_create(1, sizeof(dyn_token));
+    struct array *tokens = (struct array *)(conf + cmd->offset);
+    rstatus_t status = array_init(tokens, CONF_DEFAULT_VNODE_TOKENS, sizeof(struct dyn_token));
+    if (status != NC_OK) {
+      return CONF_ERROR;
+    }
 
+    struct string *value = array_top(&cf->arg);
+    uint32_t *p, *end;
+    p = end = value->data + value->len - 1;
+    uint32_t *start = value->data;
+    uint32_t *q = -1;
+    while (p > start) {
+        *q = nc_strrchr(p, start, ',');
+        struct dyn_token *token = array_push(tokens);
+        ASSERT (token != NULL);
+        init_dyn_token(token);
+
+        status = set_dyn_token(q, end, token);
+        if (status != NC_OK) {
+            //TODO: should we dealloc the tokens/array?
+            return CONF_ERROR;
+        }
+
+        p = end = q - 1;
+    } 
+
+    return CONF_OK;
 }
 
 char *

@@ -18,12 +18,16 @@
 #ifndef _DYN_TOKEN_H_
 #define _DYN_TOKEN_H_
 
+#include <nc_core.h>
+
 struct dyn_token {
+    uint32_t signum;
     uint32_t *mag;
     uint32_t len;
 };
 
 void init_dyn_token(struct dyn_token *token);
-
+rstatus_t set_dyn_token(uint32_t *start, uint32_t *end, struct dyn_token *token);
+uint32_t cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2);
 
 #endif

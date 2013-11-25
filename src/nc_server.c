@@ -637,7 +637,7 @@ server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
         break;
 
     case DIST_VNODE:
-        token = dyn_peer_pool_hash(pool, key, keylen);
+        token = server_pool_hash(pool, key, keylen);
         idx = vnode_dispatch(pool->continuum, pool->ncontinuum, token);
         break;
 
