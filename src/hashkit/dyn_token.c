@@ -31,37 +31,59 @@ init_dyn_token(struct dyn_token *token)
 }
 
 static uint32_t 
-parse_int(uint32_t *start, uint32_t *end)
+parse_int(uint8_t *start, uint8_t *end)
 {
-    /*     int result = Character.digit(source[start++], 10); */
-    /*     if (result == -1) */
-    /*         throw new NumberFormatException(new String(source)); */
+    ASSERT (start < end);
 
-    /*     for (int index = start; index<end; index++) { */
-    /*         int nextVal = Character.digit(source[index], 10); */
-    /*         if (nextVal == -1) */
-    /*             throw new NumberFormatException(new String(source)); */
-    /*         result = 10*result + nextVal; */
-    /*     } */
+    uint8_t res = start[0];
+    ASSERT (res >= '0' && res <= '9');
 
-    /*     return result; */
-    /* } */
+    uint8_t len = end - start;
+    for (uint8_t i = 1; i < len; i++) {
+        uint8_t next_val = start[i];
+        ASSERT (res >= '0' && res <= '9');
+        res = 10 * res + next_val;
+    }
 
-    return 0;
+    return res;
 }
 
+static void
+add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
+{
+    uint64_t product = 0;
+    uint64_t carry = 0;
+
+    /* magick! */
+    uint32_t radix_val = 0x17179149;
+
+    for (int i = len - 1; i >= 0; i--) {
+        product = radix_val * buf[i] + carry;
+        buf[i] = (uint32_t)product;
+        carry = product >> 32;
+    }
+
+    uint64_t sum = buf[len-1] + next_int;
+    buf[len-1] = (uint32_t)sum;
+    carry = sum >> 32;
+    for (int i = len-2; i >= 0; i--) {
+        sum = buf[i] + carry;
+        buf[i] = (uint32_t)sum;
+        carry = sum >> 32;
+    }
+}
 
 rstatus_t 
-set_dyn_token(uint32_t *start, uint32_t *end, struct dyn_token *token)
+set_dyn_token(uint8_t *start, uint8_t *end, struct dyn_token *token)
 {
     ASSERT(start < end);
     ASSERT(token != NULL);
 
     /* TODO-jeb: check for whitespace */
-
-    uint32_t *p = start;
-    uint32_t *q = end;
-    if (p[0] == (uint32_t)'-') {
+    char delim = '=';
+    uint8_t *p = start;
+    uint8_t *q = end;
+    if (p[0] == delim) {
         token->signum = -1;
         p++;
         ASSERT(p < q);
@@ -86,8 +108,8 @@ set_dyn_token(uint32_t *start, uint32_t *end, struct dyn_token *token)
     
     // Process remaining digit groups
     while (p < q) {
-        uint32_t local_int = parse_int(p, DIGITS_PER_INT);
-        /* destructiveMulAdd(buf, intRadix[10], local_int);  */
+        uint32_t local_int = parse_int(p, p + ((uint8_t)DIGITS_PER_INT));
+        add_next_word(buf, buf_len, local_int);
     }
 
     token->mag = nc_alloc(nwords * sizeof(uint32_t));

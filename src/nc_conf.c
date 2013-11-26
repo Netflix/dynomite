@@ -497,7 +497,7 @@ conf_dump(struct conf *cf)
  
         log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
         
-        int nseeds = array_n(&cp->dyn_seeds);
+        uint32_t nseeds = array_n(&cp->dyn_seeds);
         log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
 
         for (j = 0; j < nseeds; j++) {
@@ -1800,19 +1800,20 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 char *
 conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
 {
-    struct array *tokens = (struct array *)(conf + cmd->offset);
+    uint8_t *p = conf;
+    struct array *tokens = (struct array *)(p + cmd->offset);
     rstatus_t status = array_init(tokens, CONF_DEFAULT_VNODE_TOKENS, sizeof(struct dyn_token));
     if (status != NC_OK) {
       return CONF_ERROR;
     }
 
     struct string *value = array_top(&cf->arg);
-    uint32_t *p, *end;
+    uint8_t *end;
     p = end = value->data + value->len - 1;
-    uint32_t *start = value->data;
-    uint32_t *q = -1;
+    uint8_t *start = value->data;
+
     while (p > start) {
-        *q = nc_strrchr(p, start, ',');
+        uint8_t*q = nc_strrchr(p, start, ',');
         struct dyn_token *token = array_push(tokens);
         ASSERT (token != NULL);
         init_dyn_token(token);

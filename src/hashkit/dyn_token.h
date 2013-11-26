@@ -27,7 +27,7 @@ struct dyn_token {
 };
 
 void init_dyn_token(struct dyn_token *token);
-rstatus_t set_dyn_token(uint32_t *start, uint32_t *end, struct dyn_token *token);
+rstatus_t set_dyn_token(uint8_t *start, uint8_t *end, struct dyn_token *token);
 uint32_t cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2);
 
 #endif
