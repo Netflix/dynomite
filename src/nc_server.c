@@ -770,6 +770,9 @@ server_pool_run(struct server_pool *pool)
     case DIST_KETAMA:
         return ketama_update(pool);
 
+    case DIST_VNODE:
+        return vnode_update(pool);
+
     case DIST_MODULA:
         return modula_update(pool);
 
