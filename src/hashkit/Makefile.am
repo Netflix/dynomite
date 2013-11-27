@@ -1,6 +1,6 @@
 MAINTAINERCLEANFILES = Makefile.in
 
-AM_CPPFLAGS = -I $(top_srcdir)/src
+AM_CPPFLAGS = -I $(top_srcdir)/src -I $(top_srcdir)/contrib/murmur3
 
 AM_CFLAGS = -Wall -Wshadow
 AM_CFLAGS += -Wno-unused-parameter -Wno-unused-value
@@ -22,4 +22,5 @@ libhashkit_a_SOURCES =		\
 	nc_one_at_a_time.c	\
 	nc_random.c		\
 	dyn_vnode.c     \
-	dyn_token.c
+	dyn_token.c	    \
+	dyn_murmur3.c

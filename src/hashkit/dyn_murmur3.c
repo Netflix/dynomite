@@ -15,93 +15,25 @@
  * limitations under the License.
  */
 
-/*
- * "Murmur" hash provided by Austin, tanjent@gmail.com
- * http://murmurhash.googlepages.com/
- *
- * Note - This code makes a few assumptions about how your machine behaves -
- *
- * 1. We can read a 4-byte value from any address without crashing
- * 2. sizeof(int) == 4
- *
- * And it has a few limitations -
- * 1. It will not work incrementally.
- * 2. It will not produce the same results on little-endian and big-endian
- *  machines.
- *
- *  Updated to murmur2 hash - BP
- */
-
+#include <dyn_token.h>
 #include <nc_core.h>
-#include <nc_server.h>
+#include <murmur3.h>
+
+#define MURMUR3_SEED 0xc0a1e5ce
 
 rstatus_t
 hash_murmur3(const char *key, size_t length, struct dyn_token *token)
 {
-    /*
-     * 'm' and 'r' are mixing constants generated offline.  They're not
-     * really 'magic', they just happen to work well.
-     */
-
-    const unsigned int m = 0x5bd1e995;
-    const uint32_t seed = (0xdeadbeef * (uint32_t)length);
-    const int r = 24;
-
-
-    /* Initialize the hash to a 'random' value */
-
-    uint32_t h = seed ^ (uint32_t)length;
-
-    /* Mix 4 bytes at a time into the hash */
-
-    const unsigned char * data = (const unsigned char *)key;
-
-    while (length >= 4) {
-        unsigned int k = *(unsigned int *)data;
-
-        k *= m;
-        k ^= k >> r;
-        k *= m;
-
-        h *= m;
-        h ^= k;
-
-        data += 4;
-        length -= 4;
+    uint32_t size = sizeof(uint32_t) * 4; 
+    token->mag = nc_alloc(size);
+    if (token->mag == NULL) {
+        return NC_ENOMEM;
     }
+    memset(token->mag, 0, size);
+    token->len = 4;
+    //TODO-jeb: token->signum ?????
 
-    /* Handle the last few bytes of the input array */
+    MurmurHash3_x86_128(key, length, MURMUR3_SEED, token->mag);
 
-    switch(length) {
-    case 3:
-        h ^= ((uint32_t)data[2]) << 16;
-
-    case 2:
-        h ^= ((uint32_t)data[1]) << 8;
-
-    case 1:
-        h ^= data[0];
-        h *= m;
-
-    default:
-        break;
-    };
-
-    /*
-     * Do a few final mixes of the hash to ensure the last few bytes are
-     * well-incorporated.
-     */
-
-    h ^= h >> 13;
-    h *= m;
-    h ^= h >> 15;
-
-    token->mag = nc_alloc(sizeof(uint32_t));
-    if(token->mag == NULL) {
-        return 0;
-    }
-    token->mag[0] = h;
-    token->len = 1;
-
-    return 1;
+    return NC_OK;
 }

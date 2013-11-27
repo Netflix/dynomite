@@ -34,6 +34,7 @@
     ACTION( HASH_HSIEH,         hsieh         ) \
     ACTION( HASH_MURMUR,        murmur        ) \
     ACTION( HASH_JENKINS,       jenkins       ) \
+    ACTION( HASH_MURMUR3,       murmur3       ) \
 
 #define DIST_CODEC(ACTION)                      \
     ACTION( DIST_KETAMA,        ketama        ) \
@@ -69,7 +70,7 @@ uint32_t hash_hsieh(const char *key, size_t key_length);
 uint32_t hash_jenkins(const char *key, size_t length);
 uint32_t hash_murmur(const char *key, size_t length);
 
-rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *);
+rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token * token);
 
 rstatus_t vnode_update(struct server_pool *pool);
 uint32_t vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token);
