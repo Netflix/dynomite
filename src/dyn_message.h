@@ -4,19 +4,20 @@
 //#include <nc_message.h>
 
 typedef enum dmsg_version {
-    VERSION_10
+    VERSION_10 = 1
 } dmsg_version_t;
 
 
 typedef enum dmsg_type {
     DMSG_UNKNOWN,
+    DMSG_PARSE_ERROR,
     DMSG_REQ_MC_READ,                       /* memcache retrieval requests */
     DMSG_REQ_MC_WRITE,
     DMSG_REQ_MC_DELETE,
     GOSSIP_DIGEST_SYN,
     GOSSIP_DIGEST_ACK,
     GOSSIP_DIGEST_ACK2,
-    GOSSIP_SHUTDOWN,
+    GOSSIP_SHUTDOWN
 } dmsg_type_t;
 
 
@@ -31,21 +32,15 @@ struct dmsg {
     TAILQ_ENTRY(dmsg)     m_tqe;           /* link in free q */
 
     struct msg           *owner;
+    struct mhdr          mhdr;            /* message mbuf header */
 
     uint64_t             id;              /* message id */
     dmsg_type_t          type;            /* message type */
     dmsg_version_t       version;         /* version of the message sender */
 
-    struct mhdr          mhdr;            /* message mbuf header */
-
-    uint32_t             mlen;            /* message length */
-
-    int                  state;           /* current parser state */
-    uint8_t              *pos;            /* parser position marker */
-    uint8_t              *token;          /* token marker */
-  
     struct sockaddr      source_address;
-    struct dval          arg1; 
+    uint32_t mlen;   /*  length */
+    uint8_t  *data; /*  data */ 
 };
 
 
@@ -62,6 +57,6 @@ void dmsg_init(void);
 void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
-rstatus_t dmsg_write(struct dmsg *dmsg);
+//rstatus_t dmsg_write(struct dmsg *dmsg);
 
 #endif

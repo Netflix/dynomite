@@ -17,40 +17,41 @@ static uint32_t MAGIC_NUMBER = 2014;
 void
 dyn_parse_req(struct msg *r)
 {
+        struct dmsg *dmsg;
 	struct mbuf *b;
 	uint8_t *p, *m;
 	uint8_t ch;
         uint32_t num = 0;
-        uint8_t iteration = 0;
-        uint8_t num_args = 0; 
-        uint32_t num_bytes = 0;
 
 	enum {
-		  DYN_START,
-		  DYN_MAGIC_NUMBER = 1000,
-                  DYN_SPACES_BEFORE_MSG_ID,
-                  DYN_MSG_ID,
-                  DYN_SPACES_BEFORE_VERB_ID,
-                  DYN_VERB_ID,
-                  DYN_SPACES_BEFORE_VERSION,
-                  DYN_VERSION,
-                  DYN_CRLF_BEFORE_STAR,
-                  DYN_STAR,
-                  DYN_NUM_ARGS,
-                  DYN_CRLF_BEFORE_DOLLAR_SIGN,
-                  DYN_DOLLAR_SIGN,
-                  DYN_NUM_BYTES,
-                  DYN_CRLF_BEFORE_DATA,
-                  DYN_DATA,
-                  DYN_CRLF_END_DATA,
-		  DYN_DONE
+            DYN_START,
+            DYN_MAGIC_NUMBER = 1000,
+            DYN_SPACES_BEFORE_MSG_ID,
+            DYN_MSG_ID,
+            DYN_SPACES_BEFORE_TYPE_ID,
+            DYN_TYPE_ID,
+            DYN_SPACES_BEFORE_VERSION,
+            DYN_VERSION,
+            DYN_CRLF_BEFORE_STAR,
+            DYN_STAR,
+            DYN_DATA_LEN,
+            DYN_SPACE_BEFORE_DATA,
+            DYN_DATA,
+            DYN_CRLF_BEFORE_DONE,
+            DYN_DONE
 	} state;
 	    
 	if (r->dyn_state == DYN_DONE)
-		return memcache_parse_req(r);
+	    return memcache_parse_req(r);
 	
 	state = r->dyn_state;
 	b = STAILQ_LAST(&r->mhdr, mbuf, next);    
+
+        dmsg = r->dmsg;
+        if (dmsg == NULL) {
+            r->dmsg = dmsg_get();
+            dmsg = r->dmsg;          
+        }
 	
 	for (p = r->pos; p < b->last; p++) {
 		ch = *p;
@@ -76,11 +77,9 @@ dyn_parse_req(struct msg *r)
                             } else {
                                 if (num == MAGIC_NUMBER) {
                                    state = DYN_SPACES_BEFORE_MSG_ID;
-                                   num = 0;
                                 } else {
                                    goto error;
                                 }
-                                    
                             }
 
 		            break;
@@ -104,35 +103,35 @@ dyn_parse_req(struct msg *r)
                             } else {  
                                 if (num > 0) {
                                    loga("MSG ID : %d", num);
-                                   state = DYN_SPACES_BEFORE_VERB_ID;
-                                   num = 0;
+                                   dmsg->id = num;
+                                   state = DYN_SPACES_BEFORE_TYPE_ID;
                                 } else {
                                    goto error;
                                 }
                             }
                             break;                         
                       
-                        case DYN_SPACES_BEFORE_VERB_ID:
-                            loga("DYN_SPACES_BEFORE_VERB_ID");
+                        case DYN_SPACES_BEFORE_TYPE_ID:
+                            loga("DYN_SPACES_BEFORE_TYPE_ID");
                             if (ch == ' ') {
                                 break;
                             } else if (isdigit(ch)) {
                                num = ch - '0'; 
-                               state = DYN_VERB_ID;
+                               state = DYN_TYPE_ID;
                             }
 
                             break;
 
-                        case DYN_VERB_ID:
-                            loga("DYN_VERB_ID");
+                        case DYN_TYPE_ID:
+                            loga("DYN_TYPE_ID");
                             loga("num = %d", num);
                             if (isdigit(ch))  {
                                 num = num*10 + (ch - '0');
                             } else {
                                 if (num > 0)  {
                                    loga("VERB ID: %d", num);
+                                   dmsg->type = num;
                                    state = DYN_SPACES_BEFORE_VERSION;
-                                   num = 0;
                                 } else {
                                    goto error;       
                                 }
@@ -158,8 +157,8 @@ dyn_parse_req(struct msg *r)
                             } else {
                                 if (ch == CR)  {
                                    loga("VERSION : %d", num);
+                                   dmsg->version = num;
                                    state = DYN_CRLF_BEFORE_STAR;
-                                   num = 0;
                                 } else {
                                    goto error;
                                 }
@@ -180,7 +179,7 @@ dyn_parse_req(struct msg *r)
                         case DYN_STAR:
                            loga("DYN_STAR");
                            if (ch = '*') {
-                               state = DYN_NUM_ARGS;
+                               state = DYN_DATA_LEN;
                                num = 0;
                            } else {
                                goto error;
@@ -188,16 +187,16 @@ dyn_parse_req(struct msg *r)
 
                            break;
 
-                        case DYN_NUM_ARGS:
-                           loga("DYN_NUM_ARGS");
+                        case DYN_DATA_LEN:
+                           loga("DYN_DATA_LEN");
                            loga("num = %d", num);
                            if (isdigit(ch))  {
                                 num = num*10 + (ch - '0');
                            } else {
-                               if (ch == CR)  {
-                                  loga("Num args: %d", num);
-                                  num_args = num;
-                                  state = DYN_CRLF_BEFORE_DOLLAR_SIGN;
+                               if (ch == ' ')  {
+                                  loga("Data len: %d", num);
+                                  dmsg->mlen = num;
+                                  state = DYN_SPACE_BEFORE_DATA;
                                   num = 0;
                                } else {
                                   goto error;
@@ -205,91 +204,48 @@ dyn_parse_req(struct msg *r)
                            }
                            break;
 
-                        case DYN_CRLF_BEFORE_DOLLAR_SIGN:
-                           loga("DYN_CRLF_BEFORE_DOLLAR_SIGN");
-                           if (ch == LF)  {
-                               state = DYN_DONE;
-                               goto done;;
-                            } else {
+                        case DYN_SPACE_BEFORE_DATA:
+                           loga("DYN_SPACE_BEFORE_DATA");
+                           state = DYN_DATA;
+                           break;
+
+                        case DYN_DATA:
+                           loga("DYN_DATA");
+                           p -= 1;
+                           if (dmsg->mlen >= 0)  {
+                               dmsg->data = p;
+                               p += dmsg->mlen - 1;                  
+                               state = DYN_CRLF_BEFORE_DONE;
+                           } else {
                                goto error;
-                            }
+                           }
    
                            break;
-     /*
-                        case DYN_DOLLAR_SIGN:
-                           if (ch = '*')  {
-                               state = DYN_NUM_BYTES;  
+                        
+                        case DYN_CRLF_BEFORE_DONE:
+                           loga("DYN_CRLF_BEFORE_DONE");
+          
+                           if (ch == CR)  {
+                              p += 1;
+                              if (*p == LF) {
+                                 state = DYN_DONE;
+                              } else {
+                                 goto error;
+                              }
                            } else {
                                goto error;
                            }
-
-
-                           break;
-                      
-                        case DYN_NUM_BYTES:
-                           if (isdigit(ch))  {
-                                num += iteration * (ch - '0');
-                                iteration++;
-                           } else {
-                                if (num > 0)  {
-                                    loga("Num bytes: %d", num);
-                                    num_bytes = num;
-                                    state = DYN_CRLF_BEFORE_DATA;
-                                    num = 0;
-                                    iteration = 0;
-                                } else {
-                                    goto error;
-                                }
-        
-                           }
-                       
-                           break;
  
-                        case DYN_CRLF_BEFORE_DATA:
-                               p += num_bytes;
-                               num_bytes = 0;
-                               //store the value in somewhere
-                               
                            break;
 
-                        case 
-  */
-                        /*
+                        case DYN_DONE:
+                           loga("DYN_DONE");
+                           r->pos = p;
+                           r->dyn_state = DYN_DONE; 
+                           b->pos = p;
+                           goto done;
+                           break;
 
-		        case DYN_MAGIC_CHAR:
-                            loga("DYN_MAGIC_CHAR");
-		            if (ch == ' ') {
-		        	   break;
-		            }
-		        	
-		            if (isdigit(ch) && isdigit(*(p+1)) && isdigit(*(p+2)) ) {
-		               r->verb_start = p;
-                               p = p + 3;
-		               state = DYN_SPACES_BEFORE_IP;
-		            } else {
-		               goto error;
-		            }
-		        	
-		            break;
-		            
-		        case DYN_SPACES_BEFORE_IP:
-                            loga("DYN_SPACES_BEFORE_IP");
-		            if (ch == ' ') {
-		                break;
-		            }
-		        	
-		            state = DYN_IP;
-		            break;
-		        	
-		        case DYN_IP:
-                            loga("DYN_IP");
-		            //fix me for checking
-		            r->ip_start = p;
-		            p = p + 8;
-		            state = DYN_DONE;
-		            goto done;
-		            break;
-                        */
 		        default:
 		            NOT_REACHED();
 		            break;
@@ -298,21 +254,25 @@ dyn_parse_req(struct msg *r)
 		
 	}
 	
-	done:
-            loga("at done with p at %d", p);
-
-	    r->pos = p + 1;
-	    r->dyn_state = DYN_DONE; 
-            b->pos = p + 1; 
-            	
-    
-	    log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed rsp %"PRIu64" res %d "
+    done:
+       loga("at done with p at %d", p);
+       dmsg_dump(r->dmsg); 
+       log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed rsp %"PRIu64" res %d "
 	                    "type %d state %d rpos %d of %d", r->id, r->result, r->type,
 	                    r->dyn_state, r->pos - b->pos, b->last - b->pos);
-	    return memcache_parse_req(r);
+       return memcache_parse_req(r);
 	    
     error:
-            loga("at error");
+       loga("at error");
+       r->result = DMSG_PARSE_ERROR;
+       r->state = state;
+       errno = EINVAL;
+
+       log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
+                "res %d type %d state %d", r->id, r->result, r->type,
+                r->state);
+       return;
+
     return memcache_parse_req(r);  //fix me
 }
 
@@ -347,7 +307,7 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-    loga("dmsg dump id %"PRIu64"  len %"PRIu32" type %d  ", dmsg->id, dmsg->mlen, dmsg->type);
+    loga("dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
 
     STAILQ_FOREACH(mbuf, &dmsg->mhdr, next) {
         uint8_t *p, *q;
@@ -417,37 +377,22 @@ dmsg_get(void)
     }
 
 done:
-    /* c_tqe, s_tqe, and m_tqe are left uninitialized */
     dmsg->id = ++dmsg_id;
-
 
     STAILQ_INIT(&dmsg->mhdr);
     dmsg->mlen = 0;
-    dmsg->state = 0;
-    dmsg->pos = NULL;
-    dmsg->token = NULL;
+    dmsg->data = NULL;
 
     dmsg->type = MSG_UNKNOWN;
-        //dmsg->key_start = NULL;
-    //dmsg->key_end = NULL;
-
-    //dmsg->vlen = 0;
-    //dmsg->end = NULL;
-
-
-    //dmsg->narg_start = NULL;
-    //dmsg->narg_end = NULL;
-    //dmsg->narg = 0;
-    //dmsg->rnarg = 0;
-    //dmsg->rlen = 0;
-    //dmsg->integer = 0;
-
-    //dmsg->error = 0;
+    dmsg->id = 0;
+    dmsg->version = VERSION_10;
+    
 
     return dmsg;
 }
 
 
+/*
 
 rstatus_t
 dmsg_write(struct dmsg *dmsg)
@@ -465,7 +410,7 @@ dmsg_write(struct dmsg *dmsg)
             return NC_ENOMEM;
         }
         mbuf_insert(&dmsg->mhdr, mbuf);
-        dmsg->pos = mbuf->pos;
+        dmsg->data = mbuf->pos;
         loga("in here");
     }
     ASSERT(mbuf->end - mbuf->last > 0);
@@ -489,7 +434,7 @@ dmsg_write(struct dmsg *dmsg)
 }
 
 
-
+*/
 
 
 

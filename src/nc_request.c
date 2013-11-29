@@ -512,7 +512,7 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
      
     //int a = 123;
     //mbuf_copy(nbuf, &a, 4);
-    struct string type = string("2014 123 1 1\x0d\x0a*5\x0d\x0a");  //this should be an element in a small range < 1000 values
+    struct string type = string("2014 123 1 1\x0d\x0a*6 Justin\x0d\x0a");  //this should be an element in a small range < 1000 values
 
     mbuf_copy(nbuf, type.data, type.len);
     
@@ -528,17 +528,7 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     }
     
     mbuf_insert_head(&msg->mhdr, nbuf);
-    //msg->pos = nbuf->pos;
-    //msg->mlen = mbuf_length(nbuf);
 
-    //mbuf_insert(&nmsg->mhdr, nbuf);
-    //nmsg->pos = nbuf->pos;
-
-    /* update length of current (msg) and new message (nmsg) */
-    //nmsg->mlen = mbuf_length(nbuf);
-    //nmsg->noreply = 1; 
-    //is there better to just add nbuf into the origin msg instead of enqueueing twice      
-    //s_conn->enqueue_inq(ctx, s_conn, nmsg);
     s_conn->enqueue_inq(ctx, s_conn, msg);
 
     //fix me - coordinator stats
