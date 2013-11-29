@@ -160,6 +160,7 @@ _conn_get(void)
     /* for dynomite */
     conn->dyn_client = 0;
     conn->dnode = 0;
+    conn->dyn_mode = 0;
 
     return conn;
 }
@@ -176,6 +177,7 @@ conn_get_peer(void *owner, bool client)
     }
 
     conn->dyn_client = client? 1 : 0;   
+    conn->dyn_mode = 1;
 
     if (conn->dyn_client) {
         /*
@@ -247,6 +249,7 @@ conn_get(void *owner, bool client, bool redis)
     conn->redis = redis ? 1 : 0;
 
     conn->client = client ? 1 : 0;
+    conn->dyn_mode = 0;
 
     if (conn->client) {
         /*
@@ -318,6 +321,7 @@ conn_get_dnode(void *owner)
     conn->redis = pool->redis;
 
     conn->dnode = 1;
+    conn->dyn_mode = 1;
 
     conn->recv = dnode_recv;
     conn->recv_next = NULL;
@@ -360,6 +364,7 @@ conn_get_proxy(void *owner)
     conn->redis = pool->redis;
 
     conn->proxy = 1;
+    conn->dyn_mode = 0;
 
     conn->recv = proxy_recv;
     conn->recv_next = NULL;

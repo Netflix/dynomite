@@ -19,6 +19,8 @@
 #define _NC_MESSAGE_H_
 
 #include <nc_core.h>
+#include <dyn_message.h>
+
 
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
@@ -212,6 +214,10 @@ struct msg {
     unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
     unsigned             redis:1;         /* redis? */
+
+    //dynomite
+    struct dmsg          *dmsg;          /* dyn message */
+    int                  dyn_state;
 };
 
 TAILQ_HEAD(msg_tqh, msg);
@@ -277,8 +283,7 @@ struct msg *dyn_rsp_send_next(struct context *ctx, struct conn *conn);
 void dyn_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
-void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg);
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg);
-
+void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
 
 #endif

@@ -182,6 +182,15 @@ mbuf_insert(struct mhdr *mhdr, struct mbuf *mbuf)
     log_debug(LOG_VVERB, "insert mbuf %p len %d", mbuf, mbuf->last - mbuf->pos);
 }
 
+void
+mbuf_insert_head(struct mhdr *mhdr, struct mbuf *mbuf)
+{
+    STAILQ_INSERT_HEAD(mhdr, mbuf, next);
+    log_debug(LOG_VVERB, "insert head mbuf %p len %d", mbuf, mbuf->last - mbuf->pos);
+}
+
+
+
 /*
  * Remove mbuf from the mhdr Q
  */

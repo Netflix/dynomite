@@ -257,6 +257,9 @@ done:
     msg->swallow = 0;
     msg->redis = 0;
 
+    //dynomite
+    msg->dyn_state = 0;
+
     return msg;
 }
 
@@ -286,7 +289,11 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_coalesce = redis_post_coalesce;
     } else {
         if (request) {
-            msg->parser = memcache_parse_req;
+            if (conn->dyn_mode) {
+               msg->parser = dyn_parse_req;
+            } else {
+               msg->parser = memcache_parse_req;
+            }
         } else {
             msg->parser = memcache_parse_rsp;
         }

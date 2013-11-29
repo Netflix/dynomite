@@ -34,6 +34,7 @@ dynomite_SOURCES =			            \
         dyn_client.h dyn_client.c                   \
         dyn_request.c                               \
         dyn_response.c                              \
+        dyn_message.c dyn_message.h                 \
         nc_core.c nc_core.h                         \
         nc_connection.c nc_connection.h             \
         nc_client.c nc_client.h                     \

@@ -413,6 +413,7 @@ dyn_req_forward_stats(struct context *ctx, struct server *server, struct msg *ms
     //stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
+
 static void
 dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 {
@@ -424,8 +425,32 @@ dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 
     ASSERT(dyn_c_conn->dyn_client && !dyn_c_conn->dnode);
 
-    local_req_forward(ctx, dyn_c_conn, msg);
+    pool = dyn_c_conn->owner;
+    key = NULL;
+    keylen = 0;
+
+    if (!string_empty(&pool->hash_tag)) {
+        struct string *tag = &pool->hash_tag;
+        uint8_t *tag_start, *tag_end;
+
+        tag_start = nc_strchr(msg->key_start, msg->key_end, tag->data[0]);
+        if (tag_start != NULL) {
+            tag_end = nc_strchr(tag_start + 1, msg->key_end, tag->data[1]);
+            if (tag_end != NULL) {
+                key = tag_start + 1;
+                keylen = (uint32_t)(tag_end - key);
+            }
+        }
+    }
+
+    if (keylen == 0) {
+        key = msg->key_start;
+        keylen = (uint32_t)(msg->key_end - msg->key_start);
+    }
+
+    local_req_forward(ctx, dyn_c_conn, msg, key, keylen);
 }
+
 
 void
 dyn_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,

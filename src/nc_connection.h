@@ -86,6 +86,7 @@ struct conn {
     unsigned           redis:1;       /* redis? */
     unsigned           dnode:1;       /* dynnomite connection? */
     unsigned           dyn_client:1;  /* dnode client? */
+    unsigned           dyn_mode:1;    /* is a dyn connection? */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
