@@ -509,24 +509,20 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
        return;;
     }
   
-     
-    //int a = 123;
-    //mbuf_copy(nbuf, &a, 4);
-    struct string type = string("2014 123 1 1\x0d\x0a*6 Justin\x0d\x0a");  //this should be an element in a small range < 1000 values
-
-    mbuf_copy(nbuf, type.data, type.len);
-    
-    //uint8_t version = (uint8_t) 1;
-    
-    //mbuf_copy(nbuf, &version, 1);
-  
-    
     struct msg * nmsg = msg_get(msg->owner, msg->request, c_conn->redis);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return;
     }
-    
+   
+
+    //dyn message's meta data
+    uint64_t msg_id = 1234;
+    uint8_t type = 1;
+    uint8_t version = 1;
+    struct string data = string("Justin");
+
+    write_dyn_msg(nbuf, msg_id, type, version, &data);
     mbuf_insert_head(&msg->mhdr, nbuf);
 
     s_conn->enqueue_inq(ctx, s_conn, msg);

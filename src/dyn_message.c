@@ -13,6 +13,9 @@ static struct dmsg_tqh free_dmsgq; /* free msg q */
 
 static uint32_t MAGIC_NUMBER = 2014;
 
+static const struct string MAGIC_STR = string("2014 ");
+static const struct string CRLF_STR = string(CRLF);
+
 
 void
 dyn_parse_req(struct msg *r)
@@ -392,49 +395,28 @@ done:
 }
 
 
-/*
-
-rstatus_t
-dmsg_write(struct dmsg *dmsg)
+rstatus_t 
+write_dyn_msg(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data)
 {
-    rstatus_t status;
-    struct dmsg *nmsg;
-    struct mbuf *mbuf;
-    size_t msize;
-    ssize_t n;
 
-    mbuf = STAILQ_LAST(&dmsg->mhdr, mbuf, next);
-    if (mbuf == NULL || mbuf_full(mbuf)) {
-        mbuf = mbuf_get();
-        if (mbuf == NULL) {
-            return NC_ENOMEM;
-        }
-        mbuf_insert(&dmsg->mhdr, mbuf);
-        dmsg->data = mbuf->pos;
-        loga("in here");
-    }
-    ASSERT(mbuf->end - mbuf->last > 0);
+    mbuf_write_string(mbuf, &MAGIC_STR);
+    mbuf_write_uint64(mbuf, msg_id);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_uint8(mbuf, type);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_uint8(mbuf, version);
+    mbuf_write_string(mbuf, &CRLF_STR);
+    mbuf_write_char(mbuf, '*');
+    mbuf_write_uint32(mbuf, data->len);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_string(mbuf, data);
+    mbuf_write_string(mbuf, &CRLF_STR);
 
-    msize = mbuf_size(mbuf);
-
-    loga("msize : %d", msize);
-    loga("last - start = %d", (mbuf->last - mbuf->start));
-
-    struct string s = string("lovelyday");
-
-    mbuf_copy(mbuf, s.data, s.len);
-
-    loga("last - start = %d", (mbuf->last - mbuf->start));
-    //ASSERT((mbuf->last + ) <= mbuf->end);
-    //mbuf->last += s.len;
-    dmsg->mlen += (uint32_t)s.len;
-
-    loga("mbuf: start=%d, last=%d, pos=%d, end=%d", mbuf->start, mbuf->last, mbuf->pos, mbuf->end);
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");
+     
     return NC_OK;
 }
 
-
-*/
 
 
 

@@ -1,7 +1,6 @@
 #ifndef _NC_DYN_MESSAGE_H_
 #define _NC_DYN_MESSAGE_H_
 
-//#include <nc_message.h>
 
 typedef enum dmsg_version {
     VERSION_10 = 1
@@ -57,6 +56,6 @@ void dmsg_init(void);
 void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
-//rstatus_t dmsg_write(struct dmsg *dmsg);
+rstatus_t write_dyn_msg(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
 
 #endif

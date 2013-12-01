@@ -292,3 +292,62 @@ mbuf_deinit(void)
     }
     ASSERT(nfree_mbufq == 0);
 }
+
+
+void 
+mbuf_write_char(struct mbuf *mbuf, char ch) 
+{
+   ASSERT(mbuf_size(mbuf) >= 1);
+   *mbuf->last = ch;
+   mbuf->last += 1;
+}
+
+
+void 
+mbuf_write_string(struct mbuf *mbuf, struct string *s)
+{
+   ASSERT(s.len > mbuf_size(mbuf));
+   mbuf_copy(mbuf, s->data, s->len);
+}
+
+
+void
+mbuf_write_uint8(struct mbuf *mbuf, uint8_t num)
+{
+   if (num < 10) {
+      mbuf_write_char(mbuf, '0' + num);
+      return;
+   }
+
+   mbuf_write_uint8(mbuf, num / 10);
+   mbuf_write_char(mbuf, '0' + (num % 10));
+}
+
+
+void
+mbuf_write_uint32(struct mbuf *mbuf, uint32_t num)
+{
+   if (num < 10) {
+      mbuf_write_char(mbuf, '0' + num);
+      return;
+   }
+
+   mbuf_write_uint32(mbuf, num / 10);
+   mbuf_write_char(mbuf, '0' + (num % 10));
+}
+
+
+void 
+mbuf_write_uint64(struct mbuf *mbuf, uint64_t num)
+{
+ 
+   if (num < 10) {
+      mbuf_write_char(mbuf, '0' + (num % 10));
+      return;
+   }
+
+   mbuf_write_uint64(mbuf, num / 10);
+   mbuf_write_char(mbuf, '0' + (num % 10)); 
+}
+
+
