@@ -258,6 +258,7 @@ dyn_parse_req(struct msg *r)
 	}
 	
     done:
+       dmsg->owner = r;       
        loga("at done with p at %d", p);
        dmsg_dump(r->dmsg); 
        log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed rsp %"PRIu64" res %d "
@@ -396,7 +397,7 @@ done:
 
 
 rstatus_t 
-write_dyn_msg(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data)
+dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data)
 {
 
     mbuf_write_string(mbuf, &MAGIC_STR);
@@ -418,6 +419,34 @@ write_dyn_msg(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version,
 }
 
 
+rstatus_t 
+dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
+{
+    ASSERT(dmsg != NULL);
+    ASSERT(conn->dyn_mode);
 
+    struct string s;
+
+    loga("dmsg process: type %d", dmsg->type);
+    switch(dmsg->type) {
+        case DMSG_DEBUG:
+           s.len = dmsg->mlen;
+           s.data = dmsg->data;
+           log_hexdump(LOG_VERB, s.data, s.len, "dyn processing message ");
+           break;
+        case GOSSIP_DIGEST_SYN:
+           break;
+
+        case GOSSIP_DIGEST_ACK:
+          break;
+
+        case GOSSIP_DIGEST_ACK2:
+          break;
+        default:
+          loga("nothing to do");
+    }
+       
+    return NC_OK;
+}
 
 

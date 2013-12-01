@@ -522,7 +522,7 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     uint8_t version = 1;
     struct string data = string("Justin");
 
-    write_dyn_msg(nbuf, msg_id, type, version, &data);
+    dmsg_write(nbuf, msg_id, type, version, &data);
     mbuf_insert_head(&msg->mhdr, nbuf);
 
     s_conn->enqueue_inq(ctx, s_conn, msg);

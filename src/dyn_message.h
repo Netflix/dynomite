@@ -8,6 +8,7 @@ typedef enum dmsg_version {
 
 
 typedef enum dmsg_type {
+    DMSG_DEBUG = 1,
     DMSG_UNKNOWN,
     DMSG_PARSE_ERROR,
     DMSG_REQ_MC_READ,                       /* memcache retrieval requests */
@@ -56,6 +57,7 @@ void dmsg_init(void);
 void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
-rstatus_t write_dyn_msg(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
+rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
+rstatus_t dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 #endif

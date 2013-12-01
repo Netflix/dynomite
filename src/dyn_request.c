@@ -357,6 +357,12 @@ dyn_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         return true;
     }
 
+
+    /* dynomite hanlder */
+    if (msg->dmsg != NULL) {
+        dmsg_process(ctx, conn, msg->dmsg); 
+    }
+
     /*
      * Handle "quit\r\n", which is the protocol way of doing a
      * passive close
