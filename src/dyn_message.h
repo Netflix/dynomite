@@ -38,9 +38,9 @@ struct dmsg {
     dmsg_type_t          type;            /* message type */
     dmsg_version_t       version;         /* version of the message sender */
 
-    struct sockaddr      source_address;
-    uint32_t mlen;   /*  length */
-    uint8_t  *data; /*  data */ 
+    struct sockaddr      *source_address; /* source ip */
+    uint32_t mlen;                        /*  length */
+    uint8_t  *data;                       /*  data */ 
 };
 
 

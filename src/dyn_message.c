@@ -258,7 +258,8 @@ dyn_parse_req(struct msg *r)
 	}
 	
     done:
-       dmsg->owner = r;       
+       dmsg->owner = r;   
+       dmsg->source_address = r->owner->addr;    
        loga("at done with p at %d", p);
        dmsg_dump(r->dmsg); 
        log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed rsp %"PRIu64" res %d "
