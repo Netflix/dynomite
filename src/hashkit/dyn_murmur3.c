@@ -24,16 +24,12 @@
 rstatus_t
 hash_murmur3(const char *key, size_t length, struct dyn_token *token)
 {
-    uint32_t size = sizeof(uint32_t) * 4; 
-    token->mag = nc_alloc(size);
-    if (token->mag == NULL) {
-        return NC_ENOMEM;
+    rstatus_t status = size_dyn_token(token, 4);
+    if (status != NC_OK) {
+        return status;
     }
-    memset(token->mag, 0, size);
-    token->len = 4;
-    //TODO-jeb: token->signum ?????
 
-    MurmurHash3_x86_128(key, length, MURMUR3_SEED, token->mag);
+//    MurmurHash3_x86_128(key, length, MURMUR3_SEED, token->mag);
 
     return NC_OK;
 }

@@ -32,6 +32,29 @@ init_dyn_token(struct dyn_token *token)
     token->len = 0;
 }
 
+rstatus_t 
+size_dyn_token(struct dyn_token *token, uint32_t token_len)
+{
+    uint32_t size = sizeof(uint32_t) * token_len; 
+    token->mag = nc_alloc(size);
+    if (token->mag == NULL) {
+        return NC_ENOMEM;
+    }
+    memset(token->mag, 0, size);
+    token->len = token_len;
+    token->signum = 0;
+
+    return NC_OK;
+}
+
+void 
+set_int_dyn_token(struct dyn_token *token, uint32_t val)
+{
+    token->mag[0] = val;
+    token->len = 1;
+    token->signum = val > 0 ? 1 : 0;
+}
+
 static void
 add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
 {
