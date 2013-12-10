@@ -624,36 +624,43 @@ server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     struct server *server;
     uint32_t hash, idx;
-    struct dyn_token *token;
+    struct dyn_token *token = NULL;
 
     ASSERT(array_n(&pool->server) != 0);
     ASSERT(key != NULL && keylen != 0);
+
+    struct datacenter *dc = server_get_datacenter(pool, &pool->dc);
+    ASSERT(dc != NULL);
 
     switch (pool->dist_type) {
     case DIST_KETAMA:
         token = server_pool_hash(pool, key, keylen);
         hash = token->mag[0];
-        idx = ketama_dispatch(pool->continuum, pool->ncontinuum, hash);
+        idx = ketama_dispatch(dc->continuum, dc->ncontinuum, hash);
         break;
 
     case DIST_VNODE:
         token = server_pool_hash(pool, key, keylen);
-        idx = vnode_dispatch(pool->continuum, pool->ncontinuum, token);
+        idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
         break;
 
     case DIST_MODULA:
         token = server_pool_hash(pool, key, keylen);
         hash = token->mag[0];
-        idx = modula_dispatch(pool->continuum, pool->ncontinuum, hash);
+        idx = modula_dispatch(dc->continuum, dc->ncontinuum, hash);
         break;
 
     case DIST_RANDOM:
-        idx = random_dispatch(pool->continuum, pool->ncontinuum, 0);
+        idx = random_dispatch(dc->continuum, dc->ncontinuum, 0);
         break;
 
     default:
         NOT_REACHED();
         return NULL;
+    }
+    if (token != NULL) {
+        deinit_dyn_token(token);
+        nc_free(token);
     }
     ASSERT(idx < array_n(&pool->server));
 
@@ -836,6 +843,19 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
     return NC_OK;
 }
 
+static rstatus_t
+datacenter_deinit(void *elem, void *data)
+{
+    struct datacenter *dc = elem;
+    if (dc->continuum != NULL) {
+        nc_free(dc->continuum);
+        dc->ncontinuum = 0;
+        dc->nserver_continuum = 0;
+    }
+
+    return NC_OK;
+}
+
 void
 server_pool_deinit(struct array *server_pool)
 {
@@ -848,14 +868,9 @@ server_pool_deinit(struct array *server_pool)
         ASSERT(sp->p_conn == NULL);
         ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->nc_conn_q == 0);
 
-        if (sp->continuum != NULL) {
-            nc_free(sp->continuum);
-            sp->ncontinuum = 0;
-            sp->nserver_continuum = 0;
-            sp->nlive_server = 0;
-        }
-
         server_deinit(&sp->server);
+        array_each(&sp->datacenter, datacenter_deinit, NULL);
+        sp->nlive_server = 0;
 
         log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,
                   sp->name.len, sp->name.data);
@@ -865,3 +880,12 @@ server_pool_deinit(struct array *server_pool)
 
     log_debug(LOG_DEBUG, "deinit %"PRIu32" pools", npool);
 }
+
+struct datacenter *
+server_get_datacenter(struct server_pool *pool, struct string *dcname)
+{
+    struct datacenter *dc = NULL;
+
+    return dc;
+}
+

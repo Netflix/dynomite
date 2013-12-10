@@ -213,29 +213,10 @@ vnode_update(struct server_pool *pool)
 uint32_t
 vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token)
 {
+    // need ordered array of vnodes, in each dc
+
+    // assume max range is 4 bytes (uint32_t), then do BST
+
     
-
-
-    /* struct continuum *begin, *end, *left, *right, *middle; */
-
-    /* ASSERT(continuum != NULL); */
-    /* ASSERT(ncontinuum != 0); */
-
-    /* begin = left = continuum; */
-    /* end = right = continuum + ncontinuum; */
-
-    /* while (left < right) { */
-    /*     middle = left + (right - left) / 2; */
-    /*     if (middle->value < hash) { */
-    /*       left = middle + 1; */
-    /*     } else { */
-    /*       right = middle; */
-    /*     } */
-    /* } */
-
-    /* if (right == end) { */
-    /*     right = begin; */
-    /* } */
-
-  return 1;//right->index;
+  return 0;
 }

@@ -27,6 +27,7 @@ struct dyn_token {
 };
 
 void init_dyn_token(struct dyn_token *token);
+void deinit_dyn_token(struct dyn_token *token);
 rstatus_t size_dyn_token(struct dyn_token *token, uint32_t size);
 
 /**

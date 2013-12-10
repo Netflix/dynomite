@@ -645,36 +645,43 @@ dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     struct peer *server;
     uint32_t hash, idx;
-    struct dyn_token *token;
+    struct dyn_token *token = NULL;
 
     ASSERT(array_n(&pool->peers) != 0);
     ASSERT(key != NULL && keylen != 0);
+
+    struct datacenter *dc = server_get_datacenter(pool, &pool->dc);
+    ASSERT(dc != NULL);
 
     switch (pool->dist_type) {
     case DIST_KETAMA:
         token = dyn_peer_pool_hash(pool, key, keylen);
         hash = token->mag[0];
-        idx = ketama_dispatch(pool->continuum, pool->ncontinuum, hash);
+        idx = ketama_dispatch(dc->continuum, dc->ncontinuum, hash);
         break;
 
     case DIST_VNODE:
         token = dyn_peer_pool_hash(pool, key, keylen);
-        idx = vnode_dispatch(pool->continuum, pool->ncontinuum, token);
+        idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
         break;
 
     case DIST_MODULA:
         token = dyn_peer_pool_hash(pool, key, keylen);
         hash = token->mag[0];
-        idx = modula_dispatch(pool->continuum, pool->ncontinuum, hash);
+        idx = modula_dispatch(dc->continuum, dc->ncontinuum, hash);
         break;
 
     case DIST_RANDOM:
-        idx = random_dispatch(pool->continuum, pool->ncontinuum, 0);
+        idx = random_dispatch(dc->continuum, dc->ncontinuum, 0);
         break;
 
     default:
         NOT_REACHED();
         return NULL;
+    }
+    if (token != NULL) {
+        deinit_dyn_token(token);
+        nc_free(token);
     }
     ASSERT(idx < array_n(&pool->peers));
 
@@ -857,6 +864,20 @@ dyn_peer_pool_init(struct array *server_pool, struct array *conf_pool,
     return NC_OK;
 }
 
+
+static rstatus_t
+datacenter_deinit(void *elem, void *data)
+{
+    struct datacenter *dc = elem;
+    if (dc->continuum != NULL) {
+        nc_free(dc->continuum);
+        dc->ncontinuum = 0;
+        dc->nserver_continuum = 0;
+    }
+
+    return NC_OK;
+}
+
 void
 dyn_peer_pool_deinit(struct array *server_pool)
 {
@@ -870,14 +891,10 @@ dyn_peer_pool_deinit(struct array *server_pool)
         //fixe me to use different variables
         ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->nc_conn_q == 0);
 
-        if (sp->continuum != NULL) {
-            nc_free(sp->continuum);
-            sp->ncontinuum = 0;
-            sp->nserver_continuum = 0;
-            sp->nlive_server = 0;
-        }
 
         dyn_peer_deinit(&sp->peers);
+        array_each(&sp->datacenter, datacenter_deinit, NULL);
+        sp->nlive_server = 0;
 
         log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,
                   sp->name.len, sp->name.data);

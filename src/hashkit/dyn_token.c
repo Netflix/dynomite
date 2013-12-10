@@ -32,6 +32,14 @@ init_dyn_token(struct dyn_token *token)
     token->len = 0;
 }
 
+void 
+deinit_dyn_token(struct dyn_token *token)
+{
+    nc_free(token->mag);
+    token->signum = 0;
+    token->len = 0;
+}
+
 rstatus_t 
 size_dyn_token(struct dyn_token *token, uint32_t token_len)
 {

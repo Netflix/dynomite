@@ -64,7 +64,14 @@ typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 
 struct continuum {
     uint32_t index;  /* server index */
-    uint32_t value;  /* hash value */
+    uint32_t value;  /* hash value, used by ketama */
+};
+
+struct datacenter {
+    struct string      *name;
+    uint32_t           ncontinuum;           /* # continuum points */
+    uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
+    struct continuum   *continuum;           /* continuum */
 };
 
 struct server {
@@ -95,9 +102,7 @@ struct server_pool {
     struct conn_tqh    c_conn_q;             /* client connection q */
 
     struct array       server;               /* server[] */
-    uint32_t           ncontinuum;           /* # continuum points */
-    uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
-    struct continuum   *continuum;           /* continuum */
+    struct array       datacenter;           /* datacenter info  */
     uint32_t           nlive_server;         /* # live server */
     int64_t            next_rebuild;         /* next distribution rebuild time in usec */
 
@@ -149,6 +154,8 @@ rstatus_t server_connect(struct context *ctx, struct server *server, struct conn
 void server_close(struct context *ctx, struct conn *conn);
 void server_connected(struct context *ctx, struct conn *conn);
 void server_ok(struct context *ctx, struct conn *conn);
+
+struct datacenter *server_get_datacenter(struct server_pool *pool, struct string *dcname);
 
 struct conn *server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key, uint32_t keylen);
 rstatus_t server_pool_run(struct server_pool *pool);

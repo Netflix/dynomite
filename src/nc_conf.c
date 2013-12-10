@@ -386,9 +386,10 @@ conf_pool_each_transform(void *elem, void *data)
     TAILQ_INIT(&sp->c_conn_q);
 
     array_null(&sp->server);
-    sp->ncontinuum = 0;
-    sp->nserver_continuum = 0;
-    sp->continuum = NULL;
+    array_null(&sp->datacenter);
+    /* sp->ncontinuum = 0; */
+    /* sp->nserver_continuum = 0; */
+    /* sp->continuum = NULL; */
     sp->nlive_server = 0;
     sp->next_rebuild = 0LL;
 
