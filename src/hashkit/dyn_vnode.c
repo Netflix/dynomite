@@ -19,192 +19,80 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include <dyn_peer.h>
 #include <nc_core.h>
 #include <nc_server.h>
 #include <nc_hashkit.h>
-
-static uint32_t
-vnode_hash(const char *key, size_t key_length, uint32_t alignment)
-{
-    unsigned char results[16];
-
-    md5_signature((unsigned char*)key, key_length, results);
-
-    return ((uint32_t) (results[3 + alignment * 4] & 0xFF) << 24)
-        | ((uint32_t) (results[2 + alignment * 4] & 0xFF) << 16)
-        | ((uint32_t) (results[1 + alignment * 4] & 0xFF) << 8)
-        | (results[0 + alignment * 4] & 0xFF);
-}
 
 static int
 vnode_item_cmp(const void *t1, const void *t2)
 {
     const struct continuum *ct1 = t1, *ct2 = t2;
 
-    if (ct1->value == ct2->value) {
-        return 0;
-    } else if (ct1->value > ct2->value) {
-        return 1;
-    } else {
-        return -1;
-    }
+    return cmp_dyn_token(ct1->token, ct2->token);
+}
+
+rstatus_t
+datacenter_verify_continuum(void *elem, void *data)
+{
+    struct datacenter *dc = elem;
+    qsort(dc->continuum, dc->ncontinuum, sizeof(*dc->continuum),
+          vnode_item_cmp);
+
+    /* log_debug(LOG_VERB, "updated pool dc %"PRIu32" '%.*s'/\*  with %"PRIu32" of " *\/ */
+              /* "%"PRIu32" servers live in %"PRIu32" slots ", */
+              /* dc->idx, dc->name.len, dc->name.data, nlive_server, nserver, */
+              /* dc->nserver_continuum; */
+
+
+    return NC_OK;
 }
 
 rstatus_t
 vnode_update(struct server_pool *pool)
 {
-    uint32_t nserver;             /* # server - live and dead */
-    uint32_t nlive_server;        /* # live server */
-    uint32_t pointer_per_server;  /* pointers per server proportional to weight */
-    uint32_t pointer_per_hash;    /* pointers per hash */
-    uint32_t pointer_counter;     /* # pointers on continuum */
-    uint32_t pointer_index;       /* pointer index */
-    uint32_t points_per_server;   /* points per server */
-    uint32_t continuum_index;     /* continuum index */
-    uint32_t continuum_addition;  /* extra space in the continuum */
-    uint32_t server_index;        /* server index */
-    uint32_t value;               /* continuum value */
-    uint32_t total_weight;        /* total live server weight */
-    int64_t now;                  /* current timestamp in usec */
-
     ASSERT(array_n(&pool->server) > 0);
 
-    now = nc_usec_now();
+    int64_t now = nc_usec_now();
     if (now < 0) {
         return NC_ERROR;
     }
 
-    /*
-     * Count live servers and total weight, and also update the next time to
-     * rebuild the distribution
-     */
-    nserver = array_n(&pool->server);
-    nlive_server = 0;
-    total_weight = 0;
-    pool->next_rebuild = 0LL;
-    for (server_index = 0; server_index < nserver; server_index++) {
-        struct server *server = array_get(&pool->server, server_index);
+    for (int i = 0, len = array_n(&pool->peers); i < len; i++) {
+        struct peer *peer = array_get(&pool->peers, i);
+        struct datacenter *dc = server_get_datacenter(pool, &peer->dc);
 
-        if (pool->auto_eject_hosts) {
-            if (server->next_retry <= now) {
-                server->next_retry = 0LL;
-                nlive_server++;
-            } else if (pool->next_rebuild == 0LL ||
-                       server->next_retry < pool->next_rebuild) {
-                pool->next_rebuild = server->next_retry;
-            }
-        } else {
-            nlive_server++;
+        if (dc == NULL) {
+            dc = array_push(&pool->datacenter);
+            datacenter_init(dc);
+            dc->name = &peer->name;
         }
 
-        ASSERT(server->weight > 0);
-
-        /* count weight only for live servers */
-        if (!pool->auto_eject_hosts || server->next_retry <= now) {
-            total_weight += server->weight;
-        }
-    }
-
-    pool->nlive_server = nlive_server;
-
-    if (nlive_server == 0) {
-        log_debug(LOG_DEBUG, "no live servers for pool %"PRIu32" '%.*s'",
-                  pool->idx, pool->name.len, pool->name.data);
-
-        return NC_OK;
-    }
-    log_debug(LOG_DEBUG, "%"PRIu32" of %"PRIu32" servers are live for pool "
-              "%"PRIu32" '%.*s'", nlive_server, nserver, pool->idx,
-              pool->name.len, pool->name.data);
-
-    continuum_addition = 1;//KETAMA_CONTINUUM_ADDITION;
-    points_per_server = 1;//KETAMA_POINTS_PER_SERVER;
-    /*
-     * Allocate the continuum for the pool, the first time, and every time we
-     * add a new server to the pool
-     */
-    if (nlive_server > pool->nserver_continuum) {
-        struct continuum *continuum;
-        uint32_t nserver_continuum = nlive_server + continuum_addition;
-        uint32_t ncontinuum = nserver_continuum * points_per_server;
-
-        continuum = nc_realloc(pool->continuum, sizeof(*continuum) * ncontinuum);
+        uint32_t token_cnt = array_n(&peer->tokens);
+        uint32_t orig_cnt = dc->nserver_continuum;
+        uint32_t new_cnt = orig_cnt + token_cnt;
+        struct continuum *continuum = nc_realloc(dc->continuum, sizeof(*continuum) * new_cnt);
         if (continuum == NULL) {
             return NC_ENOMEM;
         }
 
-        pool->continuum = continuum;
-        pool->nserver_continuum = nserver_continuum;
-        /* pool->ncontinuum is initialized later as it could be <= ncontinuum */
-    }
+        dc->continuum = continuum;
+        dc->nserver_continuum = new_cnt;
 
-    /*
-     * Build a continuum with the servers that are live and points from
-     * these servers that are proportial to their weight
-     */
-    continuum_index = 0;
-    pointer_counter = 0;
-    for (server_index = 0; server_index < nserver; server_index++) {
-        struct server *server;
-        float pct;
-
-        server = array_get(&pool->server, server_index);
-
-        if (pool->auto_eject_hosts && server->next_retry > now) {
-            continue;
+        for (int j = 0; j < token_cnt; j++) {
+            struct continuum *c = &dc->continuum[orig_cnt + j];
+            c->index = i;
+            c->value = 0;
+            c->token = array_get(&peer->tokens, j);
+            dc->ncontinuum++;
         }
-
-        pct = (float)server->weight / (float)total_weight;
-        pointer_per_server = 1;//(uint32_t) ((floorf((float) (pct * KETAMA_POINTS_PER_SERVER / 4 * (float)nlive_server + 0.0000000001))) * 4);
-        pointer_per_hash = 4;
-
-        log_debug(LOG_VERB, "%.*s:%"PRIu16" weight %"PRIu32" of %"PRIu32" "
-                  "pct %0.5f points per server %"PRIu32"",
-                  server->name.len, server->name.data, server->port,
-                  server->weight, total_weight, pct, pointer_per_server);
-
-        for (pointer_index = 1;
-             pointer_index <= pointer_per_server / pointer_per_hash;
-             pointer_index++) {
-
-            char host[12]= "";
-            size_t hostlen;
-            uint32_t x;
-
-            //TODO: make it complile for now
-            hostlen = snprintf(host, 12, "%.*s-%u", //KETAMA_MAX_HOSTLEN, "%.*s-%u",
-                               server->name.len, server->name.data,
-                               pointer_index - 1);
-
-            for (x = 0; x < pointer_per_hash; x++) {
-                value = vnode_hash(host, hostlen, x);
-                pool->continuum[continuum_index].index = server_index;
-                pool->continuum[continuum_index++].value = value;
-            }
-        }
-        pointer_counter += pointer_per_server;
     }
+    
 
-    pool->ncontinuum = pointer_counter;
-    qsort(pool->continuum, pool->ncontinuum, sizeof(*pool->continuum),
-          vnode_item_cmp);
-
-    for (pointer_index = 0;
-         pointer_index < ((nlive_server) - 1);
-         pointer_index++) {
-        if (pointer_index + 1 >= pointer_counter) {
-            break;
-        }
-        ASSERT(pool->continuum[pointer_index].value <=
-               pool->continuum[pointer_index + 1].value);
+    rstatus_t status = array_each(&pool->datacenter, datacenter_verify_continuum, NULL);
+    if (status != NC_OK) {
+        return status;
     }
-
-    log_debug(LOG_VERB, "updated pool %"PRIu32" '%.*s' with %"PRIu32" of "
-              "%"PRIu32" servers live in %"PRIu32" slots and %"PRIu32" "
-              "active points in %"PRIu32" slots", pool->idx,
-              pool->name.len, pool->name.data, nlive_server, nserver,
-              pool->nserver_continuum, pool->ncontinuum,
-              (pool->nserver_continuum + continuum_addition) * points_per_server);
 
     return NC_OK;
 }
@@ -213,10 +101,29 @@ vnode_update(struct server_pool *pool)
 uint32_t
 vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token)
 {
-    // need ordered array of vnodes, in each dc
+    struct continuum *begin, *end, *left, *right, *middle;
 
-    // assume max range is 4 bytes (uint32_t), then do BST
+    ASSERT(continuum != NULL);
+    ASSERT(ncontinuum != 0);
 
-    
-  return 0;
+    begin = left = continuum;
+    end = right = continuum + ncontinuum;
+
+    while (left < right) {
+        middle = left + (right - left) / 2;
+        int32_t cmp = cmp_dyn_token(middle->token, token);
+        if (cmp == 0) {
+            return right->index;
+        } else if (cmp < 0) {
+          left = middle + 1;
+        } else {
+          right = middle;
+        }
+    }
+
+    if (right == end) {
+        right = begin;
+    }
+
+    return right->index;
 }

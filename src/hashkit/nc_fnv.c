@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <dyn_token.h>
 #include <nc_core.h>
 
 static uint64_t FNV_64_INIT = UINT64_C(0xcbf29ce484222325);
@@ -22,8 +23,8 @@ static uint64_t FNV_64_PRIME = UINT64_C(0x100000001b3);
 static uint32_t FNV_32_INIT = 2166136261UL;
 static uint32_t FNV_32_PRIME = 16777619;
 
-uint32_t
-hash_fnv1_64(const char *key, size_t key_length)
+rstatus_t
+hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint64_t hash = FNV_64_INIT;
     size_t x;
@@ -33,11 +34,16 @@ hash_fnv1_64(const char *key, size_t key_length)
       hash ^= (uint64_t)key[x];
     }
 
-    return (uint32_t)hash;
+    //note: original version simply downcast the uint64_t to uint32_t
+    uint32_t val = (uint32_t)hash;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, val);
+
+    return NC_OK;
 }
 
-uint32_t
-hash_fnv1a_64(const char *key, size_t key_length)
+rstatus_t
+hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = (uint32_t) FNV_64_INIT;
     size_t x;
@@ -48,11 +54,14 @@ hash_fnv1a_64(const char *key, size_t key_length)
       hash *= (uint32_t) FNV_64_PRIME;
     }
 
-    return hash;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, hash);
+
+    return NC_OK;
 }
 
-uint32_t
-hash_fnv1_32(const char *key, size_t key_length)
+rstatus_t
+hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = FNV_32_INIT;
     size_t x;
@@ -63,11 +72,14 @@ hash_fnv1_32(const char *key, size_t key_length)
       hash ^= val;
     }
 
-    return hash;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, hash);
+
+    return NC_OK;
 }
 
-uint32_t
-hash_fnv1a_32(const char *key, size_t key_length)
+rstatus_t
+hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = FNV_32_INIT;
     size_t x;
@@ -78,5 +90,8 @@ hash_fnv1a_32(const char *key, size_t key_length)
       hash *= FNV_32_PRIME;
     }
 
-    return hash;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, hash);
+
+    return NC_OK;
 }

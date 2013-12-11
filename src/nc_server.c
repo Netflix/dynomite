@@ -843,10 +843,18 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
     return NC_OK;
 }
 
-static rstatus_t
-datacenter_deinit(void *elem, void *data)
+void 
+datacenter_init(struct datacenter *dc)
 {
-    struct datacenter *dc = elem;
+    dc->continuum = NULL;
+    dc->ncontinuum = 0;
+    dc->nserver_continuum = 0;
+    dc->name = NULL;
+}
+
+rstatus_t
+datacenter_deinit(struct datacenter *dc)
+{
     if (dc->continuum != NULL) {
         nc_free(dc->continuum);
         dc->ncontinuum = 0;
@@ -854,6 +862,14 @@ datacenter_deinit(void *elem, void *data)
     }
 
     return NC_OK;
+}
+
+static rstatus_t
+dc_deinit(void *elem, void *data)
+{
+    struct datacenter *dc = elem;
+
+    return datacenter_deinit(dc);
 }
 
 void
@@ -869,7 +885,7 @@ server_pool_deinit(struct array *server_pool)
         ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->nc_conn_q == 0);
 
         server_deinit(&sp->server);
-        array_each(&sp->datacenter, datacenter_deinit, NULL);
+        array_each(&sp->datacenter, dc_deinit, NULL);
         sp->nlive_server = 0;
 
         log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,
@@ -884,8 +900,17 @@ server_pool_deinit(struct array *server_pool)
 struct datacenter *
 server_get_datacenter(struct server_pool *pool, struct string *dcname)
 {
-    struct datacenter *dc = NULL;
+    for (int i = 0, len = array_n(&pool->datacenter); i < len; i++) {
+        struct datacenter *dc = array_get(&pool->datacenter, i);
+        ASSERT(dc != NULL);
+        ASSERT(dc->name != NULL);
 
-    return dc;
+        int cmp = string_compare(dc->name, dcname);
+        if (cmp == 0) {
+            return dc;
+        }
+    }
+
+    return NULL;
 }
 

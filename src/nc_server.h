@@ -65,6 +65,7 @@ typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 struct continuum {
     uint32_t index;  /* server index */
     uint32_t value;  /* hash value, used by ketama */
+    struct dyn_token *token;  /* used in vnode/dyn_token situations */
 };
 
 struct datacenter {
@@ -156,6 +157,8 @@ void server_connected(struct context *ctx, struct conn *conn);
 void server_ok(struct context *ctx, struct conn *conn);
 
 struct datacenter *server_get_datacenter(struct server_pool *pool, struct string *dcname);
+void datacenter_init(struct datacenter *dc);
+rstatus_t datacenter_deinit(struct datacenter *dc);
 
 struct conn *server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key, uint32_t keylen);
 rstatus_t server_pool_run(struct server_pool *pool);

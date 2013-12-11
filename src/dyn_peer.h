@@ -24,7 +24,7 @@ struct peer {
     uint32_t           failure_count; /* # consecutive failures */
     unsigned           is_seed:1;     /* seed? */    
     struct string      dc;            /* logical datacenter */
-    struct array       tokens; /* DHT tokens this peer owns */
+    struct array       tokens;        /* DHT tokens this peer owns */
 };
 
 

@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <dyn_token.h>
 #include <nc_core.h>
 
 static const uint16_t crc16tab[256] = {
@@ -52,8 +53,8 @@ static const uint16_t crc16tab[256] = {
   0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0,
 };
 
-uint32_t
-hash_crc16(const char *key, size_t key_length)
+rstatus_t
+hash_crc16(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint64_t x;
     uint32_t crc = 0;
@@ -62,5 +63,8 @@ hash_crc16(const char *key, size_t key_length)
         crc = (crc << 8) ^ crc16tab[((crc >> 8) ^ *key++) & 0x00ff];
     }
 
-    return crc;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, crc);
+
+    return NC_OK;
 }

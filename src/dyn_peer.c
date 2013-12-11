@@ -866,16 +866,11 @@ dyn_peer_pool_init(struct array *server_pool, struct array *conf_pool,
 
 
 static rstatus_t
-datacenter_deinit(void *elem, void *data)
+dc_deinit(void *elem, void *data)
 {
     struct datacenter *dc = elem;
-    if (dc->continuum != NULL) {
-        nc_free(dc->continuum);
-        dc->ncontinuum = 0;
-        dc->nserver_continuum = 0;
-    }
 
-    return NC_OK;
+    return datacenter_deinit(dc);
 }
 
 void
@@ -893,7 +888,7 @@ dyn_peer_pool_deinit(struct array *server_pool)
 
 
         dyn_peer_deinit(&sp->peers);
-        array_each(&sp->datacenter, datacenter_deinit, NULL);
+        array_each(&sp->datacenter, dc_deinit, NULL);
         sp->nlive_server = 0;
 
         log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,

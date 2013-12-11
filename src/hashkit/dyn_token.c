@@ -89,7 +89,7 @@ add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
 }
 
 rstatus_t 
-set_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
+parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
 {
     ASSERT(len > 0);
     ASSERT(token != NULL);
@@ -139,7 +139,7 @@ set_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
     return NC_OK;
 }
 
-uint32_t 
+int32_t 
 cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2)
 {
     ASSERT(t1 != NULL);

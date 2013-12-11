@@ -27,6 +27,7 @@
  * Add big endian support
  */
 
+#include <dyn_token.h>
 #include <nc_core.h>
 
 #define hashsize(n) ((uint32_t)1<<(n))
@@ -72,8 +73,8 @@
  * In which case, the hash table should have hashsize(10) elements.
  */
 
-uint32_t
-hash_jenkins(const char *key, size_t length)
+rstatus_t
+hash_jenkins(const char *key, size_t length, struct dyn_token *token)
 {
   uint32_t a,b,c;                                          /* internal state */
   union { const void *ptr; size_t i; } u;     /* needed for Mac Powerbook G4 */
@@ -226,5 +227,9 @@ hash_jenkins(const char *key, size_t length)
 #endif
 
   final(a,b,c);
-  return c;
+
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, c);
+
+    return NC_OK;
 }

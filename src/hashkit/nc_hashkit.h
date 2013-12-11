@@ -56,22 +56,23 @@ typedef enum dist_type {
 } dist_type_t;
 #undef DEFINE_ACTION
 
-uint32_t hash_one_at_a_time(const char *key, size_t key_length);
+rstatus_t hash_one_at_a_time(const char *key, size_t key_length, struct dyn_token *token);
 void md5_signature(const unsigned char *key, unsigned int length, unsigned char *result);
-uint32_t hash_md5(const char *key, size_t key_length);
-uint32_t hash_crc16(const char *key, size_t key_length);
-uint32_t hash_crc32(const char *key, size_t key_length);
-uint32_t hash_crc32a(const char *key, size_t key_length);
-uint32_t hash_fnv1_64(const char *key, size_t key_length);
-uint32_t hash_fnv1a_64(const char *key, size_t key_length);
-uint32_t hash_fnv1_32(const char *key, size_t key_length);
-uint32_t hash_fnv1a_32(const char *key, size_t key_length);
-uint32_t hash_hsieh(const char *key, size_t key_length);
-uint32_t hash_jenkins(const char *key, size_t length);
+rstatus_t hash_md5(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_crc16(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_crc32(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_crc32a(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_hsieh(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_jenkins(const char *key, size_t length, struct dyn_token *token);
 
 rstatus_t hash_murmur(const char *key, size_t length, struct dyn_token *token);
 rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *token);
 
+rstatus_t datacenter_verify_continuum(void *elem, void *data);
 rstatus_t vnode_update(struct server_pool *pool);
 uint32_t vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token);
 

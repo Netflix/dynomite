@@ -1827,7 +1827,7 @@ conf_derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
         }
 
         uint32_t len = (uint32_t)(p - (q + offset) + 1);
-        rstatus_t status = set_dyn_token(q, len, token);
+        rstatus_t status = parse_dyn_token(q, len, token);
         if (status != NC_OK) {
              return NC_ERROR;
         }

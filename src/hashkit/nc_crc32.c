@@ -23,6 +23,7 @@
  */
 
 #include <nc_core.h>
+#include <dyn_token.h>
 
 static const uint32_t crc32tab[256] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba,
@@ -95,8 +96,8 @@ static const uint32_t crc32tab[256] = {
  * CRC-32 implementation compatible with libmemcached library. Unfortunately
  * this implementation does not return CRC-32 as per spec.
  */
-uint32_t
-hash_crc32(const char *key, size_t key_length)
+rstatus_t
+hash_crc32(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint64_t x;
     uint32_t crc = UINT32_MAX;
@@ -105,11 +106,15 @@ hash_crc32(const char *key, size_t key_length)
         crc = (crc >> 8) ^ crc32tab[(crc ^ (uint64_t)key[x]) & 0xff];
     }
 
-    return ((~crc) >> 16) & 0x7fff;
+    uint32_t val = ((~crc) >> 16) & 0x7fff;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, val);
+
+    return NC_OK;
 }
 
 uint32_t
-hash_crc32a(const char *key, size_t key_length)
+hash_crc32a(const char *key, size_t key_length, struct dyn_token *token)
 {
     const uint8_t *p = key;
     uint32_t crc;
@@ -119,5 +124,9 @@ hash_crc32a(const char *key, size_t key_length)
         crc = crc32tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
     }
 
-    return crc ^ ~0U;
+    uint32_t val = crc ^ ~0U;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, val);
+
+    return NC_OK;
 }
