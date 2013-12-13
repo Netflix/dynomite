@@ -17,6 +17,7 @@
 
 #include <nc_core.h>
 #include <nc_server.h>
+#include <dyn_peer.h>
 
 struct msg *
 req_get(struct conn *conn)
@@ -429,7 +430,8 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 }
 
 
-void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
+void
+local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 		               uint8_t *key, uint32_t keylen)
 {
     rstatus_t status;
@@ -470,9 +472,19 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
               msg->mlen, msg->type, keylen, key);
 }
 
+static bool
+request_send_to_all_datacenters(struct msg *msg) {
+    msg_type_t t = msg->type;
+ 
+    // yeah, there's probably a better way to do this...
+    return t == MSG_REQ_MC_SET || t == MSG_REQ_MC_CAS || t == MSG_REQ_MC_DELETE || t == MSG_REQ_MC_ADD ||
+        t == MSG_REQ_MC_REPLACE || t == MSG_REQ_MC_APPEND || t == MSG_REQ_MC_PREPEND || t == MSG_REQ_MC_INCR ||
+        t == MSG_REQ_MC_DECR;
+}
+
 
 void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        uint8_t *key, uint32_t keylen)
+                        struct datacenter *dc, uint8_t *key, uint32_t keylen)
 {
     rstatus_t status;
     struct conn *s_conn;
@@ -484,9 +496,21 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
-    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, key, keylen);
+    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
+        return;
+    }
+
+    //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
+    struct peer *peer = s_conn->owner;
+    if (peer->is_local) {
+        s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
+        if (s_conn == NULL) {
+            req_forward_error(ctx, c_conn, msg);
+            return;
+        }
+        local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     }
 
@@ -538,8 +562,6 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
-    rstatus_t status;
-    struct conn *s_conn;
     struct server_pool *pool;
     uint8_t *key;
     uint32_t keylen;
@@ -570,13 +592,16 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         keylen = (uint32_t)(msg->key_end - msg->key_start);
     }
 
-    
-    if (keylen == 3) {
-        return local_req_forward(ctx, c_conn, msg, key, keylen);
-    } else {  //remote req_forward
-        return remote_req_forward(ctx, c_conn, msg, key, keylen);
-    } 
-
+    struct datacenter *dc;
+    if (request_send_to_all_datacenters(msg)) {
+        for (uint32_t i = 0, len = array_n(&pool->datacenter); i < len; i++) {
+            dc = array_get(&pool->datacenter, i);
+            remote_req_forward(ctx, c_conn, msg, dc, key, keylen);
+        }
+    } else {
+        dc = server_get_datacenter(pool, &pool->dc);
+        remote_req_forward(ctx, c_conn, msg, dc, key, keylen);
+    }
 }
 
 

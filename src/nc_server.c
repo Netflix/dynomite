@@ -595,79 +595,16 @@ server_pool_update(struct server_pool *pool)
     return NC_OK;
 }
 
-static struct dyn_token *
-server_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
-{
-    ASSERT(array_n(&pool->server) != 0);
-
-    if (array_n(&pool->server) == 1) {
-        return 0;
-    }
-
-    ASSERT(key != NULL && keylen != 0);
-    struct dyn_token *token = nc_alloc(sizeof(struct dyn_token));
-    if (token == NULL) {
-        return NULL;
-    }
-    init_dyn_token(token);
-
-    rstatus_t status = pool->key_hash((char *)key, keylen, token);
-    if (status == 0) {
-        return NULL;
-    }
-
-    return token;
-}
-
 static struct server *
 server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     struct server *server;
-    uint32_t hash, idx;
-    struct dyn_token *token = NULL;
 
     ASSERT(array_n(&pool->server) != 0);
     ASSERT(key != NULL && keylen != 0);
 
-    struct datacenter *dc = server_get_datacenter(pool, &pool->dc);
-    ASSERT(dc != NULL);
-
-    switch (pool->dist_type) {
-    case DIST_KETAMA:
-        token = server_pool_hash(pool, key, keylen);
-        hash = token->mag[0];
-        idx = ketama_dispatch(dc->continuum, dc->ncontinuum, hash);
-        break;
-
-    case DIST_VNODE:
-        token = server_pool_hash(pool, key, keylen);
-        idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
-        break;
-
-    case DIST_MODULA:
-        token = server_pool_hash(pool, key, keylen);
-        hash = token->mag[0];
-        idx = modula_dispatch(dc->continuum, dc->ncontinuum, hash);
-        break;
-
-    case DIST_RANDOM:
-        idx = random_dispatch(dc->continuum, dc->ncontinuum, 0);
-        break;
-
-    default:
-        NOT_REACHED();
-        return NULL;
-    }
-    if (token != NULL) {
-        deinit_dyn_token(token);
-        nc_free(token);
-    }
-    ASSERT(idx < array_n(&pool->server));
-
-    server = array_get(&pool->server, idx);
-
-    log_debug(LOG_VERB, "key '%.*s' on dist %d maps to server '%.*s'", keylen,
-              key, pool->dist_type, server->pname.len, server->pname.data);
+    //fuck it, just return the first (memcache) entry in the array
+    server = array_get(&pool->server, 0);
 
     return server;
 }
@@ -900,7 +837,7 @@ server_pool_deinit(struct array *server_pool)
 struct datacenter *
 server_get_datacenter(struct server_pool *pool, struct string *dcname)
 {
-    for (int i = 0, len = array_n(&pool->datacenter); i < len; i++) {
+    for (uint32_t i = 0, len = array_n(&pool->datacenter); i < len; i++) {
         struct datacenter *dc = array_get(&pool->datacenter, i);
         ASSERT(dc != NULL);
         ASSERT(dc->name != NULL);

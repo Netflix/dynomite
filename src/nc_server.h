@@ -63,7 +63,7 @@
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 
 struct continuum {
-    uint32_t index;  /* server index */
+    uint32_t index;  /* dyn_peer index */
     uint32_t value;  /* hash value, used by ketama */
     struct dyn_token *token;  /* used in vnode/dyn_token situations */
 };

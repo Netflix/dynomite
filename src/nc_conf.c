@@ -235,7 +235,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->port = (uint16_t)cseed->port;
     s->weight = (uint32_t)cseed->weight;
     s->dc = cseed->dc;
-
+    s->is_local = false;
     //TODO-jeb need to copy over tokens, not sure if this is good enough
     s->tokens = cseed->tokens;
 
@@ -435,6 +435,7 @@ conf_pool_each_transform(void *elem, void *data)
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
+    array_init(&sp->datacenter, 1, sizeof(struct datacenter));
     status = dyn_peer_init(&cp->dyn_seeds, sp);
     if (status != NC_OK) {
         return status;

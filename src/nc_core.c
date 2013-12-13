@@ -22,6 +22,7 @@
 #include <nc_server.h>
 #include <nc_proxy.h>
 #include <dyn_dnode.h>
+#include <dyn_peer.h>
 
 
 

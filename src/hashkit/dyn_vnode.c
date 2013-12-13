@@ -51,7 +51,7 @@ datacenter_verify_continuum(void *elem, void *data)
 rstatus_t
 vnode_update(struct server_pool *pool)
 {
-    ASSERT(array_n(&pool->server) > 0);
+    ASSERT(array_n(&pool->peers) > 0);
 
     int64_t now = nc_usec_now();
     if (now < 0) {
@@ -65,7 +65,7 @@ vnode_update(struct server_pool *pool)
         if (dc == NULL) {
             dc = array_push(&pool->datacenter);
             datacenter_init(dc);
-            dc->name = &peer->name;
+            dc->name = &peer->dc;
         }
 
         uint32_t token_cnt = array_n(&peer->tokens);
@@ -82,7 +82,7 @@ vnode_update(struct server_pool *pool)
         for (int j = 0; j < token_cnt; j++) {
             struct continuum *c = &dc->continuum[orig_cnt + j];
             c->index = i;
-            c->value = 0;
+            c->value = 0;  /* set this to an empty value, only used by ketama */
             c->token = array_get(&peer->tokens, j);
             dc->ncontinuum++;
         }

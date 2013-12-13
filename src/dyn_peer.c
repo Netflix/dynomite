@@ -104,6 +104,39 @@ dyn_peer_each_set_owner(void *elem, void *data)
     return NC_OK;
 }
 
+static rstatus_t
+dyn_peer_add_local(struct server_pool *pool, struct peer *peer)
+{
+    ASSERT(peer != NULL);
+    peer->idx = 0; /* this not be psychotic, trying it for now */
+    peer->owner = NULL;
+
+    peer->pname = pool->d_addrstr;
+    peer->name = pool->d_addrstr;
+    peer->port = pool->d_port;
+    peer->weight = 0;  /* hacking this out of the way for now */
+    peer->dc = pool->dc;
+    peer->is_local = true;
+    //TODO-jeb need to copy over tokens, not sure if this is good enough
+    peer->tokens = pool->tokens;
+
+    peer->family = pool->d_family;
+    peer->addrlen = pool->d_addrlen;
+    pool->addr = pool->d_addr;
+
+    peer->ns_conn_q = 0;
+    TAILQ_INIT(&peer->s_conn_q);
+
+    peer->next_retry = 0LL;
+    peer->failure_count = 0;
+    peer->is_seed = 1;
+
+    log_debug(LOG_VERB, "transform to local node to peer %"PRIu32" '%.*s'",
+              peer->idx, pool->name.len, pool->name.data);
+
+    return NC_OK;
+}
+
 rstatus_t
 dyn_peer_init(struct array *conf_seeds,
             struct server_pool *sp)
@@ -111,7 +144,7 @@ dyn_peer_init(struct array *conf_seeds,
     struct array * seeds = &sp->seeds;
     struct array * peers = &sp->peers;
     rstatus_t status;
-    uint32_t nseed, npeer;
+    uint32_t nseed;
 
     /* init seeds list */
     nseed = array_n(conf_seeds);
@@ -141,19 +174,30 @@ dyn_peer_init(struct array *conf_seeds,
  
     /* initialize peers list = seeds list */
     ASSERT(array_n(peers) == 0); 
-    
-    status = array_init(peers, nseed, sizeof(struct peer));
+
+    // add current node to peers array
+    uint32_t peer_cnt = nseed + 1;
+    status = array_init(peers, peer_cnt, sizeof(struct peer));
     if (status != NC_OK) {
         return status;
     }
- 
+
+    struct peer *peer = array_push(peers);
+    ASSERT(peer != NULL);
+    status = dyn_peer_add_local(sp, peer);
+    if (status != NC_OK) {
+        dyn_peer_deinit(seeds);
+        dyn_peer_deinit(peers);
+        return status;
+    }
+
     status = array_each(conf_seeds, conf_seed_each_transform, peers);
     if (status != NC_OK) {
         dyn_peer_deinit(seeds);
         dyn_peer_deinit(peers);
         return status;
     }
-    ASSERT(array_n(peers) == nseed);
+    ASSERT(array_n(peers) == peer_cnt);
    
     status = array_each(peers, dyn_peer_each_set_owner, sp);
     if (status != NC_OK) {
@@ -633,7 +677,8 @@ dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     init_dyn_token(token);
 
     rstatus_t status = pool->key_hash((char *)key, keylen, token);
-    if (status == 0) {
+    if (status != NC_OK) {
+        nc_free(token);
         return NULL;
     }
 
@@ -641,7 +686,7 @@ dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 static struct peer *
-dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
+dyn_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t *key, uint32_t keylen)
 {
     struct peer *server;
     uint32_t hash, idx;
@@ -650,7 +695,6 @@ dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     ASSERT(array_n(&pool->peers) != 0);
     ASSERT(key != NULL && keylen != 0);
 
-    struct datacenter *dc = server_get_datacenter(pool, &pool->dc);
     ASSERT(dc != NULL);
 
     switch (pool->dist_type) {
@@ -694,7 +738,7 @@ dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 struct conn *
-dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
+dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc, uint8_t *key,
                  uint32_t keylen)
 {
     rstatus_t status;
@@ -707,7 +751,7 @@ dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
     }
 
     /* from a given {key, keylen} pick a server from pool */
-    server = dyn_peer_pool_server(pool, key, keylen);
+    server = dyn_peer_pool_server(pool, dc, key, keylen);
     if (server == NULL) {
         return NULL;
     }

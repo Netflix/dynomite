@@ -25,6 +25,7 @@ struct peer {
     unsigned           is_seed:1;     /* seed? */    
     struct string      dc;            /* logical datacenter */
     struct array       tokens;        /* DHT tokens this peer owns */
+    bool               is_local;      /* is this peer the current running node?  */
 };
 
 
@@ -41,7 +42,7 @@ void dyn_peer_close(struct context *ctx, struct conn *conn);
 void dyn_peer_connected(struct context *ctx, struct conn *conn);
 void dyn_peer_ok(struct context *ctx, struct conn *conn);
 
-struct conn *dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key, uint32_t keylen);
+struct conn *dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc, uint8_t *key, uint32_t keylen);
 rstatus_t dyn_peer_pool_run(struct server_pool *pool);
 rstatus_t dyn_peer_pool_preconnect(struct context *ctx);
 void dyn_peer_pool_disconnect(struct context *ctx);

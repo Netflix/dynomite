@@ -81,6 +81,7 @@ struct conf;
 struct stats;
 struct instance;
 struct event_base;
+struct datacenter;
 
 #include <stddef.h>
 #include <stdint.h>
