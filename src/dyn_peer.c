@@ -108,7 +108,7 @@ static rstatus_t
 dyn_peer_add_local(struct server_pool *pool, struct peer *peer)
 {
     ASSERT(peer != NULL);
-    peer->idx = 0; /* this not be psychotic, trying it for now */
+    peer->idx = 0; /* this might be psychotic, trying it for now */
     peer->owner = NULL;
 
     peer->pname = pool->d_addrstr;
@@ -117,12 +117,12 @@ dyn_peer_add_local(struct server_pool *pool, struct peer *peer)
     peer->weight = 0;  /* hacking this out of the way for now */
     peer->dc = pool->dc;
     peer->is_local = true;
-    //TODO-jeb need to copy over tokens, not sure if this is good enough
+    //TODO-jeb might need to copy over tokens, not sure if this is good enough
     peer->tokens = pool->tokens;
 
     peer->family = pool->d_family;
     peer->addrlen = pool->d_addrlen;
-    pool->addr = pool->d_addr;
+    peer->addr = pool->d_addr;
 
     peer->ns_conn_q = 0;
     TAILQ_INIT(&peer->s_conn_q);
@@ -130,6 +130,7 @@ dyn_peer_add_local(struct server_pool *pool, struct peer *peer)
     peer->next_retry = 0LL;
     peer->failure_count = 0;
     peer->is_seed = 1;
+    peer->owner = pool;
 
     log_debug(LOG_VERB, "transform to local node to peer %"PRIu32" '%.*s'",
               peer->idx, pool->name.len, pool->name.data);
@@ -148,7 +149,25 @@ dyn_peer_init(struct array *conf_seeds,
 
     /* init seeds list */
     nseed = array_n(conf_seeds);
-    ASSERT(nseed != 0);
+    if(nseed == 0) {
+        log_debug(LOG_INFO, "look like you are running with no seeds deifined. This is ok for running with just one node.");
+
+        // add current node to peers array
+        status = array_init(peers, 1, sizeof(struct peer));
+        if (status != NC_OK) {
+            return status;
+        }
+
+        struct peer *peer = array_push(peers);
+        ASSERT(peer != NULL);
+        status = dyn_peer_add_local(sp, peer);
+        if (status != NC_OK) {
+            dyn_peer_deinit(peers);
+        }
+        return status;
+    }
+
+//    ASSERT(nseed != 0);
     ASSERT(array_n(seeds) == 0);
 
     status = array_init(seeds, nseed, sizeof(struct peer));
@@ -664,12 +683,8 @@ static struct dyn_token *
 dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     ASSERT(array_n(&pool->peers) != 0);
-
-    if (array_n(&pool->peers) == 1) {
-        return 0;
-    }
-
     ASSERT(key != NULL && keylen != 0);
+
     struct dyn_token *token = nc_alloc(sizeof(struct dyn_token));
     if (token == NULL) {
         return NULL;
