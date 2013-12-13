@@ -357,6 +357,12 @@ dyn_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         return true;
     }
 
+
+    /* dynomite hanlder */
+    if (msg->dmsg != NULL) {
+        dmsg_process(ctx, conn, msg->dmsg); 
+    }
+
     /*
      * Handle "quit\r\n", which is the protocol way of doing a
      * passive close
@@ -413,6 +419,7 @@ dyn_req_forward_stats(struct context *ctx, struct server *server, struct msg *ms
     //stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
+
 static void
 dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 {
@@ -449,6 +456,7 @@ dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 
     local_req_forward(ctx, dyn_c_conn, msg, key, keylen);
 }
+
 
 void
 dyn_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,

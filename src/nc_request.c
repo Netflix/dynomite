@@ -501,6 +501,30 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
             return;
         }
     }
+
+
+    struct mbuf *nbuf = mbuf_get();
+
+    if (nbuf == NULL) {
+       return;;
+    }
+  
+    struct msg * nmsg = msg_get(msg->owner, msg->request, c_conn->redis);
+    if (nmsg == NULL) {
+        mbuf_put(nbuf);
+        return;
+    }
+   
+
+    //dyn message's meta data
+    uint64_t msg_id = 1234;
+    uint8_t type = 1;
+    uint8_t version = 1;
+    struct string data = string("Justin");
+
+    dmsg_write(nbuf, msg_id, type, version, &data);
+    mbuf_insert_head(&msg->mhdr, nbuf);
+
     s_conn->enqueue_inq(ctx, s_conn, msg);
 
     //fix me - coordinator stats
