@@ -60,8 +60,16 @@ uint32_t mbuf_length(struct mbuf *mbuf);
 uint32_t mbuf_size(struct mbuf *mbuf);
 size_t mbuf_data_size(void);
 void mbuf_insert(struct mhdr *mhdr, struct mbuf *mbuf);
+void mbuf_insert_head(struct mhdr *mhdr, struct mbuf *mbuf);
 void mbuf_remove(struct mhdr *mhdr, struct mbuf *mbuf);
 void mbuf_copy(struct mbuf *mbuf, uint8_t *pos, size_t n);
 struct mbuf *mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg);
+
+void mbuf_write_char(struct mbuf *mbuf, char ch);
+void mbuf_write_string(struct mbuf *mbuf,  struct string *s);
+void mbuf_write_uint8(struct mbuf *mbuf, uint8_t num);
+void mbuf_write_uint32(struct mbuf *mbuf, uint32_t num);
+void mbuf_write_uint64(struct mbuf *mbuf, uint64_t num);
+
 
 #endif

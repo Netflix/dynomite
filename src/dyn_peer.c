@@ -131,7 +131,7 @@ dyn_peer_init(struct array *conf_seeds,
     ASSERT(array_n(seeds) == nseed);
 
     /* set seed owner */
-    status = array_each(peers, dyn_peer_each_set_owner, sp);
+    status = array_each(seeds, dyn_peer_each_set_owner, sp);
     if (status != NC_OK) {
         dyn_peer_deinit(seeds);
         return status;

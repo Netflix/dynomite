@@ -1,0 +1,16 @@
+Dyn message Protocol:
+
+1. Spec:
+
+<MagicNumber> <space>
+<MessageId> <space>
+<TypeId> <space>
+<Version> <CR LF>
+*<number bytes> <space>
+$<data> <CR LF>
+<Memcache or Redis payload>
+
+2. Example:
+
+
+"2014 10221344 1 1\r\n*4$minh\r\nget MyKey"
