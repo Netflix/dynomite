@@ -328,7 +328,7 @@ dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->dnode && !conn->dnode_client);
+    ASSERT(conn->dnode && !conn->dyn_client);
     ASSERT(conn->recv_active);
  
     conn->recv_ready = 1;

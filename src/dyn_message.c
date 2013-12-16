@@ -22,7 +22,7 @@ dyn_parse_req(struct msg *r)
 {
         struct dmsg *dmsg;
 	struct mbuf *b;
-	uint8_t *p, *m;
+	uint8_t *p;
 	uint8_t ch;
         uint32_t num = 0;
 
@@ -181,7 +181,7 @@ dyn_parse_req(struct msg *r)
 
                         case DYN_STAR:
                            loga("DYN_STAR");
-                           if (ch = '*') {
+                           if (ch == '*') {
                                state = DYN_DATA_LEN;
                                num = 0;
                            } else {
@@ -215,7 +215,7 @@ dyn_parse_req(struct msg *r)
                         case DYN_DATA:
                            loga("DYN_DATA");
                            p -= 1;
-                           if (dmsg->mlen >= 0)  {
+                           if (dmsg->mlen > 0)  {
                                dmsg->data = p;
                                p += dmsg->mlen - 1;                  
                                state = DYN_CRLF_BEFORE_DONE;
