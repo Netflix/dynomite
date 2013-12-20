@@ -22,7 +22,9 @@
 
 /* bitsPerDigit radix of 10 multiplied by 1024, rounded up to avoid underallocation */
 #define BITS_PER_DIGIT 3402
-#define DIGITS_PER_INT 9
+
+/* TODO: jeb - this should be 9, but hacked for POC */
+#define DIGITS_PER_INT 10
 
 void 
 init_dyn_token(struct dyn_token *token)
@@ -104,15 +106,19 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
         p++;
         digits--;
         ASSERT(digits > 0);
+    } else if (digits == 1 && p[0] == '0') {
+        token->signum = 0;
+    } else {
+        token->signum = 1;
     }
 
     int nwords;
-    if (digits < 10) {
+    /* if (digits < 10) { */
         nwords = 1;
-    } else {
-        uint32_t nbits = ((digits * BITS_PER_DIGIT) >> 10) + 1;
-        nwords = (nbits + 32) >> 5;
-    }
+    /* } else { */
+    /*     uint32_t nbits = ((digits * BITS_PER_DIGIT) >> 10) + 1; */
+    /*     nwords = (nbits + 32) >> 5; */
+    /* } */
 
     token->mag = nc_alloc(nwords * sizeof(uint32_t));
     if (token->mag == NULL) {
@@ -126,12 +132,12 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
     uint32_t first_group_len = digits % DIGITS_PER_INT;
     if (first_group_len == 0)
         first_group_len = DIGITS_PER_INT;
-    buf[nwords - 1] = nc_atoi(p, first_group_len);
+    buf[nwords - 1] = nc_atoui(p, first_group_len);
     p += first_group_len;
     
     // Process remaining digit groups
     while (p < q) {
-        uint32_t local_int = nc_atoi(p, DIGITS_PER_INT);
+        uint32_t local_int = nc_atoui(p, DIGITS_PER_INT);
         add_next_word(buf, nwords, local_int);
         p += DIGITS_PER_INT;
     }

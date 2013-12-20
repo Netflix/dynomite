@@ -77,6 +77,8 @@
 
 #define nc_atoi(_line, _n)          \
     _nc_atoi((uint8_t *)_line, (size_t)_n)
+#define nc_atoui(_line, _n)          \
+    _nc_atoui((uint8_t *)_line, (size_t)_n)
 
 int nc_set_blocking(int sd);
 int nc_set_nonblocking(int sd);
@@ -90,6 +92,7 @@ int nc_get_sndbuf(int sd);
 int nc_get_rcvbuf(int sd);
 
 int _nc_atoi(uint8_t *line, size_t n);
+uint32_t _nc_atoui(uint8_t *line, size_t n);
 bool nc_valid_port(int n);
 
 /*

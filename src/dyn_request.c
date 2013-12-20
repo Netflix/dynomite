@@ -229,8 +229,9 @@ dyn_req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
 
-    stats_server_incr(ctx, conn->owner, in_queue);
-    stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    //TODO: jeb - commented out 'cause shit aint werking
+    /* stats_server_incr(ctx, conn->owner, in_queue); */
+    /* stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
 }
 
 void
@@ -241,8 +242,9 @@ dyn_req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
 
-    stats_server_decr(ctx, conn->owner, in_queue);
-    stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    //TODO: jeb - commented out 'cause shit aint werking
+    /* stats_server_decr(ctx, conn->owner, in_queue); */
+    /* stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
 }
 
 void
@@ -262,8 +264,8 @@ dyn_req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
 
-    stats_server_incr(ctx, conn->owner, out_queue);
-    stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
+    /* stats_server_incr(ctx, conn->owner, out_queue); */
+    /* stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
 }
 
 void
@@ -285,8 +287,8 @@ dyn_req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
     TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
 
-    stats_server_decr(ctx, conn->owner, out_queue);
-    stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
+    /* stats_server_decr(ctx, conn->owner, out_queue); */
+    /* stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
 }
 
 struct msg *

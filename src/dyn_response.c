@@ -168,8 +168,8 @@ dyn_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *ms
 {
     ASSERT(!msg->request);
 
-    stats_server_incr(ctx, server, responses);
-    stats_server_incr_by(ctx, server, response_bytes, msg->mlen);
+    /* stats_server_incr(ctx, server, responses); */
+    /* stats_server_incr_by(ctx, server, response_bytes, msg->mlen); */
 }
 
 static void
@@ -237,7 +237,7 @@ dyn_rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *pmsg; /* response and it's peer request */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(!conn->client && !conn->proxy);
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL || !req_done(conn, pmsg)) {

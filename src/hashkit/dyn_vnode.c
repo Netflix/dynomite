@@ -33,17 +33,18 @@ vnode_item_cmp(const void *t1, const void *t2)
 }
 
 rstatus_t
-datacenter_verify_continuum(void *elem, void *data)
+vnode_datacenter_verify_continuum(void *elem, void *data)
 {
     struct datacenter *dc = elem;
     qsort(dc->continuum, dc->ncontinuum, sizeof(*dc->continuum),
           vnode_item_cmp);
 
-    /* log_debug(LOG_VERB, "updated pool dc %"PRIu32" '%.*s'/\*  with %"PRIu32" of " *\/ */
-              /* "%"PRIu32" servers live in %"PRIu32" slots ", */
-              /* dc->idx, dc->name.len, dc->name.data, nlive_server, nserver, */
-              /* dc->nserver_continuum; */
-
+    log_debug(LOG_VERB, "**** printing continuums for dc '%.*s'", dc->name->len, dc->name->data);
+    for (uint32_t i = 0; i < dc->ncontinuum; i++) {
+        struct continuum *c = &dc->continuum[i];
+        log_debug(LOG_VERB, "next c[%d]: idx = %u, token->mag = %u", i, c->index, c->token->mag[0]);
+    }
+    log_debug(LOG_VERB, "**** end printing continuums for dc '%.*s'", dc->name->len, dc->name->data);
 
     return NC_OK;
 }
@@ -87,9 +88,8 @@ vnode_update(struct server_pool *pool)
             dc->ncontinuum++;
         }
     }
-    
 
-    rstatus_t status = array_each(&pool->datacenter, datacenter_verify_continuum, NULL);
+    rstatus_t status = array_each(&pool->datacenter, vnode_datacenter_verify_continuum, NULL);
     if (status != NC_OK) {
         return status;
     }

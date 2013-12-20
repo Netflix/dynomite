@@ -1819,21 +1819,25 @@ conf_derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
         init_dyn_token(token);
 
         q = nc_strrchr(p, start, ',');
-        uint32_t offset = 0;
         if (q == NULL) {
             q = start; /* we're at the beginning of the list */
         } else {
-            //q += 1;  /* bump to the char after the delimiter */
-            offset = 1;
+            q++;
         }
 
-        uint32_t len = (uint32_t)(p - (q + offset) + 1);
+        uint32_t len = 0;
+        if (p == end) {
+            len = (uint32_t)(p - q);
+        } else {
+            len = (uint32_t)(p - q + 1);
+        }
+
         rstatus_t status = parse_dyn_token(q, len, token);
         if (status != NC_OK) {
              return NC_ERROR;
         }
 
-        p = q - 1;
+        p = q - 2;
     } 
 
     return NC_OK;
@@ -2009,7 +2013,7 @@ conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
     uint8_t *p = conf;
     struct array *tokens = (struct array *)(p + cmd->offset);
     struct string *value = array_top(&cf->arg);
-    p = value->data + value->len - 1;
+    p = value->data + value->len;
 
     rstatus_t status = conf_derive_tokens(tokens, value->data, p);
     if (status != NC_OK) {

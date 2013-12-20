@@ -87,7 +87,7 @@
  *    Req      \                     .                     /
  *    ===>     req_filter*           .           *rsp_filter
  *               +                   .                   +
- *               |                   .                   |
+ *               |                   .                   | 
  *               \                   .                   /
  *               req_forward-//  (a) . (c)  \\-rsp_forward
  *                                   .
@@ -308,6 +308,47 @@ msg_get(struct conn *conn, bool request, bool redis)
 
     return msg;
 }
+
+rstatus_t 
+msg_clone(struct msg *src, struct msg *target)
+{
+    target->owner = src->owner;
+    target->request = src->request;
+    target->redis = src->redis;
+
+    target->parser = src->parser;
+    target->pre_splitcopy = src->pre_splitcopy;
+    target->post_splitcopy = src->post_splitcopy; 
+    target->pre_coalesce = src->pre_coalesce;
+    target->post_coalesce = src->post_coalesce;
+
+    target->noreply = src->noreply;
+    target->type = src->type;
+    target->key_start = src->key_start;
+    target->key_end = src->key_end;
+    target->mlen = src->mlen;
+    target->pos = src->pos;
+    target->vlen = src->vlen;
+
+    struct mbuf *mbuf, *nbuf;
+    STAILQ_FOREACH(mbuf, &src->mhdr, next) {
+        nbuf = mbuf_get();
+        if (nbuf == NULL) {
+            return ENOMEM;
+        }
+
+        //copy over pointers, etc
+        nbuf->pos = mbuf->start; //set to mbuf->start, just in case it's already been sent
+        nbuf->last = mbuf->last;
+        nbuf->start = mbuf->start;
+        nbuf->end = mbuf->end;
+
+        mbuf_insert(&target->mhdr, nbuf);
+    }
+
+    return NC_OK;
+}
+
 
 struct msg *
 msg_get_error(bool redis, err_t err)
