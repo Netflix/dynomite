@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <dyn_token.h>
 #include <nc_core.h>
 
 /*
@@ -307,15 +308,20 @@ md5_signature(unsigned char *key, unsigned long length, unsigned char *result)
     MD5_Final(result, &my_md5);
 }
 
-uint32_t
-hash_md5(const char *key, size_t key_length)
+rstatus_t
+hash_md5(const char *key, size_t key_length, struct dyn_token *token)
 {
     unsigned char results[16];
 
     md5_signature((unsigned char*)key, (unsigned long)key_length, results);
 
-    return ((uint32_t) (results[3] & 0xFF) << 24) |
+    uint32_t val = ((uint32_t) (results[3] & 0xFF) << 24) |
            ((uint32_t) (results[2] & 0xFF) << 16) |
            ((uint32_t) (results[1] & 0xFF) << 8) |
            (results[0] & 0xFF);
+
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, val);
+    
+    return NC_OK;
 }

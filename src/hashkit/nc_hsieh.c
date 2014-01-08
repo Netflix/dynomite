@@ -23,6 +23,7 @@
  * http://www.azillionmonkeys.com/qed/hash.html
 */
 
+#include <dyn_token.h>
 #include <nc_core.h>
 
 #undef get16bits
@@ -35,8 +36,8 @@
                       +(uint32_t)(((const uint8_t *)(d))[0]) )
 #endif
 
-uint32_t
-hash_hsieh(const char *key, size_t key_length)
+rstatus_t
+hash_hsieh(const char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = 0, tmp;
     int rem;
@@ -89,5 +90,9 @@ hash_hsieh(const char *key, size_t key_length)
     hash ^= hash << 25;
     hash += hash >> 6;
 
-    return hash;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, hash);
+
+    return NC_OK;
+
 }

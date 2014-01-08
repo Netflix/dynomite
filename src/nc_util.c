@@ -204,6 +204,26 @@ _nc_atoi(uint8_t *line, size_t n)
     return value;
 }
 
+uint32_t
+_nc_atoui(uint8_t *line, size_t n)
+{
+    uint32_t value;
+
+    if (n == 0) {
+        return 0;
+    }
+
+    for (value = 0; n--; line++) {
+        if (*line < '0' || *line > '9') {
+            return 0;
+        }
+
+        value = value * 10 + (*line - '0');
+    }
+
+    return value;
+}
+
 bool
 nc_valid_port(int n)
 {

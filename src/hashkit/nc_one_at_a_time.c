@@ -30,9 +30,10 @@
  */
 
 #include <nc_core.h>
+#include <dyn_token.h>
 
-uint32_t
-hash_one_at_a_time(const char *key, size_t key_length)
+rstatus_t
+hash_one_at_a_time(const char *key, size_t key_length, struct dyn_token *token)
 {
     const char *ptr = key;
     uint32_t value = 0;
@@ -47,5 +48,8 @@ hash_one_at_a_time(const char *key, size_t key_length)
     value ^= (value >> 11);
     value += (value << 15);
 
-    return value;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, value);
+
+    return NC_OK;
 }

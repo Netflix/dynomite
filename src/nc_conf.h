@@ -58,6 +58,7 @@
 #define CONF_DEFAULT_DYN_READ_TIMEOUT        30000
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
 #define CONF_DEFAULT_DYN_CONNECTIONS         10
+#define CONF_DEFAULT_VNODE_TOKENS            8
 
 
 struct conf_listen {
@@ -76,6 +77,8 @@ struct conf_server {
     int             weight;     /* weight */
     struct sockinfo info;       /* connect socket info */
     unsigned        valid:1;    /* valid? */
+    struct array    tokens;     /* tokens for this server */
+    struct string   dc;         /* server's datacenter */
 };
 
 struct conf_pool {
@@ -101,7 +104,9 @@ struct conf_pool {
     struct string      dyn_seed_provider;     /* seed provider */ 
     struct array       dyn_seeds;             /* seed nodes */
     int                dyn_port;
-    int                dyn_connections;       /* dyn connections */
+    int                dyn_connections;       /* dyn connections */  
+    struct string      dc;                    /* this node's logical dc */  
+    struct array       tokens;                /* this node's token */  
 };
 
 struct conf {
@@ -133,11 +138,13 @@ struct command {
 char *conf_set_string(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_listen(struct conf *cf, struct command *cmd, void *conf);
 char *conf_add_server(struct conf *cf, struct command *cmd, void *conf);
+char *conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_num(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_bool(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_hash(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_distribution(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_hashtag(struct conf *cf, struct command *cmd, void *conf);
+char *conf_set_tokens(struct conf *cf, struct command *cmd, void *conf);
 
 rstatus_t conf_server_each_transform(void *elem, void *data);
 rstatus_t conf_pool_each_transform(void *elem, void *data);

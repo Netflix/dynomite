@@ -33,9 +33,10 @@
  */
 
 #include <nc_core.h>
+#include <dyn_token.h>
 
-uint32_t
-hash_murmur(const char *key, size_t length)
+rstatus_t 
+hash_murmur(const char *key, size_t length, struct dyn_token *token)
 {
     /*
      * 'm' and 'r' are mixing constants generated offline.  They're not
@@ -95,5 +96,8 @@ hash_murmur(const char *key, size_t length)
     h *= m;
     h ^= h >> 15;
 
-    return h;
+    size_dyn_token(token, 1);
+    set_int_dyn_token(token, h);
+
+    return NC_OK;
 }

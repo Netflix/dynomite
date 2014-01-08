@@ -34,11 +34,13 @@
     ACTION( HASH_HSIEH,         hsieh         ) \
     ACTION( HASH_MURMUR,        murmur        ) \
     ACTION( HASH_JENKINS,       jenkins       ) \
+    ACTION( HASH_MURMUR3,       murmur3       ) \
 
 #define DIST_CODEC(ACTION)                      \
     ACTION( DIST_KETAMA,        ketama        ) \
     ACTION( DIST_MODULA,        modula        ) \
     ACTION( DIST_RANDOM,        random        ) \
+    ACTION( DIST_VNODE,         vnode         ) \
 
 #define DEFINE_ACTION(_hash, _name) _hash,
 typedef enum hash_type {
@@ -54,19 +56,26 @@ typedef enum dist_type {
 } dist_type_t;
 #undef DEFINE_ACTION
 
-uint32_t hash_one_at_a_time(const char *key, size_t key_length);
+rstatus_t hash_one_at_a_time(const char *key, size_t key_length, struct dyn_token *token);
 void md5_signature(const unsigned char *key, unsigned int length, unsigned char *result);
-uint32_t hash_md5(const char *key, size_t key_length);
-uint32_t hash_crc16(const char *key, size_t key_length);
-uint32_t hash_crc32(const char *key, size_t key_length);
-uint32_t hash_crc32a(const char *key, size_t key_length);
-uint32_t hash_fnv1_64(const char *key, size_t key_length);
-uint32_t hash_fnv1a_64(const char *key, size_t key_length);
-uint32_t hash_fnv1_32(const char *key, size_t key_length);
-uint32_t hash_fnv1a_32(const char *key, size_t key_length);
-uint32_t hash_hsieh(const char *key, size_t key_length);
-uint32_t hash_jenkins(const char *key, size_t length);
-uint32_t hash_murmur(const char *key, size_t length);
+rstatus_t hash_md5(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_crc16(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_crc32(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_crc32a(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_hsieh(const char *key, size_t key_length, struct dyn_token *token);
+rstatus_t hash_jenkins(const char *key, size_t length, struct dyn_token *token);
+
+rstatus_t hash_murmur(const char *key, size_t length, struct dyn_token *token);
+rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *token);
+
+rstatus_t datacenter_verify_continuum(void *elem, void *data);
+rstatus_t vnode_update(struct server_pool *pool);
+uint32_t vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token);
+
 
 rstatus_t ketama_update(struct server_pool *pool);
 uint32_t ketama_dispatch(struct continuum *continuum, uint32_t ncontinuum, uint32_t hash);

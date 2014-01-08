@@ -17,6 +17,7 @@
 
 #include <nc_core.h>
 #include <nc_server.h>
+#include <dyn_peer.h>
 
 struct msg *
 req_get(struct conn *conn)
@@ -429,7 +430,8 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 }
 
 
-void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
+void
+local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 		               uint8_t *key, uint32_t keylen)
 {
     rstatus_t status;
@@ -470,24 +472,41 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
               msg->mlen, msg->type, keylen, key);
 }
 
+static bool
+request_send_to_all_datacenters(struct msg *msg) {
+    msg_type_t t = msg->type;
+ 
+    // yeah, there's probably a better way to do this...
+    return t == MSG_REQ_MC_SET || t == MSG_REQ_MC_CAS || t == MSG_REQ_MC_DELETE || t == MSG_REQ_MC_ADD ||
+        t == MSG_REQ_MC_REPLACE || t == MSG_REQ_MC_APPEND || t == MSG_REQ_MC_PREPEND || t == MSG_REQ_MC_INCR ||
+        t == MSG_REQ_MC_DECR;
+}
+
 
 void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        uint8_t *key, uint32_t keylen)
+                        struct datacenter *dc, uint8_t *key, uint32_t keylen)
 {
     rstatus_t status;
     struct conn *s_conn;
 
     ASSERT(c_conn->client && !c_conn->dyn_client && !c_conn->proxy && !c_conn->dnode);
 
-    /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
-        c_conn->enqueue_outq(ctx, c_conn, msg);
-    }
-
-    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, key, keylen);
+    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;
+    }
+
+    //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
+    struct peer *peer = s_conn->owner;
+    if (peer->is_local) {
+        local_req_forward(ctx, c_conn, msg, key, keylen);
+        return;
+    } else {
+        /* enqueue message (request) into client outq, if response is expected */
+        if (!msg->noreply) {
+            c_conn->enqueue_outq(ctx, c_conn, msg);
+        }
     }
 
     ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dyn_client && !s_conn->dnode);
@@ -504,17 +523,15 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 
 
     struct mbuf *nbuf = mbuf_get();
-
     if (nbuf == NULL) {
-       return;;
+       return;
     }
   
-    struct msg * nmsg = msg_get(msg->owner, msg->request, c_conn->redis);
+    struct msg *nmsg = msg_get(msg->owner, msg->request, c_conn->redis);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return;
     }
-   
 
     //dyn message's meta data
     uint64_t msg_id = 1234;
@@ -538,14 +555,11 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
-    rstatus_t status;
-    struct conn *s_conn;
     struct server_pool *pool;
     uint8_t *key;
     uint32_t keylen;
 
     ASSERT(c_conn->client && !c_conn->proxy);
-
 
     pool = c_conn->owner;
     key = NULL;
@@ -570,13 +584,37 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         keylen = (uint32_t)(msg->key_end - msg->key_start);
     }
 
-    
-    if (keylen == 3) {
-        return local_req_forward(ctx, c_conn, msg, key, keylen);
-    } else {  //remote req_forward
-        return remote_req_forward(ctx, c_conn, msg, key, keylen);
-    } 
+    struct datacenter *dc;
+    uint32_t dc_cnt = array_n(&pool->datacenter);
+    if (dc_cnt > 1 && request_send_to_all_datacenters(msg)) {
+        // need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg), 
+        // that will bork the request sent to secondary dcs
+        struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
 
+        for (uint32_t i = 0; i < dc_cnt; i++) {
+            dc = array_get(&pool->datacenter, i);
+            struct msg *dc_msg;
+            
+            // clone the msg struct if not the current dc
+            if (string_compare(dc->name, &pool->dc) != 0) {
+                dc_msg = msg_get(c_conn, msg->request, msg->redis);
+                if (dc_msg == NULL) {
+                    log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-dc messages for you!");
+                    continue;
+                }
+
+                msg_clone(msg, mbuf_start, dc_msg);
+                dc_msg->noreply = true;
+            } else {
+                dc_msg = msg;
+            }
+
+            remote_req_forward(ctx, c_conn, dc_msg, dc, key, keylen);
+        }
+    } else {
+        dc = server_get_datacenter(pool, &pool->dc);
+        remote_req_forward(ctx, c_conn, msg, dc, key, keylen);
+    }
 }
 
 

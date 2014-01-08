@@ -306,7 +306,7 @@ mbuf_write_char(struct mbuf *mbuf, char ch)
 void 
 mbuf_write_string(struct mbuf *mbuf, struct string *s)
 {
-   ASSERT(s->len > mbuf_size(mbuf));
+   ASSERT(s->len < mbuf_size(mbuf));
    mbuf_copy(mbuf, s->data, s->len);
 }
 
