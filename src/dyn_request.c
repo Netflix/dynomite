@@ -425,8 +425,6 @@ dyn_req_forward_stats(struct context *ctx, struct server *server, struct msg *ms
 static void
 dyn_req_forward(struct context *ctx, struct conn *dyn_c_conn, struct msg *msg)
 {
-    rstatus_t status;
-    struct conn *l_s_conn;
     struct server_pool *pool;
     uint8_t *key;
     uint32_t keylen;

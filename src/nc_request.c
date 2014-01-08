@@ -587,6 +587,10 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     struct datacenter *dc;
     uint32_t dc_cnt = array_n(&pool->datacenter);
     if (dc_cnt > 1 && request_send_to_all_datacenters(msg)) {
+        // need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg), 
+        // that will bork the request sent to secondary dcs
+        struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
+
         for (uint32_t i = 0; i < dc_cnt; i++) {
             dc = array_get(&pool->datacenter, i);
             struct msg *dc_msg;
@@ -599,7 +603,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
                     continue;
                 }
 
-                msg_clone(msg, dc_msg);
+                msg_clone(msg, mbuf_start, dc_msg);
                 dc_msg->noreply = true;
             } else {
                 dc_msg = msg;

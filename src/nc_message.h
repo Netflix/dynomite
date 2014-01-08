@@ -227,7 +227,7 @@ void msg_tmo_insert(struct msg *msg, struct conn *conn);
 void msg_tmo_delete(struct msg *msg);
 
 void msg_init(void);
-rstatus_t msg_clone(struct msg *src, struct msg *target);
+rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
 struct msg *msg_get(struct conn *conn, bool request, bool redis);
 void msg_put(struct msg *msg);

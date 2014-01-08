@@ -310,7 +310,7 @@ msg_get(struct conn *conn, bool request, bool redis)
 }
 
 rstatus_t 
-msg_clone(struct msg *src, struct msg *target)
+msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 {
     target->owner = src->owner;
     target->request = src->request;
@@ -331,7 +331,13 @@ msg_clone(struct msg *src, struct msg *target)
     target->vlen = src->vlen;
 
     struct mbuf *mbuf, *nbuf;
+    bool started = false;
     STAILQ_FOREACH(mbuf, &src->mhdr, next) {
+        if (!started && mbuf != mbuf_start) {
+            continue;
+        } else {
+            started = true;
+        }
         nbuf = mbuf_get();
         if (nbuf == NULL) {
             return ENOMEM;
