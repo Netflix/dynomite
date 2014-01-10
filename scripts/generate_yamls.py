@@ -11,8 +11,8 @@ outputs one yaml file per input node
 import yaml, sys, random
 
 APPNAME='dyn_o_mite'
-CLIENT_PORT='22200'
-DYN_PEER_PORT='32200'
+CLIENT_PORT='8102'
+DYN_PEER_PORT=8101
 MEMCACHE_PORT='11211'
 
 
@@ -31,28 +31,28 @@ for i in range(1, len(sys.argv)):
     token_map[node] = tok_str
 
 for k,v in token_map.items():
-    ip_dc = k.split(':');
-
     # get the peers ready, and yank the current one from the dict
     dyn_seeds_map = token_map.copy()
     del dyn_seeds_map[k]
     dyn_seeds = []
     for y,z in dyn_seeds_map.items():
-        dyn_seeds.append(y + ':' + z);
+        key = y.split(':')
+        dyn_seeds.append(key[0] + ':' + str(DYN_PEER_PORT) + ':' + key[1] + ':' + z);
 
+    ip_dc = k.split(':');
     data = {
-        'listen': ip_dc[0] + ':' + CLIENT_PORT,
+        'listen': '0.0.0.0:' + CLIENT_PORT,
         'hash': 'murmur',
         'distribution': 'vnode',
         'preconnect': True,
         'auto_eject_hosts': False,
         'server_retry_timeout': 200000,
         'timeout': 150000,
-        'servers': [ip_dc[0] + ':' + MEMCACHE_PORT],
+        'servers': ['127.0.0.1:' + MEMCACHE_PORT + ':1'],
         'dyn_seed_provider': 'simple_provider',
 
-        'dyn_port': 32200,
-        'dyn_listen': ip_dc[0] + ':' + DYN_PEER_PORT,
+        'dyn_port': DYN_PEER_PORT,
+        'dyn_listen': '0.0.0.0:' + str(DYN_PEER_PORT),
         'dyn_read_timeout': 200000,
         'dyn_write_timeout': 200000,
         'datacenter': ip_dc[1],
@@ -61,6 +61,14 @@ for k,v in token_map.items():
         }
 
     outer = {APPNAME: data}
-    with open(ip_dc[0] + '.yml', 'w') as outfile:
+    file_name = ip_dc[0] + '.yml'
+    with open(file_name, 'w') as outfile:
         outfile.write( yaml.dump(outer, default_flow_style=False) )
 
+    scp_host_tag = ''
+    if "east" in ip_dc[1]:
+        scp_host_tag = '.compute-1.amazonaws.com'
+    else:
+        scp_host_tag = '.' + ip_dc[1] + '.compute.amazonaws.com'
+    
+    print 'oq-scp -r ' + ip_dc[1] + ' ' + file_name + ' ec2-' + ip_dc[0].replace('.', '-') + scp_host_tag + ':dynomite/conf/dynomite.yml'
