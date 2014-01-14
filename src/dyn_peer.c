@@ -6,6 +6,7 @@
 #include <dyn_peer.h>
 #include <nc_server.h>
 #include <dyn_peer.h>
+#include <dyn_token.h>
 
 
 void
@@ -103,6 +104,40 @@ dyn_peer_each_set_owner(void *elem, void *data)
     return NC_OK;
 }
 
+static rstatus_t
+dyn_peer_add_local(struct server_pool *pool, struct peer *peer)
+{
+    ASSERT(peer != NULL);
+    peer->idx = 0; /* this might be psychotic, trying it for now */
+    peer->owner = NULL;
+
+    peer->pname = pool->d_addrstr;
+    peer->name = pool->d_addrstr;
+    peer->port = pool->d_port;
+    peer->weight = 0;  /* hacking this out of the way for now */
+    peer->dc = pool->dc;
+    peer->is_local = true;
+    //TODO-jeb might need to copy over tokens, not sure if this is good enough
+    peer->tokens = pool->tokens;
+
+    peer->family = pool->d_family;
+    peer->addrlen = pool->d_addrlen;
+    peer->addr = pool->d_addr;
+
+    peer->ns_conn_q = 0;
+    TAILQ_INIT(&peer->s_conn_q);
+
+    peer->next_retry = 0LL;
+    peer->failure_count = 0;
+    peer->is_seed = 1;
+    peer->owner = pool;
+
+    log_debug(LOG_VERB, "transform to local node to peer %"PRIu32" '%.*s'",
+              peer->idx, pool->name.len, pool->name.data);
+
+    return NC_OK;
+}
+
 rstatus_t
 dyn_peer_init(struct array *conf_seeds,
             struct server_pool *sp)
@@ -110,11 +145,29 @@ dyn_peer_init(struct array *conf_seeds,
     struct array * seeds = &sp->seeds;
     struct array * peers = &sp->peers;
     rstatus_t status;
-    uint32_t nseed, npeer;
+    uint32_t nseed;
 
     /* init seeds list */
     nseed = array_n(conf_seeds);
-    ASSERT(nseed != 0);
+    if(nseed == 0) {
+        log_debug(LOG_INFO, "look like you are running with no seeds deifined. This is ok for running with just one node.");
+
+        // add current node to peers array
+        status = array_init(peers, 1, sizeof(struct peer));
+        if (status != NC_OK) {
+            return status;
+        }
+
+        struct peer *peer = array_push(peers);
+        ASSERT(peer != NULL);
+        status = dyn_peer_add_local(sp, peer);
+        if (status != NC_OK) {
+            dyn_peer_deinit(peers);
+        }
+        return status;
+    }
+
+//    ASSERT(nseed != 0);
     ASSERT(array_n(seeds) == 0);
 
     status = array_init(seeds, nseed, sizeof(struct peer));
@@ -140,19 +193,30 @@ dyn_peer_init(struct array *conf_seeds,
  
     /* initialize peers list = seeds list */
     ASSERT(array_n(peers) == 0); 
-    
-    status = array_init(peers, nseed, sizeof(struct peer));
+
+    // add current node to peers array
+    uint32_t peer_cnt = nseed + 1;
+    status = array_init(peers, peer_cnt, sizeof(struct peer));
     if (status != NC_OK) {
         return status;
     }
- 
+
+    struct peer *peer = array_push(peers);
+    ASSERT(peer != NULL);
+    status = dyn_peer_add_local(sp, peer);
+    if (status != NC_OK) {
+        dyn_peer_deinit(seeds);
+        dyn_peer_deinit(peers);
+        return status;
+    }
+
     status = array_each(conf_seeds, conf_seed_each_transform, peers);
     if (status != NC_OK) {
         dyn_peer_deinit(seeds);
         dyn_peer_deinit(peers);
         return status;
     }
-    ASSERT(array_n(peers) == nseed);
+    ASSERT(array_n(peers) == peer_cnt);
    
     status = array_each(peers, dyn_peer_each_set_owner, sp);
     if (status != NC_OK) {
@@ -615,47 +679,68 @@ dyn_peer_pool_update(struct server_pool *pool)
     return NC_OK;
 }
 
-static uint32_t
+static struct dyn_token *
 dyn_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     ASSERT(array_n(&pool->peers) != 0);
-
-    if (array_n(&pool->peers) == 1) {
-        return 0;
-    }
-
     ASSERT(key != NULL && keylen != 0);
 
-    return pool->key_hash((char *)key, keylen);
+    struct dyn_token *token = nc_alloc(sizeof(struct dyn_token));
+    if (token == NULL) {
+        return NULL;
+    }
+    init_dyn_token(token);
+
+    rstatus_t status = pool->key_hash((char *)key, keylen, token);
+    if (status != NC_OK) {
+        nc_free(token);
+        return NULL;
+    }
+
+    return token;
 }
 
 static struct peer *
-dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
+dyn_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t *key, uint32_t keylen)
 {
     struct peer *server;
     uint32_t hash, idx;
+    struct dyn_token *token = NULL;
 
     ASSERT(array_n(&pool->peers) != 0);
     ASSERT(key != NULL && keylen != 0);
 
+    ASSERT(dc != NULL);
+
     switch (pool->dist_type) {
     case DIST_KETAMA:
-        hash = dyn_peer_pool_hash(pool, key, keylen);
-        idx = ketama_dispatch(pool->continuum, pool->ncontinuum, hash);
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        hash = token->mag[0];
+        idx = ketama_dispatch(dc->continuum, dc->ncontinuum, hash);
+        break;
+
+    case DIST_VNODE:
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
         break;
 
     case DIST_MODULA:
-        hash = dyn_peer_pool_hash(pool, key, keylen);
-        idx = modula_dispatch(pool->continuum, pool->ncontinuum, hash);
+        token = dyn_peer_pool_hash(pool, key, keylen);
+        hash = token->mag[0];
+        idx = modula_dispatch(dc->continuum, dc->ncontinuum, hash);
         break;
 
     case DIST_RANDOM:
-        idx = random_dispatch(pool->continuum, pool->ncontinuum, 0);
+        idx = random_dispatch(dc->continuum, dc->ncontinuum, 0);
         break;
 
     default:
         NOT_REACHED();
         return NULL;
+    }
+    if (token != NULL) {
+        deinit_dyn_token(token);
+        nc_free(token);
     }
     ASSERT(idx < array_n(&pool->peers));
 
@@ -668,7 +753,7 @@ dyn_peer_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 struct conn *
-dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
+dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc, uint8_t *key,
                  uint32_t keylen)
 {
     rstatus_t status;
@@ -681,7 +766,7 @@ dyn_peer_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
     }
 
     /* from a given {key, keylen} pick a server from pool */
-    server = dyn_peer_pool_server(pool, key, keylen);
+    server = dyn_peer_pool_server(pool, dc, key, keylen);
     if (server == NULL) {
         return NULL;
     }
@@ -772,6 +857,9 @@ dyn_peer_pool_run(struct server_pool *pool)
     case DIST_KETAMA:
         return ketama_update(pool);
 
+    case DIST_VNODE:
+        return vnode_update(pool);
+
     case DIST_MODULA:
         return modula_update(pool);
 
@@ -835,6 +923,15 @@ dyn_peer_pool_init(struct array *server_pool, struct array *conf_pool,
     return NC_OK;
 }
 
+
+static rstatus_t
+dc_deinit(void *elem, void *data)
+{
+    struct datacenter *dc = elem;
+
+    return datacenter_deinit(dc);
+}
+
 void
 dyn_peer_pool_deinit(struct array *server_pool)
 {
@@ -848,14 +945,10 @@ dyn_peer_pool_deinit(struct array *server_pool)
         //fixe me to use different variables
         ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->nc_conn_q == 0);
 
-        if (sp->continuum != NULL) {
-            nc_free(sp->continuum);
-            sp->ncontinuum = 0;
-            sp->nserver_continuum = 0;
-            sp->nlive_server = 0;
-        }
 
         dyn_peer_deinit(&sp->peers);
+        array_each(&sp->datacenter, dc_deinit, NULL);
+        sp->nlive_server = 0;
 
         log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,
                   sp->name.len, sp->name.data);

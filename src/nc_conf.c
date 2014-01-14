@@ -1,4 +1,4 @@
-/*
+ /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
  * Copyright (C) 2011 Twitter, Inc.
  *
@@ -18,6 +18,7 @@
 #include <nc_core.h>
 #include <nc_conf.h>
 #include <nc_server.h>
+#include <dyn_token.h>
 #include <dyn_peer.h>
 #include <proto/nc_proto.h>
 
@@ -116,7 +117,7 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, dyn_seed_provider) },
 
     { string("dyn_seeds"),
-      conf_add_server,
+      conf_add_dyn_server,
       offsetof(struct conf_pool, dyn_seeds) }, 
 
     { string("dyn_port"),
@@ -127,14 +128,33 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, dyn_connections) },
 
+    { string("datacenter"),
+      conf_set_string,
+      offsetof(struct conf_pool, dc) },
+
+    { string("tokens"),
+      conf_set_tokens,
+      offsetof(struct conf_pool, tokens) },
+
     null_command
 };
 
-static void
+static rstatus_t
 conf_server_init(struct conf_server *cs)
 {
     string_init(&cs->pname);
     string_init(&cs->name);
+    string_init(&cs->dc);
+    
+    rstatus_t status = array_init(&cs->tokens, CONF_DEFAULT_VNODE_TOKENS,
+                        sizeof(struct dyn_token));
+    if (status != NC_OK) {
+        string_deinit(&cs->pname);
+        string_deinit(&cs->name);
+        string_deinit(&cs->dc);
+        return status;
+    }
+
     cs->port = 0;
     cs->weight = 0;
 
@@ -143,6 +163,7 @@ conf_server_init(struct conf_server *cs)
     cs->valid = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
+    return NC_OK;
 }
 
 static void
@@ -150,10 +171,13 @@ conf_server_deinit(struct conf_server *cs)
 {
     string_deinit(&cs->pname);
     string_deinit(&cs->name);
+    string_deinit(&cs->dc);
+    array_deinit(&cs->tokens);
     cs->valid = 0;
     log_debug(LOG_VVERB, "deinit conf server %p", cs);
 }
 
+// copy the server info from the config struct over to the real one
 rstatus_t
 conf_server_each_transform(void *elem, void *data)
 {
@@ -210,6 +234,10 @@ conf_seed_each_transform(void *elem, void *data)
     s->name = cseed->name;
     s->port = (uint16_t)cseed->port;
     s->weight = (uint32_t)cseed->weight;
+    s->dc = cseed->dc;
+    s->is_local = false;
+    //TODO-jeb need to copy over tokens, not sure if this is good enough
+    s->tokens = cseed->tokens;
 
     s->family = cseed->info.family;
     s->addrlen = cseed->info.addrlen;
@@ -239,6 +267,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     string_init(&cp->listen.pname);
     string_init(&cp->listen.name);
+
+    string_init(&cp->dc);
 
     cp->listen.port = 0;
     memset(&cp->listen.info, 0, sizeof(cp->listen.info));
@@ -298,6 +328,15 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
         return status;
     }
 
+    status = array_init(&cp->tokens, CONF_DEFAULT_VNODE_TOKENS,
+                        sizeof(struct dyn_token));
+    if (status != NC_OK) {
+        string_deinit(&cp->name);
+        array_deinit(&cp->server);
+        array_deinit(&cp->dyn_seeds);
+        return status;
+    }
+
     log_debug(LOG_VVERB, "init conf pool %p, '%.*s'", cp, name->len, name->data);
 
     return NC_OK;
@@ -321,6 +360,7 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->dyn_listen.pname);
     string_deinit(&cp->dyn_listen.name);
     array_deinit(&cp->dyn_seeds);
+    array_deinit(&cp->tokens);
 
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }
@@ -346,9 +386,10 @@ conf_pool_each_transform(void *elem, void *data)
     TAILQ_INIT(&sp->c_conn_q);
 
     array_null(&sp->server);
-    sp->ncontinuum = 0;
-    sp->nserver_continuum = 0;
-    sp->continuum = NULL;
+    array_null(&sp->datacenter);
+    /* sp->ncontinuum = 0; */
+    /* sp->nserver_continuum = 0; */
+    /* sp->continuum = NULL; */
     sp->nlive_server = 0;
     sp->next_rebuild = 0LL;
 
@@ -389,9 +430,12 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
     sp->d_connections = (uint32_t)cp->dyn_connections;   
+    sp->dc = cp->dc;
+    sp->tokens = cp->tokens;
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
+    array_init(&sp->datacenter, 1, sizeof(struct datacenter));
     status = dyn_peer_init(&cp->dyn_seeds, sp);
     if (status != NC_OK) {
         return status;
@@ -458,7 +502,7 @@ conf_dump(struct conf *cf)
  
         log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
         
-        int nseeds = array_n(&cp->dyn_seeds);
+        uint32_t nseeds = array_n(&cp->dyn_seeds);
         log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
 
         for (j = 0; j < nseeds; j++) {
@@ -471,6 +515,7 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
         log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
         log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
+        log_debug(LOG_VVERB, "  datacenter: %.*s", cp->dc.len, cp->dc.data);
     }
 }
 
@@ -1637,7 +1682,10 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
-    conf_server_init(field);
+    status = conf_server_init(field);
+    if (status != NC_OK) {
+        return CONF_ERROR;
+    }
 
     value = array_top(&cf->arg);
 
@@ -1751,6 +1799,227 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 
     string_deinit(&address);
     field->valid = 1;
+
+    return CONF_OK;
+}
+
+/*
+ * Does the work of reading an array of chars, and constructing the tokens
+ * for the array.
+ */
+static rstatus_t
+conf_derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
+{
+    ASSERT (end > start);
+    uint8_t *p = end;
+    uint8_t *q;
+    while (p >= start) {
+        struct dyn_token *token = array_push(tokens);
+        ASSERT (token != NULL);
+        init_dyn_token(token);
+
+        q = nc_strrchr(p, start, ',');
+        if (q == NULL) {
+            q = start; /* we're at the beginning of the list */
+        } else {
+            q++;
+        }
+
+        uint32_t len = 0;
+        if (p == end) {
+            len = (uint32_t)(p - q);
+        } else {
+            len = (uint32_t)(p - q + 1);
+        }
+
+        rstatus_t status = parse_dyn_token(q, len, token);
+        if (status != NC_OK) {
+             return NC_ERROR;
+        }
+
+        p = q - 2;
+    } 
+
+    return NC_OK;
+}
+
+/*
+ * Well, this just blows. I've copy and pasted the conf_add_server() instead
+ * of fixing the fucking yaml. ffs, why is there a colon delimited string in the yaml
+ * that requires a few levels of magic in order to guess the structure of, rather than
+ * doing the right thing and making proper fields. Granted, all I've done is perpetuated the horseshit,
+ * but, oi, there's bigger fish to deep fry, at this point.
+ */
+char *
+conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    struct array *a;
+    struct string *value;
+    struct conf_server *field;
+    uint8_t *p, *q, *start;
+    uint8_t *pname, *addr, *port, *dc, *tokens, *name;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, dclen, tokenslen, namelen;
+    struct string address;
+    char delim[] = " :::";
+
+    string_init(&address);
+    p = conf;
+    a = (struct array *)(p + cmd->offset);
+
+    field = array_push(a);
+    if (field == NULL) {
+        return CONF_ERROR;
+    }
+
+    status = conf_server_init(field);
+    if (status != NC_OK) {
+        return CONF_ERROR;
+    }
+
+    value = array_top(&cf->arg);
+
+    /* parse "hostname:port:dc:tokens [name]" */
+    p = value->data + value->len - 1;
+    start = value->data;
+    addr = NULL;
+    addrlen = 0;
+    dc = NULL;
+    dclen = 0;
+    tokens = NULL;
+    tokenslen = 0;
+    port = NULL;
+    portlen = 0;
+    name = NULL;
+    namelen = 0;
+
+    delimlen = 4;
+
+    for (k = 0; k < sizeof(delim); k++) {
+        q = nc_strrchr(p, start, delim[k]);
+        if (q == NULL) {
+            if (k == 0) {
+                /*
+                 * name in "hostname:port:dc:tokens [name]" format string is
+                 * optional
+                 */
+                continue;
+            }
+            break;
+        }
+
+        switch (k) {
+        case 0:
+            name = q + 1;
+            namelen = (uint32_t)(p - name + 1);
+            break;
+
+        case 1:
+            tokens = q + 1;
+            tokenslen = (uint32_t)(p - tokens + 1);
+            break;
+
+        case 2:
+            dc = q + 1;
+            dclen = (uint32_t)(p - dc + 1);
+            break;
+
+        case 3:
+            port = q + 1;
+            portlen = (uint32_t)(p - port + 1);
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+
+        p = q - 1;
+    }
+
+    if (k != delimlen) {
+        return "has an invalid \"hostname:port:weight [name]\"or \"/path/unix_socket:weight [name]\" format string";
+    }
+
+    pname = value->data;
+    pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
+    status = string_copy(&field->pname, pname, pnamelen);
+    if (status != NC_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&field->dc, dc, dclen);
+    if (status != NC_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    uint8_t *t_end = tokens + tokenslen;
+    status = conf_derive_tokens(&field->tokens, tokens, t_end);
+    if (status != NC_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    addr = start;
+    addrlen = (uint32_t)(p - start + 1);
+    if (value->data[0] != '/') {
+        field->port = nc_atoi(port, portlen);
+        if (field->port < 0 || !nc_valid_port(field->port)) {
+            return "has an invalid port in \"hostname:port:weight [name]\" format string";
+        }
+    }
+
+    if (name == NULL) {
+        /*
+         * To maintain backward compatibility with libmemcached, we don't
+         * include the port as the part of the input string to the consistent
+         * hashing algorithm, when it is equal to 11211.
+         */
+        if (field->port == CONF_DEFAULT_KETAMA_PORT) {
+            name = addr;
+            namelen = addrlen;
+        } else {
+            name = addr;
+            namelen = addrlen + 1 + portlen;
+        }
+    }
+
+    status = string_copy(&field->name, name, namelen);
+    if (status != NC_OK) {
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&address, addr, addrlen);
+    if (status != NC_OK) {
+        return CONF_ERROR;
+    }
+
+    status = nc_resolve(&address, field->port, &field->info);
+    if (status != NC_OK) {
+        string_deinit(&address);
+        return CONF_ERROR;
+    }
+
+    string_deinit(&address);
+    field->valid = 1;
+
+    return CONF_OK;
+}
+
+char *
+conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
+{
+    uint8_t *p = conf;
+    struct array *tokens = (struct array *)(p + cmd->offset);
+    struct string *value = array_top(&cf->arg);
+    p = value->data + value->len;
+
+    rstatus_t status = conf_derive_tokens(tokens, value->data, p);
+    if (status != NC_OK) {
+        //TODO: should we dealloc the tokens/array?
+        return CONF_ERROR;
+    }
 
     return CONF_OK;
 }

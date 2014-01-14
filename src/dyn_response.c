@@ -168,8 +168,8 @@ dyn_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *ms
 {
     ASSERT(!msg->request);
 
-    stats_server_incr(ctx, server, responses);
-    stats_server_incr_by(ctx, server, response_bytes, msg->mlen);
+    /* stats_server_incr(ctx, server, responses); */
+    /* stats_server_incr_by(ctx, server, response_bytes, msg->mlen); */
 }
 
 static void

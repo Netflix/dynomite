@@ -21,6 +21,7 @@
 #include <nc_core.h>
 #include <nc_server.h>
 #include <nc_conf.h>
+#include <dyn_token.h>
 
 void
 server_ref(struct conn *conn, void *owner)
@@ -594,54 +595,16 @@ server_pool_update(struct server_pool *pool)
     return NC_OK;
 }
 
-static uint32_t
-server_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
-{
-    ASSERT(array_n(&pool->server) != 0);
-
-    if (array_n(&pool->server) == 1) {
-        return 0;
-    }
-
-    ASSERT(key != NULL && keylen != 0);
-
-    return pool->key_hash((char *)key, keylen);
-}
-
 static struct server *
 server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
     struct server *server;
-    uint32_t hash, idx;
 
     ASSERT(array_n(&pool->server) != 0);
     ASSERT(key != NULL && keylen != 0);
 
-    switch (pool->dist_type) {
-    case DIST_KETAMA:
-        hash = server_pool_hash(pool, key, keylen);
-        idx = ketama_dispatch(pool->continuum, pool->ncontinuum, hash);
-        break;
-
-    case DIST_MODULA:
-        hash = server_pool_hash(pool, key, keylen);
-        idx = modula_dispatch(pool->continuum, pool->ncontinuum, hash);
-        break;
-
-    case DIST_RANDOM:
-        idx = random_dispatch(pool->continuum, pool->ncontinuum, 0);
-        break;
-
-    default:
-        NOT_REACHED();
-        return NULL;
-    }
-    ASSERT(idx < array_n(&pool->server));
-
-    server = array_get(&pool->server, idx);
-
-    log_debug(LOG_VERB, "key '%.*s' on dist %d maps to server '%.*s'", keylen,
-              key, pool->dist_type, server->pname.len, server->pname.data);
+    //fuck it, just return the first (memcache) entry in the array
+    server = array_get(&pool->server, 0);
 
     return server;
 }
@@ -751,6 +714,9 @@ server_pool_run(struct server_pool *pool)
     case DIST_KETAMA:
         return ketama_update(pool);
 
+    case DIST_VNODE:
+        return vnode_update(pool);
+
     case DIST_MODULA:
         return modula_update(pool);
 
@@ -814,6 +780,35 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
     return NC_OK;
 }
 
+void 
+datacenter_init(struct datacenter *dc)
+{
+    dc->continuum = NULL;
+    dc->ncontinuum = 0;
+    dc->nserver_continuum = 0;
+    dc->name = NULL;
+}
+
+rstatus_t
+datacenter_deinit(struct datacenter *dc)
+{
+    if (dc->continuum != NULL) {
+        nc_free(dc->continuum);
+        dc->ncontinuum = 0;
+        dc->nserver_continuum = 0;
+    }
+
+    return NC_OK;
+}
+
+static rstatus_t
+dc_deinit(void *elem, void *data)
+{
+    struct datacenter *dc = elem;
+
+    return datacenter_deinit(dc);
+}
+
 void
 server_pool_deinit(struct array *server_pool)
 {
@@ -826,14 +821,9 @@ server_pool_deinit(struct array *server_pool)
         ASSERT(sp->p_conn == NULL);
         ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->nc_conn_q == 0);
 
-        if (sp->continuum != NULL) {
-            nc_free(sp->continuum);
-            sp->ncontinuum = 0;
-            sp->nserver_continuum = 0;
-            sp->nlive_server = 0;
-        }
-
         server_deinit(&sp->server);
+        array_each(&sp->datacenter, dc_deinit, NULL);
+        sp->nlive_server = 0;
 
         log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,
                   sp->name.len, sp->name.data);
@@ -843,3 +833,21 @@ server_pool_deinit(struct array *server_pool)
 
     log_debug(LOG_DEBUG, "deinit %"PRIu32" pools", npool);
 }
+
+struct datacenter *
+server_get_datacenter(struct server_pool *pool, struct string *dcname)
+{
+    for (uint32_t i = 0, len = array_n(&pool->datacenter); i < len; i++) {
+        struct datacenter *dc = array_get(&pool->datacenter, i);
+        ASSERT(dc != NULL);
+        ASSERT(dc->name != NULL);
+
+        int cmp = string_compare(dc->name, dcname);
+        if (cmp == 0) {
+            return dc;
+        }
+    }
+
+    return NULL;
+}
+
