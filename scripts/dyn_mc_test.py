@@ -49,6 +49,11 @@ def main():
                       dest="port",
                       default="8102",
                       help="target port")
+    parser.add_option("-S", "--skipkeys",
+                      action="store",
+                      dest="skipkeys",
+                      default="0",
+                      help="target port")
     parser.add_option("-n", "--numkeys",
                       action="store",
                       dest="numkeys",
@@ -74,6 +79,7 @@ def main():
     #logger.addHandler(fh)
 
 
+
     print options
 
     logging.basicConfig(level=logging.DEBUG,
@@ -83,18 +89,21 @@ def main():
 
     mc = memcache.Client([options.host + ':' + options.port], debug=0)
     numkeys = int(options.numkeys)
+    start = int(options.skipkeys)
+    end   = int(options.numkeys)
 
     if 'write' == options.operation :
-       for i in range(1, numkeys ) :
+       for i in range(start, end ) :
            mc.set('key_' + str(i), 'value_' + str(i))
 
 
     elif 'read' == options.operation :
-       for i in range(1, numkeys ) :
+       for i in range(start, end ) :
           value = mc.get('key_' + str(i))
           if value is None:
              print 'No value for key: ' + 'key_' + str(i)
-          print 'key_' + str(i) + ' has value : ' + value
+          else :
+             print 'key_' + str(i) + ' has value : ' + value
 
 
 
