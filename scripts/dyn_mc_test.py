@@ -19,6 +19,7 @@ from logging import debug, info, warning, error
 import memcache
 
 
+current_milli_time = lambda: int(round(time.time() * 1000))
 
 
 def main():
@@ -33,7 +34,7 @@ def main():
                       action="store",
                       dest="operation",
                       default="write",
-                      help="Operation to perform")
+                      help="Operation to perform: write, read, swrite (single write), sread (polling single read), and sdel")
     parser.add_option("-l", "--logfile",
                       action="store",
                       dest="logfle",
@@ -78,8 +79,6 @@ def main():
     #fh.setFormatter(formatter)
     #logger.addHandler(fh)
 
-
-
     print options
 
     logging.basicConfig(level=logging.DEBUG,
@@ -105,11 +104,24 @@ def main():
           else :
              print 'key_' + str(i) + ' has value : ' + value
 
+    elif 'swrite' == options.operation :
+         mc.set('key_time', str(current_milli_time()))
+    elif 'sread' == options.operation :
+         is_stop = False
+
+         while not is_stop:
+           value = mc.get('key_time')
+           if value != None :
+               is_stop = True
+
+         print 'Estimated elapsed time : ' + str(current_milli_time() - int(value))
+
+    elif 'sdel' == options.operation :
+        mc.delete('key_time')
 
 
 
 
 if __name__ == '__main__':
     main()
-
 
