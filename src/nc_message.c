@@ -343,12 +343,8 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
             return ENOMEM;
         }
 
-        //copy over pointers, etc
-        nbuf->pos = mbuf->start; //set to mbuf->start, just in case it's already been sent
-        nbuf->last = mbuf->last;
-        nbuf->start = mbuf->start;
-        nbuf->end = mbuf->end;
-
+        uint32_t len = mbuf_length(mbuf);
+        mbuf_copy(nbuf, mbuf->start, len);
         mbuf_insert(&target->mhdr, nbuf);
     }
 
