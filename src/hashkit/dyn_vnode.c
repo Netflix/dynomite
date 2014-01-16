@@ -113,7 +113,7 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
         middle = left + (right - left) / 2;
         int32_t cmp = cmp_dyn_token(middle->token, token);
         if (cmp == 0) {
-            return right->index;
+            return middle->index;
         } else if (cmp < 0) {
           left = middle + 1;
         } else {
@@ -121,7 +121,8 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
         }
     }
 
-    if (right == end) {
+    // add an extra check to make sure last token owns it's own exact hash value; else wrap around
+    if (right == end && !cmp_dyn_token(right->token, token)) {
         right = begin;
     }
 
