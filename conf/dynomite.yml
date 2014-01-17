@@ -1,5 +1,5 @@
 local_memcached:
-  listen: 127.0.0.1:22220
+  listen: 0.0.0.0:7102
   hash: fnv1a_64
   distribution: ketama
   preconnect: true
@@ -11,8 +11,11 @@ local_memcached:
 
   dyn_seed_provider: simple_provider
   dyn_seeds: 
-    - 127.0.0.1:44444:1
+    - ec2-107-20-60-79.compute-1.amazonaws.com:7101:1
+    - ec2-23-22-95-236.compute-1.amazonaws.com:7101:1
+    - ec2-54-226-224-148.compute-1.amazonaws.com:7101:1
+
   #dyn_port: 33331
-  dyn_listen: 127.0.0.1:33333
+  dyn_listen: 0.0.0.0:7101
   dyn_read_timeout: 2000
   dyn_write_timeout: 2000

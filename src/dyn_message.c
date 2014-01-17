@@ -53,7 +53,9 @@ dyn_parse_req(struct msg *r)
         dmsg = r->dmsg;
         if (dmsg == NULL) {
             r->dmsg = dmsg_get();
-            dmsg = r->dmsg;          
+            dmsg = r->dmsg;        
+            if (dmsg == NULL) //should track this as a dropped message
+               return; 
         }
 	
 	for (p = r->pos; p < b->last; p++) {
