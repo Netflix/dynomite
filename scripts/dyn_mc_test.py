@@ -61,14 +61,12 @@ def main():
                       default="100",
                       help="Number of keys\n")
 
-
-    if len(sys.argv) == 1:
+   if len(sys.argv) == 1:
          print "Learn some usages: " + sys.argv[0] + " -h"
          sys.exit(1)
 
 
     (options, args) = parser.parse_args()
-
 
 
 
@@ -97,7 +95,7 @@ def main():
 
     if 'write' == options.operation :
        for i in range(start, end ) :
-           mc.set('key_' + str(i), str(current_milli_time()))
+           mc.set('key_' + str(i), 'value_' + str(i))
 
     elif 'read' == options.operation :
        error_count = 0
@@ -111,9 +109,8 @@ def main():
        print 'Errour count: ' + str(error_count)
     elif 'mread' == options.operation :
        n = (end - start) / 10
-       n = min(n, 20)
+       n = min(n, 10)
        print n
-
        keys = []
        i = 0
        while (i < n) :
@@ -124,20 +121,14 @@ def main():
               i = i + 1
        print keys
 
-       results = {}
+      #values = mc.get_multi(['key_1', 'key_2', 'key_3'])
        while (len(keys) > 0) :
          values = mc.get_multi(keys)
-         #print values
+         print values
          for key in values.keys() :
              keys.remove(key)
-             results[key] = str(current_milli_time() - int(values[key]))
-       #print results
 
-       total = 0;
-       for value in results.values() :
-           total = total + int(value)
 
-       print 'Average(ms) : ' + str(total/n)
 
     elif 'del' == options.operation :
          for i in range(start, end ) :
