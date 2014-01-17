@@ -1,6 +1,6 @@
 # Dynomite
 
-**Dynomite** is a distributed thin layer for [memcached](http://www.memcached.org/) protocol.
+**Dynomite** is a distributed thin proxy layer for [memcached](http://www.memcached.org/) protocol.
 In the near future, it will support Redis protocol and other protocols.
 
 ## Build
