@@ -256,6 +256,37 @@ conf_seed_each_transform(void *elem, void *data)
     return NC_OK;
 }
 
+rstatus_t 
+conf_seed_ring_each_transform(void *elem, void *data)
+{
+    struct conf_server *cseed = elem;
+    struct array *nodes = data;
+
+    ASSERT(cseed->valid);
+    struct ring_node *node = array_push(nodes);
+    ASSERT(node != null);
+
+    node->owner = NULL;
+    node->pname = cseed->pname;
+    node->name = cseed->name;
+    node->port = (uint16_t)cseed->port;
+    node->dc = cseed->dc;
+
+    //need to check if this is local, maybe???
+    node->is_local = false; 
+    //TODO-jeb need to copy over tokens, not sure if this is good enough
+    node->tokens = cseed->tokens;
+
+    node->family = cseed->info.family;
+    node->addrlen = cseed->info.addrlen;
+    node->addr = (struct sockaddr *)&cseed->info.addr;
+
+    node->ns_conn_q = 0;
+    TAILQ_INIT(&node->s_conn_q);
+    node->is_seed = 1;
+
+    return NC_OK;
+}
 
 
 static rstatus_t
@@ -437,6 +468,11 @@ conf_pool_each_transform(void *elem, void *data)
     array_null(&sp->peers);
     array_init(&sp->datacenter, 1, sizeof(struct datacenter));
     status = dyn_peer_init(&cp->dyn_seeds, sp);
+    if (status != NC_OK) {
+        return status;
+    }
+
+    status = dyn_ring_init(&cp->dyn_seeds, sp);
     if (status != NC_OK) {
         return status;
     }

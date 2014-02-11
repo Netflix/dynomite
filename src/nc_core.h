@@ -82,6 +82,7 @@ struct stats;
 struct instance;
 struct event_base;
 struct datacenter;
+struct dyn_ring;
 
 #include <stddef.h>
 #include <stdint.h>
@@ -111,6 +112,7 @@ struct datacenter;
 #include <nc_mbuf.h>
 #include <nc_message.h>
 #include <nc_connection.h>
+#include <dyn_ring.h>
 
 struct context {
     uint32_t           id;          /* unique context id */

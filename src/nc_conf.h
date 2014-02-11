@@ -150,6 +150,7 @@ rstatus_t conf_server_each_transform(void *elem, void *data);
 rstatus_t conf_pool_each_transform(void *elem, void *data);
 
 rstatus_t conf_seed_each_transform(void *elem, void *data);
+rstatus_t conf_seed_ring_each_transform(void *elem, void *data);
 
 struct conf *conf_create(char *filename);
 void conf_destroy(struct conf *cf);

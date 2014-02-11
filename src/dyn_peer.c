@@ -175,6 +175,7 @@ dyn_peer_init(struct array *conf_seeds,
         return status;
     }
 
+
     /* transform conf seeds to seeds */
     status = array_each(conf_seeds, conf_seed_each_transform, seeds);
     if (status != NC_OK) {
