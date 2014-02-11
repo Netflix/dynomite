@@ -30,6 +30,7 @@ sbin_PROGRAMS = dynomite
 
 dynomite_SOURCES =			            \
         dyn_dnode.c dyn_dnode.h                     \
+        dyn_ring.c dyn_ring.h                     \
         dyn_peer.c  dyn_peer.h                      \
         dyn_client.h dyn_client.c                   \
         dyn_request.c                               \
