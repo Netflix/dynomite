@@ -258,17 +258,28 @@ dyn_parse_req(struct msg *r)
 		}
 		
 	}
-	
+
     done:
-       dmsg->owner = r;   
-       dmsg->source_address = r->owner->addr;    
+       dmsg->owner = r;
+       dmsg->source_address = r->owner->addr;
        loga("at done with p at %d", p);
-       dmsg_dump(r->dmsg); 
-       log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed rsp %"PRIu64" res %d "
-	                    "type %d state %d rpos %d of %d", r->id, r->result, r->type,
-	                    r->dyn_state, r->pos - b->pos, b->last - b->pos);
+       dmsg_dump(r->dmsg);
+       log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
+                            "type %d state %d rpos %d of %d", r->id, r->result, r->type,
+                            r->dyn_state, r->pos - b->pos, b->last - b->pos);
+
+      if (dmsg->type == GOSSIP_PING) {
+            r->pos = p;
+            r->dyn_state = DYN_DONE;
+            b->pos = p;
+            ASSERT(r->pos <= b->last);
+            r->state = 0;
+            r->result = MSG_PARSE_OK;
+            return;
+       }
        return memcache_parse_req(r);
-	    
+
+	
     error:
        loga("at error");
        r->result = MSG_PARSE_ERROR;
@@ -281,6 +292,12 @@ dyn_parse_req(struct msg *r)
        return;
 
     return memcache_parse_req(r);  //fix me
+}
+
+
+void dyn_parse_rsp(struct msg *r)
+{
+    loga("I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
 }
 
 

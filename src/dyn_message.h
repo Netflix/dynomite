@@ -49,7 +49,7 @@ TAILQ_HEAD(dmsg_tqh, dmsg);
 
 
 void dyn_parse_req(struct msg *r);
-
+void dyn_parse_rsp(struct msg *r);
 
 void dmsg_free(struct dmsg *dmsg);
 void dmsg_put(struct dmsg *dmsg);

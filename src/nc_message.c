@@ -295,7 +295,11 @@ msg_get(struct conn *conn, bool request, bool redis)
                msg->parser = memcache_parse_req;
             }
         } else {
-            msg->parser = memcache_parse_rsp;
+            if (conn->dyn_mode) {
+               msg->parser = dyn_parse_rsp;
+            } else {
+               msg->parser = memcache_parse_rsp;
+            }
         }
         msg->pre_splitcopy = memcache_pre_splitcopy;
         msg->post_splitcopy = memcache_post_splitcopy;

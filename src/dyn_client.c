@@ -56,21 +56,21 @@ dyn_client_active(struct conn *conn)
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
         return true;
     }
 
-    log_debug(LOG_VVERB, "c %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "dyn: c %d is inactive", conn->sd);
 
     return false;
 }
@@ -128,7 +128,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
         ASSERT(msg->peer == NULL);
         ASSERT(msg->request && !msg->done);
 
-        log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
+        log_debug(LOG_INFO, "dyn: close c %d discarding pending req %"PRIu64" len "
                   "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                   msg->type);
 
@@ -145,7 +145,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
         conn->dequeue_outq(ctx, conn, msg);
 
         if (msg->done) {
-            log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
+            log_debug(LOG_INFO, "dyn: close c %d discarding %s req %"PRIu64" len "
                       "%"PRIu32" type %d", conn->sd,
                       msg->error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
@@ -156,7 +156,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
             ASSERT(msg->request);
             ASSERT(msg->peer == NULL);
 
-            log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
+            log_debug(LOG_INFO, "dyn: close c %d schedule swallow of req %"PRIu64" "
                       "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                       msg->type);
         }
@@ -167,7 +167,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
 
     status = close(conn->sd);
     if (status < 0) {
-        log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("dyn: close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
 

@@ -27,6 +27,7 @@
 
 
 static uint32_t ctx_id; /* context generation */
+static int64_t last; //storing last time for gossip
 
 static struct context *
 core_ctx_create(struct instance *nci)
@@ -154,6 +155,7 @@ struct context *
 core_start(struct instance *nci)
 {
     struct context *ctx;
+    last = nc_msec_now();
 
     mbuf_init(nci);
     msg_init();
@@ -341,6 +343,21 @@ core_core(void *arg, uint32_t events)
     return NC_OK;
 }
 
+static bool core_run_gossip()
+{
+       int64_t now = nc_msec_now();
+       
+       int delta = (int)(now - last);
+       if (delta > 10000) {
+           last = now;
+           return true;
+       }
+       
+       return false;
+}
+
+
+
 rstatus_t
 core_loop(struct context *ctx)
 {
@@ -352,6 +369,9 @@ core_loop(struct context *ctx)
     }
 
     core_timeout(ctx);
+
+    if (core_run_gossip())
+       dyn_gos_run(ctx);
 
     stats_swap(ctx->stats);
 
