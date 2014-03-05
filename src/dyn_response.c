@@ -1,13 +1,13 @@
 
 #include <nc_core.h>
-#include <nc_server.h>
+#include <dyn_peer.h>
 
 struct msg *
 dyn_rsp_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     msg = msg_get(conn, false, conn->redis);
     if (msg == NULL) {
@@ -33,7 +33,7 @@ dyn_rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     uint64_t id;
     err_t err;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
     ASSERT(msg->request && req_error(conn, msg));
     ASSERT(msg->owner == conn);
 
@@ -72,7 +72,7 @@ dyn_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -84,7 +84,7 @@ dyn_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             ASSERT(msg->peer == NULL);
             ASSERT(!msg->request);
 
-            log_error("eof s %d discarding incomplete rsp %"PRIu64" len "
+            log_error("dyn: eof s %d discarding incomplete rsp %"PRIu64" len "
                       "%"PRIu32"", conn->sd, msg->id, msg->mlen);
 
             dyn_rsp_put(msg);
@@ -99,7 +99,7 @@ dyn_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          * it crashes
          */
         conn->done = 1;
-        log_error("s %d active %d is done", conn->sd, conn->active(conn));
+        log_error("dyn: s %d active %d is done", conn->sd, conn->active(conn));
 
         return NULL;
     }
@@ -127,11 +127,11 @@ dyn_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg;
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "filter empty rsp %"PRIu64" on s %d", msg->id,
+        log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
                   conn->sd);
         dyn_rsp_put(msg);
         return true;
@@ -139,7 +139,7 @@ dyn_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL) {
-        log_debug(LOG_ERR, "filter stray rsp %"PRIu64" len %"PRIu32" on s %d",
+        log_debug(LOG_ERR, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d",
                   msg->id, msg->mlen, conn->sd);
         dyn_rsp_put(msg);
         return true;
@@ -151,7 +151,7 @@ dyn_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         conn->dequeue_outq(ctx, conn, pmsg);
         pmsg->done = 1;
 
-        log_debug(LOG_INFO, "swallow rsp %"PRIu64" len %"PRIu32" of req "
+        log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
                   "%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
                   conn->sd);
 
@@ -179,10 +179,10 @@ dyn_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
     struct msg *pmsg;
     struct conn *c_conn;
 
-    ASSERT(!s_conn->client && !s_conn->proxy);
+    ASSERT(!s_conn->dyn_client && !s_conn->dnode);
 
     /* response from server implies that server is ok and heartbeating */
-    server_ok(ctx, s_conn);
+    dyn_peer_ok(ctx, s_conn);
 
     /* dequeue peer message (request) from server */
     pmsg = TAILQ_FIRST(&s_conn->omsg_q);
@@ -215,7 +215,7 @@ void
 dyn_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
               struct msg *nmsg)
 {
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
     ASSERT(msg != NULL && conn->rmsg == msg);
     ASSERT(!msg->request);
     ASSERT(msg->owner == conn);
@@ -237,14 +237,14 @@ dyn_rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *pmsg; /* response and it's peer request */
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(!conn->dyn_client && !conn->dnode);
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL || !req_done(conn, pmsg)) {
         /* nothing is outstanding, initiate close? */
         if (pmsg == NULL && conn->eof) {
             conn->done = 1;
-            log_debug(LOG_INFO, "c %d is done", conn->sd);
+            log_debug(LOG_INFO, "dyn: c %d is done", conn->sd);
         }
 
         status = event_del_out(ctx->evb, conn);
@@ -284,7 +284,7 @@ dyn_rsp_send_next(struct context *ctx, struct conn *conn)
 
     conn->smsg = msg;
 
-    log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    log_debug(LOG_VVERB, "dyn: send next rsp %"PRIu64" on c %d", msg->id, conn->sd);
 
     return msg;
 }
@@ -294,10 +294,10 @@ dyn_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg; /* peer message (request) */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->dyn_client && !conn->dnode);
     ASSERT(conn->smsg == NULL);
 
-    log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    log_debug(LOG_VVERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
 
     pmsg = msg->peer;
 

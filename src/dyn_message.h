@@ -59,6 +59,6 @@ void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
 rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
-rstatus_t dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
+bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 #endif

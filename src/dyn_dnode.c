@@ -6,7 +6,7 @@
 #include <dyn_dnode.h>
 
 void
-dnode_ref(struct conn *conn, struct server_pool *owner)
+dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 

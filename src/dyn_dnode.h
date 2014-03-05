@@ -4,7 +4,7 @@
 
 #include <nc_core.h>
 
-void dnode_ref(struct conn *conn, struct server_pool *owner);
+void dnode_ref(struct conn *conn, void *owner);
 void dnode_unref(struct conn *conn);
 void dnode_close(struct context *ctx, struct conn *conn);
 

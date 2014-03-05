@@ -308,7 +308,7 @@ dyn_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             ASSERT(msg->peer == NULL);
             ASSERT(msg->request && !msg->done);
 
-            log_error("eof c %d discarding incomplete req %"PRIu64" len "
+            log_error("dyn: eof c %d discarding incomplete req %"PRIu64" len "
                       "%"PRIu32"", conn->sd, msg->id, msg->mlen);
 
             dyn_req_put(msg);
@@ -323,7 +323,7 @@ dyn_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          */
         if (!conn->active(conn)) {
             conn->done = 1;
-            log_debug(LOG_INFO, "c %d is done", conn->sd);
+            log_debug(LOG_INFO, "dyn: c %d is done", conn->sd);
         }
         return NULL;
     }
@@ -353,7 +353,7 @@ dyn_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "filter empty req %"PRIu64" from c %d", msg->id,
+        log_debug(LOG_VERB, "dyn: filter empty req %"PRIu64" from c %d", msg->id,
                   conn->sd);
         dyn_req_put(msg);
         return true;
@@ -371,7 +371,7 @@ dyn_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
      */
     if (msg->quit) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_INFO, "filter quit req %"PRIu64" from c %d", msg->id,
+        log_debug(LOG_INFO, "dyn: filter quit req %"PRIu64" from c %d", msg->id,
                   conn->sd);
         conn->eof = 1;
         conn->recv_ready = 0;
@@ -487,7 +487,7 @@ dyn_req_send_next(struct context *ctx, struct conn *conn)
     ASSERT(!conn->dyn_client && !conn->dnode);
 
     if (conn->connecting) {
-        server_connected(ctx, conn);
+        dyn_peer_connected(ctx, conn);
     }
 
     nmsg = TAILQ_FIRST(&conn->imsg_q);

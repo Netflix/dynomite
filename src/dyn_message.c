@@ -422,7 +422,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
 }
 
 
-rstatus_t 
+bool
 dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 {
     ASSERT(dmsg != NULL);
@@ -437,6 +437,7 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
            s.data = dmsg->data;
            log_hexdump(LOG_VERB, s.data, s.len, "dyn processing message ");
            break;
+
         case GOSSIP_DIGEST_SYN:
            break;
 
@@ -445,11 +446,16 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 
         case GOSSIP_DIGEST_ACK2:
           break;
+
+        case GOSSIP_PING:
+          loga("I have got a ping msgggggg!!!!!!");
+          return true;
+ 
         default:
           loga("nothing to do");
     }
        
-    return NC_OK;
+    return false;
 }
 
 
