@@ -132,7 +132,7 @@ dyn_peer_add_local(struct server_pool *pool, struct peer *peer)
     peer->is_seed = 1;
     peer->owner = pool;
 
-    log_debug(LOG_VERB, "transform to local node to peer %"PRIu32" '%.*s'",
+    log_debug(LOG_VERB, "dyn: transform to local node to peer %"PRIu32" '%.*s'",
               peer->idx, pool->name.len, pool->name.data);
 
     return NC_OK;
@@ -150,7 +150,7 @@ dyn_peer_init(struct array *conf_seeds,
     /* init seeds list */
     nseed = array_n(conf_seeds);
     if(nseed == 0) {
-        log_debug(LOG_INFO, "look like you are running with no seeds deifined. This is ok for running with just one node.");
+        log_debug(LOG_INFO, "dyn: look like you are running with no seeds deifined. This is ok for running with just one node.");
 
         // add current node to peers array
         status = array_init(peers, 1, sizeof(struct peer));

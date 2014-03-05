@@ -136,6 +136,10 @@ static struct command conf_commands[] = {
       conf_set_tokens,
       offsetof(struct conf_pool, tokens) },
 
+    { string("gos_interval"),
+      conf_set_num,
+      offsetof(struct conf_pool, gos_interval) }, 
+
     null_command
 };
 
@@ -256,38 +260,6 @@ conf_seed_each_transform(void *elem, void *data)
     return NC_OK;
 }
 
-rstatus_t 
-conf_seed_ring_each_transform(void *elem, void *data)
-{
-    struct conf_server *cseed = elem;
-    struct array *nodes = data;
-
-    ASSERT(cseed->valid);
-    struct ring_node *node = array_push(nodes);
-    ASSERT(node != null);
-
-    node->owner = NULL;
-    node->pname = cseed->pname;
-    node->name = cseed->name;
-    node->port = (uint16_t)cseed->port;
-    node->dc = cseed->dc;
-
-    //need to check if this is local, maybe???
-    node->is_local = false; 
-    //TODO-jeb need to copy over tokens, not sure if this is good enough
-    node->tokens = cseed->tokens;
-
-    node->family = cseed->info.family;
-    node->addrlen = cseed->info.addrlen;
-    node->addr = (struct sockaddr *)&cseed->info.addr;
-
-    node->ns_conn_q = 0;
-    TAILQ_INIT(&node->s_conn_q);
-    node->is_seed = 1;
-
-    return NC_OK;
-}
-
 
 static rstatus_t
 conf_pool_init(struct conf_pool *cp, struct string *name)
@@ -333,6 +305,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->dyn_write_timeout = CONF_UNSET_NUM;
     cp->dyn_port = CONF_UNSET_NUM;
     cp->dyn_connections = CONF_UNSET_NUM;
+
+    cp->gos_interval = CONF_UNSET_NUM;
 
     array_null(&cp->server);
     array_null(&cp->dyn_seeds);
@@ -472,7 +446,11 @@ conf_pool_each_transform(void *elem, void *data)
         return status;
     }
 
-    status = dyn_ring_init(&cp->dyn_seeds, sp);
+    /* gossip */
+    sp->g_interval = cp->gos_interval;
+    
+    status = dyn_ring_init(&sp->peers, sp);
+
     if (status != NC_OK) {
         return status;
     }
@@ -552,6 +530,7 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
         log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
         log_debug(LOG_VVERB, "  datacenter: %.*s", cp->dc.len, cp->dc.data);
+        log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
     }
 }
 
@@ -1465,6 +1444,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     } else if (cp->dyn_connections == 0) {
         log_error("conf: directive \"dyn_connections:\" cannot be 0");
         return NC_ERROR;
+    }
+
+    if (cp->gos_interval == CONF_UNSET_NUM) {
+        cp->gos_interval = CONF_DEFAULT_GOS_INTERVAL;
     }
 
     status = conf_validate_server(cf, cp);

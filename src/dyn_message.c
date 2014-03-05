@@ -271,7 +271,7 @@ dyn_parse_req(struct msg *r)
 	    
     error:
        loga("at error");
-       r->result = DMSG_PARSE_ERROR;
+       r->result = MSG_PARSE_ERROR;
        r->state = state;
        errno = EINVAL;
 

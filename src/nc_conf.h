@@ -59,7 +59,7 @@
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
 #define CONF_DEFAULT_DYN_CONNECTIONS         10
 #define CONF_DEFAULT_VNODE_TOKENS            8
-
+#define CONF_DEFAULT_GOS_INTERVAL            10000
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -107,7 +107,9 @@ struct conf_pool {
     int                dyn_connections;       /* dyn connections */  
     struct string      dc;                    /* this node's logical dc */  
     struct array       tokens;                /* this node's token */  
+    int                gos_interval;          /* wake up interval in ms */
 };
+
 
 struct conf {
     char          *fname;           /* file name (ref in argv[]) */
@@ -150,7 +152,6 @@ rstatus_t conf_server_each_transform(void *elem, void *data);
 rstatus_t conf_pool_each_transform(void *elem, void *data);
 
 rstatus_t conf_seed_each_transform(void *elem, void *data);
-rstatus_t conf_seed_ring_each_transform(void *elem, void *data);
 
 struct conf *conf_create(char *filename);
 void conf_destroy(struct conf *cf);

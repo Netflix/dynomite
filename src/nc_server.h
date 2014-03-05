@@ -131,7 +131,6 @@ struct server_pool {
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
     struct string      d_addrstr;            /* pool address (ref in conf_pool) */
-    struct dyn_ring    ring;                 /* ring info (shared with ring/gossip)  */
     uint16_t           d_port;               /* port */
     int                d_family;             /* socket family */
     socklen_t          d_addrlen;            /* socket length */
@@ -143,6 +142,10 @@ struct server_pool {
     uint32_t           d_connections;        /* maximum # dyn connections */
     struct string      dc;                   /* the datacenter for this node */  
     struct array       tokens;               /* the DHT tokens for this server */
+    /* for gossiping */
+    struct dyn_ring    ring;                 /* ring info (shared with ring/gossip)  */
+    int                g_interval;           /* gossip interval */
+
 };
 
 void server_ref(struct conn *conn, void *owner);

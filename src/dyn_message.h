@@ -14,6 +14,7 @@ typedef enum dmsg_type {
     DMSG_REQ_MC_READ,                       /* memcache retrieval requests */
     DMSG_REQ_MC_WRITE,
     DMSG_REQ_MC_DELETE,
+    GOSSIP_PING,
     GOSSIP_DIGEST_SYN,
     GOSSIP_DIGEST_ACK,
     GOSSIP_DIGEST_ACK2,
