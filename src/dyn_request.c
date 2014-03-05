@@ -1,6 +1,7 @@
 
 #include <nc_core.h>
 #include <nc_server.h>
+#include <dyn_peer.h>
 
 struct msg *
 dyn_req_get(struct conn *conn)
@@ -351,37 +352,27 @@ static void
 dyn_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg)
 {
     rstatus_t status;
-    struct msg *pmsg = msg;
-    struct conn *c_conn;
+    struct msg *pmsg;
 
     ASSERT(dc_conn->dyn_client && !dc_conn->dnode);
-
-    //should we do this?
-    //s_conn->dequeue_outq(ctx, s_conn, pmsg);
-    pmsg->done = 1;
-
-    /* establish msg <-> pmsg (response <-> request) link */
-    pmsg->peer = msg;
-    msg->peer = pmsg;
-
-    //msg->pre_coalesce(msg);
-
-    c_conn = pmsg->owner;
 
     //add messsage
     struct mbuf *nbuf = mbuf_get();
      if (nbuf == NULL) {
-    	 loga("Error happened in calling mbuf_get");
-    	 //return NC_ERROR;
-     }           
-   
-     //TODOs: need to free the old msg object
-     msg = msg_get(dc_conn, 1, 0);
-     if (msg == NULL) {
-         mbuf_put(nbuf);
-         return NC_ERROR;
+         loga("Error happened in calling mbuf_get");
+         //return NC_ERROR;
      }
-     
+
+     dc_conn->enqueue_outq(ctx, dc_conn, msg);
+     msg->done = 1;
+
+     //TODOs: need to free the old msg object
+     pmsg = msg_get(dc_conn, 1, 0);
+     if (pmsg == NULL) {
+         mbuf_put(nbuf);
+         //return NC_ERROR;
+     }
+
      //dyn message's meta data
      uint64_t msg_id = 1234;
      uint8_t type = GOSSIP_PING;
@@ -389,23 +380,31 @@ dyn_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg)
      struct string data = string("PingReply");
 
      dmsg_write(nbuf, msg_id, type, version, &data);
-     mbuf_insert_head(&msg->mhdr, nbuf);
-    
-    
-    ASSERT(c_conn->dyn_client && !c_conn->dnode);
+     mbuf_insert_head(&pmsg->mhdr, nbuf);
 
-    //if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-    status = event_add_out(ctx->evb, c_conn);
-    if (status != NC_OK) {
-        c_conn->err = errno;
+     //should we do this?
+     //s_conn->dequeue_outq(ctx, s_conn, pmsg);
+     //pmsg->done = 1;
+
+     /* establish msg <-> pmsg (response <-> request) link */
+     msg->peer = pmsg;
+     pmsg->peer = msg;
+
+     pmsg->pre_coalesce(pmsg);
+
+
+    if (dyn_req_done(dc_conn, msg)) {
+       loga("This req is done yettttttttttttttttttttttttttttt!");
+       status = event_add_out(ctx->evb, dc_conn);
+       if (status != NC_OK) {
+          dc_conn->err = errno;
+       }
     }
-    //}
 
-    c_conn->enqueue_outq(ctx, c_conn, msg);
-    
+    dc_conn->enqueue_outq(ctx, dc_conn, pmsg);
+
     //dyn_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
-
 
 static bool
 dyn_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)

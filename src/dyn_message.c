@@ -298,6 +298,10 @@ dyn_parse_req(struct msg *r)
 void dyn_parse_rsp(struct msg *r)
 {
     loga("I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
+
+     msg_dump(r);
+     r->state = 0;
+     r->result = MSG_PARSE_OK;
 }
 
 

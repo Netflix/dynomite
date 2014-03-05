@@ -51,6 +51,7 @@ rstatus_t dyn_gos_run(struct context *ctx)
              }
 
 
+
              /* enqueue the message (request) into peer inq */
              if (TAILQ_EMPTY(&conn->imsg_q)) {
                  status = event_add_out(ctx->evb, conn);
@@ -83,7 +84,7 @@ rstatus_t dyn_gos_run(struct context *ctx)
               mbuf_insert(&msg->mhdr, nbuf);
 
               //expect a response
-              conn->enqueue_outq(ctx, conn, msg);
+              //conn->enqueue_outq(ctx, conn, msg);
 
 
 
