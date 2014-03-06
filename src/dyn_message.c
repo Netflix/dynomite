@@ -55,9 +55,10 @@ dyn_parse_core(struct msg *r)
     dmsg = r->dmsg;
     if (dmsg == NULL) {
         r->dmsg = dmsg_get();
-        dmsg = r->dmsg;        
-        if (dmsg == NULL) //should track this as a dropped message
-           return; 
+        dmsg = r->dmsg;    
+        if (dmsg == NULL) {//should track this as a dropped message
+           goto error; //should count as OOM error
+        }    
     }
 	
     for (p = r->pos; p < b->last; p++) {
@@ -456,7 +457,6 @@ dmsg_empty(struct dmsg *msg)
 }
 
 
-
 struct dmsg *
 dmsg_get(void)
 {
@@ -487,7 +487,9 @@ done:
     dmsg->id = 0;
     dmsg->version = VERSION_10;
     
-
+    dmsg->source_address = NULL;
+    dmsg->owner = NULL;
+    
     return dmsg;
 }
 

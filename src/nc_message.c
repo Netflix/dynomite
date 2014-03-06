@@ -259,6 +259,7 @@ done:
 
     //dynomite
     msg->dyn_state = 0;
+    msg->dmsg = NULL;
 
     return msg;
 }
@@ -403,6 +404,11 @@ void
 msg_put(struct msg *msg)
 {
     log_debug(LOG_VVERB, "put msg %p id %"PRIu64"", msg, msg->id);
+
+    struct dmsg *dmsg = msg->dmsg;
+    if (dmsg != NULL) {
+    	dmsg_put(dmsg);
+    }
 
     while (!STAILQ_EMPTY(&msg->mhdr)) {
         struct mbuf *mbuf = STAILQ_FIRST(&msg->mhdr);

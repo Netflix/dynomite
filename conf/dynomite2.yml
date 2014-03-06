@@ -15,5 +15,5 @@ dyn_o_mite:
   server_retry_timeout: 200000
   servers:
   - 127.0.0.1:11211:1
-  timeout: 150000
+  timeout: 10000
   tokens: 5622637,721812480,851406979,1036155118,2147653893,2233516174

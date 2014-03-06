@@ -449,7 +449,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
             msg->error = 1;
             msg->err = conn->err;
 
-            if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
+            if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
                 event_add_out(ctx->evb, msg->owner);
             }
 
@@ -479,7 +479,7 @@ dyn_peer_close(struct context *ctx, struct conn *conn)
             msg->error = 1;
             msg->err = conn->err;
 
-            if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
+            if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
                 event_add_out(ctx->evb, msg->owner);
             }
 
