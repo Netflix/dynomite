@@ -21,193 +21,23 @@ dyn_req_get(struct conn *conn)
 void
 dyn_req_put(struct msg *msg)
 {
-    struct msg *pmsg; /* peer message (response) */
-
-    ASSERT(msg->request);
-
-    pmsg = msg->peer;
-    if (pmsg != NULL) {
-        ASSERT(!pmsg->request && pmsg->peer == msg);
-        msg->peer = NULL;
-        pmsg->peer = NULL;
-        rsp_put(pmsg);
-    }
-
-    msg_tmo_delete(msg);
-
-    msg_put(msg);
+	req_put(msg);
 }
 
-/*
- * Return true if request is done, false otherwise
- *
- * A request is done, if we received response for the given request.
- * A request vector is done if we received responses for all its
- * fragments.
- */
+
 bool
 dyn_req_done(struct conn *conn, struct msg *msg)
 {
-    struct msg *cmsg, *pmsg; /* current and previous message */
-    uint64_t id;             /* fragment id */
-    uint32_t nfragment;      /* # fragment */
-
     ASSERT(conn->dyn_client && !conn->dnode);
-    ASSERT(msg->request);
-
-    if (!msg->done) {
-        return false;
-    }
-
-    id = msg->frag_id;
-    if (id == 0) {
-        return true;
-    }
-
-    if (msg->fdone) {
-        /* request has already been marked as done */
-        return true;
-    }
-
-    /* check all fragments of the given request vector are done */
-
-    for (pmsg = msg, cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
-
-        if (!cmsg->done) {
-            return false;
-        }
-    }
-
-    for (pmsg = msg, cmsg = TAILQ_NEXT(msg, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
-
-        if (!cmsg->done) {
-            return false;
-        }
-    }
-
-    if (!pmsg->last_fragment) {
-        return false;
-    }
-
-    /*
-     * At this point, all the fragments including the last fragment have
-     * been received.
-     *
-     * Mark all fragments of the given request vector to be done to speed up
-     * future req_done calls for any of fragments of this request
-     */
-
-    msg->fdone = 1;
-    nfragment = 1;
-
-    for (pmsg = msg, cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
-        cmsg->fdone = 1;
-        nfragment++;
-    }
-
-    for (pmsg = msg, cmsg = TAILQ_NEXT(msg, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
-        cmsg->fdone = 1;
-        nfragment++;
-    }
-
-    ASSERT(msg->frag_owner->nfrag == nfragment);
-
-    msg->post_coalesce(msg->frag_owner);
-
-    log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
-              "fragments is done", conn->sd, id, nfragment);
-
-    return true;
+    return req_done(conn, msg);
 }
 
-/*
- * Return true if request is in error, false otherwise
- *
- * A request is in error, if there was an error in receiving response for the
- * given request. A multiget request is in error if there was an error in
- * receiving response for any its fragments.
- */
+
 bool
 dyn_req_error(struct conn *conn, struct msg *msg)
 {
-    struct msg *cmsg; /* current message */
-    uint64_t id;
-    uint32_t nfragment;
-
     ASSERT(msg->request && dyn_req_done(conn, msg));
-
-    if (msg->error) {
-        return true;
-    }
-
-    id = msg->frag_id;
-    if (id == 0) {
-        return false;
-    }
-
-    if (msg->ferror) {
-        /* request has already been marked to be in error */
-        return true;
-    }
-
-    /* check if any of the fragments of the given request are in error */
-
-    for (cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
-
-        if (cmsg->error) {
-            goto ferror;
-        }
-    }
-
-    for (cmsg = TAILQ_NEXT(msg, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
-
-        if (cmsg->error) {
-            goto ferror;
-        }
-    }
-
-    return false;
-
-ferror:
-
-    /*
-     * Mark all fragments of the given request to be in error to speed up
-     * future req_error calls for any of fragments of this request
-     */
-
-    msg->ferror = 1;
-    nfragment = 1;
-
-    for (cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
-        cmsg->ferror = 1;
-        nfragment++;
-    }
-
-    for (cmsg = TAILQ_NEXT(msg, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
-        cmsg->ferror = 1;
-        nfragment++;
-    }
-
-    log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
-              "fragments is in error", conn->sd, id, nfragment);
-
-    return true;
+    return req_error(conn, msg);
 }
 
 void
@@ -215,24 +45,8 @@ dyn_req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 {
     ASSERT(msg->request);
     ASSERT(!conn->dyn_client && !conn->dnode);
-
-    /*
-     * timeout clock starts ticking the instant the message is enqueued into
-     * the server in_q; the clock continues to tick until it either expires
-     * or the message is dequeued from the server out_q
-     *
-     * noreply request are free from timeouts because client is not intrested
-     * in the reponse anyway!
-     */
-    if (!msg->noreply) {
-        msg_tmo_insert(msg, conn);
-    }
-
-    TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
-
-    //TODO: jeb - commented out 'cause shit aint werking
-    /* stats_server_incr(ctx, conn->owner, in_queue); */
-    /* stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
+    
+    req_server_enqueue_imsgq(ctx, conn, msg);
 }
 
 void
@@ -243,7 +57,6 @@ dyn_req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
 
-    //TODO: jeb - commented out 'cause shit aint werking
     /* stats_server_decr(ctx, conn->owner, in_queue); */
     /* stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
 }
@@ -298,53 +111,7 @@ dyn_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
     struct msg *msg;
 
     ASSERT(conn->dyn_client && !conn->dnode);
-
-    if (conn->eof) {
-        msg = conn->rmsg;
-
-        /* client sent eof before sending the entire request */
-        if (msg != NULL) {
-            conn->rmsg = NULL;
-
-            ASSERT(msg->peer == NULL);
-            ASSERT(msg->request && !msg->done);
-
-            log_error("dyn: eof c %d discarding incomplete req %"PRIu64" len "
-                      "%"PRIu32"", conn->sd, msg->id, msg->mlen);
-
-            dyn_req_put(msg);
-        }
-
-        /*
-         * TCP half-close enables the client to terminate its half of the
-         * connection (i.e. the client no longer sends data), but it still
-         * is able to receive data from the proxy. The proxy closes its
-         * half (by sending the second FIN) when the client has no
-         * outstanding requests
-         */
-        if (!conn->active(conn)) {
-            conn->done = 1;
-            log_debug(LOG_INFO, "dyn: c %d is done", conn->sd);
-        }
-        return NULL;
-    }
-
-    msg = conn->rmsg;
-    if (msg != NULL) {
-        ASSERT(msg->request);
-        return msg;
-    }
-
-    if (!alloc) {
-        return NULL;
-    }
-
-    msg = dyn_req_get(conn);
-    if (msg != NULL) {
-        conn->rmsg = msg;
-    }
-
-    return msg;
+    return req_recv_next(ctx, conn, alloc);
 }
 
 
@@ -551,63 +318,13 @@ dyn_req_send_next(struct context *ctx, struct conn *conn)
 
     ASSERT(!conn->dyn_client && !conn->dnode);
 
-    if (conn->connecting) {
-        dyn_peer_connected(ctx, conn);
-    }
-
-    nmsg = TAILQ_FIRST(&conn->imsg_q);
-    if (nmsg == NULL) {
-        /* nothing to send as the server inq is empty */
-        status = event_del_out(ctx->evb, conn);
-        if (status != NC_OK) {
-            conn->err = errno;
-        }
-
-        return NULL;
-    }
-
-    msg = conn->smsg;
-    if (msg != NULL) {
-        ASSERT(msg->request && !msg->done);
-        nmsg = TAILQ_NEXT(msg, s_tqe);
-    }
-
-    conn->smsg = nmsg;
-
-    if (nmsg == NULL) {
-        return NULL;
-    }
-
-    ASSERT(nmsg->request && !nmsg->done);
-
-    log_debug(LOG_VVERB, "send next req %"PRIu64" len %"PRIu32" type %d on "
-              "s %d", nmsg->id, nmsg->mlen, nmsg->type, conn->sd);
-
-    return nmsg;
+    return req_send_next(ctx, conn);
 }
 
 void
 dyn_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(!conn->dyn_client && !conn->dnode);
-    ASSERT(msg != NULL && conn->smsg == NULL);
-    ASSERT(msg->request && !msg->done);
-    ASSERT(msg->owner != conn);
-
-    log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
-              "s %d", msg->id, msg->mlen, msg->type, conn->sd);
-
-    /* dequeue the message (request) from server inq */
-    conn->dequeue_inq(ctx, conn, msg);
-
-    /*
-     * noreply request instructs the server not to send any response. So,
-     * enqueue message (request) in server outq, if response is expected.
-     * Otherwise, free the noreply request
-     */
-    if (!msg->noreply) {
-        conn->enqueue_outq(ctx, conn, msg);
-    } else {
-        dyn_req_put(msg);
-    }
+    req_send_done(ctx, conn, msg);
 }
+

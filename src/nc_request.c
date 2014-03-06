@@ -24,7 +24,7 @@ req_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT((conn->client && !conn->proxy) || (conn->dyn_client && !conn->dnode));
 
     msg = msg_get(conn, true, conn->redis);
     if (msg == NULL) {
@@ -68,7 +68,7 @@ req_done(struct conn *conn, struct msg *msg)
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT((conn->client && !conn->proxy) || (conn->dyn_client && !conn->dnode));
     ASSERT(msg->request);
 
     if (!msg->done) {
@@ -230,7 +230,7 @@ void
 req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -311,7 +311,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT((conn->client && !conn->proxy) || (conn->dyn_client && !conn->dnode));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -645,7 +645,7 @@ req_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
 
     if (conn->connecting) {
         server_connected(ctx, conn);
@@ -685,7 +685,7 @@ req_send_next(struct context *ctx, struct conn *conn)
 void
 req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
     ASSERT(msg->owner != conn);
@@ -707,3 +707,4 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
         req_put(msg);
     }
 }
+
