@@ -249,9 +249,9 @@ dyn_parse_core(struct msg *r)
 
                 case DYN_DONE:
                    loga("DYN_DONE");
-                   r->pos = p;
+                   r->pos = p+1;
                    r->dyn_state = DYN_DONE; 
-                   b->pos = p;
+                   b->pos = p+1;
                    goto done;
                    break;
 
@@ -274,9 +274,9 @@ dyn_parse_core(struct msg *r)
 
       
        if (dmsg->type == GOSSIP_PING || dmsg->type == GOSSIP_PING_REPLY) {
-              r->pos = p+1;
-              r->dyn_state = DYN_DONE;
-              b->pos = p;
+              //r->pos = p;
+              //r->dyn_state = DYN_DONE;
+              //b->pos = p;
               ASSERT(r->pos <= b->last);
               r->state = 0;
               r->result = MSG_PARSE_OK;
