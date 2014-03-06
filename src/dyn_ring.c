@@ -81,11 +81,11 @@ rstatus_t dyn_gos_run(struct context *ctx)
               struct string data = string("Ping");
 
               dmsg_write(nbuf, msg_id, type, version, &data);
-              mbuf_insert(&msg->mhdr, nbuf);
+              mbuf_insert_head(&msg->mhdr, nbuf);
 
               //expect a response
               //conn->enqueue_outq(ctx, conn, msg);
-
+              msg->owner = conn;
 
 
               conn->enqueue_inq(ctx, conn, msg);

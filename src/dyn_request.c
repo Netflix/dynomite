@@ -370,17 +370,18 @@ dyn_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg)
      pmsg = msg_get(dc_conn, 1, 0);
      if (pmsg == NULL) {
          mbuf_put(nbuf);
+         return;
          //return NC_ERROR;
      }
 
      //dyn message's meta data
      uint64_t msg_id = 1234;
-     uint8_t type = GOSSIP_PING;
+     uint8_t type = GOSSIP_PING_REPLY;
      uint8_t version = 1;
      struct string data = string("PingReply");
 
      dmsg_write(nbuf, msg_id, type, version, &data);
-     mbuf_insert_head(&pmsg->mhdr, nbuf);
+     mbuf_insert(&pmsg->mhdr, nbuf);
 
      //should we do this?
      //s_conn->dequeue_outq(ctx, s_conn, pmsg);
@@ -390,7 +391,7 @@ dyn_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg)
      msg->peer = pmsg;
      pmsg->peer = msg;
 
-     pmsg->pre_coalesce(pmsg);
+     //pmsg->pre_coalesce(pmsg);
 
 
     if (dyn_req_done(dc_conn, msg)) {
@@ -401,7 +402,7 @@ dyn_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg)
        }
     }
 
-    dc_conn->enqueue_outq(ctx, dc_conn, pmsg);
+    //dc_conn->enqueue_outq(ctx, dc_conn, pmsg);
 
     //dyn_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
