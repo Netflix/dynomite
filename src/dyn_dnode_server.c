@@ -15,7 +15,7 @@ dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(!conn->client && !conn->proxy && conn->dnode);
+    ASSERT(conn->dnode_server);
     ASSERT(conn->owner == NULL);
 
     conn->family = pool->d_family;
@@ -36,7 +36,7 @@ dnode_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(!conn->client && !conn->proxy && conn->dnode);
+    ASSERT(conn->dnode_server);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -53,7 +53,7 @@ dnode_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     
-    ASSERT(!conn->client && !conn->proxy && conn->dnode);
+    ASSERT(conn->dnode_server);
 
     if (conn->sd < 0) {
         conn->unref(conn);
@@ -114,7 +114,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     rstatus_t status;
     struct server_pool *pool = p->owner;
 
-    ASSERT(p->dnode);
+    ASSERT(p->dnode_server);
 
     p->sd = socket(p->family, SOCK_STREAM, 0);
     if (p->sd < 0) {
@@ -252,7 +252,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     struct conn *c;
     int sd;
 
-    ASSERT(p->dnode);
+    ASSERT(p->dnode_server);
     ASSERT(p->sd > 0);
     ASSERT(p->recv_active && p->recv_ready);
 
@@ -333,7 +333,7 @@ dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->dnode && !conn->dyn_client);
+    ASSERT(conn->dnode_server && !conn->dnode_client);
     ASSERT(conn->recv_active);
  
     conn->recv_ready = 1;

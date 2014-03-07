@@ -41,16 +41,16 @@ rstatus_t dyn_gos_run(struct context *ctx)
              loga("dyn_gossip picked a local node");
         } else {
              loga("dyn_gossip picked a peer node");
-             struct conn * conn = dyn_peer_conn(rnode);
+             struct conn * conn = dnode_peer_conn(rnode);
              if (conn == NULL) {
                 //running out of connection due to memory exhaust
                  loga("Unable to obtain a connection object");
                  return NC_ERROR;
              }
 
-             status = dyn_peer_connect(ctx, rnode, conn);
+             status = dnode_peer_connect(ctx, rnode, conn);
              if (status != NC_OK ) {
-                  dyn_peer_close(ctx, conn);
+                  dnode_peer_close(ctx, conn);
                   loga("Error happened in dyn_gos_run");
                   return NC_OK;
              }

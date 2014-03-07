@@ -28,7 +28,7 @@ rsp_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     msg = msg_get(conn, false, conn->redis);
     if (msg == NULL) {
@@ -93,7 +93,7 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     if (conn->eof) {
         msg = conn->rmsg;

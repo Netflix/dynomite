@@ -7,12 +7,13 @@
 #include <dyn_server.h>
 #include <dyn_dnode_client.h>
 
+
 void
-dyn_client_ref(struct conn *conn, void *owner)
+dnode_client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->dnode_client && !conn->dnode_server);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -35,11 +36,11 @@ dyn_client_ref(struct conn *conn, void *owner)
 }
 
 void
-dyn_client_unref(struct conn *conn)
+dnode_client_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->dnode_client && !conn->dnode_server);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -54,9 +55,9 @@ dyn_client_unref(struct conn *conn)
 }
 
 bool
-dyn_client_active(struct conn *conn)
+dnode_client_active(struct conn *conn)
 {
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->dnode_client && !conn->dnode_server);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -81,7 +82,7 @@ dyn_client_active(struct conn *conn)
 }
 
 static void
-dyn_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
+dnode_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
                    unsigned eof)
 {
     //fix this for dnode_client_connections
@@ -111,14 +112,14 @@ dyn_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
 }
 
 void
-dyn_client_close(struct context *ctx, struct conn *conn)
+dnode_client_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->dnode_client && !conn->dnode_server);
 
-    dyn_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
+    dnode_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
         conn->unref(conn);

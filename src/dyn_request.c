@@ -29,7 +29,7 @@ req_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dyn_client && !conn->dnode));
+    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
 
     msg = msg_get(conn, true, conn->redis);
     if (msg == NULL) {
@@ -73,7 +73,7 @@ req_done(struct conn *conn, struct msg *msg)
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dyn_client && !conn->dnode));
+    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
     ASSERT(msg->request);
 
     if (!msg->done) {
@@ -235,7 +235,7 @@ void
 req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -316,7 +316,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dyn_client && !conn->dnode));
+    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -445,7 +445,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     //loga("key = %d", key);
     loga("keylen = %d", keylen);
 
-    ASSERT((c_conn->client || c_conn->dyn_client) && !c_conn->proxy && !c_conn->dnode);
+    ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
@@ -494,9 +494,9 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     rstatus_t status;
     struct conn *s_conn;
 
-    ASSERT(c_conn->client && !c_conn->dyn_client && !c_conn->proxy && !c_conn->dnode);
+    ASSERT(c_conn->client && !c_conn->dnode_client && !c_conn->proxy && !c_conn->dnode_server);
 
-    s_conn = dyn_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
+    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;
@@ -514,7 +514,7 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
         }
     }
 
-    ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dyn_client && !s_conn->dnode);
+    ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dnode_client && !s_conn->dnode_server);
 
     /* enqueue the message (request) into server inq */
     if (TAILQ_EMPTY(&s_conn->imsg_q)) {
@@ -650,7 +650,7 @@ req_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     if (conn->connecting) {
         server_connected(ctx, conn);
@@ -690,7 +690,7 @@ req_send_next(struct context *ctx, struct conn *conn)
 void
 req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
     ASSERT(msg->owner != conn);

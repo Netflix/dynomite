@@ -526,7 +526,7 @@ server_connected(struct context *ctx, struct conn *conn)
 {
     struct server *server = conn->owner;
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dyn_client && !conn->dnode));
+    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode));
     ASSERT(conn->connecting && !conn->connected);
 
     stats_server_incr(ctx, server, server_connections);
