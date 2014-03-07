@@ -4,7 +4,7 @@
  */ 
 
 #include <dyn_core.h>
-#include <dyn_dnode_server.h>
+#include <dyn_server.h>
 #include <dyn_dnode_peer.h>
 
 struct msg *
