@@ -556,7 +556,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct peer *peer = s_conn->owner;
+    struct server *peer = s_conn->owner;
     if (peer->is_local) {
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;

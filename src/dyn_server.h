@@ -97,6 +97,11 @@ struct server {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
+    
+    unsigned           is_seed:1;     /* seed? */    
+    struct string      dc;            /* logical datacenter */
+    struct array       tokens;        /* DHT tokens this peer owns */
+    bool               is_local;      /* is this peer the current running node?  */
 };
 
 struct server_pool {

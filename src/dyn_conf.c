@@ -234,7 +234,7 @@ conf_seed_each_transform(void *elem, void *data)
 {
     struct conf_server *cseed = elem;
     struct array *seeds = data;
-    struct peer *s;
+    struct server *s;
 
     ASSERT(cseed->valid);
 

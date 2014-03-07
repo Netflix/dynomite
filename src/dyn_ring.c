@@ -34,8 +34,8 @@ rstatus_t dyn_gos_run(struct context *ctx)
 
         ASSERT(ncontinuum > 0);
 
-        //struct peer *rnode = array_get(peers, random() % ncontinuum);
-        struct peer *rnode = array_get(peers, 1);
+        //struct server *rnode = array_get(peers, random() % ncontinuum);
+        struct server *rnode = array_get(peers, 1);
 
         if (rnode->is_local) {
              loga("dyn_gossip picked a local node");
