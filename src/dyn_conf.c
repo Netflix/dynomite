@@ -451,7 +451,7 @@ conf_pool_each_transform(void *elem, void *data)
     array_null(&sp->seeds);
     array_null(&sp->peers);
     array_init(&sp->datacenter, 1, sizeof(struct datacenter));
-    status = dyn_peer_init(&cp->dyn_seeds, sp);
+    status = dnode_peer_init(&cp->dyn_seeds, sp);
     if (status != NC_OK) {
         return status;
     }

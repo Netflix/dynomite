@@ -125,7 +125,7 @@ core_ctx_create(struct instance *nci)
 
 
     /* preconntect peers - probably start gossip here */
-    status = dyn_peer_pool_preconnect(ctx);
+    status = dnode_peer_pool_preconnect(ctx);
     if (status != NC_OK) {
         dnode_deinit(ctx);
         server_pool_disconnect(ctx);

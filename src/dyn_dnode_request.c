@@ -96,7 +96,7 @@ dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct ms
 }
 
 void
-ddnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
     ASSERT(!conn->dnode_client && !conn->dnode_server);

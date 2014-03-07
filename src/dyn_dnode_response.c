@@ -97,7 +97,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
     ASSERT(!s_conn->dnode_client && !s_conn->dnode_server);
 
     /* response from server implies that server is ok and heartbeating */
-    dyn_peer_ok(ctx, s_conn);
+    dnode_peer_ok(ctx, s_conn);
 
     /* dequeue peer message (request) from server */
     pmsg = TAILQ_FIRST(&s_conn->omsg_q);
@@ -123,7 +123,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
         }
     }
 
-    dyn_rsp_forward_stats(ctx, s_conn->owner, msg);
+    dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
 
 void
