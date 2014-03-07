@@ -441,9 +441,6 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 {
     rstatus_t status;
     struct conn *s_conn;
-    
-    //loga("key = %d", key);
-    loga("keylen = %d", keylen);
 
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 
@@ -477,6 +474,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
               msg->mlen, msg->type, keylen, key);
 }
 
+
 static bool
 request_send_to_all_datacenters(struct msg *msg) {
     msg_type_t t = msg->type;
@@ -488,40 +486,23 @@ request_send_to_all_datacenters(struct msg *msg) {
 }
 
 
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        struct datacenter *dc, uint8_t *key, uint32_t keylen)
-{
-    rstatus_t status;
-    struct conn *s_conn;
+static void 
+peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg) {
+	
+	/* enqueue message (request) into client outq, if response is expected */
+	if (!msg->noreply) {
+	     c_conn->enqueue_outq(ctx, c_conn, msg);
+	}
+	
+    ASSERT(!p_conn->dnode_client && !p_conn->dnode_server);
+    ASSERT(c_conn->client);
 
-    ASSERT(c_conn->client && !c_conn->dnode_client && !c_conn->proxy && !c_conn->dnode_server);
-
-    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
-    if (s_conn == NULL) {
-        req_forward_error(ctx, c_conn, msg);
-        return;
-    }
-
-    //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct peer *peer = s_conn->owner;
-    if (peer->is_local) {
-        local_req_forward(ctx, c_conn, msg, key, keylen);
-        return;
-    } else {
-        /* enqueue message (request) into client outq, if response is expected */
-        if (!msg->noreply) {
-            c_conn->enqueue_outq(ctx, c_conn, msg);
-        }
-    }
-
-    ASSERT(!s_conn->client && !s_conn->proxy && !s_conn->dnode_client && !s_conn->dnode_server);
-
-    /* enqueue the message (request) into server inq */
-    if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-        status = event_add_out(ctx->evb, s_conn);
+    /* enqueue the message (request) into peer inq */
+    if (TAILQ_EMPTY(&p_conn->imsg_q)) {
+        status = event_add_out(ctx->evb, p_conn);
         if (status != NC_OK) {
-            req_forward_error(ctx, c_conn, msg);
-            s_conn->err = errno;
+            req_forward_error(ctx, p_conn, msg);
+            p_conn->err = errno;
             return;
         }
     }
@@ -542,20 +523,47 @@ void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     uint64_t msg_id = 1234;
     uint8_t type = 1;
     uint8_t version = 1;
-    struct string data = string("Justin");
+    struct string data = string("Justin"); //will replace with something else
 
     dmsg_write(nbuf, msg_id, type, version, &data);
     mbuf_insert_head(&msg->mhdr, nbuf);
 
-    s_conn->enqueue_inq(ctx, s_conn, msg);
+    p_conn->enqueue_inq(ctx, p_conn, msg);
 
     //fix me - coordinator stats
     //req_forward_stats(ctx, s_conn->owner, msg);
 
     log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
+              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
               msg->mlen, msg->type, keylen, key);
 }
+
+
+void 
+remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
+                        struct datacenter *dc, uint8_t *key, uint32_t keylen)
+{
+    rstatus_t status;
+    struct conn *s_conn;
+
+    ASSERT(c_conn->client);
+
+    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
+    if (s_conn == NULL) {
+        req_forward_error(ctx, c_conn, msg);
+        return;
+    }
+
+    //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
+    struct peer *peer = s_conn->owner;
+    if (peer->is_local) {
+        local_req_forward(ctx, c_conn, msg, key, keylen);
+        return;
+    } else {
+        peer_req_forward(ctx, c_conn, s_conn, msg);
+    }
+}
+
 
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
@@ -621,7 +629,6 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         remote_req_forward(ctx, c_conn, msg, dc, key, keylen);
     }
 }
-
 
 
 void

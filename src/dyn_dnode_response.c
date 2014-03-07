@@ -6,6 +6,7 @@
 #include <dyn_core.h>
 #include <dyn_dnode_peer.h>
 
+
 struct msg *
 dnode_rsp_get(struct conn *conn)
 {
@@ -83,6 +84,7 @@ dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *
 {
     ASSERT(!msg->request);
 
+    //fixme for dnode  stats    
     /* stats_server_incr(ctx, server, responses); */
     /* stats_server_incr_by(ctx, server, response_bytes, msg->mlen); */
 }

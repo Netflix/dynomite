@@ -1124,7 +1124,7 @@ void
 _stats_server_incr(struct context *ctx, struct server *server,
                    stats_server_field_t fidx)
 {
-    /*
+    
     struct stats_metric *stm;
 
     stm = stats_server_to_metric(ctx, server, fidx);
@@ -1134,7 +1134,7 @@ _stats_server_incr(struct context *ctx, struct server *server,
 
     log_debug(LOG_VVVERB, "incr field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.counter);
-    */
+    
 }
 
 void
