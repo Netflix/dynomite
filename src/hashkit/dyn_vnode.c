@@ -1,4 +1,9 @@
 /*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Copyright (C) 2014 Netflix, Inc.
+ */ 
+
+/*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
  * Copyright (C) 2011 Twitter, Inc.
  *
@@ -19,10 +24,10 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include <dyn_peer.h>
-#include <nc_core.h>
-#include <nc_server.h>
-#include <nc_hashkit.h>
+#include <dyn_dnode_peer.h>
+#include <dyn_core.h>
+#include <dyn_server.h>
+#include <dyn_hashkit.h>
 
 static int
 vnode_item_cmp(const void *t1, const void *t2)

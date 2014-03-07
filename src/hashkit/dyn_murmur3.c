@@ -1,4 +1,9 @@
 /*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Copyright (C) 2014 Netflix, Inc.
+ */ 
+
+/*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
  * Copyright (C) 2011 Twitter, Inc.
  *
@@ -16,7 +21,7 @@
  */
 
 #include <dyn_token.h>
-#include <nc_core.h>
+#include <dyn_core.h>
 #include <murmur3.h>
 
 #define MURMUR3_SEED 0xc0a1e5ce

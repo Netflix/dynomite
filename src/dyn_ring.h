@@ -1,7 +1,12 @@
+/*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Copyright (C) 2014 Netflix, Inc.
+ */ 
+
 #ifndef _DYN_RING_H_
 #define _DYN_RING_H_
 
-#include <nc_core.h>
+#include <dyn_core.h>
 
 struct dyn_ring {
     struct array      *ring_nodes; /* array of ring_nodes currently known in the cluster  */

@@ -28,33 +28,33 @@ SUBDIRS = hashkit proto event
 
 sbin_PROGRAMS = dynomite
 
-dynomite_SOURCES =			            \
-        dyn_dnode.c dyn_dnode.h                     \
-        dyn_ring.c dyn_ring.h                     \
-        dyn_peer.c  dyn_peer.h                      \
-        dyn_client.h dyn_client.c                   \
-        dyn_request.c                               \
-        dyn_response.c                              \
-        dyn_message.c dyn_message.h                 \
-        nc_core.c nc_core.h                         \
-        nc_connection.c nc_connection.h             \
-        nc_client.c nc_client.h                     \
-	nc_server.c nc_server.h		            \
-	nc_proxy.c nc_proxy.h		            \
-	nc_message.c nc_message.h	            \
-	nc_request.c			            \
-	nc_response.c			            \
-	nc_mbuf.c nc_mbuf.h		            \
-	nc_conf.c nc_conf.h		            \
-	nc_stats.c nc_stats.h		            \
-	nc_signal.c nc_signal.h		            \
-	nc_rbtree.c nc_rbtree.h		            \
-	nc_log.c nc_log.h		            \
-	nc_string.c nc_string.h		            \
-	nc_array.c nc_array.h		            \
-	nc_util.c nc_util.h		            \
-	nc_queue.h			            \
-	nc.c
+dynomite_SOURCES =			                          \
+        dyn_dnode_server.c dyn_dnode_server.h                     \
+        dyn_ring.c dyn_ring.h                                     \
+        dyn_dnode_peer.c  dyn_dnode_peer.h                        \
+        dyn_dnode_client.h dyn_dnode_client.c                     \
+        dyn_dnode_request.c                                       \
+        dyn_dnode_response.c                                      \
+        dyn_dnode_msg.c dyn_dnode_msg.h                           \
+        dyn_core.c dyn_core.h                                     \
+        dyn_connection.c dyn_connection.h                         \
+        dyn_client.c dyn_client.h                                 \
+        dyn_server.c dyn_server.h		                  \
+        dyn_proxy.c dyn_proxy.h		                          \
+        dyn_message.c dyn_message.h	                          \
+        dyn_request.c			                          \
+        dyn_response.c			                          \
+        dyn_mbuf.c dyn_mbuf.h		                          \
+        dyn_conf.c dyn_conf.h		                          \
+        dyn_stats.c dyn_stats.h		                          \
+        dyn_signal.c dyn_signal.h		                  \
+        dyn_rbtree.c dyn_rbtree.h		                  \
+        dyn_log.c dyn_log.h		                          \
+        dyn_string.c dyn_string.h		                  \
+        dyn_array.c dyn_array.h		                          \
+        dyn_util.c dyn_util.h		                          \
+        dyn_queue.h			                          \
+        dynomite.c
 
 dynomite_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
 dynomite_LDADD += $(top_builddir)/src/proto/libproto.a

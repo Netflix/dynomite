@@ -1,13 +1,35 @@
-#include <nc_core.h>
-#include <nc_server.h>
+/*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Copyright (C) 2014 Netflix, Inc.
+ */ 
+
+/*
+ * twemproxy - A fast and lightweight proxy for memcached protocol.
+ * Copyright (C) 2011 Twitter, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <dyn_core.h>
+#include <dyn_server.h>
 #include <dyn_client.h>
 
 void
-dyn_client_ref(struct conn *conn, void *owner)
+client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->client && !conn->proxy);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -25,16 +47,16 @@ dyn_client_ref(struct conn *conn, void *owner)
     /* owner of the client connection is the server pool */
     conn->owner = owner;
 
-    log_debug(LOG_VVERB, "dyn: ref conn %p owner %p into pool '%.*s'", conn, pool,
+    log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
 
 void
-dyn_client_unref(struct conn *conn)
+client_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->client && !conn->proxy);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -44,47 +66,45 @@ dyn_client_unref(struct conn *conn)
     pool->nc_conn_q--;
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
 
-    log_debug(LOG_VVERB, "dyn: unref conn %p owner %p from pool '%.*s'", conn,
+    log_debug(LOG_VVERB, "unref conn %p owner %p from pool '%.*s'", conn,
               pool, pool->name.len, pool->name.data);
 }
 
 bool
-dyn_client_active(struct conn *conn)
+client_active(struct conn *conn)
 {
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->client && !conn->proxy);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "c %d is active", conn->sd);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "c %d is active", conn->sd);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "c %d is active", conn->sd);
         return true;
     }
 
-    log_debug(LOG_VVERB, "dyn: c %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "c %d is inactive", conn->sd);
 
     return false;
 }
 
 static void
-dyn_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
+client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
                    unsigned eof)
 {
-    //fix this for dnode_client_connections
-    //stats_pool_decr(ctx, pool, client_connections);
+    stats_pool_decr(ctx, pool, client_connections);
 
     if (eof) {
-        //fix this also
-        //stats_pool_incr(ctx, pool, client_eof);
+        stats_pool_incr(ctx, pool, client_eof);
         return;
     }
 
@@ -99,21 +119,20 @@ dyn_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
     case EHOSTDOWN:
     case EHOSTUNREACH:
     default:
-        //fix this also
         stats_pool_incr(ctx, pool, client_err);
         break;
     }
 }
 
 void
-dyn_client_close(struct context *ctx, struct conn *conn)
+client_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->dyn_client && !conn->dnode);
+    ASSERT(conn->client && !conn->proxy);
 
-    dyn_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
+    client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
         conn->unref(conn);
@@ -128,7 +147,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
         ASSERT(msg->peer == NULL);
         ASSERT(msg->request && !msg->done);
 
-        log_debug(LOG_INFO, "dyn: close c %d discarding pending req %"PRIu64" len "
+        log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
                   "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                   msg->type);
 
@@ -145,7 +164,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
         conn->dequeue_outq(ctx, conn, msg);
 
         if (msg->done) {
-            log_debug(LOG_INFO, "dyn: close c %d discarding %s req %"PRIu64" len "
+            log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
                       "%"PRIu32" type %d", conn->sd,
                       msg->error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
@@ -156,7 +175,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
             ASSERT(msg->request);
             ASSERT(msg->peer == NULL);
 
-            log_debug(LOG_INFO, "dyn: close c %d schedule swallow of req %"PRIu64" "
+            log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
                       "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                       msg->type);
         }
@@ -167,7 +186,7 @@ dyn_client_close(struct context *ctx, struct conn *conn)
 
     status = close(conn->sd);
     if (status < 0) {
-        log_error("dyn: close c %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
 

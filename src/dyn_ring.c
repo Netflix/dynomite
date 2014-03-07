@@ -1,11 +1,16 @@
+/*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Copyright (C) 2014 Netflix, Inc.
+ */ 
+
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <nc_core.h>
-#include <nc_conf.h>
+#include <dyn_core.h>
+#include <dyn_conf.h>
 #include <dyn_ring.h>
-#include <dyn_peer.h>
-#include <nc_server.h>
+#include <dyn_dnode_peer.h>
+#include <dyn_server.h>
 #include <dyn_token.h>
 
 
@@ -49,8 +54,6 @@ rstatus_t dyn_gos_run(struct context *ctx)
                   loga("Error happened in dyn_gos_run");
                   return NC_OK;
              }
-
-
 
              /* enqueue the message (request) into peer inq */
              if (TAILQ_EMPTY(&conn->imsg_q)) {

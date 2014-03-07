@@ -1,7 +1,7 @@
 # Dynomite
 
-**Dynomite** is a distributed thin proxy layer for [memcached](http://www.memcached.org/) protocol.
-In the near future, it will support Redis protocol and other protocols.
+**Dynomite** is a distributed replication thin proxy layer for multiple protocols.
+
 
 ## Build
 
@@ -26,22 +26,6 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
     $ make
     $ src/dynomite -h
 
-## Features
-
-+ Fast.
-+ Lightweight.
-+ Maintains persistent server connections.
-+ Keeps connection count on the backend caching servers low.
-+ Enables pipelining of requests and responses.
-+ Supports proxying to multiple servers.
-+ Supports multiple server pools simultaneously.
-+ Shard data automatically across multiple servers.
-+ Implements the complete [memcached ascii](notes/memcache.txt) and [redis](notes/redis.md) protocol.
-+ Easy configuration of server pools through a YAML file.
-+ Supports multiple hashing modes including consistent hashing and distribution.
-+ Can be configured to disable nodes on failures.
-+ Observability through stats exposed on stats monitoring port.
-+ Works with Linux, *BSD, OS X and Solaris (SmartOS)
 
 ## Help
 
@@ -64,11 +48,6 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
       -p, --pid-file=S       : set pid file (default: off)
       -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: 16384 bytes)
 
-## Zero Copy
-
-In dynomite, all the memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero-copy because the same buffer on which a request was received from the client is used for forwarding it to the server. Similarly the same mbuf on which a response was received from the server is used for forwarding it to the client.
-
-Furthermore, memory for mbufs is managed using a reuse pool. This means that once mbuf is allocated, it is not deallocated, but just put back into the reuse pool. By default each mbuf chunk is set to 16K bytes in size. There is a trade-off between the mbuf size and number of concurrent connections dynomite can support. A large mbuf size reduces the number of read syscalls made by dynomite when reading requests or responses. However, with large mbuf size, every active connection would use up 16K bytes of buffer which might be an issue when dynomite is handling large number of concurrent connections from clients. When dynomite is meant to handle a large number of concurrent client connections, you should set chunk size to a small value like 512 bytes using the -m or --mbuf-size=N argument.
 
 ## Configuration
 
@@ -104,76 +83,7 @@ dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **servers**: A list of server address, port and weight (name:port:weight or ip:port:weight) for this server pool.
 
 
-For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml), also shown below, configures 5 server pools with names - _alpha_, _beta_, _gamma_, _delta_ and omega. Clients that intend to send requests to one of the 10 servers in pool delta connect to port 22124 on 127.0.0.1. Clients that intend to send request to one of 2 servers in pool omega connect to unix path /tmp/gamma. Requests sent to pool alpha and omega have no timeout and might require timeout functionality to be implemented on the client side. On the other hand, requests sent to pool beta, gamma and delta timeout after 400 msec, 400 msec and 100 msec respectively when no response is received from the server. Of the 5 server pools, only pools alpha, gamma and delta are configured to use server ejection and hence are resilient to server failures. All the 5 server pools use ketama consistent hashing for key distribution with the key hasher for pools alpha, beta, gamma and delta set to fnv1a_64 while that for pool omega set to hsieh. Also only pool beta uses [nodes names](notes/recommendation.md#node-names-for-consistent-hashing) for consistent hashing, while pool alpha, gamma, delta and omega use 'host:port:weight' for consistent hashing. Finally, only pool alpha and beta can speak redis protocol, while pool gamma, deta and omega speak memcached protocol.
-
-    alpha:
-      listen: 127.0.0.1:22121
-      hash: fnv1a_64
-      distribution: ketama
-      auto_eject_hosts: true
-      redis: true
-      server_retry_timeout: 2000
-      server_failure_limit: 1
-      servers:
-       - 127.0.0.1:6379:1
-
-    beta:
-      listen: 127.0.0.1:22122
-      hash: fnv1a_64
-      hash_tag: "{}"
-      distribution: ketama
-      auto_eject_hosts: false
-      timeout: 400
-      redis: true
-      servers:
-       - 127.0.0.1:6380:1 server1
-       - 127.0.0.1:6381:1 server2
-       - 127.0.0.1:6382:1 server3
-       - 127.0.0.1:6383:1 server4
-
-    gamma:
-      listen: 127.0.0.1:22123
-      hash: fnv1a_64
-      distribution: ketama
-      timeout: 400
-      backlog: 1024
-      preconnect: true
-      auto_eject_hosts: true
-      server_retry_timeout: 2000
-      server_failure_limit: 3
-      servers:
-       - 127.0.0.1:11212:1
-       - 127.0.0.1:11213:1
-
-    delta:
-      listen: 127.0.0.1:22124
-      hash: fnv1a_64
-      distribution: ketama
-      timeout: 100
-      auto_eject_hosts: true
-      server_retry_timeout: 2000
-      server_failure_limit: 1
-      servers:
-       - 127.0.0.1:11214:1
-       - 127.0.0.1:11215:1
-       - 127.0.0.1:11216:1
-       - 127.0.0.1:11217:1
-       - 127.0.0.1:11218:1
-       - 127.0.0.1:11219:1
-       - 127.0.0.1:11220:1
-       - 127.0.0.1:11221:1
-       - 127.0.0.1:11222:1
-       - 127.0.0.1:11223:1
-
-    omega:
-      listen: /tmp/gamma
-      hash: hsieh
-      distribution: ketama
-      auto_eject_hosts: false
-      servers:
-       - 127.0.0.1:11214:100000
-       - 127.0.0.1:11215:1
-
+For example, the configuration file in [conf/dynomite.yml](conf/dynomite2.yml)
 Finally, to make writing syntactically correct configuration file easier, dynomite provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
 ## Observability
@@ -208,35 +118,10 @@ Dynomite exposes stats at the granularity of server pool and servers per pool th
 
 Logging in dynomite is only available when dynomite is built with logging enabled. By default logs are written to stderr. Dynomite can also be configured to write logs to a specific file through the -o or --output command-line argument. On a running dynomite, we can turn log levels up and down by sending it SIGTTIN and SIGTTOU signals respectively and reopen log files by sending it SIGHUP signal.
 
-## Pipelining
 
-
-Dynomite enables proxying multiple client connections onto one or few server connections. This architectural setup makes it ideal for pipelining requests and responses and hence saving on the round trip time.  In addition, Dynomite will be responsible for data replications across nodes.
-
-
-
-## Utils
-+ [nagios checks](https://github.com/wanelo/nagios-checks/blob/master/check_twemproxy)
-+ [circunous](https://github.com/wanelo-chef/nad-checks/blob/master/recipes/twemproxy.rb)
-+ [puppet module](https://github.com/wuakitv/puppet-twemproxy)
-+ [nutcracker-web](https://github.com/kontera-technologies/nutcracker-web)
-+ [munin-plugin](https://github.com/eveiga/contrib/tree/nutcracker/plugins/nutcracker)
-+ [redis-twemproxy agent](https://github.com/Stono/redis-twemproxy-agent)
-
-
-## Issues and Support
-
-Have a bug or a question? Please create an issue here on GitHub!
-
-https://github.com/Netflix/dynomite/issues
-
-## Contributors
-
-* Jason Brown 
-* Minh Do
 
 ## License
 
-Copyright 2013 Netflix, Inc.
+Copyright 2014 Netflix, Inc.
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0

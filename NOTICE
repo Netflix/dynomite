@@ -1,3 +1,8 @@
+Dynomite is a thin replacation layer for multi storages
+Copyright (C) 2014 Netflix, Inc.
+
+Portions of Dynomite were derived from twemproxy
+
 twemproxy is a fast and lightweight proxy for memcached protocol
 Copyright (C) 2012 Twitter, Inc.
 

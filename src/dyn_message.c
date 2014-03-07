@@ -1,416 +1,440 @@
-#include <ctype.h>
+/*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Copyright (C) 2014 Netflix, Inc.
+ */ 
 
-#include <nc_core.h>
-#include <nc_proto.h>
+/*
+ * twemproxy - A fast and lightweight proxy for memcached protocol.
+ * Copyright (C) 2011 Twitter, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#include <dyn_message.h>
+#include <stdio.h>
+#include <stdlib.h>
 
+#include <sys/uio.h>
 
+#include <dyn_core.h>
+#include <dyn_server.h>
+#include <proto/dyn_proto.h>
 
-static uint64_t dmsg_id;          /* message id counter */
-static uint32_t nfree_dmsgq;      /* # free msg q */
-static struct dmsg_tqh free_dmsgq; /* free msg q */
+#if (IOV_MAX > 128)
+#define NC_IOV_MAX 128
+#else
+#define NC_IOV_MAX IOV_MAX
+#endif
 
-static uint32_t MAGIC_NUMBER = 2014;
+/*
+ *            nc_message.[ch]
+ *         message (struct msg)
+ *            +        +            .
+ *            |        |            .
+ *            /        \            .
+ *         Request    Response      .../ nc_mbuf.[ch]  (mesage buffers)
+ *      nc_request.c  nc_response.c .../ nc_memcache.c; nc_redis.c (message parser)
+ *
+ * Messages in nutcracker are manipulated by a chain of processing handlers,
+ * where each handler is responsible for taking the input and producing an
+ * output for the next handler in the chain. This mechanism of processing
+ * loosely conforms to the standard chain-of-responsibility design pattern
+ *
+ * At the high level, each handler takes in a message: request or response
+ * and produces the message for the next handler in the chain. The input
+ * for a handler is either a request or response, but never both and
+ * similarly the output of an handler is either a request or response or
+ * nothing.
+ *
+ * Each handler itself is composed of two processing units:
+ *
+ * 1). filter: manipulates output produced by the handler, usually based
+ *     on a policy. If needed, multiple filters can be hooked into each
+ *     location.
+ * 2). forwarder: chooses one of the backend servers to send the request
+ *     to, usually based on the configured distribution and key hasher.
+ *
+ * Handlers are registered either with Client or Server or Proxy
+ * connections. A Proxy connection only has a read handler as it is only
+ * responsible for accepting new connections from client. Read handler
+ * (conn_recv_t) registered with client is responsible for reading requests,
+ * while that registered with server is responsible for reading responses.
+ * Write handler (conn_send_t) registered with client is responsible for
+ * writing response, while that registered with server is responsible for
+ * writing requests.
+ *
+ * Note that in the above discussion, the terminology send is used
+ * synonymously with write or OUT event. Similarly recv is used synonymously
+ * with read or IN event
+ *
+ *             Client+             Proxy           Server+
+ *                              (nutcracker)
+ *                                   .
+ *       msg_recv {read event}       .       msg_recv {read event}
+ *         +                         .                         +
+ *         |                         .                         |
+ *         \                         .                         /
+ *         req_recv_next             .             rsp_recv_next
+ *           +                       .                       +
+ *           |                       .                       |       Rsp
+ *           req_recv_done           .           rsp_recv_done      <===
+ *             +                     .                     +
+ *             |                     .                     |
+ *    Req      \                     .                     /
+ *    ===>     req_filter*           .           *rsp_filter
+ *               +                   .                   +
+ *               |                   .                   | 
+ *               \                   .                   /
+ *               req_forward-//  (a) . (c)  \\-rsp_forward
+ *                                   .
+ *                                   .
+ *       msg_send {write event}      .      msg_send {write event}
+ *         +                         .                         +
+ *         |                         .                         |
+ *    Rsp' \                         .                         /     Req'
+ *   <===  rsp_send_next             .             req_send_next     ===>
+ *           +                       .                       +
+ *           |                       .                       |
+ *           \                       .                       /
+ *           rsp_send_done-//    (d) . (b)    //-req_send_done
+ *
+ *
+ * (a) -> (b) -> (c) -> (d) is the normal flow of transaction consisting
+ * of a single request response, where (a) and (b) handle request from
+ * client, while (c) and (d) handle the corresponding response from the
+ * server.
+ */
 
-static const struct string MAGIC_STR = string("2014 ");
-static const struct string CRLF_STR = string(CRLF);
+static uint64_t msg_id;          /* message id counter */
+static uint64_t frag_id;         /* fragment id counter */
+static uint32_t nfree_msgq;      /* # free msg q */
+static struct msg_tqh free_msgq; /* free msg q */
+static struct rbtree tmo_rbt;    /* timeout rbtree */
+static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 
-
-
-enum {
-        DYN_START,
-        DYN_MAGIC_NUMBER = 1000,
-        DYN_SPACES_BEFORE_MSG_ID,
-        DYN_MSG_ID,
-        DYN_SPACES_BEFORE_TYPE_ID,
-        DYN_TYPE_ID,
-        DYN_SPACES_BEFORE_VERSION,
-        DYN_VERSION,
-        DYN_CRLF_BEFORE_STAR,
-        DYN_STAR,
-        DYN_DATA_LEN,
-        DYN_SPACE_BEFORE_DATA,
-        DYN_DATA,
-        DYN_CRLF_BEFORE_DONE,
-        DYN_DONE
-} state;
-
-
-static bool 
-dyn_parse_core(struct msg *r)
+static struct msg *
+msg_from_rbe(struct rbnode *node)
 {
-    struct dmsg *dmsg;
-    struct mbuf *b;
-    uint8_t *p;
-    uint8_t ch;
-    uint32_t num = 0;
-	    
-	//if (r->dyn_state == DYN_DONE)
-	//    return memcache_parse_req(r);
-	
-    state = r->dyn_state;
-    b = STAILQ_LAST(&r->mhdr, mbuf, next);    
+    struct msg *msg;
+    int offset;
 
-    dmsg = r->dmsg;
-    if (dmsg == NULL) {
-        r->dmsg = dmsg_get();
-        dmsg = r->dmsg;    
-        if (dmsg == NULL) {//should track this as a dropped message
-           goto error; //should count as OOM error
-        }    
+    offset = offsetof(struct msg, tmo_rbe);
+    msg = (struct msg *)((char *)node - offset);
+
+    return msg;
+}
+
+struct msg *
+msg_tmo_min(void)
+{
+    struct rbnode *node;
+
+    node = rbtree_min(&tmo_rbt);
+    if (node == NULL) {
+        return NULL;
     }
-	
-    for (p = r->pos; p < b->last; p++) {
-        ch = *p;
-        loga("dyn parser req: for : state %d", state);
-        switch (state) {
-	         loga("parser core: main switch:  state %d %d]", state, ch);
-		 case DYN_START:
-                    loga("DYN_START");
-		    if (ch == ' ') {
-		         break;
-		    } else if (isdigit(ch)) {
-                        num = ch - '0'; 
-                        state = DYN_MAGIC_NUMBER;
-                    } else {
-                        goto skip;
-                    } 
-                     
-                    break;
 
-                case DYN_MAGIC_NUMBER:
-                    loga("DYN_MAGIC_NUMBER");
-                    loga("num = %d", num);
-                    if (isdigit(ch))  {
-                         num = num*10 + (ch - '0');
-                    } else {
-                         if (num == MAGIC_NUMBER) {
-                                   state = DYN_SPACES_BEFORE_MSG_ID;
-                         } else {
-                                   goto error;
-                         }
-                    }
-
-		            break;
-
-                case DYN_SPACES_BEFORE_MSG_ID:
-                    loga("DYN_SPACES_BEFORE_MSG_ID");
-                    if (ch == ' ') {
-                        break;
-                    } else if (isdigit(ch)) {
-                       num = ch - '0'; 
-                       state = DYN_MSG_ID;
-                    }
-
-                    break;                       
-           
-                case DYN_MSG_ID:
-                    loga("DYN_MSG_ID");
-                    loga("num = %d", num);
-                    if (isdigit(ch))  {
-                        num = num*10 + (ch - '0'); 
-                    } else {  
-                        if (num > 0) {
-                           loga("MSG ID : %d", num);
-                           dmsg->id = num;
-                           state = DYN_SPACES_BEFORE_TYPE_ID;
-                        } else {
-                           goto error;
-                        }
-                    }
-                    break;                         
-              
-                case DYN_SPACES_BEFORE_TYPE_ID:
-                    loga("DYN_SPACES_BEFORE_TYPE_ID");
-                    if (ch == ' ') {
-                        break;
-                    } else if (isdigit(ch)) {
-                       num = ch - '0'; 
-                       state = DYN_TYPE_ID;
-                    }
-
-                    break;
-
-                case DYN_TYPE_ID:
-                    loga("DYN_TYPE_ID");
-                    loga("num = %d", num);
-                    if (isdigit(ch))  {
-                        num = num*10 + (ch - '0');
-                    } else {
-                        if (num > 0)  {
-                           loga("VERB ID: %d", num);
-                           dmsg->type = num;
-                           state = DYN_SPACES_BEFORE_VERSION;
-                        } else {
-                           goto error;       
-                        }
-                    }
-
-                    break;
-
-                case DYN_SPACES_BEFORE_VERSION:
-                    loga("DYN_SPACES_BEFORE_VERSION");
-                    if (ch == ' ') {
-                        break;
-                    } else if (isdigit(ch)) {
-                       num = ch - '0';
-                       state = DYN_VERSION;
-                    }
-                    break;
-
-                case DYN_VERSION:
-                   loga("DYN_VERSION");
-                   loga("num = %d", num);
-                   if (isdigit(ch))  {
-                        num = num*10 + (ch - '0');
-                    } else {
-                        if (ch == CR)  {
-                           loga("VERSION : %d", num);
-                           dmsg->version = num;
-                           state = DYN_CRLF_BEFORE_STAR;
-                        } else {
-                           goto error;
-                        }
-                    }
-
-                    break;
-       
-                case DYN_CRLF_BEFORE_STAR:
-                    loga("DYN_CRLF_BEFORE_STAR");
-                            if (ch == LF)  {
-                               state = DYN_STAR;
-                            } else {
-                               goto error;
-                            }          
- 
-                            break;
-
-                        case DYN_STAR:
-                           loga("DYN_STAR");
-                   if (ch == '*') {
-                       state = DYN_DATA_LEN;
-                       num = 0;
-                   } else {
-                       goto error;
-                   }
-
-                   break;
-
-                case DYN_DATA_LEN:
-                   loga("DYN_DATA_LEN");
-                   loga("num = %d", num);
-                   if (isdigit(ch))  {
-                        num = num*10 + (ch - '0');
-                   } else {
-                       if (ch == ' ')  {
-                          loga("Data len: %d", num);
-                          dmsg->mlen = num;
-                          state = DYN_SPACE_BEFORE_DATA;
-                          num = 0;
-                       } else {
-                          goto error;
-                       }
-                   }
-                   break;
-
-                case DYN_SPACE_BEFORE_DATA:
-                   loga("DYN_SPACE_BEFORE_DATA");
-                   state = DYN_DATA;
-                   break;
-
-                case DYN_DATA:
-                   loga("DYN_DATA");
-                   p -= 1;
-                   if (dmsg->mlen > 0)  {
-                        dmsg->data = p;
-                        p += dmsg->mlen - 1;                  
-                        state = DYN_CRLF_BEFORE_DONE;
-                   } else {
-                        goto error;
-                   }
-   
-                   break;
-                        
-                case DYN_CRLF_BEFORE_DONE:
-                   loga("DYN_CRLF_BEFORE_DONE");
-          
-                   if (ch == CR)  {
-                       //p += 1;
-                       if (*(p+1) == LF) {
-                           state = DYN_DONE;
-                       } else {
-                           goto error;
-                       }
-                   } else {
-                       goto error;
-                   }
- 
-                   break;
-
-                case DYN_DONE:
-                   loga("DYN_DONE");
-                   r->pos = p+1;
-                   r->dyn_state = DYN_DONE; 
-                   b->pos = p+1;
-                   goto done;
-                   break;
-
-		        default:
-		            NOT_REACHED();
-		            break;
-		        	
-		}
-		
-	}
-
-    done:
-       dmsg->owner = r;
-       dmsg->source_address = r->owner->addr;
-       loga("at done with p at %d", p);
-       dmsg_dump(r->dmsg);
-       log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
-                            "type %d state %d rpos %d of %d", r->id, r->result, r->type,
-                            r->dyn_state, r->pos - b->pos, b->last - b->pos);
-
-      
-       if (dmsg->type == GOSSIP_PING || dmsg->type == GOSSIP_PING_REPLY) {
-              //r->pos = p;
-              //r->dyn_state = DYN_DONE;
-              //b->pos = p;
-              ASSERT(r->pos <= b->last);
-              r->state = 0;
-              r->result = MSG_PARSE_OK;
-       }
-      //if (dmsg->type == GOSSIP_PING) {
-      //      r->pos = p;
-      //      r->dyn_state = DYN_DONE;
-      //      b->pos = p;
-      //      ASSERT(r->pos <= b->last);
-      //      r->state = 0;
-      //      r->result = MSG_PARSE_OK;
-      //      return;
-       //}
-       //return memcache_parse_req(r);
-       return true;
-
-    skip:
-       loga("This is not a dyn message");
-       dmsg->type = DMSG_UNKNOWN;
-       dmsg->owner = r;
-       dmsg->source_address = r->owner->addr;
-       return true;
-
-    error:
-       loga("at error");
-       r->result = MSG_PARSE_ERROR;
-       r->state = state;
-       errno = EINVAL;
-
-       log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
-                "res %d type %d state %d", r->id, r->result, r->type,
-                r->state);
-       return false;
-
-    return true;    //fix me
-    //return memcache_parse_req(r);  //fix me
+    return msg_from_rbe(node);
 }
-
-
-
 
 void
-dyn_parse_req(struct msg *r)
+msg_tmo_insert(struct msg *msg, struct conn *conn)
 {
-    loga("I am parsing a request !!!!!!!!!! Yah!!!!!!!");
+    struct rbnode *node;
+    int timeout;
 
-    //if (r->dyn_state == DYN_DONE) {
-    //   return memcache_parse_req(r);
-    //}
-	
-    if (dyn_parse_core(r)) {
-         struct dmsg *dmsg = r->dmsg;   	
-         if (dmsg->type == GOSSIP_PING) { //replace with switch as it will be big
-             loga("I got a GOSSIP_PINGGGGGGGGGGGGGGGGGGG"); 
-             r->state = 0;
-             r->result = MSG_PARSE_OK;
-             r->dyn_state = DYN_DONE;
-             //return memcache_parse_req(r);
-             return;
-         }
-	    
-	 return memcache_parse_req(r);
-    } 
-   
-    //bad case
-    loga("Bad message - cannot parse");  //fix me to do something
-    msg_dump(r);
+    ASSERT(msg->request);
+    ASSERT(!msg->quit && !msg->noreply);
+
+    timeout = server_timeout(conn);
+    if (timeout <= 0) {
+        return;
+    }
+
+    node = &msg->tmo_rbe;
+    node->key = nc_msec_now() + timeout;
+    node->data = conn;
+
+    rbtree_insert(&tmo_rbt, node);
+
+    log_debug(LOG_VERB, "insert msg %"PRIu64" into tmo rbt with expiry of "
+              "%d msec", msg->id, timeout);
 }
-
-
-void dyn_parse_rsp(struct msg *r)
-{
-    loga("I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
-
-    //if (r->dyn_state == DYN_DONE) {
-    //    return memcache_parse_rsp(r);
-    //}
-	
-    if (dyn_parse_core(r)) {
-         struct dmsg *dmsg = r->dmsg;
-	 if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
-	     loga("I got a GOSSIP_PING_REPLYYYYYYYYYYYYYYYYYYYYYYYYYYYYY");
-	     r->state = 0;
-             r->result = MSG_PARSE_OK;
-             r->dyn_state = DYN_DONE;
-	     //return memcache_parse_rsp(r);
-             return;
-	 }
-	 return memcache_parse_rsp(r);
-   } 
-
-   //bad case
-   loga("Bad message - cannot parse");  //fix me to do something
-   msg_dump(r);
-
-   //r->state = 0;
-   //r->result = MSG_PARSE_OK;
-}
-
 
 void
-dmsg_free(struct dmsg *dmsg)
+msg_tmo_delete(struct msg *msg)
 {
-    ASSERT(STAILQ_EMPTY(&dmsg->mhdr));
+    struct rbnode *node;
 
-    log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
-    nc_free(dmsg);
+    node = &msg->tmo_rbe;
+
+    /* already deleted */
+
+    if (node->data == NULL) {
+        return;
+    }
+
+    rbtree_delete(&tmo_rbt, node);
+
+    log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
+}
+
+static struct msg *
+_msg_get(void)
+{
+    struct msg *msg;
+
+    if (!TAILQ_EMPTY(&free_msgq)) {
+        ASSERT(nfree_msgq > 0);
+
+        msg = TAILQ_FIRST(&free_msgq);
+        nfree_msgq--;
+        TAILQ_REMOVE(&free_msgq, msg, m_tqe);
+        goto done;
+    }
+
+    msg = nc_alloc(sizeof(*msg));
+    if (msg == NULL) {
+        return NULL;
+    }
+
+done:
+    /* c_tqe, s_tqe, and m_tqe are left uninitialized */
+    msg->id = ++msg_id;
+    msg->peer = NULL;
+    msg->owner = NULL;
+
+    rbtree_node_init(&msg->tmo_rbe);
+
+    STAILQ_INIT(&msg->mhdr);
+    msg->mlen = 0;
+
+    msg->state = 0;
+    msg->pos = NULL;
+    msg->token = NULL;
+
+    msg->parser = NULL;
+    msg->result = MSG_PARSE_OK;
+
+    msg->pre_splitcopy = NULL;
+    msg->post_splitcopy = NULL;
+    msg->pre_coalesce = NULL;
+    msg->post_coalesce = NULL;
+
+    msg->type = MSG_UNKNOWN;
+
+    msg->key_start = NULL;
+    msg->key_end = NULL;
+
+    msg->vlen = 0;
+    msg->end = NULL;
+
+    msg->frag_owner = NULL;
+    msg->nfrag = 0;
+    msg->frag_id = 0;
+
+    msg->narg_start = NULL;
+    msg->narg_end = NULL;
+    msg->narg = 0;
+    msg->rnarg = 0;
+    msg->rlen = 0;
+    msg->integer = 0;
+
+    msg->err = 0;
+    msg->error = 0;
+    msg->ferror = 0;
+    msg->request = 0;
+    msg->quit = 0;
+    msg->noreply = 0;
+    msg->done = 0;
+    msg->fdone = 0;
+    msg->first_fragment = 0;
+    msg->last_fragment = 0;
+    msg->swallow = 0;
+    msg->redis = 0;
+
+    //dynomite
+    msg->dyn_state = 0;
+    msg->dmsg = NULL;
+
+    return msg;
+}
+
+struct msg *
+msg_get(struct conn *conn, bool request, bool redis)
+{
+    struct msg *msg;
+
+    msg = _msg_get();
+    if (msg == NULL) {
+        return NULL;
+    }
+
+    msg->owner = conn;
+    msg->request = request ? 1 : 0;
+    msg->redis = redis ? 1 : 0;
+
+    if (redis) {
+        if (request) {
+            msg->parser = redis_parse_req;
+        } else {
+            msg->parser = redis_parse_rsp;
+        }
+        msg->pre_splitcopy = redis_pre_splitcopy;
+        msg->post_splitcopy = redis_post_splitcopy;
+        msg->pre_coalesce = redis_pre_coalesce;
+        msg->post_coalesce = redis_post_coalesce;
+    } else {
+        if (request) {
+            if (conn->dyn_mode) {
+               msg->parser = dyn_parse_req;
+            } else {
+               msg->parser = memcache_parse_req;
+            }
+        } else {
+            if (conn->dyn_mode) {
+               msg->parser = dyn_parse_rsp;
+            } else {
+               msg->parser = memcache_parse_rsp;
+            }
+        }
+        msg->pre_splitcopy = memcache_pre_splitcopy;
+        msg->post_splitcopy = memcache_post_splitcopy;
+        msg->pre_coalesce = memcache_pre_coalesce;
+        msg->post_coalesce = memcache_post_coalesce;
+    }
+
+    log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
+              msg, msg->id, msg->request, conn->sd);
+
+    return msg;
+}
+
+rstatus_t 
+msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
+{
+    target->owner = src->owner;
+    target->request = src->request;
+    target->redis = src->redis;
+
+    target->parser = src->parser;
+    target->pre_splitcopy = src->pre_splitcopy;
+    target->post_splitcopy = src->post_splitcopy; 
+    target->pre_coalesce = src->pre_coalesce;
+    target->post_coalesce = src->post_coalesce;
+
+    target->noreply = src->noreply;
+    target->type = src->type;
+    target->key_start = src->key_start;
+    target->key_end = src->key_end;
+    target->mlen = src->mlen;
+    target->pos = src->pos;
+    target->vlen = src->vlen;
+
+    struct mbuf *mbuf, *nbuf;
+    bool started = false;
+    STAILQ_FOREACH(mbuf, &src->mhdr, next) {
+        if (!started && mbuf != mbuf_start) {
+            continue;
+        } else {
+            started = true;
+        }
+        nbuf = mbuf_get();
+        if (nbuf == NULL) {
+            return ENOMEM;
+        }
+
+        uint32_t len = mbuf_length(mbuf);
+        mbuf_copy(nbuf, mbuf->start, len);
+        mbuf_insert(&target->mhdr, nbuf);
+    }
+
+    return NC_OK;
 }
 
 
-void
-dmsg_put(struct dmsg *dmsg)
+struct msg *
+msg_get_error(bool redis, err_t err)
 {
-    log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+    struct msg *msg;
+    struct mbuf *mbuf;
+    int n;
+    char *errstr = err ? strerror(err) : "unknown";
+    char *protstr = redis ? "-ERR" : "SERVER_ERROR";
 
-    while (!STAILQ_EMPTY(&dmsg->mhdr)) {
-        struct mbuf *mbuf = STAILQ_FIRST(&dmsg->mhdr);
-        mbuf_remove(&dmsg->mhdr, mbuf);
+    msg = _msg_get();
+    if (msg == NULL) {
+        return NULL;
+    }
+
+    msg->state = 0;
+    msg->type = MSG_RSP_MC_SERVER_ERROR;
+
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+        msg_put(msg);
+        return NULL;
+    }
+    mbuf_insert(&msg->mhdr, mbuf);
+
+    n = nc_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s"CRLF, protstr, errstr);
+    mbuf->last += n;
+    msg->mlen = (uint32_t)n;
+
+    log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" error '%s'",
+              msg, msg->id, msg->mlen, errstr);
+
+    return msg;
+}
+
+static void
+msg_free(struct msg *msg)
+{
+    ASSERT(STAILQ_EMPTY(&msg->mhdr));
+
+    log_debug(LOG_VVERB, "free msg %p id %"PRIu64"", msg, msg->id);
+    nc_free(msg);
+}
+
+void
+msg_put(struct msg *msg)
+{
+    log_debug(LOG_VVERB, "put msg %p id %"PRIu64"", msg, msg->id);
+
+    struct dmsg *dmsg = msg->dmsg;
+    if (dmsg != NULL) {
+    	dmsg_put(dmsg);
+    }
+
+    while (!STAILQ_EMPTY(&msg->mhdr)) {
+        struct mbuf *mbuf = STAILQ_FIRST(&msg->mhdr);
+        mbuf_remove(&msg->mhdr, mbuf);
         mbuf_put(mbuf);
     }
 
-    nfree_dmsgq++;
-    TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
+    nfree_msgq++;
+    TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }
 
 void
-dmsg_dump(struct dmsg *dmsg)
+msg_dump(struct msg *msg)
 {
     struct mbuf *mbuf;
 
-    loga("dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
+    loga("msg dump id %"PRIu64" request %d len %"PRIu32" type %d done %d "
+         "error %d (err %d)", msg->id, msg->request, msg->mlen, msg->type,
+         msg->done, msg->error, msg->err);
 
-    STAILQ_FOREACH(mbuf, &dmsg->mhdr, next) {
+    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
         uint8_t *p, *q;
         long int len;
 
@@ -422,135 +446,448 @@ dmsg_dump(struct dmsg *dmsg)
     }
 }
 
-
 void
-dmsg_init(void)
+msg_init(void)
 {
-    log_debug(LOG_DEBUG, "dmsg size %d", sizeof(struct dmsg));
-    dmsg_id = 0;
-    nfree_dmsgq = 0;
-    TAILQ_INIT(&free_dmsgq);
+    log_debug(LOG_DEBUG, "msg size %d", sizeof(struct msg));
+    msg_id = 0;
+    frag_id = 0;
+    nfree_msgq = 0;
+    TAILQ_INIT(&free_msgq);
+    rbtree_init(&tmo_rbt, &tmo_rbs);
 }
 
-
-
-
-
 void
-dmsg_deinit(void)
+msg_deinit(void)
 {
-    struct dmsg *msg, *nmsg;
+    struct msg *msg, *nmsg;
 
-    for (msg = TAILQ_FIRST(&free_dmsgq); msg != NULL;
-         msg = nmsg, nfree_dmsgq--) {
-        ASSERT(nfree_dmsgq > 0);
+    for (msg = TAILQ_FIRST(&free_msgq); msg != NULL;
+         msg = nmsg, nfree_msgq--) {
+        ASSERT(nfree_msgq > 0);
         nmsg = TAILQ_NEXT(msg, m_tqe);
-        dmsg_free(msg);
+        msg_free(msg);
     }
-    ASSERT(nfree_dmsgq == 0);
+    ASSERT(nfree_msgq == 0);
 }
 
 bool
-dmsg_empty(struct dmsg *msg)
+msg_empty(struct msg *msg)
 {
     return msg->mlen == 0 ? true : false;
 }
 
-
-struct dmsg *
-dmsg_get(void)
+static rstatus_t
+msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    struct dmsg *dmsg;
+    struct msg *nmsg;
+    struct mbuf *mbuf, *nbuf;
 
-    if (!TAILQ_EMPTY(&free_dmsgq)) {
-        ASSERT(nfree_dmsgq > 0);
-
-        dmsg = TAILQ_FIRST(&free_dmsgq);
-        nfree_dmsgq--;
-        TAILQ_REMOVE(&free_dmsgq, dmsg, m_tqe);
-        goto done;
+    mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    if (msg->pos == mbuf->last) {
+        /* no more data to parse */
+        conn->recv_done(ctx, conn, msg, NULL);
+        return NC_OK;
     }
 
-    dmsg = nc_alloc(sizeof(*dmsg));
-    if (dmsg == NULL) {
-        return NULL;
+    /*
+     * Input mbuf has un-parsed data. Split mbuf of the current message msg
+     * into (mbuf, nbuf), where mbuf is the portion of the message that has
+     * been parsed and nbuf is the portion of the message that is un-parsed.
+     * Parse nbuf as a new message nmsg in the next iteration.
+     */
+    nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
+    if (nbuf == NULL) {
+        return NC_ENOMEM;
     }
 
-done:
-    dmsg->id = ++dmsg_id;
+    nmsg = msg_get(msg->owner, msg->request, conn->redis);
+    if (nmsg == NULL) {
+        mbuf_put(nbuf);
+        return NC_ENOMEM;
+    }
+    mbuf_insert(&nmsg->mhdr, nbuf);
+    nmsg->pos = nbuf->pos;
 
-    STAILQ_INIT(&dmsg->mhdr);
-    dmsg->mlen = 0;
-    dmsg->data = NULL;
+    /* update length of current (msg) and new message (nmsg) */
+    nmsg->mlen = mbuf_length(nbuf);
+    msg->mlen -= nmsg->mlen;
 
-    dmsg->type = MSG_UNKNOWN;
-    dmsg->id = 0;
-    dmsg->version = VERSION_10;
-    
-    dmsg->source_address = NULL;
-    dmsg->owner = NULL;
-    
-    return dmsg;
-}
+    conn->recv_done(ctx, conn, msg, nmsg);
 
-
-rstatus_t 
-dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data)
-{
-
-    mbuf_write_string(mbuf, &MAGIC_STR);
-    mbuf_write_uint64(mbuf, msg_id);
-    mbuf_write_char(mbuf, ' ');
-    mbuf_write_uint8(mbuf, type);
-    mbuf_write_char(mbuf, ' ');
-    mbuf_write_uint8(mbuf, version);
-    mbuf_write_string(mbuf, &CRLF_STR);
-    mbuf_write_char(mbuf, '*');
-    mbuf_write_uint32(mbuf, data->len);
-    mbuf_write_char(mbuf, ' ');
-    mbuf_write_string(mbuf, data);
-    mbuf_write_string(mbuf, &CRLF_STR);
-
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");
-     
     return NC_OK;
 }
 
-
-bool
-dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
+static rstatus_t
+msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(dmsg != NULL);
-    ASSERT(conn->dyn_mode);
+    rstatus_t status;  /* return status */
+    struct msg *nmsg;  /* new message */
+    struct mbuf *nbuf; /* new mbuf */
 
-    struct string s;
+    ASSERT(conn->client && !conn->proxy);
+    ASSERT(msg->request);
 
-    loga("dmsg process: type %d", dmsg->type);
-    switch(dmsg->type) {
-        case DMSG_DEBUG:
-           s.len = dmsg->mlen;
-           s.data = dmsg->data;
-           log_hexdump(LOG_VERB, s.data, s.len, "dyn processing message ");
-           break;
-
-        case GOSSIP_DIGEST_SYN:
-           break;
-
-        case GOSSIP_DIGEST_ACK:
-          break;
-
-        case GOSSIP_DIGEST_ACK2:
-          break;
-
-        case GOSSIP_PING:
-          loga("I have got a ping msgggggg!!!!!!");
-          return true;
- 
-        default:
-          loga("nothing to do");
+    nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
+    if (nbuf == NULL) {
+        return NC_ENOMEM;
     }
-       
-    return false;
+
+    status = msg->post_splitcopy(msg);
+    if (status != NC_OK) {
+        mbuf_put(nbuf);
+        return status;
+    }
+
+    nmsg = msg_get(msg->owner, msg->request, msg->redis);
+    if (nmsg == NULL) {
+        mbuf_put(nbuf);
+        return NC_ENOMEM;
+    }
+    mbuf_insert(&nmsg->mhdr, nbuf);
+    nmsg->pos = nbuf->pos;
+
+    /* update length of current (msg) and new message (nmsg) */
+    nmsg->mlen = mbuf_length(nbuf);
+    msg->mlen -= nmsg->mlen;
+
+    /*
+     * Attach unique fragment id to all fragments of the message vector. All
+     * fragments of the message, including the first fragment point to the
+     * first fragment through the frag_owner pointer. The first_fragment and
+     * last_fragment identify first and last fragment respectively.
+     *
+     * For example, a message vector given below is split into 3 fragments:
+     *  'get key1 key2 key3\r\n'
+     *  Or,
+     *  '*4\r\n$4\r\nmget\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n'
+     *
+     *   +--------------+
+     *   |  msg vector  |
+     *   |(original msg)|
+     *   +--------------+
+     *
+     *       frag_owner         frag_owner
+     *     /-----------+      /------------+
+     *     |           |      |            |
+     *     |           v      v            |
+     *   +--------------------+     +---------------------+
+     *   |   frag_id = 10     |     |   frag_id = 10      |
+     *   | first_fragment = 1 |     |  first_fragment = 0 |
+     *   | last_fragment = 0  |     |  last_fragment = 0  |
+     *   |     nfrag = 3      |     |      nfrag = 0      |
+     *   +--------------------+     +---------------------+
+     *               ^
+     *               |  frag_owner
+     *               \-------------+
+     *                             |
+     *                             |
+     *                  +---------------------+
+     *                  |   frag_id = 10      |
+     *                  |  first_fragment = 0 |
+     *                  |  last_fragment = 1  |
+     *                  |      nfrag = 0      |
+     *                  +---------------------+
+     *
+     *
+     */
+    if (msg->frag_id == 0) {
+        msg->frag_id = ++frag_id;
+        msg->first_fragment = 1;
+        msg->nfrag = 1;
+        msg->frag_owner = msg;
+    }
+    nmsg->frag_id = msg->frag_id;
+    msg->last_fragment = 0;
+    nmsg->last_fragment = 1;
+    nmsg->frag_owner = msg->frag_owner;
+    msg->frag_owner->nfrag++;
+
+    stats_pool_incr(ctx, conn->owner, fragments);
+
+    log_debug(LOG_VERB, "fragment msg into %"PRIu64" and %"PRIu64" frag id "
+              "%"PRIu64"", msg->id, nmsg->id, msg->frag_id);
+
+    conn->recv_done(ctx, conn, msg, nmsg);
+
+    return NC_OK;
 }
 
+static rstatus_t
+msg_repair(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    struct mbuf *nbuf;
 
+    nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
+    if (nbuf == NULL) {
+        return NC_ENOMEM;
+    }
+    mbuf_insert(&msg->mhdr, nbuf);
+    msg->pos = nbuf->pos;
+
+    return NC_OK;
+}
+
+static rstatus_t
+msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    rstatus_t status;
+
+    if (msg_empty(msg)) {
+        /* no data to parse */
+        conn->recv_done(ctx, conn, msg, NULL);
+        return NC_OK;
+    }
+
+    msg->parser(msg);
+
+    switch (msg->result) {
+    case MSG_PARSE_OK:
+        status = msg_parsed(ctx, conn, msg);
+        break;
+
+    case MSG_PARSE_FRAGMENT:
+        status = msg_fragment(ctx, conn, msg);
+        break;
+
+    case MSG_PARSE_REPAIR:
+        status = msg_repair(ctx, conn, msg);
+        break;
+
+    case MSG_PARSE_AGAIN:
+        status = NC_OK;
+        break;
+
+    default:
+        status = NC_ERROR;
+        conn->err = errno;
+        break;
+    }
+
+    return conn->err != 0 ? NC_ERROR : status;
+}
+
+static rstatus_t
+msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    rstatus_t status;
+    struct msg *nmsg;
+    struct mbuf *mbuf;
+    size_t msize;
+    ssize_t n;
+
+    mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    if (mbuf == NULL || mbuf_full(mbuf)) {
+        mbuf = mbuf_get();
+        if (mbuf == NULL) {
+            return NC_ENOMEM;
+        }
+        mbuf_insert(&msg->mhdr, mbuf);
+        msg->pos = mbuf->pos;
+    }
+    ASSERT(mbuf->end - mbuf->last > 0);
+
+    msize = mbuf_size(mbuf);
+
+    n = conn_recv(conn, mbuf->last, msize);
+    if (n < 0) {
+        if (n == NC_EAGAIN) {
+            return NC_OK;
+        }
+        return NC_ERROR;
+    }
+
+    ASSERT((mbuf->last + n) <= mbuf->end);
+    mbuf->last += n;
+    msg->mlen += (uint32_t)n;
+
+    for (;;) {
+        status = msg_parse(ctx, conn, msg);
+        if (status != NC_OK) {
+            return status;
+        }
+
+        /* get next message to parse */
+        nmsg = conn->recv_next(ctx, conn, false);
+        if (nmsg == NULL || nmsg == msg) {
+            /* no more data to parse */
+            break;
+        }
+
+        msg = nmsg;
+    }
+
+    return NC_OK;
+}
+
+rstatus_t
+msg_recv(struct context *ctx, struct conn *conn)
+{
+    rstatus_t status;
+    struct msg *msg;
+
+    ASSERT(conn->recv_active);
+
+    conn->recv_ready = 1;
+    do {
+        msg = conn->recv_next(ctx, conn, true);
+        if (msg == NULL) {
+            return NC_OK;
+        }
+
+        status = msg_recv_chain(ctx, conn, msg);
+        if (status != NC_OK) {
+            return status;
+        }
+    } while (conn->recv_ready);
+
+    return NC_OK;
+}
+
+static rstatus_t
+msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    struct msg_tqh send_msgq;            /* send msg q */
+    struct msg *nmsg;                    /* next msg */
+    struct mbuf *mbuf, *nbuf;            /* current and next mbuf */
+    size_t mlen;                         /* current mbuf data length */
+    struct iovec *ciov, iov[NC_IOV_MAX]; /* current iovec */
+    struct array sendv;                  /* send iovec */
+    size_t nsend, nsent;                 /* bytes to send; bytes sent */
+    size_t limit;                        /* bytes to send limit */
+    ssize_t n;                           /* bytes sent by sendv */
+
+    TAILQ_INIT(&send_msgq);
+
+    array_set(&sendv, iov, sizeof(iov[0]), NC_IOV_MAX);
+
+    /* preprocess - build iovec */
+
+    nsend = 0;
+    /*
+     * readv() and writev() returns EINVAL if the sum of the iov_len values
+     * overflows an ssize_t value Or, the vector count iovcnt is less than
+     * zero or greater than the permitted maximum.
+     */
+    limit = SSIZE_MAX;
+
+    for (;;) {
+        ASSERT(conn->smsg == msg);
+
+        TAILQ_INSERT_TAIL(&send_msgq, msg, m_tqe);
+
+        for (mbuf = STAILQ_FIRST(&msg->mhdr);
+             mbuf != NULL && array_n(&sendv) < NC_IOV_MAX && nsend < limit;
+             mbuf = nbuf) {
+            nbuf = STAILQ_NEXT(mbuf, next);
+
+            if (mbuf_empty(mbuf)) {
+                continue;
+            }
+
+            mlen = mbuf_length(mbuf);
+            if ((nsend + mlen) > limit) {
+                mlen = limit - nsend;
+            }
+
+            ciov = array_push(&sendv);
+            ciov->iov_base = mbuf->pos;
+            ciov->iov_len = mlen;
+
+            nsend += mlen;
+        }
+
+        if (array_n(&sendv) >= NC_IOV_MAX || nsend >= limit) {
+            break;
+        }
+
+        msg = conn->send_next(ctx, conn);
+        if (msg == NULL) {
+            break;
+        }
+    }
+
+    ASSERT(!TAILQ_EMPTY(&send_msgq) && nsend != 0);
+
+    conn->smsg = NULL;
+
+    n = conn_sendv(conn, &sendv, nsend);
+
+    nsent = n > 0 ? (size_t)n : 0;
+
+    /* postprocess - process sent messages in send_msgq */
+
+    for (msg = TAILQ_FIRST(&send_msgq); msg != NULL; msg = nmsg) {
+        nmsg = TAILQ_NEXT(msg, m_tqe);
+
+        TAILQ_REMOVE(&send_msgq, msg, m_tqe);
+
+        if (nsent == 0) {
+            if (msg->mlen == 0) {
+                conn->send_done(ctx, conn, msg);
+            }
+            continue;
+        }
+
+        /* adjust mbufs of the sent message */
+        for (mbuf = STAILQ_FIRST(&msg->mhdr); mbuf != NULL; mbuf = nbuf) {
+            nbuf = STAILQ_NEXT(mbuf, next);
+
+            if (mbuf_empty(mbuf)) {
+                continue;
+            }
+
+            mlen = mbuf_length(mbuf);
+            if (nsent < mlen) {
+                /* mbuf was sent partially; process remaining bytes later */
+                mbuf->pos += nsent;
+                ASSERT(mbuf->pos < mbuf->last);
+                nsent = 0;
+                break;
+            }
+
+            /* mbuf was sent completely; mark it empty */
+            mbuf->pos = mbuf->last;
+            nsent -= mlen;
+        }
+
+        /* message has been sent completely, finalize it */
+        if (mbuf == NULL) {
+            conn->send_done(ctx, conn, msg);
+        }
+    }
+
+    ASSERT(TAILQ_EMPTY(&send_msgq));
+
+    if (n > 0) {
+        return NC_OK;
+    }
+
+    return (n == NC_EAGAIN) ? NC_OK : NC_ERROR;
+}
+
+rstatus_t
+msg_send(struct context *ctx, struct conn *conn)
+{
+    rstatus_t status;
+    struct msg *msg;
+
+    ASSERT(conn->send_active);
+
+    conn->send_ready = 1;
+    do {
+        msg = conn->send_next(ctx, conn);
+        if (msg == NULL) {
+            /* nothing to send */
+            return NC_OK;
+        }
+
+        status = msg_send_chain(ctx, conn, msg);
+        if (status != NC_OK) {
+            return status;
+        }
+
+    } while (conn->send_ready);
+
+    return NC_OK;
+}
