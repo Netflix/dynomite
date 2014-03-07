@@ -1,12 +1,11 @@
 .TH NUTCRACKER 8 "June 13, 2013"
 .SH NAME
-nutcracker \- Fast, light-weight proxy for memcached and Redis
+dynomite \- is a distributed thin proxy layer for memcached protocol. In the near future, it will support Redis protocol and other protocols.
 .SH SYNOPSIS
-.B nutcracker
+.B dynomite
 .RI [ options ]
 .SH DESCRIPTION
-\fBnutcracker\fP, also known as \fBtwemproxy\fP (pronounced "two-em-proxy"), is
-a fast and lightweight proxy for the memcached and Redis protocols.
+\fBdynomite\fP is a distributed thin proxy layer for memcached protocol. In the near future, it will support Redis protocol and other protocols.
 .PP
 It was primarily built to reduce the connection count on backend caching
 servers, but it has a number of features, such as:
@@ -73,4 +72,4 @@ Set pid file to \fIfilename\fP.
 .BR redis-server (1)
 .br
 .SH AUTHOR
-nutcracker was written by Twitter, Inc.
+dynomite was written by Netflix, Inc.
