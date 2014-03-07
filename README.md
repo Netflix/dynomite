@@ -1,6 +1,6 @@
 # Dynomite
 
-**Dynomite** is a distributed replication thin proxy layer for multiple protocols.
+**Dynomite** , inspired by Dynamo whitepaper, is a thin, distributed replication layer to different protocol storages. 
 
 
 ## Build
