@@ -251,8 +251,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
 
-    stats_server_incr(ctx, conn->owner, in_queue);
-    stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    if (!conn->dyn_mode) {
+       stats_server_incr(ctx, conn->owner, in_queue);
+       stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    }
 }
 
 void

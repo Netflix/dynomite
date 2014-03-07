@@ -65,7 +65,7 @@ vnode_update(struct server_pool *pool)
     }
 
     for (int i = 0, len = array_n(&pool->peers); i < len; i++) {
-        struct peer *peer = array_get(&pool->peers, i);
+        struct server *peer = array_get(&pool->peers, i);
         struct datacenter *dc = server_get_datacenter(pool, &peer->dc);
 
         if (dc == NULL) {
