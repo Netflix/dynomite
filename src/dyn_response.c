@@ -258,7 +258,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *pmsg; /* response and it's peer request */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT((conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL || !req_done(conn, pmsg)) {
@@ -297,7 +297,11 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         }
         msg->peer = pmsg;
         pmsg->peer = msg;
-        stats_pool_incr(ctx, conn->owner, forward_error);
+        if (!conn->dyn_mode) {
+           stats_pool_incr(ctx, conn->owner, forward_error);
+        } else {  //dyn_mode
+        	
+        }
     } else {
         msg = pmsg->peer;
     }

@@ -53,6 +53,19 @@
     ACTION( out_queue,              STATS_GAUGE,        "# requests in outgoing queue")                             \
     ACTION( out_queue_bytes,        STATS_GAUGE,        "current request bytes in outgoing queue")                  \
 
+
+//#define STATS_DNODE_CODEC(ACTION)                                                                                    \
+    /* client behavior */                                                                                           \
+//    ACTION( dnode_client_eof,             STATS_COUNTER,      "# eof on dnode client connections")                              \
+//    ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                           \
+//    ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                              \
+    /* dnode behavior */                                                                                             \
+//    ACTION( dnode_server_ejects,          STATS_COUNTER,      "# times backend server was ejected")                       \
+    /* forwarder behavior */                                                                                        \
+//    ACTION( dnode_forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
+/    ACTION( dnode_fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+
+
 #define STATS_ADDR      "0.0.0.0"
 #define STATS_PORT      22222
 #define STATS_INTERVAL  (30 * 1000) /* in msec */
@@ -72,6 +85,11 @@ struct stats_metric {
         int64_t   counter;      /* accumulating counter */
         int64_t   timestamp;    /* monotonic timestamp */
     } value;
+};
+
+struct stats_dnode {
+    struct string name;   /* dnode server name (ref) */
+    struct array  metric; /* stats_metric[] for dnode server codec */
 };
 
 struct stats_server {
@@ -133,6 +151,14 @@ typedef enum stats_server_field {
 } stats_server_field_t;
 #undef DEFINE_ACTION
 
+#define DEFINE_ACTION(_name, _type, _desc) STATS_DNODE_##_name,
+typedef enum stats_dnode_field {
+    STATS_DNODECODEC(DEFINE_ACTION)
+    STATS_DNODE_NFIELD
+} stats_dnode_field_t;
+#undef DEFINE_ACTION
+
+
 #if defined NC_STATS && NC_STATS == 1
 
 #define stats_pool_incr(_ctx, _pool, _name) do {                        \
@@ -175,6 +201,27 @@ typedef enum stats_server_field {
      _stats_server_set_ts(_ctx, _server, STATS_SERVER_##_name, _val);   \
 } while (0)
 
+/////for dnode stats
+//#define stats_dnode_incr(_ctx, _server, _name) do {                    \
+//    _stats_dnode_incr(_ctx, _server, STATS_DNODE_##_name);             \
+}// while (0)
+
+//#define stats_dnode_decr(_ctx, _server, _name) do {                    \
+//    _stats_dnode_decr(_ctx, _server, STATS_DNODE_##_name);             \
+//} while (0)
+
+//#define stats_dnode_incr_by(_ctx, _server, _name, _val) do {           \
+//    _stats_dnode_incr_by(_ctx, _server, STATS_DNODE_##_name, _val);    \
+//} while (0)
+
+//#define stats_dnode_decr_by(_ctx, _server, _name, _val) do {           \
+//    _stats_dnode_decr_by(_ctx, _server, STATS_DNODE_##_name, _val);    \
+}// while (0)
+
+//#define stats_dnode_set_ts(_ctx, _server, _name, _val) do {            \
+//     _stats_dnode_set_ts(_ctx, _server, STATS_DNODE_##_name, _val);    \
+//} while (0)
+
 #else
 
 #define stats_pool_incr(_ctx, _pool, _name)
@@ -193,6 +240,16 @@ typedef enum stats_server_field {
 
 #define stats_server_decr_by(_ctx, _server, _name, _val)
 
+///for dnode
+//#define stats_dnode_incr(_ctx, _server, _name)
+
+//#define stats_dnode_decr(_ctx, _server, _name)
+
+//#define stats_dnode_incr_by(_ctx, _server, _name, _val)
+
+//#define stats_dnode_decr_by(_ctx, _server, _name, _val)
+
+
 #endif
 
 #define stats_enabled   NC_STATS
@@ -210,6 +267,14 @@ void _stats_server_decr(struct context *ctx, struct server *server, stats_server
 void _stats_server_incr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_decr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_set_ts(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
+
+//for dnode
+//void _stats_dnode_incr(struct context *ctx, struct server *server, stats_dnode_field_t fidx);
+//void _stats_dnode_decr(struct context *ctx, struct server *server, stats_dnode_field_t fidx);
+//void _stats_dnode_incr_by(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
+//void _stats_dnode_decr_by(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
+//void _stats_dnode_set_ts(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
+
 
 struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source, struct array *server_pool);
 void stats_destroy(struct stats *stats);

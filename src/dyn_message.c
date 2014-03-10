@@ -525,7 +525,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *nmsg;  /* new message */
     struct mbuf *nbuf; /* new mbuf */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
     ASSERT(msg->request);
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
@@ -603,7 +603,11 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     nmsg->frag_owner = msg->frag_owner;
     msg->frag_owner->nfrag++;
 
-    stats_pool_incr(ctx, conn->owner, fragments);
+    if (!conn->dyn_mode) {
+       stats_pool_incr(ctx, conn->owner, fragments);
+    } else {
+    	
+    }
 
     log_debug(LOG_VERB, "fragment msg into %"PRIu64" and %"PRIu64" frag id "
               "%"PRIu64"", msg->id, nmsg->id, msg->frag_id);
