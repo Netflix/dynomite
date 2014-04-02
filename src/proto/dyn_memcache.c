@@ -175,7 +175,7 @@ memcache_parse_req(struct msg *r)
         ch = *p;
 
         switch (state) {
-        log_debug(LOG_VVERB, "memcache parser: main switch:  state %d %d]", state, ch);
+        log_debug(LOG_DEBUG, "memcache parser: main switch:  state %d %d]", state, ch);
         case SW_START:
             if (ch == ' ') {
                 break;
