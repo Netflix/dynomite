@@ -739,6 +739,10 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
         idx = random_dispatch(dc->continuum, dc->ncontinuum, 0);
         break;
 
+    case DIST_SINGLE:
+        idx = 0;
+        break;
+
     default:
         NOT_REACHED();
         return NULL;

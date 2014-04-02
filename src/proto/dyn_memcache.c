@@ -171,13 +171,11 @@ memcache_parse_req(struct msg *r)
     ASSERT(r->pos != NULL);
     ASSERT(r->pos >= b->pos && r->pos <= b->last);
 
-    loga("memcache parser: state %d", state);
     for (p = r->pos; p < b->last; p++) {
         ch = *p;
-        loga("memcache parser: for : state %d", state);
 
         switch (state) {
-        loga("memcache parser: main switch:  state %d %d]", state, ch);
+        log_debug(LOG_VVERB, "memcache parser: main switch:  state %d %d]", state, ch);
         case SW_START:
             if (ch == ' ') {
                 break;
