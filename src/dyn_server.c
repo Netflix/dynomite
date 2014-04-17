@@ -842,7 +842,8 @@ server_pool_deinit(struct array *server_pool)
 struct datacenter *
 server_get_datacenter(struct server_pool *pool, struct string *dcname)
 {
-    for (uint32_t i = 0, len = array_n(&pool->datacenter); i < len; i++) {
+    uint32_t i, len;
+    for (i = 0, len = array_n(&pool->datacenter); i < len; i++) {
         struct datacenter *dc = array_get(&pool->datacenter, i);
         ASSERT(dc != NULL);
         ASSERT(dc->name != NULL);

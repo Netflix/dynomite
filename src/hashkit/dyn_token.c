@@ -78,8 +78,8 @@ add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
 
     /* magick! */
     uint32_t radix_val = 0x17179149;
-
-    for (int i = len - 1; i >= 0; i--) {
+    int i;
+    for (i = len - 1; i >= 0; i--) {
         product = radix_val * buf[i] + carry;
         buf[i] = (uint32_t)product;
         carry = product >> 32;
@@ -88,7 +88,7 @@ add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
     uint64_t sum = buf[len-1] + next_int;
     buf[len-1] = (uint32_t)sum;
     carry = sum >> 32;
-    for (int i = len-2; i >= 0; i--) {
+    for (i = len-2; i >= 0; i--) {
         sum = buf[i] + carry;
         buf[i] = (uint32_t)sum;
         carry = sum >> 32;
@@ -162,7 +162,8 @@ cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2)
         }
 
         if (t1-> len == t2->len) {
-            for (int i = 0; i < t1->len; i++) {
+            int i;
+            for (i = 0; i < t1->len; i++) {
                 uint32_t a = t1->mag[i];
                 uint32_t b = t2->mag[i];
                 if (a != b) {

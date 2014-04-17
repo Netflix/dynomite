@@ -54,17 +54,6 @@
     ACTION( out_queue_bytes,        STATS_GAUGE,        "current request bytes in outgoing queue")                  \
 
 
-//#define STATS_DNODE_CODEC(ACTION)                                                                                    \
-    /* client behavior */                                                                                           \
-//    ACTION( dnode_client_eof,             STATS_COUNTER,      "# eof on dnode client connections")                              \
-//    ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                           \
-//    ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                              \
-    /* dnode behavior */                                                                                             \
-//    ACTION( dnode_server_ejects,          STATS_COUNTER,      "# times backend server was ejected")                       \
-    /* forwarder behavior */                                                                                        \
-//    ACTION( dnode_forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
-/    ACTION( dnode_fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
-
 
 #define STATS_ADDR      "0.0.0.0"
 #define STATS_PORT      22222
@@ -151,12 +140,12 @@ typedef enum stats_server_field {
 } stats_server_field_t;
 #undef DEFINE_ACTION
 
-#define DEFINE_ACTION(_name, _type, _desc) STATS_DNODE_##_name,
-typedef enum stats_dnode_field {
-    STATS_DNODECODEC(DEFINE_ACTION)
-    STATS_DNODE_NFIELD
-} stats_dnode_field_t;
-#undef DEFINE_ACTION
+//#define DEFINE_ACTION(_name, _type, _desc) STATS_DNODE_##_name,
+//typedef enum stats_dnode_field {
+//    STATS_DNODECODEC(DEFINE_ACTION)
+//    STATS_DNODE_NFIELD
+//} stats_dnode_field_t;
+//#undef DEFINE_ACTION
 
 
 #if defined NC_STATS && NC_STATS == 1
@@ -201,26 +190,6 @@ typedef enum stats_dnode_field {
      _stats_server_set_ts(_ctx, _server, STATS_SERVER_##_name, _val);   \
 } while (0)
 
-/////for dnode stats
-//#define stats_dnode_incr(_ctx, _server, _name) do {                    \
-//    _stats_dnode_incr(_ctx, _server, STATS_DNODE_##_name);             \
-}// while (0)
-
-//#define stats_dnode_decr(_ctx, _server, _name) do {                    \
-//    _stats_dnode_decr(_ctx, _server, STATS_DNODE_##_name);             \
-//} while (0)
-
-//#define stats_dnode_incr_by(_ctx, _server, _name, _val) do {           \
-//    _stats_dnode_incr_by(_ctx, _server, STATS_DNODE_##_name, _val);    \
-//} while (0)
-
-//#define stats_dnode_decr_by(_ctx, _server, _name, _val) do {           \
-//    _stats_dnode_decr_by(_ctx, _server, STATS_DNODE_##_name, _val);    \
-}// while (0)
-
-//#define stats_dnode_set_ts(_ctx, _server, _name, _val) do {            \
-//     _stats_dnode_set_ts(_ctx, _server, STATS_DNODE_##_name, _val);    \
-//} while (0)
 
 #else
 
