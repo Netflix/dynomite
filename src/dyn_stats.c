@@ -92,6 +92,10 @@ stats_metric_init(struct stats_metric *stm)
         stm->value.timestamp = 0LL;
         break;
 
+    case STATS_STRING:
+        string_init(&stm->value.str);
+        break;
+
     default:
         NOT_REACHED();
     }
@@ -117,6 +121,8 @@ stats_pool_metric_init(struct array *stats_metric)
 {
     rstatus_t status;
     uint32_t i, nfield = STATS_POOL_NFIELD;
+
+    loga("STATS_POOL_NFIELD === %d", STATS_POOL_NFIELD);
 
     status = array_init(stats_metric, nfield, sizeof(struct stats_metric));
     if (status != NC_OK) {
@@ -366,6 +372,10 @@ stats_create_buf(struct stats *st)
     size += int64_max_digits;
     size += key_value_extra;
 
+    size += st->datacenter_str.len;
+    size += st->datacenter.len;
+    size += key_value_extra;
+
     /* server pools */
     for (i = 0; i < array_n(&st->sum); i++) {
         struct stats_pool *stp = array_get(&st->sum, i);
@@ -398,6 +408,15 @@ stats_create_buf(struct stats *st)
                 size += key_value_extra;
             }
         }
+
+        //  "seeds": "127.0.0.2, 127.0.0.3"
+        //int num_dc = 2;
+        //size += seed_extra;
+        //size += 5;  ; //seeds string
+        //for(j = 0; j< num_dc; j++) {  //one seed per DC
+        //    size += 15; //IP string 
+        //    size += 2;  // command and space
+        //}
     }
 
     /* footer */
@@ -509,6 +528,11 @@ stats_add_header(struct stats *st)
     }
 
     status = stats_add_num(st, &st->timestamp_str, cur_ts);
+    if (status != NC_OK) {
+        return status;
+    }
+
+    status = stats_add_string(st, &st->datacenter_str, &st->datacenter);
     if (status != NC_OK) {
         return status;
     }
@@ -742,6 +766,66 @@ stats_make_rsp(struct stats *st)
     return NC_OK;
 }
 
+
+static stats_cmd_t parse_request(int sd)
+{
+	char mesg[99999], *reqline[3], path[99999];
+	int rcvd, fd, bytes_read;
+
+	memset( (void*)mesg, (int)'\0', 99999 );
+
+	rcvd=recv(sd, mesg, 99999, 0);
+	    
+	if (rcvd<0)    // receive error
+            fprintf(stderr,("recv() error\n"));
+	else if (rcvd==0)    // receive socket closed
+	    fprintf(stderr,"Client disconnected upexpectedly.\n");
+	else    // message received
+	{
+		printf("%s", mesg);
+		reqline[0] = strtok (mesg, " \t\n");
+		if ( strncmp(reqline[0], "GET\0", 4)==0 )
+		{
+                      reqline[1] = strtok (NULL, " \t");
+		      reqline[2] = strtok (NULL, " \t\n");
+		      printf("0: %s\n", reqline[0]);
+		      printf("1: %s\n", reqline[1]);
+		      printf("2: %s\n", reqline[2]);
+                		     
+ 
+		      if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 )
+		      {
+		          write(sd, "HTTP/1.0 400 Bad Request\n", 25);
+		      }
+		      else
+		      {
+                          if ( strncmp(reqline[1], "/\0", 2)==0 )
+		              reqline[1] = "/info";
+
+                           if (strcmp(reqline[1], "/info") == 0) 
+                           {
+                               return STATS_INFO; 
+                           } 
+                         
+                           if (strcmp(reqline[1], "/ping") == 0)
+                           {
+                               return STATS_PING;
+                           }
+
+                           if (strcmp(reqline[1], "/describe") == 0)
+                           {
+                               return STATS_DESCRIBE;
+                           }
+ 
+                           return STATS_PING;
+		      }
+		}    	
+	}
+	
+        return 0;
+}
+
+
 static rstatus_t
 stats_send_rsp(struct stats *st)
 {
@@ -760,13 +844,22 @@ stats_send_rsp(struct stats *st)
         return NC_ERROR;
     }
 
-    log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+    stats_cmd_t cmd = parse_request(sd);
 
-    n = nc_sendn(sd, st->buf.data, st->buf.len);
-    if (n < 0) {
-        log_error("send stats on sd %d failed: %s", sd, strerror(errno));
-        close(sd);
-        return NC_ERROR;
+    log_debug(LOG_VERB, "cmd %d", cmd);
+
+    if (cmd == STATS_INFO) {
+       log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+
+       n = nc_sendn(sd, st->buf.data, st->buf.len);
+       if (n < 0) {
+          log_error("send stats on sd %d failed: %s", sd, strerror(errno));
+          close(sd);
+          return NC_ERROR;
+       }
+
+    } else {
+       loga("Unsupported cmd");
     }
 
     close(sd);
@@ -913,6 +1006,9 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
+
+    string_set_text(&st->datacenter_str, "datacenter");
+    string_set_text(&st->datacenter, "DC1");
 
     st->updated = 0;
     st->aggregate = 0;

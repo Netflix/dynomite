@@ -35,6 +35,7 @@
     /* forwarder behavior */                                                                                        \
     ACTION( forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+    ACTION( stats_count,            STATS_COUNTER,      "#stats request")                                           \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \
@@ -64,6 +65,7 @@ typedef enum stats_type {
     STATS_COUNTER,    /* monotonic accumulator */
     STATS_GAUGE,      /* non-monotonic accumulator */
     STATS_TIMESTAMP,  /* monotonic timestamp (in nsec) */
+    STATS_STRING,
     STATS_SENTINEL
 } stats_type_t;
 
@@ -73,6 +75,7 @@ struct stats_metric {
     union {
         int64_t   counter;      /* accumulating counter */
         int64_t   timestamp;    /* monotonic timestamp */
+        struct string str;     /* store string value */
     } value;
 };
 
@@ -122,6 +125,9 @@ struct stats {
     struct string       uptime_str;     /* uptime string */
     struct string       timestamp_str;  /* timestamp string */
 
+    struct string       datacenter_str;
+    struct string       datacenter;
+
     volatile int        aggregate;      /* shadow (b) aggregate? */
     volatile int        updated;        /* current (a) updated? */
 };
@@ -146,6 +152,14 @@ typedef enum stats_server_field {
 //    STATS_DNODE_NFIELD
 //} stats_dnode_field_t;
 //#undef DEFINE_ACTION
+
+
+
+typedef enum stats_cmd {
+    STATS_INFO,
+    STATS_PING,
+    STATS_DESCRIBE
+} stats_cmd_t;
 
 
 #if defined NC_STATS && NC_STATS == 1
