@@ -61,7 +61,7 @@ def main():
                       default="100",
                       help="Number of keys\n")
 
-   if len(sys.argv) == 1:
+    if len(sys.argv) == 1:
          print "Learn some usages: " + sys.argv[0] + " -h"
          sys.exit(1)
 

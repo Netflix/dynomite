@@ -115,7 +115,7 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
     ASSERT(ncontinuum != 0);
 
     begin = left = continuum;
-    end = right = continuum + ncontinuum;
+    end = right = continuum + ncontinuum - 1;
 
     while (left < right) {
         middle = left + (right - left) / 2;
