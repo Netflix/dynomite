@@ -122,8 +122,6 @@ stats_pool_metric_init(struct array *stats_metric)
     rstatus_t status;
     uint32_t i, nfield = STATS_POOL_NFIELD;
 
-    loga("STATS_POOL_NFIELD === %d", STATS_POOL_NFIELD);
-
     status = array_init(stats_metric, nfield, sizeof(struct stats_metric));
     if (status != NC_OK) {
         return status;
@@ -859,7 +857,7 @@ stats_send_rsp(struct stats *st)
        }
 
     } else {
-       loga("Unsupported cmd");
+       log_debug(LOG_VERB, "Unsupported cmd");
     }
 
     close(sd);
