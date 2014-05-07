@@ -375,8 +375,8 @@ core_loop(struct context *ctx)
 
     core_timeout(ctx);
 
-    if (core_run_gossip())
-       dyn_gos_run(ctx);
+    //if (core_run_gossip())
+    //   dyn_gos_run(ctx);
 
     stats_swap(ctx->stats);
 

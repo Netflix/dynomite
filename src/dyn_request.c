@@ -607,7 +607,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         // that will bork the request sent to secondary dcs
         struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
 
-        for (uint32_t i = 0; i < dc_cnt; i++) {
+        uint32_t i;
+        for (i = 0; i < dc_cnt; i++) {
             dc = array_get(&pool->datacenter, i);
             struct msg *dc_msg;
             

@@ -35,6 +35,7 @@
     /* forwarder behavior */                                                                                        \
     ACTION( forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+    ACTION( stats_count,            STATS_COUNTER,      "#stats request")                                           \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \
@@ -75,6 +76,7 @@ typedef enum stats_type {
     STATS_COUNTER,    /* monotonic accumulator */
     STATS_GAUGE,      /* non-monotonic accumulator */
     STATS_TIMESTAMP,  /* monotonic timestamp (in nsec) */
+    STATS_STRING,
     STATS_SENTINEL
 } stats_type_t;
 
@@ -84,6 +86,7 @@ struct stats_metric {
     union {
         int64_t   counter;      /* accumulating counter */
         int64_t   timestamp;    /* monotonic timestamp */
+        struct string str;     /* store string value */
     } value;
 };
 
@@ -133,6 +136,9 @@ struct stats {
     struct string       uptime_str;     /* uptime string */
     struct string       timestamp_str;  /* timestamp string */
 
+    struct string       datacenter_str;
+    struct string       datacenter;
+
     volatile int        aggregate;      /* shadow (b) aggregate? */
     volatile int        updated;        /* current (a) updated? */
 };
@@ -151,6 +157,12 @@ typedef enum stats_server_field {
 } stats_server_field_t;
 #undef DEFINE_ACTION
 
+
+typedef enum stats_cmd {
+    STATS_INFO,
+    STATS_PING,
+    STATS_DESCRIBE
+} stats_cmd_t;
 
 
 #if defined NC_STATS && NC_STATS == 1
@@ -195,26 +207,6 @@ typedef enum stats_server_field {
      _stats_server_set_ts(_ctx, _server, STATS_SERVER_##_name, _val);   \
 } while (0)
 
-/////for dnode stats
-//#define stats_dnode_incr(_ctx, _server, _name) do {                    \
-//    _stats_dnode_incr(_ctx, _server, STATS_DNODE_##_name);             \
-}// while (0)
-
-//#define stats_dnode_decr(_ctx, _server, _name) do {                    \
-//    _stats_dnode_decr(_ctx, _server, STATS_DNODE_##_name);             \
-//} while (0)
-
-//#define stats_dnode_incr_by(_ctx, _server, _name, _val) do {           \
-//    _stats_dnode_incr_by(_ctx, _server, STATS_DNODE_##_name, _val);    \
-//} while (0)
-
-//#define stats_dnode_decr_by(_ctx, _server, _name, _val) do {           \
-//    _stats_dnode_decr_by(_ctx, _server, STATS_DNODE_##_name, _val);    \
-}// while (0)
-
-//#define stats_dnode_set_ts(_ctx, _server, _name, _val) do {            \
-//     _stats_dnode_set_ts(_ctx, _server, STATS_DNODE_##_name, _val);    \
-//} while (0)
 
 #else
 

@@ -45,7 +45,8 @@ vnode_datacenter_verify_continuum(void *elem, void *data)
           vnode_item_cmp);
 
     log_debug(LOG_VERB, "**** printing continuums for dc '%.*s'", dc->name->len, dc->name->data);
-    for (uint32_t i = 0; i < dc->ncontinuum; i++) {
+    uint32_t i;
+    for (i = 0; i < dc->ncontinuum; i++) {
         struct continuum *c = &dc->continuum[i];
         log_debug(LOG_VERB, "next c[%d]: idx = %u, token->mag = %u", i, c->index, c->token->mag[0]);
     }
@@ -64,7 +65,8 @@ vnode_update(struct server_pool *pool)
         return NC_ERROR;
     }
 
-    for (int i = 0, len = array_n(&pool->peers); i < len; i++) {
+    int i, len;
+    for (i = 0, len = array_n(&pool->peers); i < len; i++) {
         struct server *peer = array_get(&pool->peers, i);
         struct datacenter *dc = server_get_datacenter(pool, &peer->dc);
 
@@ -85,7 +87,8 @@ vnode_update(struct server_pool *pool)
         dc->continuum = continuum;
         dc->nserver_continuum = new_cnt;
 
-        for (int j = 0; j < token_cnt; j++) {
+        int j;
+        for (j = 0; j < token_cnt; j++) {
             struct continuum *c = &dc->continuum[orig_cnt + j];
             c->index = i;
             c->value = 0;  /* set this to an empty value, only used by ketama */
@@ -112,7 +115,7 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
     ASSERT(ncontinuum != 0);
 
     begin = left = continuum;
-    end = right = continuum + ncontinuum;
+    end = right = continuum + ncontinuum - 1;
 
     while (left < right) {
         middle = left + (right - left) / 2;

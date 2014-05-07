@@ -68,7 +68,6 @@ dyn_parse_core(struct msg *r)
     for (p = r->pos; p < b->last; p++) {
         ch = *p;
         switch (state) {
-	         log_debug(LOG_DEBUG, "parser core: main switch:  state %d %d]", state, ch);
 		 case DYN_START:
                     log_debug(LOG_DEBUG, "DYN_START");
 		    if (ch == ' ') {
@@ -322,10 +321,6 @@ void
 dyn_parse_req(struct msg *r)
 {
     log_debug(LOG_DEBUG, "I am parsing a request !!!!!!!!!! Yah!!!!!!!");
-
-    //if (r->dyn_state == DYN_DONE) {
-    //   return memcache_parse_req(r);
-    //}
 	
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;   	
@@ -334,7 +329,6 @@ dyn_parse_req(struct msg *r)
              r->state = 0;
              r->result = MSG_PARSE_OK;
              r->dyn_state = DYN_DONE;
-             //return memcache_parse_req(r);
              return;
          }
 	    
@@ -351,10 +345,6 @@ void dyn_parse_rsp(struct msg *r)
 {
     log_debug(LOG_DEBUG, "I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
 
-    //if (r->dyn_state == DYN_DONE) {
-    //    return memcache_parse_rsp(r);
-    //}
-	
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;
 	 if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
@@ -362,7 +352,6 @@ void dyn_parse_rsp(struct msg *r)
 	     r->state = 0;
              r->result = MSG_PARSE_OK;
              r->dyn_state = DYN_DONE;
-	     //return memcache_parse_rsp(r);
              return;
 	 }
 	 return memcache_parse_rsp(r);
