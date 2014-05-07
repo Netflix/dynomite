@@ -25,7 +25,7 @@ rstatus_t dyn_ring_init(struct array *peers, struct server_pool *sp)
 
 rstatus_t dyn_gos_run(struct context *ctx)
 {
-        loga("Running gossip serviceeeeeeeeeeeeeeeeeeeeeeeeeee");
+        log_debug(LOG_DEBUG, "Running gossip serviceeeeeeeeeeeeeeeeeeeeeeeeeee");
         rstatus_t status;
         struct server_pool *sp = array_get(&ctx->pool, 0); //use the 1st one only
 
@@ -34,24 +34,28 @@ rstatus_t dyn_gos_run(struct context *ctx)
 
         ASSERT(ncontinuum > 0);
 
+        if (ncontinuum == 1) {
+           return NC_OK;
+        }
+
         //struct server *rnode = array_get(peers, random() % ncontinuum);
         struct server *rnode = array_get(peers, 1);
-
+  
         if (rnode->is_local) {
-             loga("dyn_gossip picked a local node");
+             log_debug(LOG_DEBUG, "dyn_gossip picked a local node");
         } else {
-             loga("dyn_gossip picked a peer node");
+             log_debug(LOG_DEBUG, "dyn_gossip picked a peer node");
              struct conn * conn = dnode_peer_conn(rnode);
              if (conn == NULL) {
                 //running out of connection due to memory exhaust
-                 loga("Unable to obtain a connection object");
+                 log_debug(LOG_DEBUG, "Unable to obtain a connection object");
                  return NC_ERROR;
              }
 
              status = dnode_peer_connect(ctx, rnode, conn);
              if (status != NC_OK ) {
                   dnode_peer_close(ctx, conn);
-                  loga("Error happened in dyn_gos_run");
+                  log_debug(LOG_DEBUG, "Error happened in dyn_gos_run");
                   return NC_OK;
              }
 
@@ -60,14 +64,14 @@ rstatus_t dyn_gos_run(struct context *ctx)
                  status = event_add_out(ctx->evb, conn);
                  if (status != NC_OK) {
                       conn->err = errno;
-                      loga("Error happened in calling event_add_out");
+                      log_debug(LOG_DEBUG, "Error happened in calling event_add_out");
                       return NC_ERROR;
                   }
              }
 
              struct mbuf *nbuf = mbuf_get();
              if (nbuf == NULL) {
-                 loga("Error happened in calling mbuf_get");
+                 log_debug(LOG_DEBUG, "Error happened in calling mbuf_get");
                  return NC_ERROR;
              }
 

@@ -728,6 +728,9 @@ server_pool_run(struct server_pool *pool)
     case DIST_RANDOM:
         return random_update(pool);
 
+    case DIST_SINGLE:
+        return NC_OK;
+
     default:
         NOT_REACHED();
         return NC_ERROR;
