@@ -46,6 +46,7 @@
     ACTION( DIST_MODULA,        modula        ) \
     ACTION( DIST_RANDOM,        random        ) \
     ACTION( DIST_VNODE,         vnode         ) \
+    ACTION( DIST_SINGLE,        single        ) \
 
 #define DEFINE_ACTION(_hash, _name) _hash,
 typedef enum hash_type {

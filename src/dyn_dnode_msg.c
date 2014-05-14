@@ -67,11 +67,9 @@ dyn_parse_core(struct msg *r)
 	
     for (p = r->pos; p < b->last; p++) {
         ch = *p;
-        //loga("dyn parser req: for : state %d", state);
         switch (state) {
-	         //loga("parser core: main switch:  state %d %d]", state, ch);
 		 case DYN_START:
-                    //loga("DYN_START");
+                    log_debug(LOG_DEBUG, "DYN_START");
 		    if (ch == ' ') {
 		         break;
 		    } else if (isdigit(ch)) {
@@ -84,22 +82,22 @@ dyn_parse_core(struct msg *r)
                     break;
 
                 case DYN_MAGIC_NUMBER:
-                    //loga("DYN_MAGIC_NUMBER");
-                    //loga("num = %d", num);
+                    log_debug(LOG_DEBUG, "DYN_MAGIC_NUMBER");
+                    log_debug(LOG_DEBUG, "num = %d", num);
                     if (isdigit(ch))  {
                          num = num*10 + (ch - '0');
                     } else {
                          if (num == MAGIC_NUMBER) {
-                                   state = DYN_SPACES_BEFORE_MSG_ID;
+                              state = DYN_SPACES_BEFORE_MSG_ID;
                          } else {
-                                   goto error;
+                              goto error;
                          }
                     }
 
-		            break;
+		    break;
 
                 case DYN_SPACES_BEFORE_MSG_ID:
-                    //loga("DYN_SPACES_BEFORE_MSG_ID");
+                    log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_MSG_ID");
                     if (ch == ' ') {
                         break;
                     } else if (isdigit(ch)) {
@@ -110,13 +108,13 @@ dyn_parse_core(struct msg *r)
                     break;                       
            
                 case DYN_MSG_ID:
-                    //loga("DYN_MSG_ID");
-                    //loga("num = %d", num);
+                    log_debug(LOG_DEBUG, "DYN_MSG_ID");
+                    log_debug(LOG_DEBUG, "num = %d", num);
                     if (isdigit(ch))  {
                         num = num*10 + (ch - '0'); 
                     } else {  
                         if (num > 0) {
-                           //loga("MSG ID : %d", num);
+                           log_debug(LOG_DEBUG, "MSG ID : %d", num);
                            dmsg->id = num;
                            state = DYN_SPACES_BEFORE_TYPE_ID;
                         } else {
@@ -126,7 +124,7 @@ dyn_parse_core(struct msg *r)
                     break;                         
               
                 case DYN_SPACES_BEFORE_TYPE_ID:
-                    //loga("DYN_SPACES_BEFORE_TYPE_ID");
+                    log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
                     if (ch == ' ') {
                         break;
                     } else if (isdigit(ch)) {
@@ -137,13 +135,13 @@ dyn_parse_core(struct msg *r)
                     break;
 
                 case DYN_TYPE_ID:
-                    //loga("DYN_TYPE_ID");
-                    //loga("num = %d", num);
+                    log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+                    log_debug(LOG_DEBUG, "num = %d", num);
                     if (isdigit(ch))  {
                         num = num*10 + (ch - '0');
                     } else {
                         if (num > 0)  {
-                           //loga("VERB ID: %d", num);
+                           log_debug(LOG_DEBUG, "VERB ID: %d", num);
                            dmsg->type = num;
                            state = DYN_SPACES_BEFORE_VERSION;
                         } else {
@@ -154,7 +152,7 @@ dyn_parse_core(struct msg *r)
                     break;
 
                 case DYN_SPACES_BEFORE_VERSION:
-                    //loga("DYN_SPACES_BEFORE_VERSION");
+                    log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
                     if (ch == ' ') {
                         break;
                     } else if (isdigit(ch)) {
@@ -164,13 +162,13 @@ dyn_parse_core(struct msg *r)
                     break;
 
                 case DYN_VERSION:
-                   //loga("DYN_VERSION");
-                   //loga("num = %d", num);
+                   log_debug(LOG_DEBUG, "DYN_VERSION");
+                   log_debug(LOG_DEBUG, "num = %d", num);
                    if (isdigit(ch))  {
                         num = num*10 + (ch - '0');
                     } else {
                         if (ch == CR)  {
-                           //loga("VERSION : %d", num);
+                           log_debug(LOG_DEBUG, "VERSION : %d", num);
                            dmsg->version = num;
                            state = DYN_CRLF_BEFORE_STAR;
                         } else {
@@ -181,7 +179,7 @@ dyn_parse_core(struct msg *r)
                     break;
        
                 case DYN_CRLF_BEFORE_STAR:
-                    //loga("DYN_CRLF_BEFORE_STAR");
+                    log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_STAR");
                     if (ch == LF)  {
                         state = DYN_STAR;
                     } else {
@@ -191,7 +189,7 @@ dyn_parse_core(struct msg *r)
                     break;
 
                 case DYN_STAR:
-                   //loga("DYN_STAR");
+                   log_debug(LOG_DEBUG, "DYN_STAR");
                    if (ch == '*') {
                        state = DYN_DATA_LEN;
                        num = 0;
@@ -202,13 +200,13 @@ dyn_parse_core(struct msg *r)
                    break;
 
                 case DYN_DATA_LEN:
-                   //loga("DYN_DATA_LEN");
-                   //loga("num = %d", num);
+                   log_debug(LOG_DEBUG, "DYN_DATA_LEN");
+                   log_debug(LOG_DEBUG, "num = %d", num);
                    if (isdigit(ch))  {
                         num = num*10 + (ch - '0');
                    } else {
                        if (ch == ' ')  {
-                          //loga("Data len: %d", num);
+                          log_debug(LOG_DEBUG, "Data len: %d", num);
                           dmsg->mlen = num;
                           state = DYN_SPACE_BEFORE_DATA;
                           num = 0;
@@ -219,12 +217,12 @@ dyn_parse_core(struct msg *r)
                    break;
 
                 case DYN_SPACE_BEFORE_DATA:
-                   //loga("DYN_SPACE_BEFORE_DATA");
+                   log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
                    state = DYN_DATA;
                    break;
 
                 case DYN_DATA:
-                   //loga("DYN_DATA");
+                   log_debug(LOG_DEBUG, "DYN_DATA");
                    p -= 1;
                    if (dmsg->mlen > 0)  {
                         dmsg->data = p;
@@ -237,10 +235,9 @@ dyn_parse_core(struct msg *r)
                    break;
                         
                 case DYN_CRLF_BEFORE_DONE:
-                   //loga("DYN_CRLF_BEFORE_DONE");
+                   log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
           
                    if (ch == CR)  {
-                       //p += 1;
                        if (*(p+1) == LF) {
                            state = DYN_DONE;
                        } else {
@@ -253,7 +250,7 @@ dyn_parse_core(struct msg *r)
                    break;
 
                 case DYN_DONE:
-                   //loga("DYN_DONE");
+                   log_debug(LOG_DEBUG, "DYN_DONE");
                    r->pos = p+1;
                    r->dyn_state = DYN_DONE; 
                    b->pos = p+1;
@@ -261,8 +258,8 @@ dyn_parse_core(struct msg *r)
                    break;
 
 		default:
-                   NOT_REACHED();
-                   break;
+		   NOT_REACHED();
+	           break;
 		        	
 		}
 		
@@ -271,8 +268,8 @@ dyn_parse_core(struct msg *r)
     done:
        dmsg->owner = r;
        dmsg->source_address = r->owner->addr;
-       //loga("at done with p at %d", p);
-       dmsg_dump(r->dmsg);
+       log_debug(LOG_DEBUG, "at done with p at %d", p);
+       //dmsg_dump(r->dmsg);
        log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
                             "type %d state %d rpos %d of %d", r->id, r->result, r->type,
                             r->dyn_state, r->pos - b->pos, b->last - b->pos);
@@ -296,14 +293,14 @@ dyn_parse_core(struct msg *r)
        return true;
 
     skip:
-       //loga("This is not a dyn message");
+       log_debug(LOG_DEBUG, "This is not a dyn message");
        dmsg->type = DMSG_UNKNOWN;
        dmsg->owner = r;
        dmsg->source_address = r->owner->addr;
        return true;
 
     error:
-       //loga("at error");
+       log_debug(LOG_DEBUG, "at error");
        r->result = MSG_PARSE_ERROR;
        r->state = state;
        errno = EINVAL;
@@ -323,12 +320,12 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-    //loga("I am parsing a request !!!!!!!!!! Yah!!!!!!!");
+    log_debug(LOG_DEBUG, "I am parsing a request !!!!!!!!!! Yah!!!!!!!");
 	
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;   	
          if (dmsg->type == GOSSIP_PING) { //replace with switch as it will be big
-             //loga("I got a GOSSIP_PINGGGGGGGGGGGGGGGGGGG"); 
+             log_debug(LOG_DEBUG, "I got a GOSSIP_PINGGGGGGGGGGGGGGGGGGG"); 
              r->state = 0;
              r->result = MSG_PARSE_OK;
              r->dyn_state = DYN_DONE;
@@ -339,19 +336,19 @@ dyn_parse_req(struct msg *r)
     } 
    
     //bad case
-    //loga("Bad message - cannot parse");  //fix me to do something
+    log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
     msg_dump(r);
 }
 
 
 void dyn_parse_rsp(struct msg *r)
 {
-    //loga("I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
+    log_debug(LOG_DEBUG, "I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
 
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;
 	 if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
-	     //loga("I got a GOSSIP_PING_REPLYYYYYYYYYYYYYYYYYYYYYYYYYYYYY");
+	     log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLYYYYYYYYYYYYYYYYYYYYYYYYYYYYY");
 	     r->state = 0;
              r->result = MSG_PARSE_OK;
              r->dyn_state = DYN_DONE;
@@ -361,7 +358,7 @@ void dyn_parse_rsp(struct msg *r)
    } 
 
    //bad case
-   //loga("Bad message - cannot parse");  //fix me to do something
+   log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
    msg_dump(r);
 
    //r->state = 0;
@@ -399,7 +396,7 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-    log_debug(LOG_VERB, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
+    log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
 
     STAILQ_FOREACH(mbuf, &dmsg->mhdr, next) {
         uint8_t *p, *q;
@@ -516,7 +513,7 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 
     struct string s;
 
-    log_debug(LOG_VERB, "dmsg process: type %d", dmsg->type);
+    log_debug(LOG_DEBUG, "dmsg process: type %d", dmsg->type);
     switch(dmsg->type) {
         case DMSG_DEBUG:
            s.len = dmsg->mlen;
@@ -534,11 +531,11 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
           break;
 
         case GOSSIP_PING:
-          log_debug(LOG_VERB, "I have got a ping msgggggg!!!!!!");
+          log_debug(LOG_DEBUG, "I have got a ping msgggggg!!!!!!");
           return true;
  
         default:
-          log_debug(LOG_VERB, "nothing to do");
+          log_debug(LOG_DEBUG, "nothing to do");
     }
        
     return false;
