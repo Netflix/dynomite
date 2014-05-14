@@ -1,11 +1,11 @@
 # Define the package version numbers and the bug reporting address
 m4_define([NC_MAJOR], 0)
-m4_define([NC_MINOR], 2)
-m4_define([NC_PATCH], 4)
-m4_define([NC_BUGS], [manj@twitter.com])
+m4_define([NC_MINOR], 1)
+m4_define([NC_PATCH], 19)
+m4_define([NC_BUGS], [mdo@netflix.com])
 
 # Initialize autoconf
-AC_PREREQ([2.64])
+AC_PREREQ([2.68])
 AC_INIT([dynomite], [NC_MAJOR.NC_MINOR.NC_PATCH], [NC_BUGS])
 AC_CONFIG_SRCDIR([src/dynomite.c])
 AC_CONFIG_AUX_DIR([config])
@@ -13,7 +13,7 @@ AC_CONFIG_HEADERS([config.h:config.h.in])
 AC_CONFIG_MACRO_DIR([m4])
 
 # Initialize automake
-AM_INIT_AUTOMAKE([1.9 foreign])
+AM_INIT_AUTOMAKE([1.11 foreign])
 
 # Define macro variables for the package version numbers
 AC_DEFINE(NC_VERSION_MAJOR, NC_MAJOR, [Define the major version number])
