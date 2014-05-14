@@ -56,6 +56,10 @@ static struct stats_desc stats_server_desc[] = {
 };
 #undef DEFINE_ACTION
 
+#define  MAX_HTTP_HEADER_SIZE 1024
+struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
+struct string endline = string("\r\n");
+
 void
 stats_describe(void)
 {
@@ -848,8 +852,23 @@ stats_send_rsp(struct stats *st)
 
     if (cmd == STATS_INFO) {
        log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+       uint8_t http_header[MAX_HTTP_HEADER_SIZE]; 
+       memset( (void*)http_header, (int)'\0', MAX_HTTP_HEADER_SIZE );
+       n = nc_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %d \r\n\r\n", header_str.len, header_str.data, st->buf.len);
+
+       if (n < 0 || n >= MAX_HTTP_HEADER_SIZE) {
+              return NC_ERROR;
+       }
+
+       n = nc_sendn(sd, http_header, n);
+       if (n < 0) {
+          log_error("send http headers on sd %d failed: %s", sd, strerror(errno));
+          close(sd);
+          return NC_ERROR;
+       }
 
        n = nc_sendn(sd, st->buf.data, st->buf.len);
+
        if (n < 0) {
           log_error("send stats on sd %d failed: %s", sd, strerror(errno));
           close(sd);
