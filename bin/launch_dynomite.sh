@@ -10,9 +10,15 @@ typeset -x `stat --printf "userowner=%U\ngroupowner=%G\n" $0`
 mkdir -p $LOG_DIR
 chown -R $userowner:nac  $LOG_DIR
 
+DEBUG_STR="-v0"
+
+if [ ! -z "$DYN_DEBUG_LEVEL" ] ; then
+   DEBUG_STR="-v$DYN_DEBUG_LEVEL"
+fi
+
 
 # note that we do not use 'su - username .... ' , because we want to keep the env settings that we have done so far
-cmd="$DYN_DIR/bin/dynomite -c $CONF_DIR/dynomite.yml -d --output=$LOG_DIR/dynomite.log  > $LOG_DIR/dynomite_start-$(date +%Y%m%d_%H:%M:%S).out 2>&1 &"
+cmd="$DYN_DIR/bin/dynomite -c $CONF_DIR/dynomite.yml -d --output=$LOG_DIR/dynomite.log  $DEBUG_STR  > $LOG_DIR/dynomite_start-$(date +%Y%m%d_%H:%M:%S).out 2>&1 &"
 if [ $USER != "root" ];then
     exec $cmd
 else
