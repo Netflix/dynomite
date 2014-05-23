@@ -50,9 +50,6 @@ dyn_parse_core(struct msg *r)
     uint8_t ch;
     uint32_t num = 0;
 	    
-	//if (r->dyn_state == DYN_DONE)
-	//    return memcache_parse_req(r);
-	
     state = r->dyn_state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);    
 
@@ -64,6 +61,8 @@ dyn_parse_core(struct msg *r)
            goto error; //should count as OOM error
         }    
     }
+
+    //log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn parser: parsed req %"PRIu64" res %d type %d", r->id, r->result, r->type, r->dyn_state);
 	
     for (p = r->pos; p < b->last; p++) {
         ch = *p;
@@ -311,7 +310,6 @@ dyn_parse_core(struct msg *r)
        return false;
 
     return true;    //fix me
-    //return memcache_parse_req(r);  //fix me
 }
 
 
@@ -320,18 +318,18 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-    log_debug(LOG_DEBUG, "I am parsing a request !!!!!!!!!! Yah!!!!!!!");
-	
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;   	
          if (dmsg->type == GOSSIP_PING) { //replace with switch as it will be big
-             log_debug(LOG_DEBUG, "I got a GOSSIP_PINGGGGGGGGGGGGGGGGGGG"); 
+             log_debug(LOG_DEBUG, "got a GOSSIP_PING"); 
              r->state = 0;
              r->result = MSG_PARSE_OK;
              r->dyn_state = DYN_DONE;
              return;
          }
-	    
+
+         if (r->redis)
+             return redis_parse_req(r);  
 	 return memcache_parse_req(r);
     } 
    
@@ -343,17 +341,17 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
-    log_debug(LOG_DEBUG, "I am parsing a response !!!!!!!!!! Hooray!!!!!!!");
-
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;
 	 if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
-	     log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLYYYYYYYYYYYYYYYYYYYYYYYYYYYYY");
+	     log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLY");
 	     r->state = 0;
              r->result = MSG_PARSE_OK;
              r->dyn_state = DYN_DONE;
              return;
 	 }
+         if (r->redis)
+            return redis_parse_rsp(r);
 	 return memcache_parse_rsp(r);
    } 
 

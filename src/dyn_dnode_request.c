@@ -134,7 +134,7 @@ dnode_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg
     struct mbuf *nbuf = mbuf_get();
      if (nbuf == NULL) {
          loga("Error happened in calling mbuf_get");
-         //return NC_ERROR;
+         return;  //TODOs: need to address this further
      }
 
      dc_conn->enqueue_outq(ctx, dc_conn, msg);
@@ -145,7 +145,6 @@ dnode_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg
      if (pmsg == NULL) {
          mbuf_put(nbuf);
          return;
-         //return NC_ERROR;
      }
 
      //dyn message's meta data
@@ -169,7 +168,6 @@ dnode_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg
 
 
     if (dnode_req_done(dc_conn, msg)) {
-       loga("This req is done yettttttttttttttttttttttttttttt!");
        status = event_add_out(ctx->evb, dc_conn);
        if (status != NC_OK) {
           dc_conn->err = errno;

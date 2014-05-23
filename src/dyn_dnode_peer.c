@@ -260,7 +260,7 @@ dnode_peer_conn(struct server *server)
     pool = server->owner;
 
     if (server->ns_conn_q < pool->d_connections) {
-        return conn_get_peer(server, false);
+        return conn_get_peer(server, false, pool->redis);
     }
     ASSERT(server->ns_conn_q == pool->d_connections);
 
