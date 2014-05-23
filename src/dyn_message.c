@@ -285,9 +285,17 @@ msg_get(struct conn *conn, bool request, bool redis)
 
     if (redis) {
         if (request) {
-            msg->parser = redis_parse_req;
+            if (conn->dyn_mode) {
+               msg->parser = dyn_parse_req;
+            } else {
+               msg->parser = redis_parse_req;
+            }
         } else {
-            msg->parser = redis_parse_rsp;
+            if (conn->dyn_mode) {
+               msg->parser = dyn_parse_rsp;
+            } else {
+               msg->parser = redis_parse_rsp;
+            }
         }
         msg->pre_splitcopy = redis_pre_splitcopy;
         msg->post_splitcopy = redis_post_splitcopy;

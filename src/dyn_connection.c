@@ -172,7 +172,7 @@ _conn_get(void)
 
 
 struct conn *
-conn_get_peer(void *owner, bool client)
+conn_get_peer(void *owner, bool client, bool redis)
 {
     struct conn *conn;
 
@@ -181,6 +181,7 @@ conn_get_peer(void *owner, bool client)
         return NULL;
     }
 
+    conn->redis = redis ? 1 : 0;
     conn->dnode_client = client? 1 : 0;   
     conn->dyn_mode = 1;
 
