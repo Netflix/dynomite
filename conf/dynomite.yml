@@ -1,6 +1,7 @@
 dyn_o_mite:
   auto_eject_hosts: false
-  distribution: single
+  datacenter: DC1
+  distribution: vnode
   dyn_listen: 127.0.0.1:8101
   dyn_read_timeout: 200000
   dyn_seed_provider: simple_provider
@@ -13,3 +14,4 @@ dyn_o_mite:
   servers:
   - 127.0.0.1:11211:1
   timeout: 10000
+  tokens: 437425602,1122629340,1683099499,2400294391,2772631304,4271597971
