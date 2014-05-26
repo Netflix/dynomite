@@ -6,7 +6,7 @@
 #ifndef _DYN_DNODE_MSG_H_
 #define _DYN_DNODE_MSG_H_
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 
 typedef enum dmsg_version {

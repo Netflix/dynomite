@@ -22,14 +22,15 @@
 
 #include <sys/uio.h>
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_client.h>
-#include <dyn_proxy.h>
-#include <dyn_dnode_server.h>
-#include <dyn_dnode_peer.h>
-#include <dyn_dnode_client.h>
-#include <proto/dyn_proto.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_client.h"
+#include "dyn_proxy.h"
+#include "dyn_dnode_server.h"
+#include "dyn_dnode_peer.h"
+#include "dyn_dnode_client.h"
+
+#include "proto/dyn_proto.h"
 
 /*
  *                   nc_connection.[ch]

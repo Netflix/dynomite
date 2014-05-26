@@ -23,7 +23,7 @@
 #ifndef _DYN_PROXY_H_
 #define _DYN_PROXY_H_
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 void proxy_ref(struct conn *conn, void *owner);
 void proxy_unref(struct conn *conn);

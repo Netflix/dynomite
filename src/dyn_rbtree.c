@@ -20,7 +20,7 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 void
 rbtree_node_init(struct rbnode *node)

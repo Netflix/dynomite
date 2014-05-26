@@ -22,12 +22,14 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <dyn_core.h>
-#include <dyn_conf.h>
-#include <dyn_server.h>
-#include <dyn_proxy.h>
-#include <dyn_dnode_server.h>
-#include <dyn_dnode_peer.h>
+
+#include "dyn_core.h"
+#include "dyn_conf.h"
+#include "dyn_server.h"
+#include "dyn_proxy.h"
+#include "dyn_dnode_server.h"
+#include "dyn_dnode_peer.h"
+#include "dyn_gossip.h"
 
 
 
@@ -137,6 +139,10 @@ core_ctx_create(struct instance *nci)
         return NULL;
     }
 
+    //struct server_pool * sp = array_get(&ctx->pool, 0);
+    //loga("name is ....................... %s", sp->name);
+    //gossip_create(NULL);
+    gossip_pool_init(ctx);
 
     log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 

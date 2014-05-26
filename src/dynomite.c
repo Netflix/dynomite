@@ -29,9 +29,9 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 
-#include <dyn_core.h>
-#include <dyn_conf.h>
-#include <dyn_signal.h>
+#include "dyn_core.h"
+#include "dyn_conf.h"
+#include "dyn_signal.h"
 
 #define NC_CONF_PATH        "conf/dynomite.yml"
 

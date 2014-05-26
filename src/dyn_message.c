@@ -25,9 +25,9 @@
 
 #include <sys/uio.h>
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <proto/dyn_proto.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "proto/dyn_proto.h"
 
 #if (IOV_MAX > 128)
 #define NC_IOV_MAX 128

@@ -23,7 +23,7 @@
 #ifndef _DYN_CONNECTION_H_
 #define _DYN_CONNECTION_H_
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 typedef rstatus_t (*conn_recv_t)(struct context *, struct conn*);
 typedef struct msg* (*conn_recv_next_t)(struct context *, struct conn *, bool);

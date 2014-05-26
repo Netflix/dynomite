@@ -6,12 +6,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <dyn_core.h>
-#include <dyn_conf.h>
-#include <dyn_ring.h>
-#include <dyn_dnode_peer.h>
-#include <dyn_server.h>
-#include <dyn_token.h>
+#include "dyn_core.h"
+#include "dyn_conf.h"
+#include "dyn_ring.h"
+#include "dyn_dnode_peer.h"
+#include "dyn_server.h"
+#include "hashkit/dyn_token.h"
 
 
 rstatus_t dyn_ring_init(struct array *peers, struct server_pool *sp)

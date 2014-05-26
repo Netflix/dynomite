@@ -27,7 +27,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 static struct logger logger;
 

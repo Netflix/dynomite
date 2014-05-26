@@ -3,8 +3,8 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-#include <dyn_core.h>
-#include <dyn_dnode_peer.h>
+#include "dyn_core.h"
+#include "dyn_dnode_peer.h"
 
 
 struct msg *

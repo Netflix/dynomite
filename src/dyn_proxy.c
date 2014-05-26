@@ -22,9 +22,9 @@
 
 #include <sys/un.h>
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_proxy.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_proxy.h"
 
 void
 proxy_ref(struct conn *conn, void *owner)

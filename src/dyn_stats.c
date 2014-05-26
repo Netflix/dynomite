@@ -28,8 +28,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include <dyn_core.h>
-#include <dyn_server.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
 
 struct stats_desc {
     char *name; /* stats name */

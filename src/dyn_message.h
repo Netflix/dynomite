@@ -23,8 +23,8 @@
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
 
-#include <dyn_core.h>
-#include <dyn_dnode_msg.h>
+#include "dyn_core.h"
+#include "dyn_dnode_msg.h"
 
 
 typedef void (*msg_parse_t)(struct msg *);

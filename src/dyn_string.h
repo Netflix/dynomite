@@ -24,7 +24,8 @@
 #define _DYN_STRING_H_
 
 #include <string.h>
-#include <dyn_core.h>
+
+#include "dyn_core.h"
 
 struct string {
     uint32_t len;   /* string length */

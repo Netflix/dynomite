@@ -5,10 +5,10 @@
 
 #include <ctype.h>
 
-#include <dyn_core.h>
-#include <dyn_proto.h>
-#include <dyn_dnode_msg.h>
+#include "dyn_core.h"
+#include "dyn_dnode_msg.h"
 
+#include "proto/dyn_proto.h"
 
 
 static uint64_t dmsg_id;          /* message id counter */

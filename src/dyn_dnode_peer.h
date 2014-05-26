@@ -6,8 +6,8 @@
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
 
-#include <dyn_core.h>
-#include <dyn_server.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
 
 
 void dnode_peer_ref(struct conn *conn, void *owner);

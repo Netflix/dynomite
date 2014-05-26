@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 /*
  * String (struct string) is a sequence of unsigned char objects terminated

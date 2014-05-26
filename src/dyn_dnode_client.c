@@ -3,9 +3,9 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_dnode_client.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_dnode_client.h"
 
 
 void

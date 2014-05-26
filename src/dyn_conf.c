@@ -3,10 +3,6 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-/*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -25,12 +21,13 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-#include <dyn_conf.h>
-#include <dyn_server.h>
-#include <dyn_token.h>
-#include <dyn_dnode_peer.h>
-#include <proto/dyn_proto.h>
+#include "dyn_core.h"
+#include "dyn_conf.h"
+#include "dyn_server.h"
+#include "dyn_dnode_peer.h"
+
+#include "hashkit/dyn_token.h"
+#include "proto/dyn_proto.h"
 
 #define DEFINE_ACTION(_hash, _name) string(#_name),
 static struct string hash_strings[] = {
@@ -439,6 +436,7 @@ conf_pool_each_transform(void *elem, void *data)
     }
 
     /* dynomite init */
+    sp->seed_provider = cp->dyn_seed_provider;
     sp->d_addrstr = cp->dyn_listen.pname;
     sp->d_port = (uint16_t)cp->dyn_listen.port;
     sp->d_family = cp->dyn_listen.info.family;

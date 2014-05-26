@@ -7,6 +7,7 @@ endif
 AM_CPPFLAGS += -I $(top_srcdir)/src/hashkit
 AM_CPPFLAGS += -I $(top_srcdir)/src/proto
 AM_CPPFLAGS += -I $(top_srcdir)/src/event
+AM_CPPFLAGS += -I $(top_srcdir)/src/seedsprovider
 AM_CPPFLAGS += -I $(top_srcdir)/contrib/yaml-0.1.4/include
 
 AM_CFLAGS =
@@ -24,13 +25,14 @@ if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
 
-SUBDIRS = hashkit proto event
+SUBDIRS = hashkit proto event seedsprovider
 
 sbin_PROGRAMS = dynomite
 
 dynomite_SOURCES =			                          \
         dyn_dnode_server.c dyn_dnode_server.h                     \
         dyn_cbuf.h                                                \
+        dyn_gossip.c dyn_gossip.h                                 \
         dyn_ring.c dyn_ring.h                                     \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
         dyn_dnode_client.h dyn_dnode_client.c                     \
@@ -60,4 +62,5 @@ dynomite_SOURCES =			                          \
 dynomite_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
 dynomite_LDADD += $(top_builddir)/src/proto/libproto.a
 dynomite_LDADD += $(top_builddir)/src/event/libevent.a
+dynomite_LDADD +=  $(top_builddir)/src/seedsprovider/libseedsprovider.a
 dynomite_LDADD += $(top_builddir)/contrib/yaml-0.1.4/src/.libs/libyaml.a

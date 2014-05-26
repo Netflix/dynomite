@@ -23,8 +23,8 @@
 #ifndef _DYN_SERVER_H_
 #define _DYN_SERVER_H_
 
-#include <dyn_core.h>
-#include <dyn_token.h>
+#include "dyn_core.h"
+#include "hashkit/dyn_token.h"
 
 /*
  * server_pool is a collection of servers and their continuum. Each
@@ -137,6 +137,7 @@ struct server_pool {
     unsigned           preconnect:1;         /* preconnect? */
     unsigned           redis:1;              /* redis? */
     /* dynomite */
+    struct string      seed_provider;
     struct array       seeds;                /*dyn seeds */
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */

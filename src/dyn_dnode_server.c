@@ -5,10 +5,10 @@
 
 #include <sys/un.h>
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_dnode_peer.h>
-#include <dyn_dnode_server.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_dnode_peer.h"
+#include "dyn_dnode_server.h"
 
 void
 dnode_ref(struct conn *conn, void *owner)

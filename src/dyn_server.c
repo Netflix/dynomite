@@ -23,10 +23,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_conf.h>
-#include <dyn_token.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_conf.h"
+#include "hashkit/dyn_token.h"
 
 void
 server_ref(struct conn *conn, void *owner)
