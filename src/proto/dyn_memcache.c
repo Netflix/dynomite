@@ -22,8 +22,8 @@
 
 #include <ctype.h>
 
-#include <dyn_core.h>
-#include <dyn_proto.h>
+#include "../dyn_core.h"
+#include "dyn_proto.h"
 
 /*
  * From memcache protocol specification:
