@@ -5,6 +5,8 @@
 #include "dyn_core.h"
 #include "hashkit/dyn_token.h"
 
+typedef void (*seeds_provider_t)(struct context *, struct string *);
+
 struct socket_conn  {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
     struct string      name;          /* name (ref in conf_server) */
@@ -16,7 +18,7 @@ struct socket_conn  {
 };
 
 struct node {
-    struct dyn_token   *token;        /* used in vnode/dyn_token situations */
+    struct array       tokens;        /* array of dyn_tokens */
     struct gossip_dc   *dc;           /* logical datacenter */
     struct socket_conn socket_conn;
 
@@ -26,31 +28,28 @@ struct node {
 
     bool               is_seed;       /* seed? */
     bool               is_local;      /* is this peer the current running node?  */
+    uint8_t            status;        /* 0: down, 1: up, 2:unknown */
 };
 
 struct gossip_dc {
     struct string      *name;
-    uint32_t           nnodes;        /* # total nodes */
-    uint32_t           nlive_nodes;   /* # live nodes */
-    struct array       nodes;        /* nodes */
+    uint32_t           nnodes;           /* # total nodes */
+    uint32_t           nlive_nodes;      /* # live nodes */
+    struct array       nodes;            /* nodes */
 };
 
-
 struct gossip_node_pool {
-	struct string      *name;                 /* pool name (ref in conf_pool) */
+	struct string      *name;                /* pool name (ref in conf_pool) */
     uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
-
+    seeds_provider_t   seeds_provider;       /* seeds provider */
     struct array       datacenters;          /* gossip_dc  */
     uint32_t           nlive_server;         /* # live server */
     int64_t            last_run;             /* last time run in usec */
 
-    struct string      seed_provider;
-    //struct array       seeds;                /*dyn seeds */
     int                g_interval;           /* gossip interval */
 
 };
-
 
 
 rstatus_t gossip_pool_init(struct context *ctx);

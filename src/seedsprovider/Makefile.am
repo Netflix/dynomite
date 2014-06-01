@@ -7,7 +7,7 @@ AM_CFLAGS += -Wno-unused-parameter -Wno-unused-value
 
 noinst_LIBRARIES = libseedsprovider.a
 
-noinst_HEADERS = dyn_florida.h
+noinst_HEADERS = dyn_seeds_provider.h
 
 libseedsprovider_a_SOURCES =			\
 	dyn_florida.c			
