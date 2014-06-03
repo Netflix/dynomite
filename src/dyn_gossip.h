@@ -5,13 +5,19 @@
 #include "dyn_core.h"
 #include "hashkit/dyn_token.h"
 
-typedef void (*seeds_provider_t)(struct context *, struct string *);
+
+#define GOS_NOOPS     1
+#define GOS_OK        0
+#define GOS_ERROR    -1
+
+
+typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
+
 
 struct socket_conn  {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
     struct string      name;          /* name (ref in conf_server) */
     uint16_t           port;          /* port */
-    uint32_t           weight;        /* weight */
     int                family;        /* socket family */
     socklen_t          addrlen;       /* socket length */
     struct sockaddr    *addr;         /* socket address (ref in conf_server) */
@@ -32,7 +38,7 @@ struct node {
 };
 
 struct gossip_dc {
-    struct string      *name;
+    struct string      name;
     uint32_t           nnodes;           /* # total nodes */
     uint32_t           nlive_nodes;      /* # live nodes */
     struct array       nodes;            /* nodes */

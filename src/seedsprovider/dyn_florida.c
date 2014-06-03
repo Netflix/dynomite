@@ -15,9 +15,24 @@
 #define PAGE "REST/v1/admin/get_seeds"
 #define PORT 8080
 
+static int64_t last; //storing last time for seeds check
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
+
+
+static bool seeds_check()
+{
+       int64_t now = nc_msec_now();
+
+       int delta = (int)(now - last);
+       if (delta > SEEDS_CHECK_INTERVAL) {
+           last = now;
+           return true;
+       }
+
+       return false;
+}
 
 
 uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
@@ -26,6 +41,10 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	uint32_t tmpres;
 	uint8_t *get;
 	uint8_t buf[BUFSIZ+1];
+
+	if (!seeds_check()) {
+		return NC_NOOPS;
+	}
 
 	sock = create_tcp_socket();
 	if (sock == -1) {
@@ -93,7 +112,7 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	nc_free(get);
 	nc_free(remote);
 	close(sock);
-	return 0;
+	return NC_OK;
 }
 
 

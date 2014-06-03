@@ -192,3 +192,45 @@ cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2)
 }
 
 
+/*
+ * Does the work of reading an array of chars, and constructing the tokens
+ * for the array.
+ */
+rstatus_t
+derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
+{
+    ASSERT (end > start);
+    uint8_t *p = end;
+    uint8_t *q;
+    while (p >= start) {
+        struct dyn_token *token = array_push(tokens);
+        ASSERT (token != NULL);
+        init_dyn_token(token);
+
+        q = nc_strrchr(p, start, ',');
+        if (q == NULL) {
+            q = start; /* we're at the beginning of the list */
+        } else {
+            q++;
+        }
+
+        uint32_t len = 0;
+        if (p == end) {
+            len = (uint32_t)(p - q);
+        } else {
+            len = (uint32_t)(p - q + 1);
+        }
+
+        rstatus_t status = parse_dyn_token(q, len, token);
+        if (status != NC_OK) {
+             return NC_ERROR;
+        }
+
+        p = q - 2;
+    }
+
+    return NC_OK;
+}
+
+
+

@@ -63,6 +63,7 @@
 # define NC_HAVE_BACKTRACE 1
 #endif
 
+#define NC_NOOPS     1
 #define NC_OK        0
 #define NC_ERROR    -1
 #define NC_EAGAIN   -2
@@ -117,6 +118,8 @@ struct dyn_ring;
 #include "dyn_message.h"
 #include "dyn_connection.h"
 #include "dyn_ring.h"
+#include "dyn_cbuf.h"
+#include "dyn_ring_queue.h"
 
 #include "event/dyn_event.h"
 

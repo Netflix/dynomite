@@ -139,6 +139,10 @@ core_ctx_create(struct instance *nci)
         return NULL;
     }
 
+    //init ring queue
+    CBUF_Init(C2G_InQ);
+    CBUF_Init(C2G_OutQ);
+
     //struct server_pool * sp = array_get(&ctx->pool, 0);
     //loga("name is ....................... %s", sp->name);
     //gossip_create(NULL);
@@ -367,19 +371,38 @@ static bool core_run_gossip()
        return false;
 }
 
+static void* ss = "hello gossiper, from main";
+static bool process_messages()
+{
+
+	 loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+     while (!CBUF_IsEmpty(C2G_OutQ)) {
+	     char* s = (char*) CBUF_Pop(C2G_OutQ);
+	     loga("Core: %s", s);
+	     //nc_free(s);
+     }
+
+
+     loga("Main pushes a message to gossip!!!!!!!!!!!!!!!!!!!!!!!");
+	 CBUF_Push( C2G_InQ, ss );
+	 CBUF_Push( C2G_InQ, ss );
+     loga("Leng of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
+}
 
 
 rstatus_t
 core_loop(struct context *ctx)
 {
     int nsd;
-
+    loga("timeout = %d", ctx->timeout);
     nsd = event_wait(ctx->evb, ctx->timeout);
     if (nsd < 0) {
         return nsd;
     }
 
+    loga("COre has timeout!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     core_timeout(ctx);
+    process_messages();
 
     //if (core_run_gossip())
     //   dyn_gos_run(ctx);
