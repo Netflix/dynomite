@@ -82,6 +82,15 @@ set_int_dyn_token(struct dyn_token *token, uint32_t val)
     token->signum = val > 0 ? 1 : 0;
 }
 
+void print_dyn_token(struct dyn_token *token)
+{
+	if (token == NULL)
+		log_debug(LOG_VERB, "Token is null!!!!!");
+
+	log_debug(LOG_VERB, "Token : %"PRIu32" %"PRIu32" %"PRIu32" ", token->signum, *token->mag, token->len);
+
+}
+
 static void
 add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
 {

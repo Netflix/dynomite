@@ -15,11 +15,12 @@
 #define PAGE "REST/v1/admin/get_seeds"
 #define PORT 8080
 
-static int64_t last; //storing last time for seeds check
-
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
 
+
+static int64_t last; //storing last time for seeds check
+static struct string last_seeds;
 
 static bool seeds_check()
 {
@@ -59,7 +60,6 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 
 	if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
 		log_debug(LOG_VVERB, "Could not connect");
-		//exit(1);
 		return NC_ERROR;
 	}
 	get = build_get_query((uint8_t*) IP, (uint8_t*) PAGE);
@@ -71,7 +71,6 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 		if(tmpres == -1){
 			perror("Can't send query");
 			log_debug(LOG_VVERB, "Can't send query");
-			//exit(1);
 			return NC_ERROR;
 		}
 		sent += tmpres;
@@ -112,6 +111,19 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	nc_free(get);
 	nc_free(remote);
 	close(sock);
+
+	if (last_seeds.data == NULL) {  //first time
+		string_init(&last_seeds);
+		string_copy(&last_seeds, seeds->data, seeds->len);
+	} else {
+		if (string_compare(&last_seeds, seeds) == 0) { //if equals, no change
+			return NC_NOOPS;
+		} else {                                   //else, set last_seeds to the latest value
+			string_deinit(&last_seeds);
+			string_copy(&last_seeds, seeds->data, seeds->len);
+		}
+	}
+
 	return NC_OK;
 }
 

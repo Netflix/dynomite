@@ -118,6 +118,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
     peer->pname = pool->d_addrstr;
     peer->name = pool->d_addrstr;
     peer->port = pool->d_port;
+
     peer->weight = 0;  /* hacking this out of the way for now */
     peer->dc = pool->dc;
     peer->is_local = true;

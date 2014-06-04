@@ -372,7 +372,7 @@ static bool core_run_gossip()
 }
 
 static void* ss = "hello gossiper, from main";
-static bool process_messages()
+static void process_messages()
 {
 
 	 loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));

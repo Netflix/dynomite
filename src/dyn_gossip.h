@@ -26,7 +26,13 @@ struct socket_conn  {
 struct node {
     struct array       tokens;        /* array of dyn_tokens */
     struct gossip_dc   *dc;           /* logical datacenter */
-    struct socket_conn socket_conn;
+
+    struct string      pname;         /* name:port */
+    struct string      name;          /* name  */
+    int                port;          /* port */
+    int                family;        /* socket family */
+    socklen_t          addrlen;       /* socket length */
+    struct sockaddr    *addr;         /* socket address  */
 
     int64_t            next_retry;    /* next retry time in usec */
     int64_t            last_retry;    /* last retry time in usec */
@@ -60,7 +66,8 @@ struct gossip_node_pool {
 
 rstatus_t gossip_pool_init(struct context *ctx);
 void gossip_pool_deinit(struct context *ctx);
-
+rstatus_t gossip_start(struct server_pool *sp);
+rstatus_t gossip_destroy(struct server_pool *sp);
 
 
 #endif /* DYN_GOSSIP_H_ */
