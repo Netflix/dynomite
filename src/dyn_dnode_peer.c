@@ -524,6 +524,35 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     conn_put(conn);
 }
 
+
+rstatus_t
+dnode_peer_add(struct context *ctx, struct server *server)
+{
+	rstatus_t status;
+
+
+
+	return NC_OK;
+}
+
+rstatus_t
+dnode_peer_remove(struct context *ctx, struct node *node)
+{
+	rstatus_t status;
+
+	return NC_OK;
+}
+
+
+rstatus_t
+dnode_peer_replace(struct context *ctx, struct node *node)
+{
+	rstatus_t status;
+
+	return NC_OK;
+}
+
+
 rstatus_t
 dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
 {

@@ -15,6 +15,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_util.h"
 #include "dyn_string.h"
+#include "dyn_ring_queue.h"
 #include "hashkit/dyn_token.h"
 #include "seedsprovider/dyn_seeds_provider.h"
 
@@ -261,8 +262,8 @@ gossip_loop(void *arg)
 		usleep(2000000);
 		loga("Running  gossip ...");
 
-		if (gn_pool.seeds_provider(NULL, &seeds) == NC_OK) {
-		   log_debug(LOG_VERB, "SSSSSSSSSSSSSSSSSSSSSSSSSSSeeds :::::: '%.*s'", seeds.len, seeds.data);
+		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == NC_OK) {
+		   log_debug(LOG_VERB, "Seeds :::::: '%.*s'", seeds.len, seeds.data);
 		   gossip_update_seeds(&seeds);
 		   string_deinit(&seeds);
 		}
@@ -325,8 +326,14 @@ gossip_start(struct server_pool *sp)
 static void
 gossip_set_seeds_provider(struct string * seeds_provider_str)
 {
-	//need to check seeds_provider_str == 'florida_seeds_provider'
-    gn_pool.seeds_provider = florida_get_seeds;
+	log_debug(LOG_VERB, "Seed provider :::::: '%.*s'",
+			            seeds_provider_str->len, seeds_provider_str->data);
+
+	if (strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
+        gn_pool.seeds_provider = florida_get_seeds;
+	} else {
+		gn_pool.seeds_provider = NULL;
+	}
 }
 
 
@@ -373,17 +380,16 @@ gossip_pool_each_init(void *elem, void *data)
 
             if (string_compare(&peer->dc, &g_dc->name) == 0) {
     			struct node *gnode = array_push(&g_dc->nodes);
+    			node_init(gnode);
 
-    			string_init(&gnode->name);
-    		    string_init(&gnode->pname);
+    			//string_init(&gnode->name);
+    		    //string_init(&gnode->pname);
 
     			string_copy(&gnode->name, peer->name.data, peer->name.len);
     			string_copy(&gnode->pname, peer->pname.data, peer->pname.len); //ignore the port for now
     			gnode->port = peer->port;
-    			loga("PEEEEEEEEEEEEEEEEEEERRRRRRRRRRRRRRRR port : ", peer->port);
-    			log_debug(LOG_DEBUG, "Peer pname '%.*s'", peer->pname.len, peer->pname.data);
 
-    			gnode->dc = g_dc;
+    			//gnode->dc = g_dc;
     			//adding stuff into gossip structure
     			uint32_t ntokens = array_n(&peer->tokens);
     			status = array_init(&gnode->tokens, ntokens, sizeof(struct dyn_token));
@@ -391,7 +397,7 @@ gossip_pool_each_init(void *elem, void *data)
                 for(k = 0; k < ntokens; k++) {
                 	struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, k);
                 	struct dyn_token *gtoken = array_push(&gnode->tokens);
-		            init_dyn_token(gtoken);
+		            //init_dyn_token(gtoken);
                 	copy_dyn_token(ptoken, gtoken);
                 }
                 //copy socket stuffs

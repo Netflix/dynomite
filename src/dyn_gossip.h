@@ -10,38 +10,11 @@
 #define GOS_OK        0
 #define GOS_ERROR    -1
 
+#define SIMPLE_PROVIDER           "simple_provider"
+#define FLORIDA_PROVIDER          "florida_provider"
 
 typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 
-
-struct socket_conn  {
-    struct string      pname;         /* name:port:weight (ref in conf_server) */
-    struct string      name;          /* name (ref in conf_server) */
-    uint16_t           port;          /* port */
-    int                family;        /* socket family */
-    socklen_t          addrlen;       /* socket length */
-    struct sockaddr    *addr;         /* socket address (ref in conf_server) */
-};
-
-struct node {
-    struct array       tokens;        /* array of dyn_tokens */
-    struct gossip_dc   *dc;           /* logical datacenter */
-
-    struct string      pname;         /* name:port */
-    struct string      name;          /* name  */
-    int                port;          /* port */
-    int                family;        /* socket family */
-    socklen_t          addrlen;       /* socket length */
-    struct sockaddr    *addr;         /* socket address  */
-
-    int64_t            next_retry;    /* next retry time in usec */
-    int64_t            last_retry;    /* last retry time in usec */
-    uint32_t           failure_count; /* # consecutive failures */
-
-    bool               is_seed;       /* seed? */
-    bool               is_local;      /* is this peer the current running node?  */
-    uint8_t            status;        /* 0: down, 1: up, 2:unknown */
-};
 
 struct gossip_dc {
     struct string      name;

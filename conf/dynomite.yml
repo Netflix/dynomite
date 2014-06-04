@@ -4,7 +4,7 @@ dyn_o_mite:
   distribution: vnode
   dyn_listen: 127.0.0.1:8101
   dyn_read_timeout: 200000
-  dyn_seed_provider: simple_provider
+  dyn_seed_provider: florida_provider
   dyn_write_timeout: 200000
   gos_interval: 10000
   hash: murmur

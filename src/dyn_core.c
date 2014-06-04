@@ -358,7 +358,7 @@ core_core(void *arg, uint32_t events)
     return NC_OK;
 }
 
-static bool core_run_gossip()
+static bool core_run_gossip(void)
 {
        int64_t now = nc_msec_now();
        
@@ -372,7 +372,7 @@ static bool core_run_gossip()
 }
 
 static void* ss = "hello gossiper, from main";
-static void process_messages()
+static void process_messages(void)
 {
 
 	 loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));

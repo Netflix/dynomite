@@ -771,60 +771,55 @@ stats_make_rsp(struct stats *st)
 
 static stats_cmd_t parse_request(int sd)
 {
-	char mesg[99999], *reqline[3], path[99999];
-	int rcvd, fd, bytes_read;
+	size_t max_buf_size = 99999;
+	char mesg[max_buf_size], *reqline[3];
+	int rcvd;
 
-	memset( (void*)mesg, (int)'\0', 99999 );
+	memset( (void*)mesg, (int)'\0', max_buf_size );
 
-	rcvd=recv(sd, mesg, 99999, 0);
-	    
+	rcvd=recv(sd, mesg, max_buf_size, 0);
+
 	if (rcvd<0)    // receive error
-            fprintf(stderr,("recv() error\n"));
+		fprintf(stderr,("recv() error\n"));
 	else if (rcvd==0)    // receive socket closed
-	    fprintf(stderr,"Client disconnected upexpectedly.\n");
-	else    // message received
-	{
+		fprintf(stderr,"Client disconnected upexpectedly.\n");
+	else  {  // message received
 		printf("%s", mesg);
 		reqline[0] = strtok (mesg, " \t\n");
-		if ( strncmp(reqline[0], "GET\0", 4)==0 )
-		{
-                      reqline[1] = strtok (NULL, " \t");
-		      reqline[2] = strtok (NULL, " \t\n");
-		      printf("0: %s\n", reqline[0]);
-		      printf("1: %s\n", reqline[1]);
-		      printf("2: %s\n", reqline[2]);
-                		     
- 
-		      if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 )
-		      {
-		          write(sd, "HTTP/1.0 400 Bad Request\n", 25);
-		      }
-		      else
-		      {
-                          if ( strncmp(reqline[1], "/\0", 2)==0 )
-		              reqline[1] = "/info";
+		if ( strncmp(reqline[0], "GET\0", 4)==0 ) {
+			reqline[1] = strtok (NULL, " \t");
+			reqline[2] = strtok (NULL, " \t\n");
+			printf("0: %s\n", reqline[0]);
+			printf("1: %s\n", reqline[1]);
+			printf("2: %s\n", reqline[2]);
 
-                           if (strcmp(reqline[1], "/info") == 0) 
-                           {
-                               return STATS_INFO; 
-                           } 
-                         
-                           if (strcmp(reqline[1], "/ping") == 0)
-                           {
-                               return STATS_PING;
-                           }
 
-                           if (strcmp(reqline[1], "/describe") == 0)
-                           {
-                               return STATS_DESCRIBE;
-                           }
- 
-                           return STATS_PING;
-		      }
+			if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
+				write(sd, "HTTP/1.0 400 Bad Request\n", 25);
+				return UNKNOWN;
+			}
+			else {
+				if ( strncmp(reqline[1], "/\0", 2)==0 )
+					reqline[1] = "/info";
+
+				if (strcmp(reqline[1], "/info") == 0) {
+					return STATS_INFO;
+				}
+
+				if (strcmp(reqline[1], "/ping") == 0) {
+					return STATS_PING;
+				}
+
+				if (strcmp(reqline[1], "/describe") == 0) {
+					return STATS_DESCRIBE;
+				}
+
+				return STATS_PING;
+			}
 		}    	
 	}
-	
-        return 0;
+
+	return 0;
 }
 
 
@@ -854,7 +849,7 @@ stats_send_rsp(struct stats *st)
        log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
        uint8_t http_header[MAX_HTTP_HEADER_SIZE]; 
        memset( (void*)http_header, (int)'\0', MAX_HTTP_HEADER_SIZE );
-       n = nc_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %d \r\n\r\n", header_str.len, header_str.data, st->buf.len);
+       n = nc_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %u \r\n\r\n", header_str.len, header_str.data, st->buf.len);
 
        if (n < 0 || n >= MAX_HTTP_HEADER_SIZE) {
               return NC_ERROR;

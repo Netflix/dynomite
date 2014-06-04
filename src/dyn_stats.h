@@ -161,7 +161,8 @@ typedef enum stats_server_field {
 typedef enum stats_cmd {
     STATS_INFO,
     STATS_PING,
-    STATS_DESCRIBE
+    STATS_DESCRIBE,
+    UNKNOWN
 } stats_cmd_t;
 
 
