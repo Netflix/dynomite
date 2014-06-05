@@ -22,12 +22,14 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <dyn_core.h>
-#include <dyn_conf.h>
-#include <dyn_server.h>
-#include <dyn_proxy.h>
-#include <dyn_dnode_server.h>
-#include <dyn_dnode_peer.h>
+
+#include "dyn_core.h"
+#include "dyn_conf.h"
+#include "dyn_server.h"
+#include "dyn_proxy.h"
+#include "dyn_dnode_server.h"
+#include "dyn_dnode_peer.h"
+#include "dyn_gossip.h"
 
 
 
@@ -137,6 +139,14 @@ core_ctx_create(struct instance *nci)
         return NULL;
     }
 
+    //init ring queue
+    CBUF_Init(C2G_InQ);
+    CBUF_Init(C2G_OutQ);
+
+    //struct server_pool * sp = array_get(&ctx->pool, 0);
+    //loga("name is ....................... %s", sp->name);
+    //gossip_create(NULL);
+    gossip_pool_init(ctx);
 
     log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 
@@ -348,7 +358,7 @@ core_core(void *arg, uint32_t events)
     return NC_OK;
 }
 
-static bool core_run_gossip()
+static bool core_run_gossip(void)
 {
        int64_t now = nc_msec_now();
        
@@ -362,19 +372,62 @@ static bool core_run_gossip()
 }
 
 
+static void
+core_debug(struct context *ctx)
+{
+	uint32_t i, nelem;
+	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
+		//struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
+		uint32_t j, n;
+		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
+			struct server *server = (struct server *) array_get(&sp->peers, j);
+			log_debug(LOG_VERB, "Peer name          : '%.*s'", server->name);
+			log_debug(LOG_VERB, "Peer pname         : '%.*s'", server->pname);
+			log_debug(LOG_VERB, "Peer port          : %"PRIu32"", server->port);
+		    log_debug(LOG_VERB, "Peer is_local      : %"PRIu32" ", server->is_local);
+		    log_debug(LOG_VERB, "Peer failure_count : %"PRIu32" ", server->failure_count);
+		    log_debug(LOG_VERB, "Peer num tokens    : %d", array_n(&server->tokens));
+		}
+
+	}
+}
+
+//static void* ss = "hello gossiper, from main";
+static rstatus_t
+process_messages(void)
+{
+	 //loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+     while (!CBUF_IsEmpty(C2G_OutQ)) {
+    	 struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
+    	 if (msg != NULL && msg->cb != NULL) {
+    		 msg->cb(msg->sp, msg->node);
+    		 ring_message_deinit(msg);
+    	 }
+     }
+
+     //loga("Main pushes a message to gossip!!!!!!!!!!!!!!!!!!!!!!!");
+	 //CBUF_Push( C2G_InQ, ss );
+	 //CBUF_Push( C2G_InQ, ss );
+     //loga("Leng of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
+
+     return NC_OK;
+}
+
 
 rstatus_t
 core_loop(struct context *ctx)
 {
     int nsd;
-
+    loga("timeout = %d", ctx->timeout);
     nsd = event_wait(ctx->evb, ctx->timeout);
     if (nsd < 0) {
         return nsd;
     }
 
     core_timeout(ctx);
-
+    process_messages();
+    core_debug(ctx);
     //if (core_run_gossip())
     //   dyn_gos_run(ctx);
 

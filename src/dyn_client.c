@@ -20,9 +20,9 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_client.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_client.h"
 
 void
 client_ref(struct conn *conn, void *owner)

@@ -6,7 +6,7 @@
 #ifndef _DYN_RING_H_
 #define _DYN_RING_H_
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 struct dyn_ring {
     struct array      *ring_nodes; /* array of ring_nodes currently known in the cluster  */

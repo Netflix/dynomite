@@ -47,6 +47,7 @@ deinit_dyn_token(struct dyn_token *token)
     token->len = 0;
 }
 
+//This implementation does not take into account that token's val can be very large, larger than an uint32 number
 rstatus_t 
 size_dyn_token(struct dyn_token *token, uint32_t token_len)
 {
@@ -62,12 +63,32 @@ size_dyn_token(struct dyn_token *token, uint32_t token_len)
     return NC_OK;
 }
 
+
+//This implementation does not take into account that token's val can be very large, larger than an uint32 number
+rstatus_t
+copy_dyn_token(const struct dyn_token * src, struct dyn_token * dst)
+{
+    size_dyn_token(dst, 1);
+    set_int_dyn_token(dst, src->mag[0]);
+}
+
+
+//This implementation does not take into account that token's val can be very large, larger than an uint32 number
 void 
 set_int_dyn_token(struct dyn_token *token, uint32_t val)
 {
     token->mag[0] = val;
     token->len = 1;
     token->signum = val > 0 ? 1 : 0;
+}
+
+void print_dyn_token(struct dyn_token *token)
+{
+	if (token == NULL)
+		log_debug(LOG_VERB, "Token is null!!!!!");
+
+	log_debug(LOG_VERB, "Token : %"PRIu32" %"PRIu32" %"PRIu32" ", token->signum, *token->mag, token->len);
+
 }
 
 static void
@@ -178,5 +199,47 @@ cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2)
 
     return t1->signum > t2->signum ? 1 : -1;
 }
+
+
+/*
+ * Does the work of reading an array of chars, and constructing the tokens
+ * for the array.
+ */
+rstatus_t
+derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
+{
+    ASSERT (end > start);
+    uint8_t *p = end;
+    uint8_t *q;
+    while (p >= start) {
+        struct dyn_token *token = array_push(tokens);
+        ASSERT (token != NULL);
+        init_dyn_token(token);
+
+        q = nc_strrchr(p, start, ',');
+        if (q == NULL) {
+            q = start; /* we're at the beginning of the list */
+        } else {
+            q++;
+        }
+
+        uint32_t len = 0;
+        if (p == end) {
+            len = (uint32_t)(p - q);
+        } else {
+            len = (uint32_t)(p - q + 1);
+        }
+
+        rstatus_t status = parse_dyn_token(q, len, token);
+        if (status != NC_OK) {
+             return NC_ERROR;
+        }
+
+        p = q - 2;
+    }
+
+    return NC_OK;
+}
+
 
 

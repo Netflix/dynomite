@@ -1,6 +1,6 @@
 #!/bin/sh
 
-port=22123
+port=8102
 socatopt="-t 20 -T 20 -b 8193 -d -d "
 key=""
 keys=""

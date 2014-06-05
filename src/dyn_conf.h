@@ -28,8 +28,8 @@
 #include <sys/un.h>
 #include <yaml.h>
 
-#include <dyn_core.h>
-#include <hashkit/dyn_hashkit.h>
+#include "dyn_core.h"
+#include "hashkit/dyn_hashkit.h"
 
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"

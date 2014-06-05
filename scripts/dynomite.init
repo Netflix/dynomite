@@ -1,18 +1,18 @@
 #! /bin/sh
 #
 # chkconfig: - 55 45
-# description:  Twitter's twemproxy nutcracker
-# processname: nutcracker
-# config: /etc/sysconfig/nutcracker
+# description:  Twitter's twemproxy dynomite
+# processname: dynomite
+# config: /etc/sysconfig/dynomite
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
 USER="nobody"
-OPTIONS="-d -c /etc/nutcracker/nutcracker.yml"
+OPTIONS="-d -c /etc/dynomite/dynomite.yml"
 
-if [ -f /etc/sysconfig/nutcracker ];then
-    . /etc/sysconfig/nutcracker
+if [ -f /etc/sysconfig/dynomite ];then
+    . /etc/sysconfig/dynomite
 fi
 
 # Check that networking is up.
@@ -22,7 +22,7 @@ then
 fi
 
 RETVAL=0
-prog="nutcracker"
+prog="dynomite"
 
 start () {
     echo -n $"Starting $prog: "
@@ -62,7 +62,7 @@ case "$1" in
     restart
     ;;
   condrestart)
-    [ -f /var/lock/subsys/nutcracker ] && restart || :
+    [ -f /var/lock/subsys/dynomite ] && restart || :
     ;;
   *)
     echo $"Usage: $0 {start|stop|status|restart|reload|condrestart}"

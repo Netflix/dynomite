@@ -55,7 +55,7 @@
 #ifndef _DYN_QUEUE_H_
 #define _DYN_QUEUE_H_
 
-#include <dyn_log.h>
+#include "dyn_log.h"
 
 #ifndef __offsetof
 #define __offsetof(type, field) ((size_t)(&((type *)NULL)->field))

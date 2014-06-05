@@ -207,6 +207,7 @@ AC_CONFIG_FILES([Makefile
                  src/Makefile
                  src/hashkit/Makefile
                  src/proto/Makefile
+                 src/seedsprovider/Makefile
                  src/event/Makefile])
 
 # Generate the "configure" script

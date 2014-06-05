@@ -22,7 +22,7 @@
 
 #include <stdlib.h>
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 struct array *
 array_create(uint32_t n, size_t size)

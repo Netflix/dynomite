@@ -3,10 +3,6 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-/*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -25,12 +21,13 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-#include <dyn_conf.h>
-#include <dyn_server.h>
-#include <dyn_token.h>
-#include <dyn_dnode_peer.h>
-#include <proto/dyn_proto.h>
+#include "dyn_core.h"
+#include "dyn_conf.h"
+#include "dyn_server.h"
+#include "dyn_dnode_peer.h"
+
+#include "hashkit/dyn_token.h"
+#include "proto/dyn_proto.h"
 
 #define DEFINE_ACTION(_hash, _name) string(#_name),
 static struct string hash_strings[] = {
@@ -439,6 +436,7 @@ conf_pool_each_transform(void *elem, void *data)
     }
 
     /* dynomite init */
+    sp->seed_provider = cp->dyn_seed_provider;
     sp->d_addrstr = cp->dyn_listen.pname;
     sp->d_port = (uint16_t)cp->dyn_listen.port;
     sp->d_family = cp->dyn_listen.info.family;
@@ -1832,45 +1830,6 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     return CONF_OK;
 }
 
-/*
- * Does the work of reading an array of chars, and constructing the tokens
- * for the array.
- */
-static rstatus_t
-conf_derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
-{
-    ASSERT (end > start);
-    uint8_t *p = end;
-    uint8_t *q;
-    while (p >= start) {
-        struct dyn_token *token = array_push(tokens);
-        ASSERT (token != NULL);
-        init_dyn_token(token);
-
-        q = nc_strrchr(p, start, ',');
-        if (q == NULL) {
-            q = start; /* we're at the beginning of the list */
-        } else {
-            q++;
-        }
-
-        uint32_t len = 0;
-        if (p == end) {
-            len = (uint32_t)(p - q);
-        } else {
-            len = (uint32_t)(p - q + 1);
-        }
-
-        rstatus_t status = parse_dyn_token(q, len, token);
-        if (status != NC_OK) {
-             return NC_ERROR;
-        }
-
-        p = q - 2;
-    } 
-
-    return NC_OK;
-}
 
 /*
  * Well, this just blows. I've copy and pasted the conf_add_server() instead
@@ -1984,7 +1943,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     uint8_t *t_end = tokens + tokenslen;
-    status = conf_derive_tokens(&field->tokens, tokens, t_end);
+    status = derive_tokens(&field->tokens, tokens, t_end);
     if (status != NC_OK) {
         array_pop(a);
         return CONF_ERROR;
@@ -2044,7 +2003,7 @@ conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
     struct string *value = array_top(&cf->arg);
     p = value->data + value->len;
 
-    rstatus_t status = conf_derive_tokens(tokens, value->data, p);
+    rstatus_t status = derive_tokens(tokens, value->data, p);
     if (status != NC_OK) {
         //TODO: should we dealloc the tokens/array?
         return CONF_ERROR;

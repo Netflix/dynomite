@@ -20,9 +20,9 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-#include <dyn_server.h>
-#include <dyn_dnode_peer.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
+#include "dyn_dnode_peer.h"
 
 struct msg *
 req_get(struct conn *conn)

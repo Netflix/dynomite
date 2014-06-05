@@ -63,6 +63,7 @@
 # define NC_HAVE_BACKTRACE 1
 #endif
 
+#define NC_NOOPS     1
 #define NC_OK        0
 #define NC_ERROR    -1
 #define NC_EAGAIN   -2
@@ -106,18 +107,21 @@ struct dyn_ring;
 #include <sys/time.h>
 #include <netinet/in.h>
 
-#include <dyn_array.h>
-#include <dyn_string.h>
-#include <dyn_queue.h>
-#include <dyn_rbtree.h>
-#include <dyn_log.h>
-#include <dyn_util.h>
-#include <event/dyn_event.h>
-#include <dyn_stats.h>
-#include <dyn_mbuf.h>
-#include <dyn_message.h>
-#include <dyn_connection.h>
-#include <dyn_ring.h>
+#include "dyn_array.h"
+#include "dyn_string.h"
+#include "dyn_queue.h"
+#include "dyn_rbtree.h"
+#include "dyn_log.h"
+#include "dyn_util.h"
+#include "dyn_stats.h"
+#include "dyn_mbuf.h"
+#include "dyn_message.h"
+#include "dyn_connection.h"
+#include "dyn_ring.h"
+#include "dyn_cbuf.h"
+#include "dyn_ring_queue.h"
+
+#include "event/dyn_event.h"
 
 struct context {
     uint32_t           id;          /* unique context id */

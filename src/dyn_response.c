@@ -20,8 +20,8 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-#include <dyn_server.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
 
 struct msg *
 rsp_get(struct conn *conn)

@@ -6,8 +6,8 @@
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
 
-#include <dyn_core.h>
-#include <dyn_server.h>
+#include "dyn_core.h"
+#include "dyn_server.h"
 
 
 void dnode_peer_ref(struct conn *conn, void *owner);
@@ -29,6 +29,8 @@ void dnode_peer_pool_disconnect(struct context *ctx);
 rstatus_t dnode_peer_pool_init(struct array *server_pool, struct array *conf_pool, struct context *ctx);
 void dnode_peer_pool_deinit(struct array *server_pool);
 
-         
+rstatus_t dnode_peer_add(struct server_pool *sp, struct node *node);
+rstatus_t dnode_peer_replace(struct server_pool *sp, struct node *node);
+rstatus_t dnode_peer_remove(struct server_pool *sp, struct node *node);
 
 #endif 

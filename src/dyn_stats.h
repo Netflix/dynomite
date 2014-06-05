@@ -23,7 +23,7 @@
 #ifndef _DYN_STATS_H_
 #define _DYN_STATS_H_
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 #define STATS_POOL_CODEC(ACTION)                                                                                    \
     /* client behavior */                                                                                           \
@@ -161,7 +161,8 @@ typedef enum stats_server_field {
 typedef enum stats_cmd {
     STATS_INFO,
     STATS_PING,
-    STATS_DESCRIBE
+    STATS_DESCRIBE,
+    UNKNOWN
 } stats_cmd_t;
 
 

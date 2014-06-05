@@ -23,8 +23,8 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#include <dyn_core.h>
-#include <dyn_signal.h>
+#include "dyn_core.h"
+#include "dyn_signal.h"
 
 static struct signal signals[] = {
     { SIGUSR1, "SIGUSR1", 0,                 signal_handler },

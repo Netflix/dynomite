@@ -1,8 +1,8 @@
-Summary: Twitter's nutcracker redis and memcached proxy
-Name: nutcracker
-Version: 0.2.2
+Summary: Dynomite: generic replicator
+Name: dynomite
+Version: 0.1.19
 Release: 1
-URL: http://code.google.com/p/twemproxy/
+URL: https://github.com/Netflix/Dynomite
 Source0: %{name}-%{version}.tar.gz
 License: Apache License 2.0
 Group: System Environment/Libraries
@@ -10,8 +10,8 @@ Packager:  Tom Parrott <tomp@tomp.co.uk>
 BuildRoot: %{_tmppath}/%{name}-root
 
 %description
-twemproxy (pronounced "two-em-proxy"), aka nutcracker is a fast and lightweight proxy for memcached and redis protocol.
-It was primarily built to reduce the connection count on the backend caching servers.
+dynomite is thin replication layer for different storage.  Currently, we support memcached and redis protocol.
+The goal is to use this as a caching system or a in-memory storage
 
 %prep
 %setup -q
@@ -47,6 +47,6 @@ fi
 
 %files
 %defattr(-,root,root,-)
-/usr/bin/nutcracker
+/usr/bin/dynomite
 %{_initrddir}/%{name}
 %config(noreplace)%{_sysconfdir}/%{name}/%{name}.yml

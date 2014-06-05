@@ -23,8 +23,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#include <dyn_core.h>
-#include <dyn_proto.h>
+#include "../dyn_core.h"
+#include "dyn_proto.h"
 
 /*
  * Return true, if the redis command accepts no arguments, otherwise

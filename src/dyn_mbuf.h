@@ -23,7 +23,7 @@
 #ifndef _DYN_MBUF_H_
 #define _DYN_MBUF_H_
 
-#include <dyn_core.h>
+#include "dyn_core.h"
 
 typedef void (*mbuf_copy_t)(struct mbuf *, void *);
 
