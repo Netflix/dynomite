@@ -13,7 +13,7 @@
 
 struct node;
 
-typedef rstatus_t (*callback_t)(struct context *, struct node *);
+typedef rstatus_t (*callback_t)(struct server_pool *, struct node *);
 
 
 volatile struct
@@ -36,6 +36,7 @@ volatile struct
 
 struct node {
     struct array       tokens;        /* array of dyn_tokens */
+    struct string      dc;
     //struct gossip_dc   *dc;           /* logical datacenter */
 
     struct string      pname;         /* name:port */
@@ -56,9 +57,9 @@ struct node {
 
 
 struct ring_message {
-    struct node        *node;
 	callback_t         cb;
-
+    struct node        *node;
+	struct server_pool *sp;
 };
 
 
@@ -69,6 +70,7 @@ rstatus_t ring_message_deinit(struct ring_message *msg);
 struct node * create_node(void);
 rstatus_t node_init(struct node *node);
 rstatus_t node_deinit(struct node *node);
+rstatus_t node_copy(const struct node *src, struct node *dst);
 
 
 #endif

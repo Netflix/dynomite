@@ -371,22 +371,47 @@ static bool core_run_gossip(void)
        return false;
 }
 
-static void* ss = "hello gossiper, from main";
-static void process_messages(void)
-{
 
-	 loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+static void
+core_debug(struct context *ctx)
+{
+	uint32_t i, nelem;
+	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
+		//struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
+		uint32_t j, n;
+		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
+			struct server *server = (struct server *) array_get(&sp->peers, j);
+			log_debug(LOG_VERB, "Peer name          : '%.*s'", server->name);
+			log_debug(LOG_VERB, "Peer pname         : '%.*s'", server->pname);
+			log_debug(LOG_VERB, "Peer port          : %"PRIu32"", server->port);
+		    log_debug(LOG_VERB, "Peer is_local      : %"PRIu32" ", server->is_local);
+		    log_debug(LOG_VERB, "Peer failure_count : %"PRIu32" ", server->failure_count);
+		    log_debug(LOG_VERB, "Peer num tokens    : %d", array_n(&server->tokens));
+		}
+
+	}
+}
+
+//static void* ss = "hello gossiper, from main";
+static rstatus_t
+process_messages(void)
+{
+	 //loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
      while (!CBUF_IsEmpty(C2G_OutQ)) {
-	     char* s = (char*) CBUF_Pop(C2G_OutQ);
-	     loga("Core: %s", s);
-	     //nc_free(s);
+    	 struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
+    	 if (msg != NULL && msg->cb != NULL) {
+    		 msg->cb(msg->sp, msg->node);
+    		 ring_message_deinit(msg);
+    	 }
      }
 
+     //loga("Main pushes a message to gossip!!!!!!!!!!!!!!!!!!!!!!!");
+	 //CBUF_Push( C2G_InQ, ss );
+	 //CBUF_Push( C2G_InQ, ss );
+     //loga("Leng of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
 
-     loga("Main pushes a message to gossip!!!!!!!!!!!!!!!!!!!!!!!");
-	 CBUF_Push( C2G_InQ, ss );
-	 CBUF_Push( C2G_InQ, ss );
-     loga("Leng of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
+     return NC_OK;
 }
 
 
@@ -400,10 +425,9 @@ core_loop(struct context *ctx)
         return nsd;
     }
 
-    loga("COre has timeout!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     core_timeout(ctx);
     process_messages();
-
+    core_debug(ctx);
     //if (core_run_gossip())
     //   dyn_gos_run(ctx);
 

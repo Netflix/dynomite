@@ -526,29 +526,71 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 
 rstatus_t
-dnode_peer_add(struct context *ctx, struct server *server)
+dnode_peer_add(struct server_pool *sp, struct node *node)
 {
 	rstatus_t status;
+	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
+    //struct conf_server *cseed = elem;
+	//struct server_pool *sp = elem;
+    //struct array *seeds = data;
+	struct array *peers = &sp->peers;
+    struct server *s;
 
+    s = array_push(peers);
+    ASSERT(s != NULL);
+
+    s->idx = array_idx(peers, s);
+    s->owner = sp;
+
+    string_copy(&s->pname, node->pname.data, node->pname.len);
+    string_copy(&s->name, node->name.data, node->name.len);
+
+    s->port = (uint16_t) node->port;
+    //s->weight = (uint32_t)cseed->weight;
+    string_copy(&s->dc, node->dc.data, node->dc.len);
+    s->is_local = node->is_local;
+
+    //s->tokens = cseed->tokens;
+    uint32_t i, nelem;
+    for (i = 0, nelem = array_n(&node->tokens); i < nelem; i++) {
+        	struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+        	struct dyn_token *dst_token = array_push(&s->tokens);
+        	copy_dyn_token(src_token, dst_token);
+    }
+
+    s->family = node->family;
+    s->addrlen = node->addrlen;
+    //s->addr = (struct sockaddr *)&cseed->info.addr;
+    s->addr = node->addr; //need to make sure this is okay
+
+    s->ns_conn_q = 0;
+    TAILQ_INIT(&s->s_conn_q);
+
+    s->next_retry = 0LL;
+    s->failure_count = 0;
+    s->is_seed = node->is_seed;
+
+    log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
+              s->idx, s->pname.len, s->pname.data);
 
 
 	return NC_OK;
 }
 
 rstatus_t
-dnode_peer_remove(struct context *ctx, struct node *node)
+dnode_peer_remove(struct server_pool *sp, struct node *node)
 {
 	rstatus_t status;
-
+	log_debug(LOG_VVERB, "dyn: peer has a removed message '%.*s'", node->name.len, node->name.data);
 	return NC_OK;
 }
 
 
 rstatus_t
-dnode_peer_replace(struct context *ctx, struct node *node)
+dnode_peer_replace(struct server_pool *sp, struct node *node)
 {
 	rstatus_t status;
-
+	log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
 	return NC_OK;
 }
 
