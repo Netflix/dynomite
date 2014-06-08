@@ -28,46 +28,46 @@
 #endif
 
 #ifdef HAVE_DEBUG_LOG
-# define NC_DEBUG_LOG 1
+# define DN_DEBUG_LOG 1
 #endif
 
 #ifdef HAVE_ASSERT_PANIC
-# define NC_ASSERT_PANIC 1
+# define DN_ASSERT_PANIC 1
 #endif
 
 #ifdef HAVE_ASSERT_LOG
-# define NC_ASSERT_LOG 1
+# define DN_ASSERT_LOG 1
 #endif
 
 #ifdef HAVE_STATS
-# define NC_STATS 1
+# define DN_STATS 1
 #else
-# define NC_STATS 0
+# define DN_STATS 0
 #endif
 
 #ifdef HAVE_EPOLL
-# define NC_HAVE_EPOLL 1
+# define DN_HAVE_EPOLL 1
 #elif HAVE_KQUEUE
-# define NC_HAVE_KQUEUE 1
+# define DN_HAVE_KQUEUE 1
 #elif HAVE_EVENT_PORTS
-# define NC_HAVE_EVENT_PORTS 1
+# define DN_HAVE_EVENT_PORTS 1
 #else
 # error missing scalable I/O event notification mechanism
 #endif
 
 #ifdef HAVE_LITTLE_ENDIAN
-# define NC_LITTLE_ENDIAN 1
+# define DN_LITTLE_ENDIAN 1
 #endif
 
 #ifdef HAVE_BACKTRACE
-# define NC_HAVE_BACKTRACE 1
+# define DN_HAVE_BACKTRACE 1
 #endif
 
-#define NC_NOOPS     1
-#define NC_OK        0
-#define NC_ERROR    -1
-#define NC_EAGAIN   -2
-#define NC_ENOMEM   -3
+#define DN_NOOPS     1
+#define DN_OK        0
+#define DN_ERROR    -1
+#define DN_EAGAIN   -2
+#define DN_ENOMEM   -3
 
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
@@ -143,7 +143,7 @@ struct instance {
     uint16_t        stats_port;                  /* stats monitoring port */
     int             stats_interval;              /* stats aggregation interval */
     char            *stats_addr;                 /* stats monitoring addr */
-    char            hostname[NC_MAXHOSTNAMELEN]; /* hostname */
+    char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
     pid_t           pid;                         /* process id */
     char            *pid_filename;               /* pid filename */

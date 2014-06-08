@@ -6,20 +6,20 @@ By default debug logging is disabled in nutcracker. However, it is worthwhile ru
 
 At LOG_INFO level, nutcracker logs the life cycle of every client and server connection and important events like the server being ejected from the hash ring and so on. Eg.
 
-    [Thu Aug  2 00:03:09 2012] nc_proxy.c:336 accepted c 7 on p 6 from '127.0.0.1:54009'
-    [Thu Aug  2 00:03:09 2012] nc_server.c:528 connected on s 8 to server '127.0.0.1:11211:1'
-    [Thu Aug  2 00:03:09 2012] nc_core.c:270 req 1 on s 8 timedout
-    [Thu Aug  2 00:03:09 2012] nc_core.c:207 close s 8 '127.0.0.1:11211' on event 0004 eof 0 done 0 rb 0 sb 20: Connection timed out
-    [Thu Aug  2 00:03:09 2012] nc_server.c:406 close s 8 schedule error for req 1 len 20 type 5 from c 7: Connection timed out
-    [Thu Aug  2 00:03:09 2012] nc_server.c:281 update pool 0 'alpha' to delete server '127.0.0.1:11211:1' for next 2 secs
-    [Thu Aug  2 00:03:10 2012] nc_connection.c:314 recv on sd 7 eof rb 20 sb 35
-    [Thu Aug  2 00:03:10 2012] nc_request.c:334 c 7 is done
-    [Thu Aug  2 00:03:10 2012] nc_core.c:207 close c 7 '127.0.0.1:54009' on event 0001 eof 1 done 1 rb 20 sb 35
-    [Thu Aug  2 00:03:11 2012] nc_proxy.c:336 accepted c 7 on p 6 from '127.0.0.1:54011'
-    [Thu Aug  2 00:03:11 2012] nc_server.c:528 connected on s 8 to server '127.0.0.1:11212:1'
-    [Thu Aug  2 00:03:12 2012] nc_connection.c:314 recv on sd 7 eof rb 20 sb 8
-    [Thu Aug  2 00:03:12 2012] nc_request.c:334 c 7 is done
-    [Thu Aug  2 00:03:12 2012] nc_core.c:207 close c 7 '127.0.0.1:54011' on event 0001 eof 1 done 1 rb 20 sb 8
+    [Thu Aug  2 00:03:09 2012] dn_proxy.c:336 accepted c 7 on p 6 from '127.0.0.1:54009'
+    [Thu Aug  2 00:03:09 2012] dn_server.c:528 connected on s 8 to server '127.0.0.1:11211:1'
+    [Thu Aug  2 00:03:09 2012] dn_core.c:270 req 1 on s 8 timedout
+    [Thu Aug  2 00:03:09 2012] dn_core.c:207 close s 8 '127.0.0.1:11211' on event 0004 eof 0 done 0 rb 0 sb 20: Connection timed out
+    [Thu Aug  2 00:03:09 2012] dn_server.c:406 close s 8 schedule error for req 1 len 20 type 5 from c 7: Connection timed out
+    [Thu Aug  2 00:03:09 2012] dn_server.c:281 update pool 0 'alpha' to delete server '127.0.0.1:11211:1' for next 2 secs
+    [Thu Aug  2 00:03:10 2012] dn_connection.c:314 recv on sd 7 eof rb 20 sb 35
+    [Thu Aug  2 00:03:10 2012] dn_request.c:334 c 7 is done
+    [Thu Aug  2 00:03:10 2012] dn_core.c:207 close c 7 '127.0.0.1:54009' on event 0001 eof 1 done 1 rb 20 sb 35
+    [Thu Aug  2 00:03:11 2012] dn_proxy.c:336 accepted c 7 on p 6 from '127.0.0.1:54011'
+    [Thu Aug  2 00:03:11 2012] dn_server.c:528 connected on s 8 to server '127.0.0.1:11212:1'
+    [Thu Aug  2 00:03:12 2012] dn_connection.c:314 recv on sd 7 eof rb 20 sb 8
+    [Thu Aug  2 00:03:12 2012] dn_request.c:334 c 7 is done
+    [Thu Aug  2 00:03:12 2012] dn_core.c:207 close c 7 '127.0.0.1:54011' on event 0001 eof 1 done 1 rb 20 sb 8
 
 To enable debug logging, you have to compile nutcracker with logging enabled using --enable-debug=log configure option.
 

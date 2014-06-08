@@ -145,16 +145,16 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     local = localtime(&t);
     timestr = asctime(local);
 
-    len += nc_scnprintf(buf + len, size - len, "[%.*s] %s:%d ",
+    len += dn_scnprintf(buf + len, size - len, "[%.*s] %s:%d ",
                         strlen(timestr) - 1, timestr, file, line);
 
     va_start(args, fmt);
-    len += nc_vscnprintf(buf + len, size - len, fmt, args);
+    len += dn_vscnprintf(buf + len, size - len, fmt, args);
     va_end(args);
 
     buf[len++] = '\n';
 
-    n = nc_write(l->fd, buf, len);
+    n = dn_write(l->fd, buf, len);
     if (n < 0) {
         l->nerror++;
     }
@@ -180,12 +180,12 @@ _log_stderr(const char *fmt, ...)
     size = 4 * LOG_MAX_LEN; /* size of output buffer */
 
     va_start(args, fmt);
-    len += nc_vscnprintf(buf, size, fmt, args);
+    len += dn_vscnprintf(buf, size, fmt, args);
     va_end(args);
 
     buf[len++] = '\n';
 
-    n = nc_write(STDERR_FILENO, buf, len);
+    n = dn_write(STDERR_FILENO, buf, len);
     if (n < 0) {
         l->nerror++;
     }
@@ -221,7 +221,7 @@ _log_hexdump(const char *file, int line, char *data, int datalen,
         unsigned char c;
         int savelen;
 
-        len += nc_scnprintf(buf + len, size - len, "%08x  ", off);
+        len += dn_scnprintf(buf + len, size - len, "%08x  ", off);
 
         save = data;
         savelen = datalen;
@@ -229,28 +229,28 @@ _log_hexdump(const char *file, int line, char *data, int datalen,
         for (i = 0; datalen != 0 && i < 16; data++, datalen--, i++) {
             c = (unsigned char)(*data);
             str = (i == 7) ? "  " : " ";
-            len += nc_scnprintf(buf + len, size - len, "%02x%s", c, str);
+            len += dn_scnprintf(buf + len, size - len, "%02x%s", c, str);
         }
         for ( ; i < 16; i++) {
             str = (i == 7) ? "  " : " ";
-            len += nc_scnprintf(buf + len, size - len, "  %s", str);
+            len += dn_scnprintf(buf + len, size - len, "  %s", str);
         }
 
         data = save;
         datalen = savelen;
 
-        len += nc_scnprintf(buf + len, size - len, "  |");
+        len += dn_scnprintf(buf + len, size - len, "  |");
 
         for (i = 0; datalen != 0 && i < 16; data++, datalen--, i++) {
             c = (unsigned char)(isprint(*data) ? *data : '.');
-            len += nc_scnprintf(buf + len, size - len, "%c", c);
+            len += dn_scnprintf(buf + len, size - len, "%c", c);
         }
-        len += nc_scnprintf(buf + len, size - len, "|\n");
+        len += dn_scnprintf(buf + len, size - len, "|\n");
 
         off += 16;
     }
 
-    n = nc_write(l->fd, buf, len);
+    n = dn_write(l->fd, buf, len);
     if (n < 0) {
         l->nerror++;
     }

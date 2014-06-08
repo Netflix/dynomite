@@ -33,15 +33,15 @@
 #include "proto/dyn_proto.h"
 
 /*
- *                   nc_connection.[ch]
+ *                   dn_connection.[ch]
  *                Connection (struct conn)
  *                 +         +          +
  *                 |         |          |
  *                 |       Proxy        |
- *                 |     nc_proxy.[ch]  |
+ *                 |     dn_proxy.[ch]  |
  *                 /                    \
  *              Client                Server
- *           nc_client.[ch]         nc_server.[ch]
+ *           dn_client.[ch]         dn_server.[ch]
  *
  * Nutcracker essentially multiplexes m client connections over n server
  * connections. Usually m >> n, so that nutcracker can pipeline requests
@@ -123,7 +123,7 @@ _conn_get(void)
         nfree_connq--;
         TAILQ_REMOVE(&free_connq, conn, conn_tqe);
     } else {
-        conn = nc_alloc(sizeof(*conn));
+        conn = dn_alloc(sizeof(*conn));
         if (conn == NULL) {
             return NULL;
         }
@@ -403,7 +403,7 @@ static void
 conn_free(struct conn *conn)
 {
     log_debug(LOG_VVERB, "free conn %p", conn);
-    nc_free(conn);
+    dn_free(conn);
 }
 
 void
@@ -450,7 +450,7 @@ conn_recv(struct conn *conn, void *buf, size_t size)
     ASSERT(conn->recv_ready);
 
     for (;;) {
-        n = nc_read(conn->sd, buf, size);
+        n = dn_read(conn->sd, buf, size);
 
         log_debug(LOG_VERB, "recv on sd %d %zd of %zu", conn->sd, n, size);
 
@@ -476,18 +476,18 @@ conn_recv(struct conn *conn, void *buf, size_t size)
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn->recv_ready = 0;
             log_debug(LOG_VERB, "recv on sd %d not ready - eagain", conn->sd);
-            return NC_EAGAIN;
+            return DN_EAGAIN;
         } else {
             conn->recv_ready = 0;
             conn->err = errno;
             log_error("recv on sd %d failed: %s", conn->sd, strerror(errno));
-            return NC_ERROR;
+            return DN_ERROR;
         }
     }
 
     NOT_REACHED();
 
-    return NC_ERROR;
+    return DN_ERROR;
 }
 
 ssize_t
@@ -500,7 +500,7 @@ conn_sendv(struct conn *conn, struct array *sendv, size_t nsend)
     ASSERT(conn->send_ready);
 
     for (;;) {
-        n = nc_writev(conn->sd, sendv->elem, sendv->nelem);
+        n = dn_writev(conn->sd, sendv->elem, sendv->nelem);
 
         log_debug(LOG_VERB, "sendv on sd %d %zd of %zu in %"PRIu32" buffers",
                   conn->sd, n, nsend, sendv->nelem);
@@ -525,16 +525,16 @@ conn_sendv(struct conn *conn, struct array *sendv, size_t nsend)
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn->send_ready = 0;
             log_debug(LOG_VERB, "sendv on sd %d not ready - eagain", conn->sd);
-            return NC_EAGAIN;
+            return DN_EAGAIN;
         } else {
             conn->send_ready = 0;
             conn->err = errno;
             log_error("sendv on sd %d failed: %s", conn->sd, strerror(errno));
-            return NC_ERROR;
+            return DN_ERROR;
         }
     }
 
     NOT_REACHED();
 
-    return NC_ERROR;
+    return DN_ERROR;
 }

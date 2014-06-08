@@ -127,7 +127,7 @@ stats_pool_metric_init(struct array *stats_metric)
     uint32_t i, nfield = STATS_POOL_NFIELD;
 
     status = array_init(stats_metric, nfield, sizeof(struct stats_metric));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -141,7 +141,7 @@ stats_pool_metric_init(struct array *stats_metric)
         stats_metric_init(stm);
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -151,7 +151,7 @@ stats_server_metric_init(struct stats_server *sts)
     uint32_t i, nfield = STATS_SERVER_NFIELD;
 
     status = array_init(&sts->metric, nfield, sizeof(struct stats_metric));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -165,7 +165,7 @@ stats_server_metric_init(struct stats_server *sts)
         stats_metric_init(stm);
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -189,14 +189,14 @@ stats_server_init(struct stats_server *sts, struct server *s)
     array_null(&sts->metric);
 
     status = stats_server_metric_init(sts);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     log_debug(LOG_VVVERB, "init stats server '%.*s' with %"PRIu32" metric",
               sts->name.len, sts->name.data, array_n(&sts->metric));
 
-    return NC_OK;
+    return DN_OK;
 
 }
 
@@ -210,7 +210,7 @@ stats_server_map(struct array *stats_server, struct array *server)
     ASSERT(nserver != 0);
 
     status = array_init(stats_server, nserver, sizeof(struct stats_server));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -219,14 +219,14 @@ stats_server_map(struct array *stats_server, struct array *server)
         struct stats_server *sts = array_push(stats_server);
 
         status = stats_server_init(sts, s);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
 
     log_debug(LOG_VVVERB, "map %"PRIu32" stats servers", nserver);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -255,12 +255,12 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
     array_null(&stp->server);
 
     status = stats_pool_metric_init(&stp->metric);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = stats_server_map(&stp->server, &sp->server);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         stats_metric_deinit(&stp->metric);
         return status;
     }
@@ -269,7 +269,7 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
               "%"PRIu32" server", stp->name.len, stp->name.data,
               array_n(&stp->metric), array_n(&stp->metric));
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -303,7 +303,7 @@ stats_pool_map(struct array *stats_pool, struct array *server_pool)
     ASSERT(npool != 0);
 
     status = array_init(stats_pool, npool, sizeof(struct stats_pool));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -312,14 +312,14 @@ stats_pool_map(struct array *stats_pool, struct array *server_pool)
         struct stats_pool *stp = array_push(stats_pool);
 
         status = stats_pool_init(stp, sp);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
 
     log_debug(LOG_VVVERB, "map %"PRIu32" stats pools", npool);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -424,19 +424,19 @@ stats_create_buf(struct stats *st)
     /* footer */
     size += 2;
 
-    size = NC_ALIGN(size, NC_ALIGNMENT);
+    size = DN_ALIGN(size, DN_ALIGNMENT);
 
-    st->buf.data = nc_alloc(size);
+    st->buf.data = dn_alloc(size);
     if (st->buf.data == NULL) {
         log_error("create stats buffer of size %zu failed: %s", size,
                    strerror(errno));
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
     st->buf.size = size;
 
     log_debug(LOG_DEBUG, "stats buffer size %zu", size);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -444,7 +444,7 @@ stats_destroy_buf(struct stats *st)
 {
     if (st->buf.size != 0) {
         ASSERT(st->buf.data != NULL);
-        nc_free(st->buf.data);
+        dn_free(st->buf.data);
         st->buf.size = 0;
     }
 }
@@ -461,15 +461,15 @@ stats_add_string(struct stats *st, struct string *key, struct string *val)
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = nc_snprintf(pos, room, "\"%.*s\":\"%.*s\", ", key->len, key->data,
+    n = dn_snprintf(pos, room, "\"%.*s\":\"%.*s\", ", key->len, key->data,
                     val->len, val->data);
     if (n < 0 || n >= (int)room) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     buf->len += (size_t)n;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -484,15 +484,15 @@ stats_add_num(struct stats *st, struct string *key, int64_t val)
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = nc_snprintf(pos, room, "\"%.*s\":%"PRId64", ", key->len, key->data,
+    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64", ", key->len, key->data,
                     val);
     if (n < 0 || n >= (int)room) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     buf->len += (size_t)n;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -510,36 +510,36 @@ stats_add_header(struct stats *st)
     uptime = cur_ts - st->start_ts;
 
     status = stats_add_string(st, &st->service_str, &st->service);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = stats_add_string(st, &st->source_str, &st->source);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = stats_add_string(st, &st->version_str, &st->version);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = stats_add_num(st, &st->uptime_str, uptime);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = stats_add_num(st, &st->timestamp_str, cur_ts);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = stats_add_string(st, &st->datacenter_str, &st->datacenter);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -551,7 +551,7 @@ stats_add_footer(struct stats *st)
     buf = &st->buf;
 
     if (buf->len == buf->size) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     /* overwrite the last byte and add a new byte */
@@ -560,7 +560,7 @@ stats_add_footer(struct stats *st)
     pos[1] = '\n';
     buf->len += 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -575,14 +575,14 @@ stats_begin_nesting(struct stats *st, struct string *key)
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = nc_snprintf(pos, room, "\"%.*s\": {", key->len, key->data);
+    n = dn_snprintf(pos, room, "\"%.*s\": {", key->len, key->data);
     if (n < 0 || n >= (int)room) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     buf->len += (size_t)n;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -606,7 +606,7 @@ stats_end_nesting(struct stats *st)
 
     case '}':
         if (buf->len == buf->size) {
-            return NC_ERROR;
+            return DN_ERROR;
         }
         /* overwrite the last byte and add a new byte */
         ASSERT(pos[1] == ',');
@@ -619,7 +619,7 @@ stats_end_nesting(struct stats *st)
         NOT_REACHED();
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -632,12 +632,12 @@ stats_copy_metric(struct stats *st, struct array *metric)
         struct stats_metric *stm = array_get(metric, i);
 
         status = stats_add_num(st, &stm->name, stm->value.counter);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -715,7 +715,7 @@ stats_make_rsp(struct stats *st)
     uint32_t i;
 
     status = stats_add_header(st);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -724,13 +724,13 @@ stats_make_rsp(struct stats *st)
         uint32_t j;
 
         status = stats_begin_nesting(st, &stp->name);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
         /* copy pool metric from sum(c) to buffer */
         status = stats_copy_metric(st, &stp->metric);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
@@ -738,34 +738,34 @@ stats_make_rsp(struct stats *st)
             struct stats_server *sts = array_get(&stp->server, j);
 
             status = stats_begin_nesting(st, &sts->name);
-            if (status != NC_OK) {
+            if (status != DN_OK) {
                 return status;
             }
 
             /* copy server metric from sum(c) to buffer */
             status = stats_copy_metric(st, &sts->metric);
-            if (status != NC_OK) {
+            if (status != DN_OK) {
                 return status;
             }
 
             status = stats_end_nesting(st);
-            if (status != NC_OK) {
+            if (status != DN_OK) {
                 return status;
             }
         }
 
         status = stats_end_nesting(st);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
 
     status = stats_add_footer(st);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 
@@ -831,14 +831,14 @@ stats_send_rsp(struct stats *st)
     int sd;
 
     status = stats_make_rsp(st);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     sd = accept(st->sd, NULL, NULL);
     if (sd < 0) {
         log_error("accept on m %d failed: %s", st->sd, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     stats_cmd_t cmd = parse_request(sd);
@@ -849,25 +849,25 @@ stats_send_rsp(struct stats *st)
        log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
        uint8_t http_header[MAX_HTTP_HEADER_SIZE]; 
        memset( (void*)http_header, (int)'\0', MAX_HTTP_HEADER_SIZE );
-       n = nc_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %u \r\n\r\n", header_str.len, header_str.data, st->buf.len);
+       n = dn_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %u \r\n\r\n", header_str.len, header_str.data, st->buf.len);
 
        if (n < 0 || n >= MAX_HTTP_HEADER_SIZE) {
-              return NC_ERROR;
+              return DN_ERROR;
        }
 
-       n = nc_sendn(sd, http_header, n);
+       n = dn_sendn(sd, http_header, n);
        if (n < 0) {
           log_error("send http headers on sd %d failed: %s", sd, strerror(errno));
           close(sd);
-          return NC_ERROR;
+          return DN_ERROR;
        }
 
-       n = nc_sendn(sd, st->buf.data, st->buf.len);
+       n = dn_sendn(sd, st->buf.data, st->buf.len);
 
        if (n < 0) {
           log_error("send stats on sd %d failed: %s", sd, strerror(errno));
           close(sd);
-          return NC_ERROR;
+          return DN_ERROR;
        }
 
     } else {
@@ -876,7 +876,7 @@ stats_send_rsp(struct stats *st)
 
     close(sd);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -909,7 +909,7 @@ stats_listen(struct stats *st)
     rstatus_t status;
     struct sockinfo si;
 
-    status = nc_resolve(&st->addr, st->port, &si);
+    status = dn_resolve(&st->addr, st->port, &si);
     if (status < 0) {
         return status;
     }
@@ -917,32 +917,32 @@ stats_listen(struct stats *st)
     st->sd = socket(si.family, SOCK_STREAM, 0);
     if (st->sd < 0) {
         log_error("socket failed: %s", strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    status = nc_set_reuseaddr(st->sd);
+    status = dn_set_reuseaddr(st->sd);
     if (status < 0) {
         log_error("set reuseaddr on m %d failed: %s", st->sd, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     status = bind(st->sd, (struct sockaddr *)&si.addr, si.addrlen);
     if (status < 0) {
         log_error("bind on m %d to addr '%.*s:%u' failed: %s", st->sd,
                   st->addr.len, st->addr.data, st->port, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     status = listen(st->sd, SOMAXCONN);
     if (status < 0) {
         log_error("listen on m %d failed: %s", st->sd, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     log_debug(LOG_NOTICE, "m %d listening on '%.*s:%u'", st->sd,
               st->addr.len, st->addr.data, st->port);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -951,21 +951,21 @@ stats_start_aggregator(struct stats *st)
     rstatus_t status;
 
     if (!stats_enabled) {
-        return NC_OK;
+        return DN_OK;
     }
 
     status = stats_listen(st);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = pthread_create(&st->tid, NULL, stats_loop, st);
     if (status < 0) {
         log_error("stats aggregator create failed: %s", strerror(status));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -985,7 +985,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     rstatus_t status;
     struct stats *st;
 
-    st = nc_alloc(sizeof(*st));
+    st = dn_alloc(sizeof(*st));
     if (st == NULL) {
         return NULL;
     }
@@ -1014,7 +1014,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_raw(&st->source, source);
 
     string_set_text(&st->version_str, "version");
-    string_set_text(&st->version, NC_VERSION_STRING);
+    string_set_text(&st->version, DN_VERSION_STRING);
 
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
@@ -1028,27 +1028,27 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     /* map server pool to current (a), shadow (b) and sum (c) */
 
     status = stats_pool_map(&st->current, server_pool);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
     status = stats_pool_map(&st->shadow, server_pool);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
     status = stats_pool_map(&st->sum, server_pool);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
     status = stats_create_buf(st);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
     status = stats_start_aggregator(st);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
@@ -1067,7 +1067,7 @@ stats_destroy(struct stats *st)
     stats_pool_unmap(&st->shadow);
     stats_pool_unmap(&st->current);
     stats_destroy_buf(st);
-    nc_free(st);
+    dn_free(st);
 }
 
 void

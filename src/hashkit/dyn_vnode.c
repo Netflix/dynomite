@@ -52,7 +52,7 @@ vnode_datacenter_verify_continuum(void *elem, void *data)
     }
     log_debug(LOG_VERB, "**** end printing continuums for dc '%.*s'", dc->name->len, dc->name->data);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -60,9 +60,9 @@ vnode_update(struct server_pool *sp)
 {
     ASSERT(array_n(&sp->peers) > 0);
 
-    int64_t now = nc_usec_now();
+    int64_t now = dn_usec_now();
     if (now < 0) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     int i, len;
@@ -80,16 +80,16 @@ vnode_update(struct server_pool *sp)
             dc = array_push(&sp->datacenter);
             datacenter_init(dc);
             string_copy(dc->name, peer->dc.data, peer->dc.len);
-            dc->continuum = nc_alloc(sizeof(struct continuum));
+            dc->continuum = dn_alloc(sizeof(struct continuum));
         }
 
         uint32_t token_cnt = array_n(&peer->tokens);
         uint32_t orig_cnt = dc->nserver_continuum;
         uint32_t new_cnt = orig_cnt + token_cnt;
 
-        struct continuum *continuum = nc_realloc(dc->continuum, sizeof(struct continuum) * new_cnt);
+        struct continuum *continuum = dn_realloc(dc->continuum, sizeof(struct continuum) * new_cnt);
         if (continuum == NULL) {
-            return NC_ENOMEM;
+            return DN_ENOMEM;
         }
 
         dc->continuum = continuum;
@@ -106,11 +106,11 @@ vnode_update(struct server_pool *sp)
     }
 
     rstatus_t status = array_each(&sp->datacenter, vnode_datacenter_verify_continuum, NULL);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 

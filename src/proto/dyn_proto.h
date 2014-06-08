@@ -20,12 +20,12 @@
  * limitations under the License.
  */
 
-#ifndef _NC_PROTO_H_
-#define _NC_PROTO_H_
+#ifndef _DN_PROTO_H_
+#define _DN_PROTO_H_
 
 #include <dyn_core.h>
 
-#ifdef NC_LITTLE_ENDIAN
+#ifdef DN_LITTLE_ENDIAN
 
 #define str4cmp(m, c0, c1, c2, c3)                                                          \
     (*(uint32_t *) m == ((c3 << 24) | (c2 << 16) | (c1 << 8) | c0))

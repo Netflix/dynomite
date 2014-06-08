@@ -48,7 +48,7 @@ _mbuf_get(void)
         goto done;
     }
 
-    buf = nc_alloc(mbuf_chunk_size);
+    buf = dn_alloc(mbuf_chunk_size);
     if (buf == NULL) {
         return NULL;
     }
@@ -117,7 +117,7 @@ mbuf_free(struct mbuf *mbuf)
     ASSERT(mbuf->magic == MBUF_MAGIC);
 
     buf = (uint8_t *)mbuf - mbuf_offset;
-    nc_free(buf);
+    dn_free(buf);
 }
 
 void
@@ -227,7 +227,7 @@ mbuf_copy(struct mbuf *mbuf, uint8_t *pos, size_t n)
     /* no overlapping copy */
     ASSERT(pos < mbuf->start || pos >= mbuf->end);
 
-    nc_memcpy(mbuf->last, pos, n);
+    dn_memcpy(mbuf->last, pos, n);
     mbuf->last += n;
 }
 

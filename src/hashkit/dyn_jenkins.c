@@ -236,5 +236,5 @@ hash_jenkins(const char *key, size_t length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, c);
 
-    return NC_OK;
+    return DN_OK;
 }

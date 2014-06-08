@@ -111,7 +111,7 @@ struct server_pool {
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
     struct conn        *p_conn;              /* proxy connection (listener) */
-    uint32_t           nc_conn_q;            /* # client connection */
+    uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
 
     struct array       server;               /* server[] */

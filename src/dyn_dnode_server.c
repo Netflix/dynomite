@@ -86,7 +86,7 @@ dnode_reuse(struct conn *p)
     switch (p->family) {
     case AF_INET:
     case AF_INET6:
-        status = nc_set_reuseaddr(p->sd);
+        status = dn_set_reuseaddr(p->sd);
         break;
 
     case AF_UNIX:
@@ -97,12 +97,12 @@ dnode_reuse(struct conn *p)
          */
         un = (struct sockaddr_un *) p->addr;
         unlink(un->sun_path);
-        status = NC_OK;
+        status = DN_OK;
         break;
 
     default:
         NOT_REACHED();
-        status = NC_ERROR;
+        status = DN_ERROR;
     }
 
     return status;
@@ -119,7 +119,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     p->sd = socket(p->family, SOCK_STREAM, 0);
     if (p->sd < 0) {
         log_error("dyn: socket failed: %s", strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     status = dnode_reuse(p);
@@ -127,28 +127,28 @@ dnode_listen(struct context *ctx, struct conn *p)
         log_error("dyn: reuse of addr '%.*s' for listening on p %d failed: %s",
                   pool->d_addrstr.len, pool->d_addrstr.data, p->sd,
                   strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     status = bind(p->sd, p->addr, p->addrlen);
     if (status < 0) {
         log_error("dyn: bind on p %d to addr '%.*s' failed: %s", p->sd,
                   pool->addrstr.len, pool->addrstr.data, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     status = listen(p->sd, pool->backlog);
     if (status < 0) {
         log_error("dyn: listen on p %d on addr '%.*s' failed: %s", p->sd,
                   pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    status = nc_set_nonblocking(p->sd);
+    status = dn_set_nonblocking(p->sd);
     if (status < 0) {
         log_error("dyn: set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
                   pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     log_debug(LOG_INFO, "dyn: e %d with nevent %d", ctx->evb->ep, ctx->evb->nevent);
@@ -157,17 +157,17 @@ dnode_listen(struct context *ctx, struct conn *p)
         log_error("dyn: event add conn p %d on addr '%.*s' failed: %s",
                   p->sd, pool->d_addrstr.len, pool->d_addrstr.data,
                   strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     status = event_del_out(ctx->evb, p);
     if (status < 0) {
         log_error("dyn: event del out p %d on addr '%.*s' failed: %s",
                   strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -179,11 +179,11 @@ dnode_each_init(void *elem, void *data)
 
     p = conn_get_dnode(pool);
     if (p == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     status = dnode_listen(pool->ctx, p);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         p->close(pool->ctx, p);
         return status;
     }
@@ -193,7 +193,7 @@ dnode_each_init(void *elem, void *data)
               pool->d_addrstr.data, pool->redis ? "redis" : "memcache",
               pool->idx, pool->name.len, pool->name.data,
               array_n(&pool->server));
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -204,7 +204,7 @@ dnode_init(struct context *ctx)
     ASSERT(array_n(&ctx->pool) != 0);
 
     status = array_each(&ctx->pool, dnode_each_init, NULL);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         dnode_deinit(ctx);
         return status;
     }
@@ -212,7 +212,7 @@ dnode_init(struct context *ctx)
     log_debug(LOG_VVERB, "init dnode with %"PRIu32" pools",
               array_n(&ctx->pool));
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -226,7 +226,7 @@ dnode_each_deinit(void *elem, void *data)
         p->close(pool->ctx, p);
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 void
@@ -237,7 +237,7 @@ dnode_deinit(struct context *ctx)
     ASSERT(array_n(&ctx->pool) != 0);
 
     status = array_each(&ctx->pool, dnode_each_deinit, NULL);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return;
     }
 
@@ -268,7 +268,7 @@ dnode_accept(struct context *ctx, struct conn *p)
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 log_debug(LOG_VERB, "dyn: accept on p %d not ready - eagain", p->sd);
                 p->recv_ready = 0;
-                return NC_OK;
+                return DN_OK;
             }
 
             /*
@@ -277,7 +277,7 @@ dnode_accept(struct context *ctx, struct conn *p)
              */
 
             log_error("dyn: accept on p %d failed: %s", p->sd, strerror(errno));
-            return NC_ERROR;
+            return DN_ERROR;
         }
 
         break;
@@ -292,14 +292,14 @@ dnode_accept(struct context *ctx, struct conn *p)
         if (status < 0) {
             log_error("dyn: close c %d failed, ignored: %s", sd, strerror(errno));
         }
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
     c->sd = sd;
 
     //fixme for dnode server stats
     //stats_pool_incr(ctx, c->owner, client_connections);
 
-    status = nc_set_nonblocking(c->sd);
+    status = dn_set_nonblocking(c->sd);
     if (status < 0) {
         log_error("dyn: set nonblock on c %d from p %d failed: %s", c->sd, p->sd,
                   strerror(errno));
@@ -308,7 +308,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     }
 
     if (p->family == AF_INET || p->family == AF_INET6) {
-        status = nc_set_tcpnodelay(c->sd);
+        status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
             log_warn("dyn: set tcpnodelay on c %d from p %d failed, ignored: %s",
                      c->sd, p->sd, strerror(errno));
@@ -324,9 +324,9 @@ dnode_accept(struct context *ctx, struct conn *p)
     }
 
     log_debug(LOG_NOTICE, "dyn: accepted c %d on p %d from '%s'", c->sd, p->sd,
-              nc_unresolve_peer_desc(c->sd));
+              dn_unresolve_peer_desc(c->sd));
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -340,11 +340,11 @@ dnode_recv(struct context *ctx, struct conn *conn)
     conn->recv_ready = 1;
     do {
         status = dnode_accept(ctx, conn);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     } while (conn->recv_ready);
 
-    return NC_OK;
+    return DN_OK;
 }
 

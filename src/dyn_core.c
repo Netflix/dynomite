@@ -41,7 +41,7 @@ core_ctx_create(struct instance *nci)
 	rstatus_t status;
 	struct context *ctx;
 
-	ctx = nc_alloc(sizeof(*ctx));
+	ctx = dn_alloc(sizeof(*ctx));
 	if (ctx == NULL) {
 		return NULL;
 	}
@@ -56,15 +56,15 @@ core_ctx_create(struct instance *nci)
 	/* parse and create configuration */
 	ctx->cf = conf_create(nci->conf_filename);
 	if (ctx->cf == NULL) {
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
@@ -74,7 +74,7 @@ core_ctx_create(struct instance *nci)
 	if (ctx->stats == NULL) {
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
@@ -84,56 +84,56 @@ core_ctx_create(struct instance *nci)
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
 	/* preconnect? servers in server pool */
 	status = server_pool_preconnect(ctx);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
 	/* initialize proxy per server pool */
 	status = proxy_init(ctx);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
 	/* initialize dnode listener per server pool */
 	status = dnode_init(ctx);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
 	/* initialize peers */
 	status = dnode_peer_init(&ctx->pool, ctx);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return status;
 	}
 
@@ -141,7 +141,7 @@ core_ctx_create(struct instance *nci)
 
 	/* preconntect peers - probably start gossip here */
 	status = dnode_peer_pool_preconnect(ctx);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		dnode_peer_deinit(ctx);
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
@@ -149,7 +149,7 @@ core_ctx_create(struct instance *nci)
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
-		nc_free(ctx);
+		dn_free(ctx);
 		return NULL;
 	}
 
@@ -174,14 +174,14 @@ core_ctx_destroy(struct context *ctx)
 	stats_destroy(ctx->stats);
 	server_pool_deinit(&ctx->pool);
 	conf_destroy(ctx->cf);
-	nc_free(ctx);
+	dn_free(ctx);
 }
 
 struct context *
 core_start(struct instance *nci)
 {
 	struct context *ctx;
-	last = nc_msec_now();
+	last = dn_msec_now();
 
 	mbuf_init(nci);
 	msg_init();
@@ -215,7 +215,7 @@ core_recv(struct context *ctx, struct conn *conn)
 	rstatus_t status;
 
 	status = conn->recv(ctx, conn);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		log_debug(LOG_INFO, "recv on %c %d failed: %s",
 				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd,
 						strerror(errno));
@@ -230,7 +230,7 @@ core_send(struct context *ctx, struct conn *conn)
 	rstatus_t status;
 
 	status = conn->send(ctx, conn);
-	if (status != NC_OK) {
+	if (status != DN_OK) {
 		log_debug(LOG_INFO, "send on %c %d failed: %s",
 				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd,
 						strerror(errno));
@@ -249,10 +249,10 @@ core_close(struct context *ctx, struct conn *conn)
 
 	if (conn->client) {
 		type = 'c';
-		addrstr = nc_unresolve_peer_desc(conn->sd);
+		addrstr = dn_unresolve_peer_desc(conn->sd);
 	} else {
 		type = conn->proxy ? 'p' : 's';
-		addrstr = nc_unresolve_addr(conn->addr, conn->addrlen);
+		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
 	}
 	log_debug(LOG_NOTICE, "close %c %d '%s' on event %04"PRIX32" eof %d done "
 			"%d rb %zu sb %zu%c %s", type, conn->sd, addrstr, conn->events,
@@ -274,7 +274,7 @@ core_error(struct context *ctx, struct conn *conn)
 	rstatus_t status;
 	char type = conn->client ? 'c' : (conn->proxy ? 'p' : 's');
 
-	status = nc_get_soerror(conn->sd);
+	status = dn_get_soerror(conn->sd);
 	if (status < 0) {
 		log_warn("get soerr on %c %d failed, ignored: %s", type, conn->sd,
 				strerror(errno));
@@ -313,7 +313,7 @@ core_timeout(struct context *ctx)
 		conn = msg->tmo_rbe.data;
 		then = msg->tmo_rbe.key;
 
-		now = nc_msec_now();
+		now = dn_msec_now();
 		if (now < then) {
 			int delta = (int)(then - now);
 			ctx->timeout = MIN(delta, ctx->max_timeout);
@@ -344,34 +344,34 @@ core_core(void *arg, uint32_t events)
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {
 		core_error(ctx, conn);
-		return NC_ERROR;
+		return DN_ERROR;
 	}
 
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
 		status = core_recv(ctx, conn);
-		if (status != NC_OK || conn->done || conn->err) {
+		if (status != DN_OK || conn->done || conn->err) {
 			core_close(ctx, conn);
-			return NC_ERROR;
+			return DN_ERROR;
 		}
 	}
 
 
 	if (events & EVENT_WRITE) {
 		status = core_send(ctx, conn);
-		if (status != NC_OK || conn->done || conn->err) {
+		if (status != DN_OK || conn->done || conn->err) {
 			core_close(ctx, conn);
-			return NC_ERROR;
+			return DN_ERROR;
 		}
 	}
 
 
-	return NC_OK;
+	return DN_OK;
 }
 
 static bool core_run_gossip(void)
 {
-	int64_t now = nc_msec_now();
+	int64_t now = dn_msec_now();
 
 	int delta = (int)(now - last);
 	if (delta > 10000) {
@@ -436,7 +436,7 @@ core_process_messages(void)
 		}
 	}
 
-	return NC_OK;
+	return DN_OK;
 }
 
 
@@ -459,5 +459,5 @@ core_loop(struct context *ctx)
 
 	stats_swap(ctx->stats);
 
-	return NC_OK;
+	return DN_OK;
 }

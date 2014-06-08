@@ -159,7 +159,7 @@ conf_server_init(struct conf_server *cs)
     
     rstatus_t status = array_init(&cs->tokens, CONF_DEFAULT_VNODE_TOKENS,
                         sizeof(struct dyn_token));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         string_deinit(&cs->pname);
         string_deinit(&cs->name);
         string_deinit(&cs->dc);
@@ -174,7 +174,7 @@ conf_server_init(struct conf_server *cs)
     cs->valid = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -222,7 +222,7 @@ conf_server_each_transform(void *elem, void *data)
     log_debug(LOG_VERB, "transform to server %"PRIu32" '%.*s'",
               s->idx, s->pname.len, s->pname.data);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 
@@ -264,7 +264,7 @@ conf_seed_each_transform(void *elem, void *data)
     log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
               s->idx, s->pname.len, s->pname.data);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 
@@ -321,20 +321,20 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->valid = 0;
 
     status = string_duplicate(&cp->name, name);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = array_init(&cp->server, CONF_DEFAULT_SERVERS,
                         sizeof(struct conf_server));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         string_deinit(&cp->name);
         return status;
     }
 
     status = array_init(&cp->dyn_seeds, CONF_DEFAULT_SEEDS,
                         sizeof(struct conf_server));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         string_deinit(&cp->name);
         array_deinit(&cp->server);
         return status;
@@ -342,7 +342,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     status = array_init(&cp->tokens, CONF_DEFAULT_VNODE_TOKENS,
                         sizeof(struct dyn_token));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         string_deinit(&cp->name);
         array_deinit(&cp->server);
         array_deinit(&cp->dyn_seeds);
@@ -351,7 +351,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     log_debug(LOG_VVERB, "init conf pool %p, '%.*s'", cp, name->len, name->data);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -394,7 +394,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->ctx = NULL;
 
     sp->p_conn = NULL;
-    sp->nc_conn_q = 0;
+    sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
 
     array_null(&sp->server);
@@ -431,7 +431,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->preconnect = cp->preconnect ? 1 : 0;
 
     status = server_init(&sp->server, &cp->server, sp);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -457,7 +457,7 @@ conf_pool_each_transform(void *elem, void *data)
     log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
               sp->name.len, sp->name.data);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -538,20 +538,20 @@ conf_yaml_init(struct conf *cf)
     if (rv < 0) {
         log_error("conf: failed to seek to the beginning of file '%s': %s",
                   cf->fname, strerror(errno));
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     rv = yaml_parser_initialize(&cf->parser);
     if (!rv) {
         log_error("conf: failed (err %d) to initialize yaml parser",
                   cf->parser.error);
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     yaml_parser_set_input_file(&cf->parser, cf->fh);
     cf->valid_parser = 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -573,11 +573,11 @@ conf_token_next(struct conf *cf)
     rv = yaml_parser_scan(&cf->parser, &cf->token);
     if (!rv) {
         log_error("conf: failed (err %d) to scan next token", cf->parser.error);
-        return NC_ERROR;
+        return DN_ERROR;
     }
     cf->valid_token = 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -601,11 +601,11 @@ conf_event_next(struct conf *cf)
     rv = yaml_parser_parse(&cf->parser, &cf->event);
     if (!rv) {
         log_error("conf: failed (err %d) to get next event", cf->parser.error);
-        return NC_ERROR;
+        return DN_ERROR;
     }
     cf->valid_event = 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -632,17 +632,17 @@ conf_push_scalar(struct conf *cf)
 
     value = array_push(&cf->arg);
     if (value == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
     string_init(value);
 
     status = string_copy(value, scalar, scalar_len);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         array_pop(&cf->arg);
         return status;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static void
@@ -685,15 +685,15 @@ conf_handler(struct conf *cf, void *data)
         rv = cmd->set(cf, cmd, data);
         if (rv != CONF_OK) {
             log_error("conf: directive \"%.*s\" %s", key->len, key->data, rv);
-            return NC_ERROR;
+            return DN_ERROR;
         }
 
-        return NC_OK;
+        return DN_OK;
     }
 
     log_error("conf: directive \"%.*s\" is unknown", key->len, key->data);
 
-    return NC_ERROR;
+    return DN_ERROR;
 }
 
 static rstatus_t
@@ -706,14 +706,14 @@ conf_begin_parse(struct conf *cf)
     ASSERT(cf->depth == 0);
 
     status = conf_yaml_init(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     done = false;
     do {
         status = conf_event_next(cf);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
@@ -738,7 +738,7 @@ conf_begin_parse(struct conf *cf)
 
     } while (!done);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -753,7 +753,7 @@ conf_end_parse(struct conf *cf)
     done = false;
     do {
         status = conf_event_next(cf);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
@@ -776,7 +776,7 @@ conf_end_parse(struct conf *cf)
 
     conf_yaml_deinit(cf);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -788,7 +788,7 @@ conf_parse_core(struct conf *cf, void *data)
     ASSERT(cf->sound);
 
     status = conf_event_next(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -824,7 +824,7 @@ conf_parse_core(struct conf *cf, void *data)
 
     case YAML_SCALAR_EVENT:
         status = conf_push_scalar(cf);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             break;
         }
 
@@ -837,7 +837,7 @@ conf_parse_core(struct conf *cf, void *data)
             /* create new conf_pool */
             data = array_push(&cf->pool);
             if (data == NULL) {
-                status = NC_ENOMEM;
+                status = DN_ENOMEM;
                 break;
            }
            new_pool = true;
@@ -855,13 +855,13 @@ conf_parse_core(struct conf *cf, void *data)
 
     conf_event_done(cf);
 
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     if (done) {
         /* terminating condition */
-        return NC_OK;
+        return DN_OK;
     }
 
     if (leaf || new_pool) {
@@ -874,7 +874,7 @@ conf_parse_core(struct conf *cf, void *data)
             }
         }
 
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
@@ -891,23 +891,23 @@ conf_parse(struct conf *cf)
     ASSERT(array_n(&cf->arg) == 0);
 
     status = conf_begin_parse(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = conf_parse_core(cf, NULL);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = conf_end_parse(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     cf->parsed = 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static struct conf *
@@ -924,23 +924,23 @@ conf_open(char *filename)
         return NULL;
     }
 
-    cf = nc_alloc(sizeof(*cf));
+    cf = dn_alloc(sizeof(*cf));
     if (cf == NULL) {
         fclose(fh);
         return NULL;
     }
 
     status = array_init(&cf->arg, CONF_DEFAULT_ARGS, sizeof(struct string));
-    if (status != NC_OK) {
-        nc_free(cf);
+    if (status != DN_OK) {
+        dn_free(cf);
         fclose(fh);
         return NULL;
     }
 
     status = array_init(&cf->pool, CONF_DEFAULT_POOL, sizeof(struct conf_pool));
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         array_deinit(&cf->arg);
-        nc_free(cf);
+        dn_free(cf);
         fclose(fh);
         return NULL;
     }
@@ -970,7 +970,7 @@ conf_validate_document(struct conf *cf)
     bool done;
 
     status = conf_yaml_init(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -986,7 +986,7 @@ conf_validate_document(struct conf *cf)
             log_error("conf: failed (err %d) to get the next yaml document",
                       cf->parser.error);
             conf_yaml_deinit(cf);
-            return NC_ERROR;
+            return DN_ERROR;
         }
 
         node = yaml_document_get_root_node(&document);
@@ -1004,10 +1004,10 @@ conf_validate_document(struct conf *cf)
     if (count != 1) {
         log_error("conf: '%s' must contain only 1 document; found %"PRIu32" "
                   "documents", cf->fname, count);
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -1018,7 +1018,7 @@ conf_validate_tokens(struct conf *cf)
     int type;
 
     status = conf_yaml_init(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -1026,7 +1026,7 @@ conf_validate_tokens(struct conf *cf)
     error = false;
     do {
         status = conf_token_next(cf);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
         type = cf->token.type;
@@ -1127,7 +1127,7 @@ conf_validate_tokens(struct conf *cf)
 
     conf_yaml_deinit(cf);
 
-    return !error ? NC_OK : NC_ERROR;
+    return !error ? DN_OK : DN_ERROR;
 }
 
 static rstatus_t
@@ -1139,7 +1139,7 @@ conf_validate_structure(struct conf *cf)
     bool done, error, seq;
 
     status = conf_yaml_init(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
@@ -1175,7 +1175,7 @@ conf_validate_structure(struct conf *cf)
      */
     do {
         status = conf_event_next(cf);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
@@ -1270,7 +1270,7 @@ conf_validate_structure(struct conf *cf)
 
     conf_yaml_deinit(cf);
 
-    return !error ? NC_OK : NC_ERROR;
+    return !error ? DN_OK : DN_ERROR;
 }
 
 static rstatus_t
@@ -1280,23 +1280,23 @@ conf_pre_validate(struct conf *cf)
 
 
     status = conf_validate_document(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = conf_validate_tokens(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     status = conf_validate_structure(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     cf->sound = 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static int
@@ -1333,7 +1333,7 @@ conf_validate_server(struct conf *cf, struct conf_pool *cp)
     if (nserver == 0) {
         log_error("conf: pool '%.*s' has no servers", cp->name.len,
                   cp->name.data);
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     /*
@@ -1358,10 +1358,10 @@ conf_validate_server(struct conf *cf, struct conf_pool *cp)
         }
     }
     if (!valid) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -1374,7 +1374,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (!cp->listen.valid) {
         log_error("conf: directive \"listen:\" is missing");
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     /* set default values for unset directives */
@@ -1413,7 +1413,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->server_connections = CONF_DEFAULT_SERVER_CONNECTIONS;
     } else if (cp->server_connections == 0) {
         log_error("conf: directive \"server_connections:\" cannot be 0");
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     if (cp->server_retry_timeout == CONF_UNSET_NUM) {
@@ -1436,7 +1436,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->dyn_connections = CONF_DEFAULT_DYN_CONNECTIONS;
     } else if (cp->dyn_connections == 0) {
         log_error("conf: directive \"dyn_connections:\" cannot be 0");
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     if (cp->gos_interval == CONF_UNSET_NUM) {
@@ -1444,13 +1444,13 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     status = conf_validate_server(cf, cp);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
     cp->valid = 1;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -1466,7 +1466,7 @@ conf_post_validate(struct conf *cf)
     npool = array_n(&cf->pool);
     if (npool == 0) {
         log_error("conf: '%.*s' has no pools", cf->fname);
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     /* validate pool */
@@ -1474,7 +1474,7 @@ conf_post_validate(struct conf *cf)
         struct conf_pool *cp = array_get(&cf->pool, i);
 
         status = conf_validate_pool(cf, cp);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
@@ -1497,7 +1497,7 @@ conf_post_validate(struct conf *cf)
         }
     }
     if (!valid) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     /* disallow pools with duplicate names */
@@ -1516,10 +1516,10 @@ conf_post_validate(struct conf *cf)
         }
     }
     if (!valid) {
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 struct conf *
@@ -1535,19 +1535,19 @@ conf_create(char *filename)
 
     /* validate configuration file before parsing */
     status = conf_pre_validate(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
     /* parse the configuration file */
     status = conf_parse(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
     /* validate parsed configuration */
     status = conf_post_validate(cf);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         goto error;
     }
 
@@ -1578,7 +1578,7 @@ conf_destroy(struct conf *cf)
     }
     array_deinit(&cf->pool);
 
-    nc_free(cf);
+    dn_free(cf);
 }
 
 char *
@@ -1598,7 +1598,7 @@ conf_set_string(struct conf *cf, struct command *cmd, void *conf)
     value = array_top(&cf->arg);
 
     status = string_duplicate(field, value);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
@@ -1624,7 +1624,7 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
     value = array_top(&cf->arg);
 
     status = string_duplicate(&field->pname, value);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
@@ -1638,7 +1638,7 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
         /* parse "hostname:port" from the end */
         p = value->data + value->len - 1;
         start = value->data;
-        q = nc_strrchr(p, start, ':');
+        q = dn_strrchr(p, start, ':');
         if (q == NULL) {
             return "has an invalid \"hostname:port\" format string";
         }
@@ -1651,19 +1651,19 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
         name = start;
         namelen = (uint32_t)(p - start + 1);
 
-        field->port = nc_atoi(port, portlen);
-        if (field->port < 0 || !nc_valid_port(field->port)) {
+        field->port = dn_atoi(port, portlen);
+        if (field->port < 0 || !dn_valid_port(field->port)) {
             return "has an invalid port in \"hostname:port\" format string";
         }
     }
 
     status = string_copy(&field->name, name, namelen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
-    status = nc_resolve(&field->name, field->port, &field->info);
-    if (status != NC_OK) {
+    status = dn_resolve(&field->name, field->port, &field->info);
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
@@ -1695,7 +1695,7 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     status = conf_server_init(field);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
@@ -1716,7 +1716,7 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     delimlen = value->data[0] == '/' ? 2 : 3;
 
     for (k = 0; k < sizeof(delim); k++) {
-        q = nc_strrchr(p, start, delim[k]);
+        q = dn_strrchr(p, start, delim[k]);
         if (q == NULL) {
             if (k == 0) {
                 /*
@@ -1758,7 +1758,7 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     pname = value->data;
     pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
     status = string_copy(&field->pname, pname, pnamelen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         array_pop(a);
         return CONF_ERROR;
     }
@@ -1766,14 +1766,14 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
 
-    field->weight = nc_atoi(weight, weightlen);
+    field->weight = dn_atoi(weight, weightlen);
     if (field->weight < 0) {
         return "has an invalid weight in \"hostname:port:weight [name]\" format string";
     }
 
     if (value->data[0] != '/') {
-        field->port = nc_atoi(port, portlen);
-        if (field->port < 0 || !nc_valid_port(field->port)) {
+        field->port = dn_atoi(port, portlen);
+        if (field->port < 0 || !dn_valid_port(field->port)) {
             return "has an invalid port in \"hostname:port:weight [name]\" format string";
         }
     }
@@ -1794,17 +1794,17 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     status = string_copy(&field->name, name, namelen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
     status = string_copy(&address, addr, addrlen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
-    status = nc_resolve(&address, field->port, &field->info);
-    if (status != NC_OK) {
+    status = dn_resolve(&address, field->port, &field->info);
+    if (status != DN_OK) {
         string_deinit(&address);
         return CONF_ERROR;
     }
@@ -1846,7 +1846,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     status = conf_server_init(field);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
@@ -1869,7 +1869,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     delimlen = 4;
 
     for (k = 0; k < sizeof(delim); k++) {
-        q = nc_strrchr(p, start, delim[k]);
+        q = dn_strrchr(p, start, delim[k]);
         if (q == NULL) {
             if (k == 0) {
                 /*
@@ -1916,20 +1916,20 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     pname = value->data;
     pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
     status = string_copy(&field->pname, pname, pnamelen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         array_pop(a);
         return CONF_ERROR;
     }
 
     status = string_copy(&field->dc, dc, dclen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         array_pop(a);
         return CONF_ERROR;
     }
 
     uint8_t *t_end = tokens + tokenslen;
     status = derive_tokens(&field->tokens, tokens, t_end);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         array_pop(a);
         return CONF_ERROR;
     }
@@ -1937,8 +1937,8 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
     if (value->data[0] != '/') {
-        field->port = nc_atoi(port, portlen);
-        if (field->port < 0 || !nc_valid_port(field->port)) {
+        field->port = dn_atoi(port, portlen);
+        if (field->port < 0 || !dn_valid_port(field->port)) {
             return "has an invalid port in \"hostname:port:weight [name]\" format string";
         }
     }
@@ -1959,17 +1959,17 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     status = string_copy(&field->name, name, namelen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
     status = string_copy(&address, addr, addrlen);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 
-    status = nc_resolve(&address, field->port, &field->info);
-    if (status != NC_OK) {
+    status = dn_resolve(&address, field->port, &field->info);
+    if (status != DN_OK) {
         string_deinit(&address);
         return CONF_ERROR;
     }
@@ -1989,7 +1989,7 @@ conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
     p = value->data + value->len;
 
     rstatus_t status = derive_tokens(tokens, value->data, p);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         //TODO: should we dealloc the tokens/array?
         return CONF_ERROR;
     }
@@ -2013,7 +2013,7 @@ conf_set_num(struct conf *cf, struct command *cmd, void *conf)
 
     value = array_top(&cf->arg);
 
-    num = nc_atoi(value->data, value->len);
+    num = dn_atoi(value->data, value->len);
     if (num < 0) {
         return "is not a number";
     }
@@ -2131,7 +2131,7 @@ conf_set_hashtag(struct conf *cf, struct command *cmd, void *conf)
     }
 
     status = string_duplicate(field, value);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return CONF_ERROR;
     }
 

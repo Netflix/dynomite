@@ -13,7 +13,7 @@
 struct ring_message *
 create_ring_message()
 {
-	struct ring_message *result = nc_alloc(sizeof(*result));
+	struct ring_message *result = dn_alloc(sizeof(*result));
 	ring_message_init(result);
 
 	return result;
@@ -23,11 +23,11 @@ rstatus_t
 ring_message_init(struct ring_message *msg)
 {
 	if (msg == NULL)
-		return NC_ERROR;
+		return DN_ERROR;
 
-	msg->node = nc_alloc(sizeof(struct node));
+	msg->node = dn_alloc(sizeof(struct node));
 
-	return NC_OK;
+	return DN_OK;
 }
 
 
@@ -35,12 +35,12 @@ rstatus_t
 ring_message_deinit(struct ring_message *msg)
 {
 	if (msg == NULL)
-		return NC_ERROR;
+		return DN_ERROR;
 
-    nc_free(msg->node);
-    nc_free(msg);
+    dn_free(msg->node);
+    dn_free(msg);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 
@@ -48,7 +48,7 @@ ring_message_deinit(struct ring_message *msg)
 struct node *
 create_node()
 {
-    struct node *result = nc_alloc(sizeof(*result));
+    struct node *result = dn_alloc(sizeof(*result));
     node_init(result);
 
     return result;
@@ -59,7 +59,7 @@ rstatus_t
 node_init(struct node *node)
 {
      if (node == NULL)
-    	 return NC_ERROR;
+    	 return DN_ERROR;
 
      array_init(&node->tokens, 1, sizeof(struct dyn_token));
      string_init(&node->dc);
@@ -76,7 +76,7 @@ node_init(struct node *node)
      node->is_local = false;
      node->status = 2;
 
-     return NC_OK;
+     return DN_OK;
 }
 
 
@@ -84,16 +84,16 @@ rstatus_t
 node_deinit(struct node *node)
 {
      if (node == NULL)
-    	 return NC_ERROR;
+    	 return DN_ERROR;
 
      array_deinit(&node->tokens);
      string_deinit(&node->dc);
      string_deinit(&node->name);
      string_deinit(&node->pname);
 
-     nc_free(node);
+     dn_free(node);
 
-     return NC_OK;
+     return DN_OK;
 }
 
 
@@ -101,7 +101,7 @@ rstatus_t
 node_copy(const struct node *src, struct node *dst)
 {
      if (src == NULL || dst == NULL)
-    	 return NC_ERROR;
+    	 return DN_ERROR;
 
      dst->status = src->status;
      dst->is_local = src->is_local;

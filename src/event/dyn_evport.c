@@ -22,7 +22,7 @@
 
 #include <dyn_core.h>
 
-#ifdef NC_HAVE_EVENT_PORTS
+#ifdef DN_HAVE_EVENT_PORTS
 
 #include <port.h>
 #include <poll.h>
@@ -42,7 +42,7 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    event = nc_calloc(nevent, sizeof(*event));
+    event = dn_calloc(nevent, sizeof(*event));
     if (event == NULL) {
         status = close(evp);
         if (status < 0) {
@@ -51,9 +51,9 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    evb = nc_alloc(sizeof(*evb));
+    evb = dn_alloc(sizeof(*evb));
     if (evb == NULL) {
-        nc_free(event);
+        dn_free(event);
         status = close(evp);
         if (status < 0) {
             log_error("close evp %d failed, ignored: %s", evp, strerror(errno));
@@ -82,7 +82,7 @@ event_base_destroy(struct event_base *evb)
 
     ASSERT(evb->evp >= 0);
 
-    nc_free(evb->event);
+    dn_free(evb->event);
 
     status = close(evb->evp);
     if (status < 0) {
@@ -90,7 +90,7 @@ event_base_destroy(struct event_base *evb)
     }
     evb->evp = -1;
 
-    nc_free(evb);
+    dn_free(evb);
 }
 
 int
@@ -388,7 +388,7 @@ event_loop_stats(event_stats_cb_t cb, void *arg)
         unsigned int nreturned = 1;
 
         status = port_getn(evp, &event, 1, &nreturned, tsp);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             if (errno == EINTR || errno == EAGAIN) {
                 continue;
             }
@@ -422,4 +422,4 @@ error:
     evp = -1;
 }
 
-#endif /* NC_HAVE_EVENT_PORTS */
+#endif /* DN_HAVE_EVENT_PORTS */

@@ -20,8 +20,8 @@
  * limitations under the License.
  */
 
-#ifndef _NC_EVENT_H_
-#define _NC_EVENT_H_
+#ifndef _DN_EVENT_H_
+#define _DN_EVENT_H_
 
 #include <dyn_core.h>
 
@@ -34,7 +34,7 @@
 typedef int (*event_cb_t)(void *, uint32_t);
 typedef void (*event_stats_cb_t)(void *, void *);
 
-#ifdef NC_HAVE_KQUEUE
+#ifdef DN_HAVE_KQUEUE
 
 struct event_base {
     int           kq;          /* kernel event queue descriptor */
@@ -50,7 +50,7 @@ struct event_base {
     event_cb_t    cb;          /* event callback */
 };
 
-#elif NC_HAVE_EPOLL
+#elif DN_HAVE_EPOLL
 
 struct event_base {
     int                ep;      /* epoll descriptor */
@@ -61,7 +61,7 @@ struct event_base {
     event_cb_t         cb;      /* event callback */
 };
 
-#elif NC_HAVE_EVENT_PORTS
+#elif DN_HAVE_EVENT_PORTS
 
 #include <port.h>
 
@@ -90,4 +90,4 @@ int event_del_conn(struct event_base *evb, struct conn *c);
 int event_wait(struct event_base *evb, int timeout);
 void event_loop_stats(event_stats_cb_t cb, void *arg);
 
-#endif /* _NC_EVENT_H */
+#endif /* _DN_EVENT_H */

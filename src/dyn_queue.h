@@ -134,7 +134,7 @@
 
 #define QUEUE_MACRO_SCRUB 1
 
-#ifdef NC_ASSERT_PANIC
+#ifdef DN_ASSERT_PANIC
 # define QUEUE_MACRO_TRACE  1
 # define QUEUE_MACRO_ASSERT 1
 #endif

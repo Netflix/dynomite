@@ -8,8 +8,8 @@ Copyright (C) 2012 Twitter, Inc.
 
 Portions of twemproxy were inspired from nginx: http://nginx.org/
 
-The implementation of generic array (nc_array.[ch]) and red black tree
-(nc_rbtree.[ch]) also comes from nginx-0.8.55.
+The implementation of generic array (dn_array.[ch]) and red black tree
+(dn_rbtree.[ch]) also comes from nginx-0.8.55.
 
 /*
  * Copyright (C) 2002-2010 Igor Sysoev

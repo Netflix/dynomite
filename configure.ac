@@ -1,12 +1,12 @@
 # Define the package version numbers and the bug reporting address
-m4_define([NC_MAJOR], 0)
-m4_define([NC_MINOR], 1)
-m4_define([NC_PATCH], 19)
-m4_define([NC_BUGS], [mdo@netflix.com])
+m4_define([DN_MAJOR], 0)
+m4_define([DN_MINOR], 1)
+m4_define([DN_PATCH], 19)
+m4_define([DN_BUGS], [mdo@netflix.com])
 
 # Initialize autoconf
 AC_PREREQ([2.68])
-AC_INIT([dynomite], [NC_MAJOR.NC_MINOR.NC_PATCH], [NC_BUGS])
+AC_INIT([dynomite], [DN_MAJOR.DN_MINOR.DN_PATCH], [DN_BUGS])
 AC_CONFIG_SRCDIR([src/dynomite.c])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADERS([config.h:config.h.in])
@@ -16,10 +16,10 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign])
 
 # Define macro variables for the package version numbers
-AC_DEFINE(NC_VERSION_MAJOR, NC_MAJOR, [Define the major version number])
-AC_DEFINE(NC_VERSION_MINOR, NC_MINOR, [Define the minor version number])
-AC_DEFINE(NC_VERSION_PATCH, NC_PATCH, [Define the patch version number])
-AC_DEFINE(NC_VERSION_STRING, "NC_MAJOR.NC_MINOR.NC_PATCH", [Define the version string])
+AC_DEFINE(DN_VERSION_MAJOR, DN_MAJOR, [Define the major version number])
+AC_DEFINE(DN_VERSION_MINOR, DN_MINOR, [Define the minor version number])
+AC_DEFINE(DN_VERSION_PATCH, DN_PATCH, [Define the patch version number])
+AC_DEFINE(DN_VERSION_STRING, "DN_MAJOR.DN_MINOR.DN_PATCH", [Define the version string])
 
 # Checks for language
 AC_LANG([C])

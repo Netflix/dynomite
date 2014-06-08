@@ -56,7 +56,7 @@ struct logger {
  * log_debug    - debug log messages based on a log level
  * log_hexdump  - hexadump -C of a log buffer
  */
-#ifdef NC_DEBUG_LOG
+#ifdef DN_DEBUG_LOG
 
 #define log_debug(_level, ...) do {                                         \
     if (log_loggable(_level) != 0) {                                        \

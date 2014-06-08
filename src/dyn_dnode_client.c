@@ -25,7 +25,7 @@ dnode_client_ref(struct conn *conn, void *owner)
     conn->addrlen = 0;
     conn->addr = NULL;
 
-    pool->nc_conn_q++;
+    pool->dn_conn_q++;
     TAILQ_INSERT_TAIL(&pool->c_conn_q, conn, conn_tqe);
 
     /* owner of the client connection is the server pool */
@@ -46,8 +46,8 @@ dnode_client_unref(struct conn *conn)
     pool = conn->owner;
     conn->owner = NULL;
 
-    ASSERT(pool->nc_conn_q != 0);
-    pool->nc_conn_q--;
+    ASSERT(pool->dn_conn_q != 0);
+    pool->dn_conn_q--;
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
 
     log_debug(LOG_VVERB, "dyn: unref conn %p owner %p from pool '%.*s'", conn,

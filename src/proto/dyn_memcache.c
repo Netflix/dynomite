@@ -1219,7 +1219,7 @@ memcache_post_splitcopy(struct msg *r)
     mbuf = STAILQ_LAST(&r->mhdr, mbuf, next);
     mbuf_copy(mbuf, crlf.data, crlf.len);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 /*

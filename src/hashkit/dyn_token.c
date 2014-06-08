@@ -42,7 +42,7 @@ init_dyn_token(struct dyn_token *token)
 void 
 deinit_dyn_token(struct dyn_token *token)
 {
-	nc_free(token->mag);
+	dn_free(token->mag);
 	token->signum = 0;
 	token->len = 0;
 }
@@ -52,15 +52,15 @@ rstatus_t
 size_dyn_token(struct dyn_token *token, uint32_t token_len)
 {
 	uint32_t size = sizeof(uint32_t) * token_len;
-	token->mag = nc_alloc(size);
+	token->mag = dn_alloc(size);
 	if (token->mag == NULL) {
-		return NC_ENOMEM;
+		return DN_ENOMEM;
 	}
 	memset(token->mag, 0, size);
 	token->len = token_len;
 	token->signum = 0;
 
-	return NC_OK;
+	return DN_OK;
 }
 
 
@@ -146,9 +146,9 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
 	/*     nwords = (nbits + 32) >> 5; */
 	/* } */
 
-	token->mag = nc_alloc(nwords * sizeof(uint32_t));
+	token->mag = dn_alloc(nwords * sizeof(uint32_t));
 	if (token->mag == NULL) {
-		return NC_ENOMEM;
+		return DN_ENOMEM;
 	}
 	memset(token->mag, 0, nwords * sizeof(uint32_t));
 	uint32_t *buf = token->mag;
@@ -158,17 +158,17 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
 	uint32_t first_group_len = digits % DIGITS_PER_INT;
 	if (first_group_len == 0)
 		first_group_len = DIGITS_PER_INT;
-	buf[nwords - 1] = nc_atoui(p, first_group_len);
+	buf[nwords - 1] = dn_atoui(p, first_group_len);
 	p += first_group_len;
 
 	// Process remaining digit groups
 	while (p < q) {
-		uint32_t local_int = nc_atoui(p, DIGITS_PER_INT);
+		uint32_t local_int = dn_atoui(p, DIGITS_PER_INT);
 		add_next_word(buf, nwords, local_int);
 		p += DIGITS_PER_INT;
 	}
 
-	return NC_OK;
+	return DN_OK;
 }
 
 int32_t 
@@ -216,7 +216,7 @@ derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
 		ASSERT (token != NULL);
 		init_dyn_token(token);
 
-		q = nc_strrchr(p, start, ',');
+		q = dn_strrchr(p, start, ',');
 		if (q == NULL) {
 			q = start; /* we're at the beginning of the list */
 		} else {
@@ -231,14 +231,14 @@ derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
 		}
 
 		rstatus_t status = parse_dyn_token(q, len, token);
-		if (status != NC_OK) {
-			return NC_ERROR;
+		if (status != DN_OK) {
+			return DN_ERROR;
 		}
 
 		p = q - 2;
 	}
 
-	return NC_OK;
+	return DN_OK;
 }
 
 

@@ -44,7 +44,7 @@ hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, val);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -62,7 +62,7 @@ hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, hash);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -80,7 +80,7 @@ hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, hash);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -98,5 +98,5 @@ hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, hash);
 
-    return NC_OK;
+    return DN_OK;
 }
