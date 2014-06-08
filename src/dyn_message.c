@@ -44,7 +44,7 @@
  *         Request    Response      .../ dn_mbuf.[ch]  (mesage buffers)
  *      dn_request.c  dn_response.c .../ dn_memcache.c; dn_redis.c (message parser)
  *
- * Messages in nutcracker are manipulated by a chain of processing handlers,
+ * Messages in dynomite are manipulated by a chain of processing handlers,
  * where each handler is responsible for taking the input and producing an
  * output for the next handler in the chain. This mechanism of processing
  * loosely conforms to the standard chain-of-responsibility design pattern
@@ -77,7 +77,7 @@
  * with read or IN event
  *
  *             Client+             Proxy           Server+
- *                              (nutcracker)
+ *                              (dynomite)
  *                                   .
  *       msg_recv {read event}       .       msg_recv {read event}
  *         +                         .                         +

@@ -278,7 +278,7 @@ redis_argeval(struct msg *r)
  *     the last argument is handled in a special way in order to allow for
  *     a binary-safe last argument.
  *
- * Nutcracker only supports the Redis unified protocol for requests.
+ * Dynomite only supports the Redis unified protocol for requests.
  */
 void
 redis_parse_req(struct msg *r)

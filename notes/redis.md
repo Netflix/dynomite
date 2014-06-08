@@ -168,7 +168,7 @@
     |      RPUSHX       |    Yes     | RPUSHX key value                                                                                                    |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* RPOPLPUSH support requires that source and destination keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for source and destination key. Twemproxy does no checking on its end to verify that source and destination key hash to the same server, and the RPOPLPUSH command is forwarded to the server that the source key hashes to
+* RPOPLPUSH support requires that source and destination keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for source and destination key. Dynomite does no checking on its end to verify that source and destination key hash to the same server, and the RPOPLPUSH command is forwarded to the server that the source key hashes to
 
 ### Sets
 
@@ -204,7 +204,7 @@
     |   SUNIONSTORE     |    Yes*    | SUNIONSTORE destination key [key ...]                                                                               |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* SIDFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION and SUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Twemproxy does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
+* SIDFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION and SUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 
 ### Sorted Sets
@@ -245,7 +245,7 @@
     |    ZUNIONSTORE    |    Yes*    | ZUNIONSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX]                 |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Twemproxy does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
+* ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 
 ### Pub/Sub
@@ -374,11 +374,11 @@
 ### Setup
 
 + redis-server running on machine A.
-+ nutcracker running on machine A as a local proxy to redis-server.
++ dynomite running on machine A as a local proxy to redis-server.
 + redis-benchmark running on machine B.
 + machine A != machine B.
-+ nutcracker built with --enable-debug=no
-+ nutcracker running with mbuf-size of 512 (-m 512)
++ dynomite built with --enable-debug=no
++ dynomite running with mbuf-size of 512 (-m 512)
 + redis-server built from redis 2.6 branch
 
 ### redis-benchmark against redis-server
@@ -397,7 +397,7 @@
     LRANGE_500 (first 450 elements): 11135.86 requests per second
     LRANGE_600 (first 600 elements): 8650.52 requests per second
 
-### redis-benchmark against nutcracker proxing redis-server
+### redis-benchmark against dynomite proxing redis-server
 
     $ redis-benchmark -h <machine-A> -q -t set,get,incr,lpush,lpop,sadd,spop,lpush,lrange -c 100 -p 22121
     SET: 85470.09 requests per second

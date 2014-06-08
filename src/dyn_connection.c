@@ -43,8 +43,8 @@
  *              Client                Server
  *           dn_client.[ch]         dn_server.[ch]
  *
- * Nutcracker essentially multiplexes m client connections over n server
- * connections. Usually m >> n, so that nutcracker can pipeline requests
+ * Dynomite essentially multiplexes m client connections over n server
+ * connections. Usually m >> n, so that dynomite can pipeline requests
  * from several clients over a server connection and hence use the connection
  * bandwidth to the server efficiently
  *
