@@ -124,7 +124,7 @@ server_each_set_owner(void *elem, void *data)
 }
 
 rstatus_t
-server_init(struct array *server, struct array *conf_server,
+server_init(struct array *servers, struct array *conf_server,
             struct server_pool *sp)
 {
     rstatus_t status;
@@ -134,23 +134,23 @@ server_init(struct array *server, struct array *conf_server,
     ASSERT(nserver != 0);
     ASSERT(array_n(server) == 0);
 
-    status = array_init(server, nserver, sizeof(struct server));
+    status = array_init(servers, nserver, sizeof(struct server));
     if (status != NC_OK) {
         return status;
     }
 
     /* transform conf server to server */
-    status = array_each(conf_server, conf_server_each_transform, server);
+    status = array_each(conf_server, conf_server_each_transform, servers);
     if (status != NC_OK) {
-        server_deinit(server);
+        server_deinit(servers);
         return status;
     }
     ASSERT(array_n(server) == nserver);
 
     /* set server owner */
-    status = array_each(server, server_each_set_owner, sp);
+    status = array_each(servers, server_each_set_owner, sp);
     if (status != NC_OK) {
-        server_deinit(server);
+        server_deinit(servers);
         return status;
     }
 
@@ -718,8 +718,8 @@ server_pool_run(struct server_pool *pool)
         return ketama_update(pool);
 
     case DIST_VNODE:
-        return vnode_update(pool);
-
+        //return vnode_update(pool);
+        break;
     case DIST_MODULA:
         return modula_update(pool);
 
@@ -792,7 +792,8 @@ datacenter_init(struct datacenter *dc)
     dc->continuum = NULL;
     dc->ncontinuum = 0;
     dc->nserver_continuum = 0;
-    dc->name = NULL;
+    dc->name = nc_alloc(sizeof(struct string));
+    string_init(dc->name);
 }
 
 rstatus_t
@@ -800,8 +801,6 @@ datacenter_deinit(struct datacenter *dc)
 {
     if (dc->continuum != NULL) {
         nc_free(dc->continuum);
-        dc->ncontinuum = 0;
-        dc->nserver_continuum = 0;
     }
 
     return NC_OK;
@@ -845,7 +844,7 @@ server_get_datacenter(struct server_pool *pool, struct string *dcname)
 {
     uint32_t i, len;
     for (i = 0, len = array_n(&pool->datacenter); i < len; i++) {
-        struct datacenter *dc = array_get(&pool->datacenter, i);
+        struct datacenter *dc = (struct datacenter *) array_get(&pool->datacenter, i);
         ASSERT(dc != NULL);
         ASSERT(dc->name != NULL);
 

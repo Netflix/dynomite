@@ -113,7 +113,6 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 {
     ASSERT(peer != NULL);
     peer->idx = 0; /* this might be psychotic, trying it for now */
-    peer->owner = NULL;
 
     peer->pname = pool->d_addrstr;
     peer->name = pool->d_addrstr;
@@ -144,9 +143,27 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 }
 
 rstatus_t
-dnode_peer_init(struct array *conf_seeds,
-            struct server_pool *sp)
+dnode_peer_init(struct array *server_pool, struct context *ctx)
 {
+	rstatus_t status;
+
+    status = array_each(server_pool, dnode_peer_each_pool_init, ctx);
+    if (status != NC_OK) {
+        server_pool_deinit(server_pool);
+        return status;
+    }
+
+    return NC_OK;
+}
+
+
+rstatus_t
+dnode_peer_each_pool_init(void *elem, void *context)
+{
+	struct server_pool *sp = (struct server_pool *) elem;
+	struct context *ctx = context;
+	struct array *conf_seeds = &sp->conf_pool->dyn_seeds;
+
     struct array * seeds = &sp->seeds;
     struct array * peers = &sp->peers;
     rstatus_t status;
@@ -231,6 +248,13 @@ dnode_peer_init(struct array *conf_seeds,
         return status;
     }
 
+    //update other infos
+    //dnode_peer_pool_update(sp);
+    dnode_peer_pool_run(sp);
+
+    //TODOs: need to clean this
+    status = dyn_ring_init(&sp->peers, sp);
+
     log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool %"PRIu32" '%.*s'",
               nseed, sp->idx, sp->name.len, sp->name.data);
 
@@ -289,7 +313,6 @@ dnode_peer_each_preconnect(void *elem, void *data)
 
     pn = elem;
     pool = pn->owner;
-
     
     conn = dnode_peer_conn(pn);
     if (conn == NULL) {
@@ -526,19 +549,14 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 
 rstatus_t
-dnode_peer_add(struct server_pool *sp, struct node *node)
+dnode_peer_add_node(struct node *node, struct array *peers, struct server_pool *sp)
 {
-	rstatus_t status;
-	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
-    //struct conf_server *cseed = elem;
-	//struct server_pool *sp = elem;
-    //struct array *seeds = data;
-	struct array *peers = &sp->peers;
     struct server *s;
 
     s = array_push(peers);
     ASSERT(s != NULL);
 
+    s->owner = sp;
     s->idx = array_idx(peers, s);
     s->owner = sp;
 
@@ -550,19 +568,88 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
     string_copy(&s->dc, node->dc.data, node->dc.len);
     s->is_local = node->is_local;
 
-    //s->tokens = cseed->tokens;
     uint32_t i, nelem;
     for (i = 0, nelem = array_n(&node->tokens); i < nelem; i++) {
-        	struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
-        	struct dyn_token *dst_token = array_push(&s->tokens);
-        	copy_dyn_token(src_token, dst_token);
+        struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+        struct dyn_token *dst_token = array_push(&s->tokens);
+        copy_dyn_token(src_token, dst_token);
     }
 
-    s->family = node->family;
-    s->addrlen = node->addrlen;
-    //s->addr = (struct sockaddr *)&cseed->info.addr;
-    s->addr = node->addr; //need to make sure this is okay
+    struct sockinfo  *info = (struct sockinfo *) nc_alloc(sizeof(struct sockinfo));
+    nc_resolve(&node->name, node->port, info);
+    s->family = node->info.family;
+    //s->family = info.family;
+    s->addrlen = node->info.addrlen;
+    //s->addrlen = info.addrlen;
+    //TODOs: how do we free info?
+    s->addr = (struct sockaddr *) &info->addr;
 
+    s->next_retry = 0LL;
+    s->failure_count = 0;
+    s->is_seed = node->is_seed;
+
+    log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
+              s->idx, s->pname.len, s->pname.data);
+
+
+    s->ns_conn_q = 0;
+    TAILQ_INIT(&s->s_conn_q);
+
+
+    log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
+              s->idx, s->pname.len, s->pname.data);
+
+    return NC_OK;
+}
+
+rstatus_t
+dnode_peer_add(struct server_pool *sp, struct node *node)
+{
+    rstatus_t status;
+	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
+	struct array *peers = &sp->peers;
+    struct server *s = NULL;
+
+    uint32_t i,nelem;
+    bool dc_exist = false;
+    //TODOs: use hash table here
+    for (i=0, nelem = array_n(peers); i< nelem; i++) {
+    	struct server * peer = (struct server *) array_get(peers, i);
+
+    	if (string_compare(&peer->dc, &node->dc) == 0) {
+    		dc_exist = true;
+    		break;
+    	} //TODOs: else add a new DC here
+    }
+
+    if (s == NULL)
+       s = array_push(peers);
+
+    ASSERT(s != NULL);
+
+    s->owner = sp;
+    s->idx = array_idx(peers, s);
+
+    string_copy(&s->pname, node->pname.data, node->pname.len);
+    string_copy(&s->name, node->name.data, node->name.len);
+    string_copy(&s->dc, node->dc.data, node->dc.len);
+
+    s->port = (uint16_t) node->port;
+    s->is_local = node->is_local;
+
+    nelem = array_n(&node->tokens);
+    array_init(&s->tokens, nelem, sizeof(struct dyn_token));
+    for (i = 0; i < nelem; i++) {
+        struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+       	struct dyn_token *dst_token = array_push(&s->tokens);
+       	copy_dyn_token(src_token, dst_token);
+    }
+
+    struct sockinfo  *info =  nc_alloc(sizeof(*info)); //need to free this
+    nc_resolve(&s->name, s->port, info);
+    s->family = info->family;
+    s->addrlen = info->addrlen;
+    s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
@@ -573,6 +660,9 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
     log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
               s->idx, s->pname.len, s->pname.data);
 
+
+    dnode_peer_pool_run(sp);
+    dnode_peer_each_preconnect(s, NULL);
 
 	return NC_OK;
 }
@@ -707,7 +797,7 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
     }
 }
 
-static rstatus_t
+rstatus_t
 dnode_peer_pool_update(struct server_pool *pool)
 {
     rstatus_t status;
@@ -955,61 +1045,11 @@ dnode_peer_pool_run(struct server_pool *pool)
     return NC_OK;
 }
 
-static rstatus_t
-dnode_peer_pool_each_run(void *elem, void *data)
-{
-    return dnode_peer_pool_run(elem);
-}
-
-rstatus_t
-dnode_peer_pool_init(struct array *server_pool, struct array *conf_pool,
-                 struct context *ctx)
-{
-    rstatus_t status;
-    uint32_t npool;
-
-    npool = array_n(conf_pool);
-    ASSERT(npool != 0);
-    ASSERT(array_n(server_pool) == 0);
-
-    status = array_init(server_pool, npool, sizeof(struct server_pool));
-    if (status != NC_OK) {
-        return status;
-    }
-
-    /* transform conf pool to server pool */
-    status = array_each(conf_pool, conf_pool_each_transform, server_pool);
-    if (status != NC_OK) {
-        dnode_peer_pool_deinit(server_pool);
-        return status;
-    }
-    ASSERT(array_n(server_pool) == npool);
-
-    /* set ctx as the server pool owner */
-    status = array_each(server_pool, dnode_peer_pool_each_set_owner, ctx);
-    if (status != NC_OK) {
-        dnode_peer_pool_deinit(server_pool);
-        return status;
-    }
-
-    /* update server pool continuum */
-    status = array_each(server_pool, dnode_peer_pool_each_run, NULL);
-    if (status != NC_OK) {
-        dnode_peer_pool_deinit(server_pool);
-        return status;
-    }
-
-    log_debug(LOG_DEBUG, "dyn: init %"PRIu32" peer pools", npool);
-
-    return NC_OK;
-}
-
 
 static rstatus_t
 dc_deinit(void *elem, void *data)
 {
     struct datacenter *dc = elem;
-
     return datacenter_deinit(dc);
 }
 

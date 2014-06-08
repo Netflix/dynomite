@@ -56,9 +56,9 @@ vnode_datacenter_verify_continuum(void *elem, void *data)
 }
 
 rstatus_t
-vnode_update(struct server_pool *pool)
+vnode_update(struct server_pool *sp)
 {
-    ASSERT(array_n(&pool->peers) > 0);
+    ASSERT(array_n(&sp->peers) > 0);
 
     int64_t now = nc_usec_now();
     if (now < 0) {
@@ -66,20 +66,28 @@ vnode_update(struct server_pool *pool)
     }
 
     int i, len;
-    for (i = 0, len = array_n(&pool->peers); i < len; i++) {
-        struct server *peer = array_get(&pool->peers, i);
-        struct datacenter *dc = server_get_datacenter(pool, &peer->dc);
+    for (i = 0, len = array_n(&sp->peers); i < len; i++) {
+        struct server *peer = array_get(&sp->peers, i);
+        struct datacenter *dc = server_get_datacenter(sp, &peer->dc);
+
+        if (peer->processed) {
+            continue;
+        } else {
+            peer->processed = 1;
+        }
 
         if (dc == NULL) {
-            dc = array_push(&pool->datacenter);
+            dc = array_push(&sp->datacenter);
             datacenter_init(dc);
-            dc->name = &peer->dc;
+            string_copy(dc->name, peer->dc.data, peer->dc.len);
+            dc->continuum = nc_alloc(sizeof(struct continuum));
         }
 
         uint32_t token_cnt = array_n(&peer->tokens);
         uint32_t orig_cnt = dc->nserver_continuum;
         uint32_t new_cnt = orig_cnt + token_cnt;
-        struct continuum *continuum = nc_realloc(dc->continuum, sizeof(*continuum) * new_cnt);
+
+        struct continuum *continuum = nc_realloc(dc->continuum, sizeof(struct continuum) * new_cnt);
         if (continuum == NULL) {
             return NC_ENOMEM;
         }
@@ -97,7 +105,7 @@ vnode_update(struct server_pool *pool)
         }
     }
 
-    rstatus_t status = array_each(&pool->datacenter, vnode_datacenter_verify_continuum, NULL);
+    rstatus_t status = array_each(&sp->datacenter, vnode_datacenter_verify_continuum, NULL);
     if (status != NC_OK) {
         return status;
     }

@@ -102,11 +102,13 @@ struct server {
     struct string      dc;            /* logical datacenter */
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
+    unsigned           processed:1;   /* flag to indicate whether this has been processed */
 };
 
 struct server_pool {
     uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
+    struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
     struct conn        *p_conn;              /* proxy connection (listener) */
     uint32_t           nc_conn_q;            /* # client connection */

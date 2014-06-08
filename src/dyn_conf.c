@@ -449,25 +449,10 @@ conf_pool_each_transform(void *elem, void *data)
     array_null(&sp->seeds);
     array_null(&sp->peers);
     array_init(&sp->datacenter, 1, sizeof(struct datacenter));
-    status = dnode_peer_init(&cp->dyn_seeds, sp);
-    if (status != NC_OK) {
-        return status;
-    }
+    sp->conf_pool = cp;
 
     /* gossip */
     sp->g_interval = cp->gos_interval;
-    
-    status = dyn_ring_init(&sp->peers, sp);
-
-    if (status != NC_OK) {
-        return status;
-    }
-
-    //array_null(&sp->peers);
-    //status = peer_init(&sp->peers, &sp->seeds);
-    //if (status != NC_OK) {
-    //    return status;
-    //}
 
     log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
               sp->name.len, sp->name.data);

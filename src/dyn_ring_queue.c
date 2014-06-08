@@ -115,8 +115,9 @@ node_copy(const struct node *src, struct node *dst)
      string_copy(&dst->name, src->name.data, src->name.len);
      string_copy(&dst->dc, src->dc.data, src->dc.len);
 
-     uint32_t i, nelem;
-     for (i = 0, nelem = array_n(&src->tokens); i < nelem; i++) {
+     uint32_t i, nelem = array_n(&src->tokens);
+     array_init(&dst->tokens, nelem, sizeof(struct dyn_token));
+     for (i = 0; i < nelem; i++) {
          	struct dyn_token *src_token = (struct dyn_token *) array_get(&src->tokens, i);
          	struct dyn_token *dst_token = array_push(&dst->tokens);
          	copy_dyn_token(src_token, dst_token);

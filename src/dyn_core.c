@@ -32,7 +32,6 @@
 #include "dyn_gossip.h"
 
 
-
 static uint32_t ctx_id; /* context generation */
 static int64_t last; //storing last time for gossip
 
@@ -125,6 +124,16 @@ core_ctx_create(struct instance *nci)
         return NULL;
     }
 
+    /* initialize peers */
+    status = dnode_peer_init(&ctx->pool, ctx);
+    if (status != NC_OK) {
+    	conf_destroy(ctx->cf);
+    	nc_free(ctx);
+    	//TODOs: need to clean more
+        return status;
+    }
+
+    core_debug(ctx);
 
     /* preconntect peers - probably start gossip here */
     status = dnode_peer_pool_preconnect(ctx);
@@ -143,9 +152,6 @@ core_ctx_create(struct instance *nci)
     CBUF_Init(C2G_InQ);
     CBUF_Init(C2G_OutQ);
 
-    //struct server_pool * sp = array_get(&ctx->pool, 0);
-    //loga("name is ....................... %s", sp->name);
-    //gossip_create(NULL);
     gossip_pool_init(ctx);
 
     log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
@@ -372,44 +378,58 @@ static bool core_run_gossip(void)
 }
 
 
-static void
+void
 core_debug(struct context *ctx)
 {
+	log_debug(LOG_VERB, "Peers info.................................................");
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
-		//struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
 		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
+		log_debug(LOG_VERB, "Server pool          : %"PRIu32"", sp->idx);
 		uint32_t j, n;
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
-			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "Peer name          : '%.*s'", server->name);
-			log_debug(LOG_VERB, "Peer pname         : '%.*s'", server->pname);
-			log_debug(LOG_VERB, "Peer port          : %"PRIu32"", server->port);
-		    log_debug(LOG_VERB, "Peer is_local      : %"PRIu32" ", server->is_local);
-		    log_debug(LOG_VERB, "Peer failure_count : %"PRIu32" ", server->failure_count);
-		    log_debug(LOG_VERB, "Peer num tokens    : %d", array_n(&server->tokens));
+		    log_debug(LOG_VERB, "==============================================");
+		    struct server *server = (struct server *) array_get(&sp->peers, j);
+		    log_debug(LOG_VERB, "\tPeer DC          : '%.*s'", sp->dc);
+		    log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
+		    log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
+		    log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
+		    log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
+		    log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", server->failure_count);
+		    log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&server->tokens));
+
+		    uint32_t k;
+		    for (k = 0; k < array_n(&server->tokens); k++) {
+		   	  struct dyn_token *token = (struct dyn_token *) array_get(&server->tokens, k);
+		          print_dyn_token(token);
+		    }
 		}
 
+		log_debug(LOG_VERB, "Peers DCs.................................................");
+		log_debug(LOG_VERB, "Peer DC size    : %d", array_n(&sp->datacenter));
+		for (j = 0, n = array_n(&sp->datacenter); j < n; j++) {
+                    struct datacenter *dc = (struct datacenter *) array_get(&sp->datacenter, j);
+                    log_debug(LOG_VERB, "\tDC '%.*s'", dc->name->len, dc->name->data);
+                    log_debug(LOG_VERB, "\tPeer DC ncontinuumm    : %d", dc->ncontinuum);
+                    log_debug(LOG_VERB, "\tPeer DC nserver_continuum    : %d", dc->nserver_continuum);
+		}
 	}
+	log_debug(LOG_VERB, "..........................................................");
 }
 
-//static void* ss = "hello gossiper, from main";
+
 static rstatus_t
-process_messages(void)
+core_process_messages(void)
 {
 	 //loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
      while (!CBUF_IsEmpty(C2G_OutQ)) {
     	 struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
     	 if (msg != NULL && msg->cb != NULL) {
-    		 msg->cb(msg->sp, msg->node);
-    		 ring_message_deinit(msg);
+    		   msg->cb(msg->sp, msg->node);
+    		   ring_message_deinit(msg);
+    		   core_debug(msg->sp->ctx);
     	 }
      }
-
-     //loga("Main pushes a message to gossip!!!!!!!!!!!!!!!!!!!!!!!");
-	 //CBUF_Push( C2G_InQ, ss );
-	 //CBUF_Push( C2G_InQ, ss );
-     //loga("Leng of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
 
      return NC_OK;
 }
@@ -426,8 +446,9 @@ core_loop(struct context *ctx)
     }
 
     core_timeout(ctx);
-    process_messages();
-    core_debug(ctx);
+    core_process_messages();
+
+    //core_debug(ctx);
     //if (core_run_gossip())
     //   dyn_gos_run(ctx);
 

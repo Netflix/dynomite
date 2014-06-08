@@ -22,17 +22,18 @@ static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
 static int64_t last; //storing last time for seeds check
 static struct string last_seeds;
 
+
 static bool seeds_check()
 {
-       int64_t now = nc_msec_now();
+	int64_t now = nc_msec_now();
 
-       int delta = (int)(now - last);
-       if (delta > SEEDS_CHECK_INTERVAL) {
-           last = now;
-           return true;
-       }
+	int delta = (int)(now - last);
+	if (delta > SEEDS_CHECK_INTERVAL) {
+		last = now;
+		return true;
+	}
 
-       return false;
+	return false;
 }
 
 
@@ -43,13 +44,15 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	uint8_t *get;
 	uint8_t buf[BUFSIZ+1];
 
+	log_debug(LOG_VVERB, "Running florida_get_seeds!");
+
 	if (!seeds_check()) {
 		return NC_NOOPS;
 	}
 
 	sock = create_tcp_socket();
 	if (sock == -1) {
-		log_debug(LOG_VVERB, "Could not create a socket");
+		log_debug(LOG_VVERB, "Unable to create a socket");
 		return NC_ERROR;
 	}
 
@@ -59,7 +62,7 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	remote->sin_port = htons(PORT);
 
 	if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
-		log_debug(LOG_VVERB, "Could not connect");
+		log_debug(LOG_VVERB, "Unable to connect the destination");
 		return NC_ERROR;
 	}
 	get = build_get_query((uint8_t*) IP, (uint8_t*) PAGE);
@@ -69,8 +72,7 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	{
 		tmpres = send(sock, get+sent, nc_strlen(get)-sent, 0);
 		if(tmpres == -1){
-			perror("Can't send query");
-			log_debug(LOG_VVERB, "Can't send query");
+			log_debug(LOG_VVERB, "Unable to send query");
 			return NC_ERROR;
 		}
 		sent += tmpres;
@@ -128,13 +130,11 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 }
 
 
-
-
 uint32_t create_tcp_socket()
 {
 	uint32_t sock;
 	if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0){
-		log_debug(LOG_VVERB, "Can't create TCP socket");
+		log_debug(LOG_VVERB, "Unable to create TCP socket");
 		return NC_ERROR;
 	}
 	return sock;
