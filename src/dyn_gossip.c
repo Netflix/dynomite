@@ -116,9 +116,23 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *port_st
 }
 
 
+
 static rstatus_t
-gossip_add_node(struct server_pool *sp, struct gossip_dc *g_dc,
-		struct string *address, struct string *ip, struct string *port, struct array * tokens) 
+gossip_dc_init(struct gossip_dc *g_dc, struct string *dc)
+{
+	rstatus_t status;
+	string_copy(&g_dc->name, dc->data, dc->len);
+	g_dc->nnodes = 0;
+	g_dc->nlive_nodes = 0;
+	status = array_init(&g_dc->nodes, 1, sizeof(struct node));
+
+	return status;
+}
+
+
+static struct node *
+gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
+		struct string *address, struct string *ip, struct string *port, struct array *tokens)
 {
 	rstatus_t status;
 	struct node *gnode = (struct node *) array_push(&g_dc->nodes);
@@ -137,13 +151,23 @@ gossip_add_node(struct server_pool *sp, struct gossip_dc *g_dc,
 	for (i = 0, nelem = array_n(tokens); i < nelem; i++) {
 		struct dyn_token * token = (struct dyn_token *) array_get(tokens, i);
 		struct dyn_token * gtoken = (struct dyn_token *) array_push(&gnode->tokens);
-		//init_dyn_token(gtoken);
 		copy_dyn_token(token, gtoken);
 	}
 
 	g_dc->nnodes++;
 
-	gossip_msg_to_core(sp, gnode, dnode_peer_add);
+	return gnode;
+}
+
+
+static rstatus_t
+gossip_add_node(struct server_pool *sp, struct gossip_dc *g_dc,
+		struct string *address, struct string *ip, struct string *port, struct array *tokens)
+{
+	rstatus_t status;
+
+	struct node *gnode = gossip_add_node_to_dc(sp, g_dc, address, ip, port, tokens);
+	status = gossip_msg_to_core(sp, gnode, dnode_peer_add);
 	return status;
 }
 
@@ -174,31 +198,12 @@ gossip_add_dc(struct server_pool *sp, struct string *dc,
 
     //add dc
     struct gossip_dc *g_dc = (struct gossip_dc *)  array_push(&gn_pool.datacenters);
-	string_copy(&g_dc->name, dc->data, dc->len);
-	g_dc->nnodes = 1;
-	status = array_init(&g_dc->nodes, 1, sizeof(struct node));
+    status = gossip_dc_init(g_dc, dc);
 
-	//add node
-	struct node *gnode = array_push(&g_dc->nodes);
-	node_init(gnode);
+	struct node *gnode = gossip_add_node_to_dc(sp, g_dc, address, ip, port, tokens);
+	status = gossip_msg_to_core(sp, gnode, dnode_peer_add_dc);
 
-	string_copy(&gnode->name, ip->data, ip->len);
-	string_copy(&gnode->pname, address->data, address->len); //ignore the port for now
-	gnode->port = dn_atoi(port->data, port->len);
-
-
-	//adding stuff into gossip structure
-	uint32_t ntokens = array_n(tokens);
-	status = array_init(&gnode->tokens, ntokens, sizeof(struct dyn_token));
-	uint32_t k;
-	for(k = 0; k < ntokens; k++) {
-		struct dyn_token *ptoken = (struct dyn_token *) array_get(tokens, k);
-		struct dyn_token *gtoken = array_push(&gnode->tokens);
-		init_dyn_token(gtoken);
-		copy_dyn_token(ptoken, gtoken);
-	}
-
-	return DN_OK;
+	return status;
 }
 
 //we should use hash table to help out here for O(1) check.
@@ -411,10 +416,7 @@ gossip_pool_each_init(void *elem, void *data)
 	for (i = 0, nelem = array_n(&sp->datacenter); i < nelem; i++) {
 		struct datacenter *dc = (struct datacenter *) array_get(&sp->datacenter, i);
 		struct gossip_dc *g_dc = array_push(&gn_pool.datacenters);
-		//g_dc->name = elem->name;
-		string_copy(&g_dc->name, dc->name->data, dc->name->len);
-		g_dc->nnodes++;
-		status = array_init(&g_dc->nodes, 1, sizeof(struct node));
+		gossip_dc_init(g_dc, dc->name);
 	}
 
 	for (i = 0, nelem = array_n(&sp->peers); i < nelem; i++) {
@@ -444,6 +446,8 @@ gossip_pool_each_init(void *elem, void *data)
 					copy_dyn_token(ptoken, gtoken);
 				}
 				//copy socket stuffs
+
+				g_dc->nnodes++;
 			}
 		}
 	}

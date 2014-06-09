@@ -34,5 +34,6 @@ void dnode_peer_pool_disconnect(struct context *ctx);
 rstatus_t dnode_peer_add(struct server_pool *sp, struct node *node);
 rstatus_t dnode_peer_replace(struct server_pool *sp, struct node *node);
 rstatus_t dnode_peer_remove(struct server_pool *sp, struct node *node);
+rstatus_t dnode_peer_add_dc(struct server_pool *sp, struct node *node);
 
 #endif 

@@ -19,7 +19,7 @@ static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
 
 
-static int64_t last; //storing last time for seeds check
+static int64_t last = 0; //storing last time for seeds check
 static struct string last_seeds;
 
 
@@ -27,7 +27,10 @@ static bool seeds_check()
 {
 	int64_t now = dn_msec_now();
 
-	int delta = (int)(now - last);
+	int64_t delta = (int64_t)(now - last);
+	loga("delta : %d", delta);
+	loga("SEEDS_CHECK_INTERVAL %d", SEEDS_CHECK_INTERVAL);
+
 	if (delta > SEEDS_CHECK_INTERVAL) {
 		last = now;
 		return true;
@@ -125,6 +128,8 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 			string_copy(&last_seeds, seeds->data, seeds->len);
 		}
 	}
+
+	log_debug(LOG_VVERB, "Done calling get_seeds!!");
 
 	return DN_OK;
 }

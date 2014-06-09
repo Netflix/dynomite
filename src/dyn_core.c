@@ -395,7 +395,7 @@ core_debug(struct context *ctx)
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer DC          : '%.*s'", sp->dc);
+			log_debug(LOG_VERB, "\tPeer DC          : '%.*s'", server->dc);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);

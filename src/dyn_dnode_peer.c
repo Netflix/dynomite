@@ -620,8 +620,9 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 		} //TODOs: else add a new DC here
 	}
 
-	if (s == NULL)
+	if (s == NULL) {
 		s = array_push(peers);
+	}
 
 	ASSERT(s != NULL);
 
@@ -656,14 +657,68 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 	s->is_seed = node->is_seed;
 
 	log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
-			s->idx, s->pname.len, s->pname.data);
-
+			  s->idx, s->pname.len, s->pname.data);
 
 	dnode_peer_pool_run(sp);
 	dnode_peer_each_preconnect(s, NULL);
 
 	return DN_OK;
 }
+
+
+
+rstatus_t
+dnode_peer_add_dc(struct server_pool *sp, struct node *node)
+{
+	rstatus_t status;
+	log_debug(LOG_VVERB, "dyn: peer has an add-dc message '%.*s'", node->name.len, node->name.data);
+
+    //struct datacenter *dc = array_push(&sp->datacenter);
+    //datacenter_init(dc);
+    //string_copy(dc->name, node->dc.data, node->dc.len);
+    //dc->continuum = dn_alloc(sizeof(struct continuum));
+
+    struct server *s = array_push(&sp->peers);
+    s->owner = sp;
+    s->idx = array_idx(&sp->peers, s);
+
+    string_copy(&s->pname, node->pname.data, node->pname.len);
+    string_copy(&s->name, node->name.data, node->name.len);
+   	string_copy(&s->dc, node->dc.data, node->dc.len);
+
+   	s->port = (uint16_t) node->port;
+   	s->is_local = node->is_local;
+
+   	uint32_t i,nelem;
+   	nelem = array_n(&node->tokens);
+   	array_init(&s->tokens, nelem, sizeof(struct dyn_token));
+   	for (i = 0; i < nelem; i++) {
+   		struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+   		struct dyn_token *dst_token = array_push(&s->tokens);
+   		copy_dyn_token(src_token, dst_token);
+   	}
+
+   	struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
+   	dn_resolve(&s->name, s->port, info);
+   	s->family = info->family;
+   	s->addrlen = info->addrlen;
+   	s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+   	s->ns_conn_q = 0;
+   	TAILQ_INIT(&s->s_conn_q);
+
+   	s->next_retry = 0LL;
+   	s->failure_count = 0;
+   	s->is_seed = node->is_seed;
+
+   	log_debug(LOG_VERB, "add a dc and node to peer %"PRIu32" '%.*s'",
+   				  s->idx, s->pname.len, s->pname.data);
+
+   	dnode_peer_pool_run(sp);
+   	dnode_peer_each_preconnect(s, NULL);
+
+	return DN_OK;
+}
+
 
 rstatus_t
 dnode_peer_remove(struct server_pool *sp, struct node *node)
