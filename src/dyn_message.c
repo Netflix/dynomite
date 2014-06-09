@@ -30,21 +30,21 @@
 #include "proto/dyn_proto.h"
 
 #if (IOV_MAX > 128)
-#define NC_IOV_MAX 128
+#define DN_IOV_MAX 128
 #else
-#define NC_IOV_MAX IOV_MAX
+#define DN_IOV_MAX IOV_MAX
 #endif
 
 /*
- *            nc_message.[ch]
+ *            dn_message.[ch]
  *         message (struct msg)
  *            +        +            .
  *            |        |            .
  *            /        \            .
- *         Request    Response      .../ nc_mbuf.[ch]  (mesage buffers)
- *      nc_request.c  nc_response.c .../ nc_memcache.c; nc_redis.c (message parser)
+ *         Request    Response      .../ dn_mbuf.[ch]  (mesage buffers)
+ *      dn_request.c  dn_response.c .../ dn_memcache.c; dn_redis.c (message parser)
  *
- * Messages in nutcracker are manipulated by a chain of processing handlers,
+ * Messages in dynomite are manipulated by a chain of processing handlers,
  * where each handler is responsible for taking the input and producing an
  * output for the next handler in the chain. This mechanism of processing
  * loosely conforms to the standard chain-of-responsibility design pattern
@@ -77,7 +77,7 @@
  * with read or IN event
  *
  *             Client+             Proxy           Server+
- *                              (nutcracker)
+ *                              (dynomite)
  *                                   .
  *       msg_recv {read event}       .       msg_recv {read event}
  *         +                         .                         +
@@ -161,7 +161,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     }
 
     node = &msg->tmo_rbe;
-    node->key = nc_msec_now() + timeout;
+    node->key = dn_msec_now() + timeout;
     node->data = conn;
 
     rbtree_insert(&tmo_rbt, node);
@@ -202,7 +202,7 @@ _msg_get(void)
         goto done;
     }
 
-    msg = nc_alloc(sizeof(*msg));
+    msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
         return NULL;
     }
@@ -366,7 +366,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
         mbuf_insert(&target->mhdr, nbuf);
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 
@@ -394,7 +394,7 @@ msg_get_error(bool redis, err_t err)
     }
     mbuf_insert(&msg->mhdr, mbuf);
 
-    n = nc_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s"CRLF, protstr, errstr);
+    n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s"CRLF, protstr, errstr);
     mbuf->last += n;
     msg->mlen = (uint32_t)n;
 
@@ -410,7 +410,7 @@ msg_free(struct msg *msg)
     ASSERT(STAILQ_EMPTY(&msg->mhdr));
 
     log_debug(LOG_VVERB, "free msg %p id %"PRIu64"", msg, msg->id);
-    nc_free(msg);
+    dn_free(msg);
 }
 
 void
@@ -495,7 +495,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
     if (msg->pos == mbuf->last) {
         /* no more data to parse */
         conn->recv_done(ctx, conn, msg, NULL);
-        return NC_OK;
+        return DN_OK;
     }
 
     /*
@@ -506,13 +506,13 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
      */
     nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
     if (nbuf == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     nmsg = msg_get(msg->owner, msg->request, conn->redis);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
     mbuf_insert(&nmsg->mhdr, nbuf);
     nmsg->pos = nbuf->pos;
@@ -523,7 +523,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
 
     conn->recv_done(ctx, conn, msg, nmsg);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -538,11 +538,11 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
     if (nbuf == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     status = msg->post_splitcopy(msg);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         mbuf_put(nbuf);
         return status;
     }
@@ -550,7 +550,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     nmsg = msg_get(msg->owner, msg->request, msg->redis);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
     mbuf_insert(&nmsg->mhdr, nbuf);
     nmsg->pos = nbuf->pos;
@@ -622,7 +622,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
 
     conn->recv_done(ctx, conn, msg, nmsg);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -632,12 +632,12 @@ msg_repair(struct context *ctx, struct conn *conn, struct msg *msg)
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
     if (nbuf == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
     mbuf_insert(&msg->mhdr, nbuf);
     msg->pos = nbuf->pos;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -648,7 +648,7 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
     if (msg_empty(msg)) {
         /* no data to parse */
         conn->recv_done(ctx, conn, msg, NULL);
-        return NC_OK;
+        return DN_OK;
     }
 
     msg->parser(msg);
@@ -667,16 +667,16 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
         break;
 
     case MSG_PARSE_AGAIN:
-        status = NC_OK;
+        status = DN_OK;
         break;
 
     default:
-        status = NC_ERROR;
+        status = DN_ERROR;
         conn->err = errno;
         break;
     }
 
-    return conn->err != 0 ? NC_ERROR : status;
+    return conn->err != 0 ? DN_ERROR : status;
 }
 
 static rstatus_t
@@ -692,7 +692,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     if (mbuf == NULL || mbuf_full(mbuf)) {
         mbuf = mbuf_get();
         if (mbuf == NULL) {
-            return NC_ENOMEM;
+            return DN_ENOMEM;
         }
         mbuf_insert(&msg->mhdr, mbuf);
         msg->pos = mbuf->pos;
@@ -703,10 +703,10 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     n = conn_recv(conn, mbuf->last, msize);
     if (n < 0) {
-        if (n == NC_EAGAIN) {
-            return NC_OK;
+        if (n == DN_EAGAIN) {
+            return DN_OK;
         }
-        return NC_ERROR;
+        return DN_ERROR;
     }
 
     ASSERT((mbuf->last + n) <= mbuf->end);
@@ -715,7 +715,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     for (;;) {
         status = msg_parse(ctx, conn, msg);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
@@ -729,7 +729,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         msg = nmsg;
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -744,16 +744,16 @@ msg_recv(struct context *ctx, struct conn *conn)
     do {
         msg = conn->recv_next(ctx, conn, true);
         if (msg == NULL) {
-            return NC_OK;
+            return DN_OK;
         }
 
         status = msg_recv_chain(ctx, conn, msg);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     } while (conn->recv_ready);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 static rstatus_t
@@ -763,7 +763,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *nmsg;                    /* next msg */
     struct mbuf *mbuf, *nbuf;            /* current and next mbuf */
     size_t mlen;                         /* current mbuf data length */
-    struct iovec *ciov, iov[NC_IOV_MAX]; /* current iovec */
+    struct iovec *ciov, iov[DN_IOV_MAX]; /* current iovec */
     struct array sendv;                  /* send iovec */
     size_t nsend, nsent;                 /* bytes to send; bytes sent */
     size_t limit;                        /* bytes to send limit */
@@ -771,7 +771,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     TAILQ_INIT(&send_msgq);
 
-    array_set(&sendv, iov, sizeof(iov[0]), NC_IOV_MAX);
+    array_set(&sendv, iov, sizeof(iov[0]), DN_IOV_MAX);
 
     /* preprocess - build iovec */
 
@@ -789,7 +789,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         TAILQ_INSERT_TAIL(&send_msgq, msg, m_tqe);
 
         for (mbuf = STAILQ_FIRST(&msg->mhdr);
-             mbuf != NULL && array_n(&sendv) < NC_IOV_MAX && nsend < limit;
+             mbuf != NULL && array_n(&sendv) < DN_IOV_MAX && nsend < limit;
              mbuf = nbuf) {
             nbuf = STAILQ_NEXT(mbuf, next);
 
@@ -809,7 +809,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             nsend += mlen;
         }
 
-        if (array_n(&sendv) >= NC_IOV_MAX || nsend >= limit) {
+        if (array_n(&sendv) >= DN_IOV_MAX || nsend >= limit) {
             break;
         }
 
@@ -872,10 +872,10 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(TAILQ_EMPTY(&send_msgq));
 
     if (n > 0) {
-        return NC_OK;
+        return DN_OK;
     }
 
-    return (n == NC_EAGAIN) ? NC_OK : NC_ERROR;
+    return (n == DN_EAGAIN) ? DN_OK : DN_ERROR;
 }
 
 rstatus_t
@@ -891,15 +891,15 @@ msg_send(struct context *ctx, struct conn *conn)
         msg = conn->send_next(ctx, conn);
         if (msg == NULL) {
             /* nothing to send */
-            return NC_OK;
+            return DN_OK;
         }
 
         status = msg_send_chain(ctx, conn, msg);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
 
     } while (conn->send_ready);
 
-    return NC_OK;
+    return DN_OK;
 }

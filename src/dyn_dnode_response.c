@@ -120,7 +120,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 
     if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
         status = event_add_out(ctx->evb, c_conn);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             c_conn->err = errno;
         }
     }

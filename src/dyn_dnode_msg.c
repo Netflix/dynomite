@@ -370,7 +370,7 @@ dmsg_free(struct dmsg *dmsg)
     ASSERT(STAILQ_EMPTY(&dmsg->mhdr));
 
     log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
-    nc_free(dmsg);
+    dn_free(dmsg);
 }
 
 
@@ -457,7 +457,7 @@ dmsg_get(void)
         goto done;
     }
 
-    dmsg = nc_alloc(sizeof(*dmsg));
+    dmsg = dn_alloc(sizeof(*dmsg));
     if (dmsg == NULL) {
         return NULL;
     }
@@ -499,7 +499,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
 
     log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");
      
-    return NC_OK;
+    return DN_OK;
 }
 
 

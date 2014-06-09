@@ -19,7 +19,7 @@ rstatus_t dyn_ring_init(struct array *peers, struct server_pool *sp)
        sp->ring.ring_nodes = peers;
        sp->ring.owner = sp;
        
-       return NC_OK;
+       return DN_OK;
 }
 
 
@@ -35,7 +35,7 @@ rstatus_t dyn_gos_run(struct context *ctx)
         ASSERT(ncontinuum > 0);
 
         if (ncontinuum == 1) {
-           return NC_OK;
+           return DN_OK;
         }
 
         //struct server *rnode = array_get(peers, random() % ncontinuum);
@@ -49,36 +49,36 @@ rstatus_t dyn_gos_run(struct context *ctx)
              if (conn == NULL) {
                 //running out of connection due to memory exhaust
                  log_debug(LOG_DEBUG, "Unable to obtain a connection object");
-                 return NC_ERROR;
+                 return DN_ERROR;
              }
 
              status = dnode_peer_connect(ctx, rnode, conn);
-             if (status != NC_OK ) {
+             if (status != DN_OK ) {
                   dnode_peer_close(ctx, conn);
                   log_debug(LOG_DEBUG, "Error happened in dyn_gos_run");
-                  return NC_OK;
+                  return DN_OK;
              }
 
              /* enqueue the message (request) into peer inq */
              if (TAILQ_EMPTY(&conn->imsg_q)) {
                  status = event_add_out(ctx->evb, conn);
-                 if (status != NC_OK) {
+                 if (status != DN_OK) {
                       conn->err = errno;
                       log_debug(LOG_DEBUG, "Error happened in calling event_add_out");
-                      return NC_ERROR;
+                      return DN_ERROR;
                   }
              }
 
              struct mbuf *nbuf = mbuf_get();
              if (nbuf == NULL) {
                  log_debug(LOG_DEBUG, "Error happened in calling mbuf_get");
-                 return NC_ERROR;
+                 return DN_ERROR;
              }
 
              struct msg *msg = msg_get(conn, 1, 0);
              if (msg == NULL) {
                  mbuf_put(nbuf);
-                 return NC_ERROR;
+                 return DN_ERROR;
              }
 
              //dyn message's meta data
@@ -103,5 +103,5 @@ rstatus_t dyn_gos_run(struct context *ctx)
                         " type %d", conn->sd, msg->id, msg->mlen, msg->type);
       }
 
-      return NC_OK;
+      return DN_OK;
 }

@@ -43,9 +43,9 @@ random_update(struct server_pool *pool)
     /* uint32_t server_index;        /\* server index *\/ */
     /* int64_t now;                  /\* current timestamp in usec *\/ */
 
-    /* now = nc_usec_now(); */
+    /* now = dn_usec_now(); */
     /* if (now < 0) { */
-    /*     return NC_ERROR; */
+    /*     return DN_ERROR; */
     /* } */
 
     /* nserver = array_n(&pool->server); */
@@ -77,7 +77,7 @@ random_update(struct server_pool *pool)
     /*     log_debug(LOG_DEBUG, "no live servers for pool %"PRIu32" '%.*s'", */
     /*               pool->idx, pool->name.len, pool->name.data); */
 
-    /*     return NC_OK; */
+    /*     return DN_OK; */
     /* } */
     /* log_debug(LOG_DEBUG, "%"PRIu32" of %"PRIu32" servers are live for pool " */
     /*           "%"PRIu32" '%.*s'", nlive_server, nserver, pool->idx, */
@@ -95,9 +95,9 @@ random_update(struct server_pool *pool)
     /*     uint32_t nserver_continuum = nlive_server + RANDOM_CONTINUUM_ADDITION; */
     /*     uint32_t ncontinuum = nserver_continuum *  RANDOM_POINTS_PER_SERVER; */
 
-    /*     continuum = nc_realloc(pool->continuum, sizeof(*continuum) * ncontinuum); */
+    /*     continuum = dn_realloc(pool->continuum, sizeof(*continuum) * ncontinuum); */
     /*     if (continuum == NULL) { */
-    /*         return NC_ENOMEM; */
+    /*         return DN_ENOMEM; */
     /*     } */
 
     /*     srandom((uint32_t)time(NULL)); */
@@ -133,7 +133,7 @@ random_update(struct server_pool *pool)
     /*           pool->nserver_continuum, pool->ncontinuum, */
     /*           (pool->nserver_continuum + continuum_addition) * points_per_server); */
 
-    return NC_OK;
+    return DN_OK;
 
 }
 

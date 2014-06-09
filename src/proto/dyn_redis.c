@@ -278,7 +278,7 @@ redis_argeval(struct msg *r)
  *     the last argument is handled in a special way in order to allow for
  *     a binary-safe last argument.
  *
- * Nutcracker only supports the Redis unified protocol for requests.
+ * Dynomite only supports the Redis unified protocol for requests.
  */
 void
 redis_parse_req(struct msg *r)
@@ -1936,12 +1936,12 @@ redis_pre_splitcopy(struct mbuf *mbuf, void *arg)
 
     switch (r->type) {
     case MSG_REQ_REDIS_MGET:
-        n = nc_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$4\r\nmget\r\n",
+        n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$4\r\nmget\r\n",
                         r->narg - 1);
         break;
 
     case MSG_REQ_REDIS_DEL:
-        n = nc_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$3\r\ndel\r\n",
+        n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$3\r\ndel\r\n",
                         r->narg - 1);
         break;
 
@@ -1969,7 +1969,7 @@ redis_post_splitcopy(struct msg *r)
 
     nhbuf = mbuf_get();
     if (nhbuf == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     /*
@@ -1992,7 +1992,7 @@ redis_post_splitcopy(struct msg *r)
     r->narg_start = nhbuf->pos;
     r->narg_end = nhbuf->last;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 /*
@@ -2111,7 +2111,7 @@ redis_post_coalesce(struct msg *r)
         ASSERT(pr->mlen == 0);
         ASSERT(mbuf_empty(mbuf));
 
-        n = nc_scnprintf(mbuf->last, mbuf_size(mbuf), ":%d\r\n", r->integer);
+        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":%d\r\n", r->integer);
         mbuf->last += n;
         pr->mlen += (uint32_t)n;
         break;
@@ -2123,7 +2123,7 @@ redis_post_coalesce(struct msg *r)
         mbuf = STAILQ_FIRST(&pr->mhdr);
         ASSERT(mbuf_empty(mbuf));
 
-        n = nc_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", r->nfrag);
+        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", r->nfrag);
         mbuf->last += n;
         pr->mlen += (uint32_t)n;
         break;

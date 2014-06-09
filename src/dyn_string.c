@@ -56,7 +56,7 @@ string_deinit(struct string *str)
            (str->len != 0 && str->data != NULL));
 
     if (str->data != NULL) {
-        nc_free(str->data);
+        dn_free(str->data);
         string_init(str);
     }
 }
@@ -75,15 +75,15 @@ string_duplicate(struct string *dst, const struct string *src)
     ASSERT(dst->len == 0 && dst->data == NULL);
     ASSERT(src->len != 0 && src->data != NULL);
 
-    dst->data = nc_strndup(src->data, src->len + 1);
+    dst->data = dn_strndup(src->data, src->len + 1);
     if (dst->data == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     dst->len = src->len;
     dst->data[dst->len] = '\0';
 
-    return NC_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -92,15 +92,15 @@ string_copy(struct string *dst, const uint8_t *src, uint32_t srclen)
     ASSERT(dst->len == 0 && dst->data == NULL);
     ASSERT(src != NULL && srclen != 0);
 
-    dst->data = nc_strndup(src, srclen + 1);
+    dst->data = dn_strndup(src, srclen + 1);
     if (dst->data == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     dst->len = srclen;
     dst->data[dst->len] = '\0';
 
-    return NC_OK;
+    return DN_OK;
 }
 
 int
@@ -110,5 +110,5 @@ string_compare(const struct string *s1, const struct string *s2)
         return s1->len - s2->len > 0 ? 1 : -1;
     }
 
-    return nc_strncmp(s1->data, s2->data, s1->len);
+    return dn_strncmp(s1->data, s2->data, s1->len);
 }

@@ -166,7 +166,7 @@ typedef enum stats_cmd {
 } stats_cmd_t;
 
 
-#if defined NC_STATS && NC_STATS == 1
+#if defined DN_STATS && DN_STATS == 1
 
 #define stats_pool_incr(_ctx, _pool, _name) do {                        \
     _stats_pool_incr(_ctx, _pool, STATS_POOL_##_name);                  \
@@ -239,7 +239,7 @@ typedef enum stats_cmd {
 
 #endif
 
-#define stats_enabled   NC_STATS
+#define stats_enabled   DN_STATS
 
 void stats_describe(void);
 

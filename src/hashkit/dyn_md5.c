@@ -328,5 +328,5 @@ hash_md5(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, val);
     
-    return NC_OK;
+    return DN_OK;
 }

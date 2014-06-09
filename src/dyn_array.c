@@ -31,14 +31,14 @@ array_create(uint32_t n, size_t size)
 
     ASSERT(n != 0 && size != 0);
 
-    a = nc_alloc(sizeof(*a));
+    a = dn_alloc(sizeof(*a));
     if (a == NULL) {
         return NULL;
     }
 
-    a->elem = nc_alloc(n * size);
+    a->elem = dn_alloc(n * size);
     if (a->elem == NULL) {
-        nc_free(a);
+        dn_free(a);
         return NULL;
     }
 
@@ -53,7 +53,7 @@ void
 array_destroy(struct array *a)
 {
     array_deinit(a);
-    nc_free(a);
+    dn_free(a);
 }
 
 rstatus_t
@@ -61,16 +61,16 @@ array_init(struct array *a, uint32_t n, size_t size)
 {
     ASSERT(n != 0 && size != 0);
 
-    a->elem = nc_alloc(n * size);
+    a->elem = dn_alloc(n * size);
     if (a->elem == NULL) {
-        return NC_ENOMEM;
+        return DN_ENOMEM;
     }
 
     a->nelem = 0;
     a->size = size;
     a->nalloc = n;
 
-    return NC_OK;
+    return DN_OK;
 }
 
 void
@@ -79,7 +79,7 @@ array_deinit(struct array *a)
     ASSERT(a->nelem == 0);
 
     if (a->elem != NULL) {
-        nc_free(a->elem);
+        dn_free(a->elem);
     }
 }
 
@@ -112,7 +112,7 @@ array_push(struct array *a)
 
         /* the array is full; allocate new array */
         size = a->size * a->nalloc;
-        new = nc_realloc(a->elem, 2 * size);
+        new = dn_realloc(a->elem, 2 * size);
         if (new == NULL) {
             return NULL;
         }
@@ -200,10 +200,10 @@ array_each(struct array *a, array_each_t func, void *data)
         rstatus_t status;
 
         status = func(elem, data);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             return status;
         }
     }
 
-    return NC_OK;
+    return DN_OK;
 }

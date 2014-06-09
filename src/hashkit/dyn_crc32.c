@@ -115,7 +115,7 @@ hash_crc32(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, val);
 
-    return NC_OK;
+    return DN_OK;
 }
 
 uint32_t
@@ -133,5 +133,5 @@ hash_crc32a(const char *key, size_t key_length, struct dyn_token *token)
     size_dyn_token(token, 1);
     set_int_dyn_token(token, val);
 
-    return NC_OK;
+    return DN_OK;
 }

@@ -30,11 +30,11 @@ rstatus_t
 hash_murmur3(const char *key, size_t length, struct dyn_token *token)
 {
     rstatus_t status = size_dyn_token(token, 4);
-    if (status != NC_OK) {
+    if (status != DN_OK) {
         return status;
     }
 
 //    MurmurHash3_x86_128(key, length, MURMUR3_SEED, token->mag);
 
-    return NC_OK;
+    return DN_OK;
 }

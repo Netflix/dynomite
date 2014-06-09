@@ -56,11 +56,11 @@ signal_init(void)
         if (status < 0) {
             log_error("sigaction(%s) failed: %s", sig->signame,
                       strerror(errno));
-            return NC_ERROR;
+            return DN_ERROR;
         }
     }
 
-    return NC_OK;
+    return DN_OK;
 }
 
 void
@@ -115,7 +115,7 @@ signal_handler(int signo)
         break;
 
     case SIGSEGV:
-        nc_stacktrace(1);
+        dn_stacktrace(1);
         actionstr = ", core dumping";
         raise(SIGSEGV);
         break;

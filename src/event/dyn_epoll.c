@@ -22,7 +22,7 @@
 
 #include <dyn_core.h>
 
-#ifdef NC_HAVE_EPOLL
+#ifdef DN_HAVE_EPOLL
 
 #include <sys/epoll.h>
 
@@ -41,7 +41,7 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    event = nc_calloc(nevent, sizeof(*event));
+    event = dn_calloc(nevent, sizeof(*event));
     if (event == NULL) {
         status = close(ep);
         if (status < 0) {
@@ -50,9 +50,9 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    evb = nc_alloc(sizeof(*evb));
+    evb = dn_alloc(sizeof(*evb));
     if (evb == NULL) {
-        nc_free(event);
+        dn_free(event);
         status = close(ep);
         if (status < 0) {
             log_error("close e %d failed, ignored: %s", ep, strerror(errno));
@@ -81,7 +81,7 @@ event_base_destroy(struct event_base *evb)
 
     ASSERT(evb->ep > 0);
 
-    nc_free(evb->event);
+    dn_free(evb->event);
 
     status = close(evb->ep);
     if (status < 0) {
@@ -89,7 +89,7 @@ event_base_destroy(struct event_base *evb)
     }
     evb->ep = -1;
 
-    nc_free(evb);
+    dn_free(evb);
 }
 
 int
@@ -348,4 +348,4 @@ error:
     ep = -1;
 }
 
-#endif /* NC_HAVE_EPOLL */
+#endif /* DN_HAVE_EPOLL */

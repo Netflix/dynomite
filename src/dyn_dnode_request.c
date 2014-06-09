@@ -169,7 +169,7 @@ dnode_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg
 
     if (dnode_req_done(dc_conn, msg)) {
        status = event_add_out(ctx->evb, dc_conn);
-       if (status != NC_OK) {
+       if (status != DN_OK) {
           dc_conn->err = errno;
        }
     }
@@ -242,7 +242,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (dnode_req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
         status = event_add_out(ctx->evb, conn);
-        if (status != NC_OK) {
+        if (status != DN_OK) {
             conn->err = errno;
         }
     }
@@ -276,9 +276,9 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
         struct string *tag = &pool->hash_tag;
         uint8_t *tag_start, *tag_end;
 
-        tag_start = nc_strchr(msg->key_start, msg->key_end, tag->data[0]);
+        tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
         if (tag_start != NULL) {
-            tag_end = nc_strchr(tag_start + 1, msg->key_end, tag->data[1]);
+            tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
             if (tag_end != NULL) {
                 key = tag_start + 1;
                 keylen = (uint32_t)(tag_end - key);

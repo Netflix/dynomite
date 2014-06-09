@@ -20,8 +20,8 @@
  * limitations under the License.
  */
 
-#ifndef _NC_HASHKIT_H_
-#define _NC_HASHKIT_H_
+#ifndef _DYN_HASHKIT_H_
+#define _DYN_HASHKIT_H_
 
 #include <dyn_core.h>
 #include <dyn_server.h>

@@ -22,7 +22,7 @@
 
 #include <dyn_core.h>
 
-#ifdef NC_HAVE_KQUEUE
+#ifdef DN_HAVE_KQUEUE
 
 #include <sys/event.h>
 
@@ -41,7 +41,7 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    change = nc_calloc(nevent, sizeof(*change));
+    change = dn_calloc(nevent, sizeof(*change));
     if (change == NULL) {
         status = close(kq);
         if (status < 0) {
@@ -50,9 +50,9 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    event = nc_calloc(nevent, sizeof(*event));
+    event = dn_calloc(nevent, sizeof(*event));
     if (event == NULL) {
-        nc_free(change);
+        dn_free(change);
         status = close(kq);
         if (status < 0) {
             log_error("close kq %d failed, ignored: %s", kq, strerror(errno));
@@ -60,10 +60,10 @@ event_base_create(int nevent, event_cb_t cb)
         return NULL;
     }
 
-    evb = nc_alloc(sizeof(*evb));
+    evb = dn_alloc(sizeof(*evb));
     if (evb == NULL) {
-        nc_free(change);
-        nc_free(event);
+        dn_free(change);
+        dn_free(event);
         status = close(kq);
         if (status < 0) {
             log_error("close kq %d failed, ignored: %s", kq, strerror(errno));
@@ -96,8 +96,8 @@ event_base_destroy(struct event_base *evb)
 
     ASSERT(evb->kq > 0);
 
-    nc_free(evb->change);
-    nc_free(evb->event);
+    dn_free(evb->change);
+    dn_free(evb->event);
 
     status = close(evb->kq);
     if (status < 0) {
@@ -105,7 +105,7 @@ event_base_destroy(struct event_base *evb)
     }
     evb->kq = -1;
 
-    nc_free(evb);
+    dn_free(evb);
 }
 
 int
@@ -414,4 +414,4 @@ error:
     kq = -1;
 }
 
-#endif /* NC_HAVE_KQUEUE */
+#endif /* DN_HAVE_KQUEUE */

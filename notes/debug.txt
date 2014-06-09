@@ -1,5 +1,5 @@
 - strace
-  strace -o strace.txt -ttT -s 1024 -p `pgrep nutcracker`
+  strace -o strace.txt -ttT -s 1024 -p `pgrep dynomite`
 
 - libyaml (yaml-0.1.4)
 
@@ -65,7 +65,7 @@
   ulimit -m <size>    # limit maximum memory size
   ulimit -v <size>    # limit virtual memory
 
-- get nutcracker stats
+- get dynomite stats
   printf "" | socat  - TCP:localhost:22222 | tee stats.txt
   printf "" | nc localhost 22222 | python -mjson.tool
 

@@ -34,17 +34,16 @@ volatile struct
 
 
 
-struct node {
+volatile struct node {
     struct array       tokens;        /* array of dyn_tokens */
     struct string      dc;
     //struct gossip_dc   *dc;           /* logical datacenter */
 
     struct string      pname;         /* name:port */
     struct string      name;          /* name  */
+
     int                port;          /* port */
-    int                family;        /* socket family */
-    socklen_t          addrlen;       /* socket length */
-    struct sockaddr    *addr;         /* socket address  */
+    struct sockinfo    info;
 
     int64_t            next_retry;    /* next retry time in usec */
     int64_t            last_retry;    /* last retry time in usec */
@@ -56,7 +55,7 @@ struct node {
 };
 
 
-struct ring_message {
+volatile struct ring_message {
 	callback_t         cb;
     struct node        *node;
 	struct server_pool *sp;
