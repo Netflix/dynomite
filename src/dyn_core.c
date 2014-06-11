@@ -444,7 +444,9 @@ rstatus_t
 core_loop(struct context *ctx)
 {
 	int nsd;
-	loga("timeout = %d", ctx->timeout);
+
+	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
+
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;
