@@ -258,7 +258,7 @@ gossip_add_seed_if_absent(struct server_pool *sp, struct string *dc,
 				for(j = 0; j < g_dc->nnodes; j++) {
 					struct node * g_node = (struct node *) array_get(&g_dc->nodes, j);
 					log_debug(LOG_VERB, "\t\tg_node->name          : '%.*s'", g_node->name.len, g_node->name.data);
-					log_debug(LOG_VERB, "\t\ip         : '%.*s'", ip->len, ip->data);
+					log_debug(LOG_VERB, "\t\tip         : '%.*s'", ip->len, ip->data);
 					if (string_compare(&g_node->name, ip) == 0) {
 						exist = true;
 						break;
@@ -415,7 +415,7 @@ gossip_set_seeds_provider(struct string * seeds_provider_str)
 	log_debug(LOG_VERB, "Seed provider :::::: '%.*s'",
 			  seeds_provider_str->len, seeds_provider_str->data);
 
-	if (strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
+	if (dn_strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
 		gn_pool.seeds_provider = florida_get_seeds;
 	} else {
 		gn_pool.seeds_provider = NULL;
