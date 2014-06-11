@@ -349,21 +349,21 @@ gossip_loop(void *arg)
 
 	for(;;) {
 		usleep(2000000); //TODOs: get this from a setting
-		log_debug(LOG_VERB, "Running  gossip ...");
+		log_debug(LOG_VERB, "Gossip is running ...");
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
-			log_debug(LOG_VERB, "Seeds :::::: '%.*s'", seeds.len, seeds.data);
+			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
 			gossip_update_seeds(sp, &seeds);
 			string_deinit(&seeds);
 		}
 
-		loga("From gossip thread, Length of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
+		//loga("From gossip thread, Length of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
 
-		while (!CBUF_IsEmpty(C2G_InQ)) {
+		//while (!CBUF_IsEmpty(C2G_InQ)) {
 			//char* s = (char*) CBUF_Pop( C2G_InQ );
 			//loga("Gossip: %s", s);
 			//dn_free(s);
-		}
+		//}
 
 		//void* ss = "hello main, from gossip";
 		//CBUF_Push( C2G_OutQ, ss );
@@ -397,7 +397,7 @@ static void
 gossip_set_seeds_provider(struct string * seeds_provider_str)
 {
 	log_debug(LOG_VERB, "Seed provider :::::: '%.*s'",
-			seeds_provider_str->len, seeds_provider_str->data);
+			  seeds_provider_str->len, seeds_provider_str->data);
 
 	if (strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
 		gn_pool.seeds_provider = florida_get_seeds;
