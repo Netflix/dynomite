@@ -82,12 +82,15 @@ set_int_dyn_token(struct dyn_token *token, uint32_t val)
 	token->signum = val > 0 ? 1 : 0;
 }
 
-void print_dyn_token(struct dyn_token *token)
+void print_dyn_token(struct dyn_token *token, int num_tabs)
 {
 	if (token == NULL)
 		log_debug(LOG_VERB, "Token is null!!!!!");
 
-	log_debug(LOG_VERB, "Token : %"PRIu32" %"PRIu32" %"PRIu32" ", token->signum, *token->mag, token->len);
+	if (num_tabs < 0)
+		num_tabs = 0;
+
+	log_debug(LOG_VERB, "%*cToken : %"PRIu32" %"PRIu32" %"PRIu32" ", num_tabs, '\t', token->signum, *token->mag, token->len);
 
 }
 

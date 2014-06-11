@@ -28,6 +28,6 @@ void set_int_dyn_token(struct dyn_token *token, uint32_t val);
 rstatus_t parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token);
 int32_t cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2);
 rstatus_t derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end);
-void print_dyn_token(struct dyn_token *token);
+void print_dyn_token(struct dyn_token *token, int num_tabs);
 
 #endif

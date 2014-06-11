@@ -406,7 +406,7 @@ core_debug(struct context *ctx)
 			uint32_t k;
 			for (k = 0; k < array_n(&server->tokens); k++) {
 				struct dyn_token *token = (struct dyn_token *) array_get(&server->tokens, k);
-				print_dyn_token(token);
+				print_dyn_token(token, 12);
 			}
 		}
 
