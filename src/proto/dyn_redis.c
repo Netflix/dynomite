@@ -511,6 +511,12 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
+                if (str4icmp(m, 'p', 'i', 'n', 'g')) {
+                    r->type = MSG_REQ_REDIS_PING;
+                    p = p + 1;
+                    goto done;
+                }
+
                 if (str4icmp(m, 'l', 's', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_LSET;
                     break;

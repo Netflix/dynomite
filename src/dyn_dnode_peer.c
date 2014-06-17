@@ -874,6 +874,10 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 		break;
 
 	case DIST_VNODE:
+		if (keylen == 0) {
+			idx = 0; //for no argument command
+			break;
+		}
 		token = dnode_peer_pool_hash(pool, key, keylen);
 		idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
 		break;
