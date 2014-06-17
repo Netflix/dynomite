@@ -371,13 +371,20 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 
 
 struct msg *
-msg_get_error(bool redis, err_t err)
+msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
 {
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? strerror(err) : "unknown";
     char *protstr = redis ? "-ERR" : "SERVER_ERROR";
+    char *source;
+
+    if (dyn_err == PEER_CONNECTION_REFUSE) {
+    	source = "Peer:";
+    } else if (dyn_err == STORAGE_CONNECTION_REFUSE) {
+    	source = "Storage:";
+    }
 
     msg = _msg_get();
     if (msg == NULL) {
@@ -394,7 +401,7 @@ msg_get_error(bool redis, err_t err)
     }
     mbuf_insert(&msg->mhdr, mbuf);
 
-    n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s"CRLF, protstr, errstr);
+    n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s %s"CRLF, protstr, source, errstr);
     mbuf->last += n;
     msg->mlen = (uint32_t)n;
 

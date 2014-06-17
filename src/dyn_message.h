@@ -119,6 +119,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_LREM,
     MSG_REQ_REDIS_LSET,
     MSG_REQ_REDIS_LTRIM,
+    MSG_REQ_REDIS_PING,
     MSG_REQ_REDIS_RPOP,
     MSG_REQ_REDIS_RPOPLPUSH,
     MSG_REQ_REDIS_RPUSH,
@@ -163,6 +164,12 @@ typedef enum msg_type {
     MSG_SENTINEL
 } msg_type_t;
 
+
+typedef enum dyn_error {
+    UNKNOWN_ERROR,
+    PEER_CONNECTION_REFUSE,
+    STORAGE_CONNECTION_REFUSE
+} dyn_error_t;
 
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
@@ -225,6 +232,7 @@ struct msg {
     //dynomite
     struct dmsg          *dmsg;          /* dyn message */
     int                  dyn_state;
+    dyn_error_t          dyn_error;      /* error code for dynomite */
 };
 
 TAILQ_HEAD(msg_tqh, msg);
@@ -238,7 +246,7 @@ rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target
 void msg_deinit(void);
 struct msg *msg_get(struct conn *conn, bool request, bool redis);
 void msg_put(struct msg *msg);
-struct msg *msg_get_error(bool redis, err_t err);
+struct msg *msg_get_error(bool redis, dyn_error_t dyn_err, err_t err);
 void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
