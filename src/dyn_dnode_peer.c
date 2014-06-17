@@ -478,6 +478,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 			msg->done = 1;
 			msg->error = 1;
 			msg->err = conn->err;
+			msg->dyn_error = PEER_CONNECTION_REFUSE;
 
 			if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
 				event_add_out(ctx->evb, msg->owner);

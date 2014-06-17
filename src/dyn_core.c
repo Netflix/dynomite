@@ -240,12 +240,28 @@ core_send(struct context *ctx, struct conn *conn)
 }
 
 static void
-core_close(struct context *ctx, struct conn *conn)
+core_dnode_close_log(struct conn *conn)
 {
-	rstatus_t status;
 	char type, *addrstr;
 
-	ASSERT(conn->sd > 0);
+	if (conn->dnode_client) {
+		type = 'c';
+		addrstr = dn_unresolve_peer_desc(conn->sd);
+	} else {
+		type = conn->dnode_server ? 's' : 'p';
+		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
+	}
+	log_debug(LOG_NOTICE, "dnode close %c %d '%s' on event %04"PRIX32" eof %d done "
+			"%d rb %zu sb %zu%c %s", type, conn->sd, addrstr, conn->events,
+			conn->eof, conn->done, conn->recv_bytes, conn->send_bytes,
+			conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
+
+}
+
+static void
+core_close_log(struct conn *conn)
+{
+	char type, *addrstr;
 
 	if (conn->client) {
 		type = 'c';
@@ -259,10 +275,26 @@ core_close(struct context *ctx, struct conn *conn)
 			conn->eof, conn->done, conn->recv_bytes, conn->send_bytes,
 			conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
+}
+
+static void
+core_close(struct context *ctx, struct conn *conn)
+{
+	rstatus_t status;
+	char type, *addrstr;
+
+	ASSERT(conn->sd > 0);
+
+    if (conn->dyn_mode) {
+    	core_dnode_close_log(conn);
+    } else {
+    	core_close_log(conn);
+    }
+
 	status = event_del_conn(ctx->evb, conn);
 	if (status < 0) {
 		log_warn("event del conn %c %d failed, ignored: %s",
-				type, conn->sd, strerror(errno));
+				 type, conn->sd, strerror(errno));
 	}
 
 	conn->close(ctx, conn);
@@ -336,8 +368,13 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-	log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
-			conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
+	if (conn->dyn_mode) {
+		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
+				      	 conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
+	} else {
+	    log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
+		      	 conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
+	}
 
 	conn->events = events;
 
