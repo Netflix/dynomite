@@ -180,9 +180,9 @@ gossip_add_node(struct server_pool *sp, struct gossip_dc *g_dc,
 			  g_dc->name.len, g_dc->name.data, address->len, address->data, ip->len, ip->data, port->len, port->data);
 
 	struct node *gnode = gossip_add_node_to_dc(sp, g_dc, address, ip, port, tokens);
-        if (gnode == NULL) {
-            return DN_ENOMEM;
-        }
+    if (gnode == NULL) {
+       return DN_ENOMEM;
+    }
 
 	status = gossip_msg_to_core(sp, gnode, dnode_peer_add);
 	return status;
@@ -217,15 +217,15 @@ gossip_add_dc(struct server_pool *sp, struct string *dc,
 	rstatus_t status;
 	log_debug(LOG_VERB, "gossip_add_dc : dc[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
 			  dc->len, dc->data, address->len, address->data, ip->len, ip->data, port->len, port->data);
-        //add dc
-        struct gossip_dc *g_dc = (struct gossip_dc *)  array_push(&gn_pool.datacenters);
-        status = gossip_dc_init(g_dc, dc);
+    //add dc
+    struct gossip_dc *g_dc = (struct gossip_dc *)  array_push(&gn_pool.datacenters);
+    status = gossip_dc_init(g_dc, dc);
 
 	struct node *gnode = gossip_add_node_to_dc(sp, g_dc, address, ip, port, tokens);
-        if (gnode == NULL) {
-            array_pop(&gn_pool.datacenters);
-            return DN_ENOMEM;
-        }
+    if (gnode == NULL) {
+        array_pop(&gn_pool.datacenters);
+        return DN_ENOMEM;
+    }
 
 	status = gossip_msg_to_core(sp, gnode, dnode_peer_add_dc);
 

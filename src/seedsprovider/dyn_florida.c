@@ -28,8 +28,8 @@ static bool seeds_check()
 	int64_t now = dn_msec_now();
 
 	int64_t delta = (int64_t)(now - last);
-	loga("delta : %d", delta);
-	loga("SEEDS_CHECK_INTERVAL %d", SEEDS_CHECK_INTERVAL);
+	log_debug(LOG_VERB, "Delta or elapsed time : %d", delta);
+	log_debug(LOG_VERB, "Seeds check internal %d", SEEDS_CHECK_INTERVAL);
 
 	if (delta > SEEDS_CHECK_INTERVAL) {
 		last = now;
