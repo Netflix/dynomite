@@ -24,6 +24,10 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
+static
+struct string client_request_dyn_msg = string("Client_request");
+
+
 struct msg *
 req_get(struct conn *conn)
 {
@@ -496,7 +500,6 @@ request_send_to_all_datacenters(struct msg *msg) {
            t == MSG_REQ_MC_DECR;
 }
 
-
 static void 
 peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
                  struct datacenter *dc, uint8_t *key, uint32_t keylen) {
@@ -536,9 +539,8 @@ peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, 
     uint64_t msg_id = 1234;
     uint8_t type = 1;
     uint8_t version = 1;
-    struct string data = string("Justin"); //will replace with something else
 
-    dmsg_write(nbuf, msg_id, type, version, &data);
+    dmsg_write(nbuf, msg_id, type, version, &client_request_dyn_msg);
     mbuf_insert_head(&msg->mhdr, nbuf);
 
     p_conn->enqueue_inq(ctx, p_conn, msg);

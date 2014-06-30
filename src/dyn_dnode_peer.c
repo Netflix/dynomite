@@ -550,6 +550,24 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 	conn_put(conn);
 }
 
+static void
+dnode_peer_relink_conn_owner(struct server_pool *sp) {
+        struct array *peers = &sp->peers;
+  
+        uint32_t i,nelem; 
+        nelem = array_n(peers);
+        for (i = 0; i < nelem; i++) {
+                struct server *peer = (struct server *) array_get(peers, i);
+                struct conn *conn, *nconn;
+                for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
+                      conn = nconn) {
+                      nconn = TAILQ_NEXT(conn, conn_tqe);
+                      conn->owner = peer; //re-link to the owner in case of an resize/allocation
+                }
+        }
+         
+}
+
 static rstatus_t
 dnode_peer_add_node(struct server_pool *sp, struct node *node)
 {
@@ -559,6 +577,8 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	 struct server *s = array_push(peers);
 
 	 s->owner = sp;
+
+         uint32_t i,nelem;
 	 s->idx = array_idx(peers, s);
 
 	 string_copy(&s->pname, node->pname.data, node->pname.len);
@@ -568,7 +588,6 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	 s->port = (uint16_t) node->port;
 	 s->is_local = node->is_local;
 
-	 uint32_t i,nelem;
 	 nelem = array_n(&node->tokens);
 	 array_init(&s->tokens, nelem, sizeof(struct dyn_token));
 	 for (i = 0; i < nelem; i++) {
@@ -592,7 +611,12 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	 log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
 	   		   s->idx, s->pname.len, s->pname.data);
 
+         dnode_peer_relink_conn_owner(sp);
+
 	 status = dnode_peer_pool_run(sp);
+         if (status != DN_OK)
+             return status;
+
 	 status = dnode_peer_each_preconnect(s, NULL);
 
 	 return status;
@@ -900,6 +924,8 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 		NOT_REACHED();
 		return NULL;
 	}
+
+        //TODOs: should reuse the token
 	if (token != NULL) {
 		deinit_dyn_token(token);
 		dn_free(token);
