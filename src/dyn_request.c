@@ -676,9 +676,9 @@ req_send_next(struct context *ctx, struct conn *conn)
     ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     if (conn->connecting) {
-        if (!conn->client && conn->dnode_client)
+        if (!conn->dyn_mode && !conn->client)
            server_connected(ctx, conn);
-        else if (!conn->dnode_client)
+        else if (conn->dyn_mode && !conn->dnode_client)
            dnode_peer_connected(ctx, conn);
     }
 

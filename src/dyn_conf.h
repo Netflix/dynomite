@@ -65,6 +65,7 @@
 #define CONF_DEFAULT_DYN_CONNECTIONS         100
 #define CONF_DEFAULT_VNODE_TOKENS            8
 #define CONF_DEFAULT_GOS_INTERVAL            10000
+#define CONF_DEFAULT_PEERS                   100
 
 
 struct conf_listen {
