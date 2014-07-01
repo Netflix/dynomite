@@ -180,7 +180,7 @@ dnode_peer_each_pool_init(void *elem, void *context)
 		log_debug(LOG_INFO, "dyn: look like you are running with no seeds deifined. This is ok for running with just one node.");
 
 		// add current node to peers array
-		status = array_init(peers, 1, sizeof(struct server));
+		status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct server));
 		if (status != DN_OK) {
 			return status;
 		}
@@ -223,7 +223,7 @@ dnode_peer_each_pool_init(void *elem, void *context)
 
 	// add current node to peers array
 	uint32_t peer_cnt = nseed + 1;
-	status = array_init(peers, peer_cnt, sizeof(struct server));
+	status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct server));
 	if (status != DN_OK) {
 		return status;
 	}
