@@ -463,6 +463,7 @@ gossip_pool_each_init(void *elem, void *data)
 				struct node *gnode = array_push(&g_dc->nodes);
 				node_init(gnode);
 
+				string_copy(&gnode->dc, g_dc->name.data, g_dc->name.len);
 				string_copy(&gnode->name, peer->name.data, peer->name.len);
 				string_copy(&gnode->pname, peer->pname.data, peer->pname.len); //ignore the port for now
 				gnode->port = peer->port;

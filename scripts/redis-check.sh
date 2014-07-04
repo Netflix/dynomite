@@ -1,7 +1,6 @@
 #!/bin/sh
 
-port=6379
-port=22121
+port=8102
 
 debug="-v -d"
 debug="-d"

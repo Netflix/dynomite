@@ -113,7 +113,7 @@ vnode_update(struct server_pool *sp)
     return DN_OK;
 }
 
-
+//if token falls into interval (a,b], we return b.
 uint32_t
 vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token)
 {
@@ -125,6 +125,9 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
     begin = left = continuum;
     end = right = continuum + ncontinuum - 1;
 
+    if (cmp_dyn_token(right->token, token) < 0 || cmp_dyn_token(left->token, token) >= 0)
+        return left->index;
+
     while (left < right) {
         middle = left + (right - left) / 2;
         int32_t cmp = cmp_dyn_token(middle->token, token);
@@ -135,11 +138,6 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
         } else {
           right = middle;
         }
-    }
-
-    // add an extra check to make sure last token owns it's own exact hash value; else wrap around
-    if (right == end && !cmp_dyn_token(right->token, token)) {
-        right = begin;
     }
 
     return right->index;
