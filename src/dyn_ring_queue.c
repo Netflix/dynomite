@@ -25,7 +25,8 @@ ring_message_init(struct ring_message *msg)
 	if (msg == NULL)
 		return DN_ERROR;
 
-	msg->node = dn_alloc(sizeof(struct node));
+	//msg->node = dn_alloc(sizeof(struct node));
+        msg->node = create_node();
 
 	return DN_OK;
 }
