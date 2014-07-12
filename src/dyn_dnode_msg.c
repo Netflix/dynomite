@@ -93,7 +93,7 @@ dyn_parse_core(struct msg *r)
                          }
                     }
 
-		    break;
+                    break;
 
                 case DYN_SPACES_BEFORE_MSG_ID:
                     log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_MSG_ID");
