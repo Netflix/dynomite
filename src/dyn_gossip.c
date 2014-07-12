@@ -259,20 +259,22 @@ gossip_add_seed_if_absent(struct server_pool *sp, struct string *dc,
 					struct node * g_node = (struct node *) array_get(&g_dc->nodes, j);
 					log_debug(LOG_VERB, "\t\tg_node->name          : '%.*s'", g_node->name.len, g_node->name.data);
 					log_debug(LOG_VERB, "\t\tip         : '%.*s'", ip->len, ip->data);
+
 					if (string_compare(&g_node->name, ip) == 0) {
-						exist = true;
-						break;
+						 exist = true;
+						 break;
 					} else {  //name is different. Now compare tokens
-						//TODOs: only compare the 1st token for now.  Support Vnode later
-						struct dyn_token * node_token = (struct dyn_token *) array_get(&g_node->tokens, 0);
-						struct dyn_token * seed_token = (struct dyn_token *) array_get(tokens, 0);
-						if (node_token != NULL && cmp_dyn_token(node_token, seed_token) == 0) {
-							//replace node
-							gossip_replace_node(sp, g_node, address, ip);
-							exist = true;
-							break;
-						}
+						 //TODOs: only compare the 1st token for now.  Support Vnode later
+						 struct dyn_token * node_token = (struct dyn_token *) array_get(&g_node->tokens, 0);
+						 struct dyn_token * seed_token = (struct dyn_token *) array_get(tokens, 0);
+						 if (node_token != NULL && cmp_dyn_token(node_token, seed_token) == 0) {
+							  //replace node
+							  gossip_replace_node(sp, g_node, address, ip);
+							  exist = true;
+							  break;
+						 }
 					}
+
 				}
 
 				if (!exist) {

@@ -109,6 +109,8 @@ typedef enum msg_type {
     MSG_REQ_REDIS_HSET,
     MSG_REQ_REDIS_HSETNX,
     MSG_REQ_REDIS_HVALS,
+    MSG_REG_REDIS_KEYS,
+    MSG_REG_REDIS_INFO,
     MSG_REQ_REDIS_LINDEX,                 /* redis requests - lists */
     MSG_REQ_REDIS_LINSERT,
     MSG_REQ_REDIS_LLEN,
@@ -131,6 +133,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_SINTER,
     MSG_REQ_REDIS_SINTERSTORE,
     MSG_REQ_REDIS_SISMEMBER,
+    MSG_REQ_REDIS_SLAVEOF,
     MSG_REQ_REDIS_SMEMBERS,
     MSG_REQ_REDIS_SMOVE,
     MSG_REQ_REDIS_SPOP,
@@ -233,6 +236,13 @@ struct msg {
     struct dmsg          *dmsg;          /* dyn message */
     int                  dyn_state;
     dyn_error_t          dyn_error;      /* error code for dynomite */
+    uint8_t              msg_type;       /* for special message types
+                                              0 : normal,
+                                              1 : local cmd only no matter what
+                                              2 : cmd to all nodes in same DC no matter whats
+                                              3 : cmd to all DCs (one node from each DC)
+                                          */
+
 };
 
 TAILQ_HEAD(msg_tqh, msg);

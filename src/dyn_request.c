@@ -562,7 +562,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     ASSERT(c_conn->client);
 
-    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen);
+    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen, msg->msg_type);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;

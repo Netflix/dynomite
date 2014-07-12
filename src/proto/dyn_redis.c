@@ -61,6 +61,8 @@ redis_arg0(struct msg *r)
     case MSG_REQ_REDIS_SRANDMEMBER:
 
     case MSG_REQ_REDIS_ZCARD:
+
+    case MSG_REG_REDIS_KEYS:
         return true;
 
     default:
@@ -104,6 +106,7 @@ redis_arg1(struct msg *r)
     case MSG_REQ_REDIS_ZRANK:
     case MSG_REQ_REDIS_ZREVRANK:
     case MSG_REQ_REDIS_ZSCORE:
+    case MSG_REQ_REDIS_SLAVEOF:
         return true;
 
     default:
@@ -496,6 +499,19 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
+                if (str4icmp(m, 'k', 'e', 'y', 's')) {
+                    r->type = MSG_REG_REDIS_KEYS;
+                    r->msg_type = 1; //local only
+                    break;
+                }
+
+                if (str4icmp(m, 'i', 'n', 'f', 'o')) {
+                    r->type = MSG_REG_REDIS_INFO;
+                    r->msg_type = 1; //local only
+                    p = p + 1;
+                    goto done;
+                }
+
                 if (str4icmp(m, 'l', 'l', 'e', 'n')) {
                     r->type = MSG_REQ_REDIS_LLEN;
                     break;
@@ -788,6 +804,12 @@ redis_parse_req(struct msg *r)
 
                 if (str7icmp(m, 'r', 'e', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_RESTORE;
+                    break;
+                }
+
+                if (str7icmp(m, 's', 'l', 'a', 'v', 'e', 'o', 'f')) {
+                    r->type = MSG_REQ_REDIS_SLAVEOF;
+                    r->msg_type = 1;
                     break;
                 }
 

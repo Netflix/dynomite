@@ -941,8 +941,8 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 }
 
 struct conn *
-dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc, uint8_t *key,
-		uint32_t keylen)
+dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc,
+		             uint8_t *key, uint32_t keylen, uint8_t msg_type)
 {
 	rstatus_t status;
 	struct server *server;
@@ -951,25 +951,29 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datac
 	//status = dnode_peer_pool_update(pool);
 	status = dnode_peer_pool_run(pool);
 	if (status != DN_OK) {
-		return NULL;
+            return NULL;
 	}
 
-	/* from a given {key, keylen} pick a server from pool */
-	server = dnode_peer_pool_server(pool, dc, key, keylen);
-	if (server == NULL) {
-		return NULL;
+	if (msg_type == 1) {  //always local
+            server = array_get(&pool->peers, 0);
+	} else {
+	    /* from a given {key, keylen} pick a server from pool */
+	    server = dnode_peer_pool_server(pool, dc, key, keylen);
+	    if (server == NULL) {
+                return NULL;
+	    }
 	}
 
 	/* pick a connection to a given server */
 	conn = dnode_peer_conn(server);
 	if (conn == NULL) {
-		return NULL;
+            return NULL;
 	}
 
 	status = dnode_peer_connect(ctx, server, conn);
 	if (status != DN_OK) {
-		dnode_peer_close(ctx, conn);
-		return NULL;
+           dnode_peer_close(ctx, conn);
+           return NULL;
 	}
 
 	return conn;
