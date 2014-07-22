@@ -910,7 +910,10 @@ stats_send_rsp(struct stats *st)
         st->ctx->dyn_state = STATE_COLD_HIBERNATE;
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == STATS_NORMAL) {
-        st->ctx->dyn_state = STATS_NORMAL;
+        st->ctx->dyn_state = STATE_NORMAL;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == STATS_WARM_HIBERNATE) {
+        st->ctx->dyn_state = STATE_WARM_HIBERNATE;
         return stats_http_rsp(sd, ok.data, ok.len);
     } else {
         log_debug(LOG_VERB, "Unsupported cmd");

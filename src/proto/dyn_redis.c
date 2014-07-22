@@ -438,21 +438,25 @@ redis_parse_req(struct msg *r)
             case 3:
                 if (str3icmp(m, 'g', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_GET;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str3icmp(m, 's', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_SET;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str3icmp(m, 't', 't', 'l')) {
                     r->type = MSG_REQ_REDIS_TTL;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str3icmp(m, 'd', 'e', 'l')) {
                     r->type = MSG_REQ_REDIS_DEL;
+                    r->is_read = 0;
                     break;
                 }
 
@@ -461,47 +465,56 @@ redis_parse_req(struct msg *r)
             case 4:
                 if (str4icmp(m, 'p', 't', 't', 'l')) {
                     r->type = MSG_REQ_REDIS_PTTL;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'd', 'e', 'c', 'r')) {
                     r->type = MSG_REQ_REDIS_DECR;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'd', 'u', 'm', 'p')) {
                     r->type = MSG_REQ_REDIS_DUMP;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'h', 'd', 'e', 'l')) {
                     r->type = MSG_REQ_REDIS_HDEL;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'h', 'g', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_HGET;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'h', 'l', 'e', 'n')) {
                     r->type = MSG_REQ_REDIS_HLEN;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'h', 's', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_HSET;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'i', 'n', 'c', 'r')) {
                     r->type = MSG_REQ_REDIS_INCR;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'k', 'e', 'y', 's')) {
                     r->type = MSG_REG_REDIS_KEYS;
                     r->msg_type = 1; //local only
+                    r->is_read = 1;
                     break;
                 }
 
@@ -509,77 +522,92 @@ redis_parse_req(struct msg *r)
                     r->type = MSG_REG_REDIS_INFO;
                     r->msg_type = 1; //local only
                     p = p + 1;
+                    r->is_read = 1;
                     goto done;
                 }
 
                 if (str4icmp(m, 'l', 'l', 'e', 'n')) {
                     r->type = MSG_REQ_REDIS_LLEN;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'l', 'p', 'o', 'p')) {
                     r->type = MSG_REQ_REDIS_LPOP;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'l', 'r', 'e', 'm')) {
                     r->type = MSG_REQ_REDIS_LREM;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'p', 'i', 'n', 'g')) {
                     r->type = MSG_REQ_REDIS_PING;
                     p = p + 1;
+                    r->is_read = 1;
                     goto done;
                 }
 
                 if (str4icmp(m, 'l', 's', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_LSET;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'r', 'p', 'o', 'p')) {
                     r->type = MSG_REQ_REDIS_RPOP;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 's', 'a', 'd', 'd')) {
                     r->type = MSG_REQ_REDIS_SADD;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 's', 'p', 'o', 'p')) {
                     r->type = MSG_REQ_REDIS_SPOP;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 's', 'r', 'e', 'm')) {
                     r->type = MSG_REQ_REDIS_SREM;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 't', 'y', 'p', 'e')) {
                     r->type = MSG_REQ_REDIS_TYPE;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'm', 'g', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_MGET;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'z', 'a', 'd', 'd')) {
                     r->type = MSG_REQ_REDIS_ZADD;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'z', 'r', 'e', 'm')) {
                     r->type = MSG_REQ_REDIS_ZREM;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str4icmp(m, 'e', 'v', 'a', 'l')) {
                     r->type = MSG_REQ_REDIS_EVAL;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -588,71 +616,85 @@ redis_parse_req(struct msg *r)
             case 5:
                 if (str5icmp(m, 'h', 'k', 'e', 'y', 's')) {
                     r->type = MSG_REQ_REDIS_HKEYS;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 'h', 'm', 'g', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_HMGET;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 'h', 'm', 's', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_HMSET;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 'h', 'v', 'a', 'l', 's')) {
                     r->type = MSG_REQ_REDIS_HVALS;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 'l', 'p', 'u', 's', 'h')) {
                     r->type = MSG_REQ_REDIS_LPUSH;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 'l', 't', 'r', 'i', 'm')) {
                     r->type = MSG_REQ_REDIS_LTRIM;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 'r', 'p', 'u', 's', 'h')) {
                     r->type = MSG_REQ_REDIS_RPUSH;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 's', 'c', 'a', 'r', 'd')) {
                     r->type = MSG_REQ_REDIS_SCARD;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 's', 'd', 'i', 'f', 'f')) {
                     r->type = MSG_REQ_REDIS_SDIFF;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 's', 'e', 't', 'e', 'x')) {
                     r->type = MSG_REQ_REDIS_SETEX;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 's', 'e', 't', 'n', 'x')) {
                     r->type = MSG_REQ_REDIS_SETNX;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 's', 'm', 'o', 'v', 'e')) {
                     r->type = MSG_REQ_REDIS_SMOVE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str5icmp(m, 'z', 'c', 'a', 'r', 'd')) {
                     r->type = MSG_REQ_REDIS_ZCARD;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 'z', 'r', 'a', 'n', 'k')) {
                     r->type = MSG_REQ_REDIS_ZRANK;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -661,101 +703,121 @@ redis_parse_req(struct msg *r)
             case 6:
                 if (str6icmp(m, 'a', 'p', 'p', 'e', 'n', 'd')) {
                     r->type = MSG_REQ_REDIS_APPEND;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'd', 'e', 'c', 'r', 'b', 'y')) {
                     r->type = MSG_REQ_REDIS_DECRBY;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'e', 'x', 'i', 's', 't', 's')) {
                     r->type = MSG_REQ_REDIS_EXISTS;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'e', 'x', 'p', 'i', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_EXPIRE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'g', 'e', 't', 'b', 'i', 't')) {
                     r->type = MSG_REQ_REDIS_GETBIT;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'g', 'e', 't', 's', 'e', 't')) {
                     r->type = MSG_REQ_REDIS_GETSET;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'p', 's', 'e', 't', 'e', 'x')) {
                     r->type = MSG_REQ_REDIS_PSETEX;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'h', 's', 'e', 't', 'n', 'x')) {
                     r->type = MSG_REQ_REDIS_HSETNX;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'i', 'n', 'c', 'r', 'b', 'y')) {
                     r->type = MSG_REQ_REDIS_INCRBY;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'l', 'i', 'n', 'd', 'e', 'x')) {
                     r->type = MSG_REQ_REDIS_LINDEX;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'l', 'p', 'u', 's', 'h', 'x')) {
                     r->type = MSG_REQ_REDIS_LPUSHX;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 'l', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_LRANGE;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'r', 'p', 'u', 's', 'h', 'x')) {
                     r->type = MSG_REQ_REDIS_RPUSHX;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 's', 'e', 't', 'b', 'i', 't')) {
                     r->type = MSG_REQ_REDIS_SETBIT;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str6icmp(m, 's', 'i', 'n', 't', 'e', 'r')) {
                     r->type = MSG_REQ_REDIS_SINTER;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 's', 't', 'r', 'l', 'e', 'n')) {
                     r->type = MSG_REQ_REDIS_STRLEN;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 's', 'u', 'n', 'i', 'o', 'n')) {
                     r->type = MSG_REQ_REDIS_SUNION;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'z', 'c', 'o', 'u', 'n', 't')) {
                     r->type = MSG_REQ_REDIS_ZCOUNT;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'z', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_ZRANGE;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str6icmp(m, 'z', 's', 'c', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZSCORE;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -764,52 +826,62 @@ redis_parse_req(struct msg *r)
             case 7:
                 if (str7icmp(m, 'p', 'e', 'r', 's', 'i', 's', 't')) {
                     r->type = MSG_REQ_REDIS_PERSIST;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str7icmp(m, 'p', 'e', 'x', 'p', 'i', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_PEXPIRE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str7icmp(m, 'h', 'e', 'x', 'i', 's', 't', 's')) {
                     r->type = MSG_REQ_REDIS_HEXISTS;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str7icmp(m, 'h', 'g', 'e', 't', 'a', 'l', 'l')) {
                     r->type = MSG_REQ_REDIS_HGETALL;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str7icmp(m, 'h', 'i', 'n', 'c', 'r', 'b', 'y')) {
                     r->type = MSG_REQ_REDIS_HINCRBY;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str7icmp(m, 'l', 'i', 'n', 's', 'e', 'r', 't')) {
                     r->type = MSG_REQ_REDIS_LINSERT;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str7icmp(m, 'z', 'i', 'n', 'c', 'r', 'b', 'y')) {
                     r->type = MSG_REQ_REDIS_ZINCRBY;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str7icmp(m, 'e', 'v', 'a', 'l', 's', 'h', 'a')) {
                     r->type = MSG_REQ_REDIS_EVALSHA;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str7icmp(m, 'r', 'e', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_RESTORE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str7icmp(m, 's', 'l', 'a', 'v', 'e', 'o', 'f')) {
                     r->type = MSG_REQ_REDIS_SLAVEOF;
                     r->msg_type = 1;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -818,31 +890,37 @@ redis_parse_req(struct msg *r)
             case 8:
                 if (str8icmp(m, 'e', 'x', 'p', 'i', 'r', 'e', 'a', 't')) {
                     r->type = MSG_REQ_REDIS_EXPIREAT;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str8icmp(m, 'b', 'i', 't', 'c', 'o', 'u', 'n', 't')) {
                     r->type = MSG_REQ_REDIS_BITCOUNT;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str8icmp(m, 'g', 'e', 't', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_GETRANGE;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str8icmp(m, 's', 'e', 't', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_SETRANGE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str8icmp(m, 's', 'm', 'e', 'm', 'b', 'e', 'r', 's')) {
                     r->type = MSG_REQ_REDIS_SMEMBERS;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str8icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'k')) {
                     r->type = MSG_REQ_REDIS_ZREVRANK;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -851,21 +929,25 @@ redis_parse_req(struct msg *r)
             case 9:
                 if (str9icmp(m, 'p', 'e', 'x', 'p', 'i', 'r', 'e', 'a', 't')) {
                     r->type = MSG_REQ_REDIS_PEXPIREAT;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str9icmp(m, 'r', 'p', 'o', 'p', 'l', 'p', 'u', 's', 'h')) {
                     r->type = MSG_REQ_REDIS_RPOPLPUSH;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str9icmp(m, 's', 'i', 's', 'm', 'e', 'm', 'b', 'e', 'r')) {
                     r->type = MSG_REQ_REDIS_SISMEMBER;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str9icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREVRANGE;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -874,37 +956,44 @@ redis_parse_req(struct msg *r)
             case 10:
                 if (str10icmp(m, 's', 'd', 'i', 'f', 'f', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_SDIFFSTORE;
+                    r->is_read = 0;
                     break;
                 }
 
             case 11:
                 if (str11icmp(m, 'i', 'n', 'c', 'r', 'b', 'y', 'f', 'l', 'o', 'a', 't')) {
                     r->type = MSG_REQ_REDIS_INCRBYFLOAT;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str11icmp(m, 's', 'i', 'n', 't', 'e', 'r', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_SINTERSTORE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str11icmp(m, 's', 'r', 'a', 'n', 'd', 'm', 'e', 'm', 'b', 'e', 'r')) {
                     r->type = MSG_REQ_REDIS_SRANDMEMBER;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str11icmp(m, 's', 'u', 'n', 'i', 'o', 'n', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_SUNIONSTORE;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str11icmp(m, 'z', 'i', 'n', 't', 'e', 'r', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZINTERSTORE;
+                    r->is_read = 1;
                     break;
                 }
 
                 if (str11icmp(m, 'z', 'u', 'n', 'i', 'o', 'n', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZUNIONSTORE;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -913,15 +1002,16 @@ redis_parse_req(struct msg *r)
             case 12:
                 if (str12icmp(m, 'h', 'i', 'n', 'c', 'r', 'b', 'y', 'f', 'l', 'o', 'a', 't')) {
                     r->type = MSG_REQ_REDIS_HINCRBYFLOAT;
+                    r->is_read = 0;
                     break;
                 }
-
 
                 break;
 
             case 13:
                 if (str13icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZRANGEBYSCORE;
+                    r->is_read = 1;
                     break;
                 }
 
@@ -930,6 +1020,7 @@ redis_parse_req(struct msg *r)
             case 15:
                 if (str15icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'r', 'a', 'n', 'k')) {
                     r->type = MSG_REQ_REDIS_ZREMRANGEBYRANK;
+                    r->is_read = 0;
                     break;
                 }
 
@@ -938,17 +1029,20 @@ redis_parse_req(struct msg *r)
             case 16:
                 if (str16icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREMRANGEBYSCORE;
+                    r->is_read = 0;
                     break;
                 }
 
                 if (str16icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREVRANGEBYSCORE;
+                    r->is_read = 1;
                     break;
                 }
 
                 break;
 
             default:
+            	r->is_read = 1;
                 break;
             }
 

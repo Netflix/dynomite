@@ -386,7 +386,15 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     }
 
     if (ctx->dyn_state == STATE_COLD_HIBERNATE) {
-    	log_debug(LOG_VERB, "Node is in Cold Hiberate state. Drop connection");
+    	log_debug(LOG_VERB, "Node is in Cold Hiberate state. Drop write/read connection");
+    	conn->eof = 1;
+    	conn->recv_ready = 0;
+    	req_put(msg);
+    	return true;
+    }
+
+    if (ctx->dyn_state == STATE_WARM_HIBERNATE && msg->is_read) {
+    	log_debug(LOG_VERB, "Node is in Warm Hibernate state. Drop read connection");
     	conn->eof = 1;
     	conn->recv_ready = 0;
     	req_put(msg);
@@ -489,6 +497,9 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 }
 
 
+/*
+ * TODOs: Should replace these by using msg_type in struct msg
+ */
 static bool
 request_send_to_all_datacenters(struct msg *msg) {
     msg_type_t t = msg->type;
