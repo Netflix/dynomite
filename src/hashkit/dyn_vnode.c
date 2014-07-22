@@ -134,9 +134,9 @@ vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_toke
         if (cmp == 0) {
             return middle->index;
         } else if (cmp < 0) {
-          left = middle + 1;
+            left = middle + 1;
         } else {
-          right = middle;
+            right = middle;
         }
     }
 

@@ -385,6 +385,14 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         return true;
     }
 
+    if (ctx->dyn_state == STATE_COLD_HIBERNATE) {
+    	log_debug(LOG_VERB, "Node is in Cold Hiberate state. Drop connection");
+    	conn->eof = 1;
+    	conn->recv_ready = 0;
+    	req_put(msg);
+    	return true;
+    }
+
     /*
      * Handle "quit\r\n", which is the protocol way of doing a
      * passive close

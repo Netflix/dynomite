@@ -123,6 +123,14 @@ struct dyn_ring;
 
 #include "event/dyn_event.h"
 
+typedef enum dyn_state {
+    STATE_LEAVING,
+    STATE_NORMAL,
+    STATE_COLD_HIBERNATE,
+    STATE_WARM_HIBERNATE,
+    STATE_UNKNOWN
+} dyn_state_t;
+
 struct context {
     uint32_t           id;          /* unique context id */
     struct conf        *cf;         /* configuration */
@@ -132,6 +140,8 @@ struct context {
     struct event_base  *evb;        /* event base */
     int                max_timeout; /* max timeout in msec */
     int                timeout;     /* timeout in msec */
+    dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
+                                       it is ok to eventually get its new value */
 };
 
 
