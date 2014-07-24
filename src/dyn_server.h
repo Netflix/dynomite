@@ -98,11 +98,13 @@ struct server {
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
     
-    unsigned           is_seed:1;     /* seed? */    
     struct string      dc;            /* logical datacenter */
+    struct string      region;        /* server's region */
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
+    unsigned           is_seed:1;     /* seed? */
     unsigned           processed:1;   /* flag to indicate whether this has been processed */
+    unsigned           is_secure:1;   /* is the connection to the server secure? */
 };
 
 struct server_pool {
@@ -158,6 +160,7 @@ struct server_pool {
     /* for gossiping */
     struct dyn_ring    ring;                 /* ring info (shared with ring/gossip)  */
     int                g_interval;           /* gossip interval */
+    struct string      region;               /* server's region */
 
 };
 
