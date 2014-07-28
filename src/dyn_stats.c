@@ -30,6 +30,7 @@
 
 #include "dyn_core.h"
 #include "dyn_server.h"
+#include "dyn_ring_queue.h"
 
 struct stats_desc {
     char *name; /* stats name */
@@ -57,8 +58,10 @@ static struct stats_desc stats_server_desc[] = {
 #undef DEFINE_ACTION
 
 #define  MAX_HTTP_HEADER_SIZE 1024
-struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
-struct string endline = string("\r\n");
+static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
+static struct string endline = string("\r\n");
+static struct string ok = string("OK");
+static struct string error = string("ERR");
 
 void
 stats_describe(void)
@@ -814,6 +817,19 @@ static stats_cmd_t parse_request(int sd)
 					return STATS_DESCRIBE;
 				}
 
+				if (str6icmp(reqline[1], '//', 's', 't', 'a', 't', 'e') == 0) {
+					log_debug(LOG_VERB, "URL Parameters : %s", reqline[1]);
+					char* state = reqline[1] + 7;
+					log_debug(LOG_VERB, "cmd === %s", state);
+					if (strcmp(state, "cold_hibernate") == 0) {
+					   return STATS_COLD_HIBERNATE;
+					} else if (strcmp(state, "warm_hibernate") == 0) {
+					   return STATS_WARM_HIBERNATE;
+				    } else if (strcmp(state, "normal") == 0) {
+					   return STATS_NORMAL;
+					}
+				}
+
 				return STATS_PING;
 			}
 		}    	
@@ -824,10 +840,52 @@ static stats_cmd_t parse_request(int sd)
 
 
 static rstatus_t
+stats_msg_to_core(stats_cmd_t cmd, void *cb, void *post_cb)
+{
+    struct stat_message *msg = dn_alloc(sizeof(*msg));
+    msg->cmd = cmd;
+    msg->data = NULL;
+    msg->cb = cb;
+    msg->post_cb = post_cb;
+    CBUF_Push(C2S_OutQ, msg);
+	return DN_OK;
+}
+
+static rstatus_t
+stats_http_rsp(int sd, uint8_t *content, size_t len)
+{
+    ssize_t n;
+    uint8_t http_header[MAX_HTTP_HEADER_SIZE];
+    memset( (void*)http_header, (int)'\0', MAX_HTTP_HEADER_SIZE );
+    n = dn_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %u \r\n\r\n", header_str.len, header_str.data, len);
+
+    if (n < 0 || n >= MAX_HTTP_HEADER_SIZE) {
+           return DN_ERROR;
+    }
+
+    n = dn_sendn(sd, http_header, n);
+    if (n < 0) {
+       log_error("send http headers on sd %d failed: %s", sd, strerror(errno));
+       close(sd);
+       return DN_ERROR;
+    }
+
+    n = dn_sendn(sd, content, len);
+
+    if (n < 0) {
+       log_error("send stats on sd %d failed: %s", sd, strerror(errno));
+       close(sd);
+       return DN_ERROR;
+    }
+
+    return DN_OK;
+}
+
+
+static rstatus_t
 stats_send_rsp(struct stats *st)
 {
     rstatus_t status;
-    ssize_t n;
     int sd;
 
     status = stats_make_rsp(st);
@@ -846,32 +904,19 @@ stats_send_rsp(struct stats *st)
     log_debug(LOG_VERB, "cmd %d", cmd);
 
     if (cmd == STATS_INFO) {
-       log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
-       uint8_t http_header[MAX_HTTP_HEADER_SIZE]; 
-       memset( (void*)http_header, (int)'\0', MAX_HTTP_HEADER_SIZE );
-       n = dn_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %u \r\n\r\n", header_str.len, header_str.data, st->buf.len);
-
-       if (n < 0 || n >= MAX_HTTP_HEADER_SIZE) {
-              return DN_ERROR;
-       }
-
-       n = dn_sendn(sd, http_header, n);
-       if (n < 0) {
-          log_error("send http headers on sd %d failed: %s", sd, strerror(errno));
-          close(sd);
-          return DN_ERROR;
-       }
-
-       n = dn_sendn(sd, st->buf.data, st->buf.len);
-
-       if (n < 0) {
-          log_error("send stats on sd %d failed: %s", sd, strerror(errno));
-          close(sd);
-          return DN_ERROR;
-       }
-
+        log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+        return stats_http_rsp(sd, st->buf.data, st->buf.len);
+    } else if (cmd == STATS_COLD_HIBERNATE) {
+        st->ctx->dyn_state = STATE_COLD_HIBERNATE;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == STATS_NORMAL) {
+        st->ctx->dyn_state = STATE_NORMAL;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == STATS_WARM_HIBERNATE) {
+        st->ctx->dyn_state = STATE_WARM_HIBERNATE;
+        return stats_http_rsp(sd, ok.data, ok.len);
     } else {
-       log_debug(LOG_VERB, "Unsupported cmd");
+        log_debug(LOG_VERB, "Unsupported cmd");
     }
 
     close(sd);
@@ -980,7 +1025,7 @@ stats_stop_aggregator(struct stats *st)
 
 struct stats *
 stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
-             char *source, struct array *server_pool)
+             char *source, struct array *server_pool, struct context *ctx)
 {
     rstatus_t status;
     struct stats *st;
@@ -1052,6 +1097,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
         goto error;
     }
 
+    st->ctx = ctx;
     return st;
 
 error:

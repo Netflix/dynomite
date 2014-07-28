@@ -202,21 +202,25 @@ memcache_parse_req(struct msg *r)
                 case 3:
                     if (str4cmp(m, 'g', 'e', 't', ' ')) {
                         r->type = MSG_REQ_MC_GET;
+                        r->is_read = 1;
                         break;
                     }
 
                     if (str4cmp(m, 's', 'e', 't', ' ')) {
                         r->type = MSG_REQ_MC_SET;
+                        r->is_read = 0;
                         break;
                     }
 
                     if (str4cmp(m, 'a', 'd', 'd', ' ')) {
                         r->type = MSG_REQ_MC_ADD;
+                        r->is_read = 0;
                         break;
                     }
 
                     if (str4cmp(m, 'c', 'a', 's', ' ')) {
                         r->type = MSG_REQ_MC_CAS;
+                        r->is_read = 0;
                         break;
                     }
 
@@ -225,22 +229,26 @@ memcache_parse_req(struct msg *r)
                 case 4:
                     if (str4cmp(m, 'g', 'e', 't', 's')) {
                         r->type = MSG_REQ_MC_GETS;
+                        r->is_read = 1;
                         break;
                     }
 
                     if (str4cmp(m, 'i', 'n', 'c', 'r')) {
                         r->type = MSG_REQ_MC_INCR;
+                        r->is_read = 0;
                         break;
                     }
 
                     if (str4cmp(m, 'd', 'e', 'c', 'r')) {
                         r->type = MSG_REQ_MC_DECR;
+                        r->is_read = 0;
                         break;
                     }
 
                     if (str4cmp(m, 'q', 'u', 'i', 't')) {
                         r->type = MSG_REQ_MC_QUIT;
                         r->quit = 1;
+                        r->is_read = 1;
                         break;
                     }
 
@@ -249,11 +257,13 @@ memcache_parse_req(struct msg *r)
                 case 6:
                     if (str6cmp(m, 'a', 'p', 'p', 'e', 'n', 'd')) {
                         r->type = MSG_REQ_MC_APPEND;
+                        r->is_read = 0;
                         break;
                     }
 
                     if (str6cmp(m, 'd', 'e', 'l', 'e', 't', 'e')) {
                         r->type = MSG_REQ_MC_DELETE;
+                        r->is_read = 0;
                         break;
                     }
 
@@ -262,11 +272,13 @@ memcache_parse_req(struct msg *r)
                 case 7:
                     if (str7cmp(m, 'p', 'r', 'e', 'p', 'e', 'n', 'd')) {
                         r->type = MSG_REQ_MC_PREPEND;
+                        r->is_read = 0;
                         break;
                     }
 
                     if (str7cmp(m, 'r', 'e', 'p', 'l', 'a', 'c', 'e')) {
                         r->type = MSG_REQ_MC_REPLACE;
+                        r->is_read = 0;
                         break;
                     }
 

@@ -242,6 +242,8 @@ struct msg {
                                               2 : cmd to all nodes in same DC no matter whats
                                               3 : cmd to all DCs (one node from each DC)
                                           */
+    unsigned             is_read:1;       /*  0 : write
+                                              1 : read */
 
 };
 

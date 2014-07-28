@@ -113,6 +113,7 @@ struct stats_buffer {
 };
 
 struct stats {
+    struct context      *ctx;
     uint16_t            port;           /* stats monitoring port */
     int                 interval;       /* stats aggregation interval */
     struct string       addr;           /* stats monitoring address */
@@ -162,6 +163,11 @@ typedef enum stats_cmd {
     STATS_INFO,
     STATS_PING,
     STATS_DESCRIBE,
+    STATS_BOOTSTRAPING,
+    STATS_LEAVING,
+    STATS_NORMAL,
+    STATS_COLD_HIBERNATE,
+    STATS_WARM_HIBERNATE,
     UNKNOWN
 } stats_cmd_t;
 
@@ -263,7 +269,8 @@ void _stats_server_set_ts(struct context *ctx, struct server *server, stats_serv
 //void _stats_dnode_set_ts(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
 
 
-struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source, struct array *server_pool);
+struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,
+		                   struct array *server_pool, struct context *ctx);
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
 

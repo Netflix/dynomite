@@ -52,6 +52,7 @@ core_ctx_create(struct instance *nci)
 	array_null(&ctx->pool);
 	ctx->max_timeout = nci->stats_interval;
 	ctx->timeout = ctx->max_timeout;
+	ctx->dyn_state = STATS_BOOTSTRAPING;
 
 	/* parse and create configuration */
 	ctx->cf = conf_create(nci->conf_filename);
@@ -70,7 +71,7 @@ core_ctx_create(struct instance *nci)
 
 	/* create stats per server pool */
 	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
-			nci->hostname, &ctx->pool);
+			nci->hostname, &ctx->pool, ctx);
 	if (ctx->stats == NULL) {
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
@@ -153,14 +154,18 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
-	//init ring queue
+	//init ring msg queue
 	CBUF_Init(C2G_InQ);
 	CBUF_Init(C2G_OutQ);
+
+	//init stats msg queue
+	CBUF_Init(C2S_InQ);
+	CBUF_Init(C2S_OutQ);
 
 	gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-
+    ctx->dyn_state = STATS_NORMAL;
 	return ctx;
 }
 
