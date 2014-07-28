@@ -50,6 +50,7 @@ void string_deinit(struct string *str);
 bool string_empty(const struct string *str);
 rstatus_t string_duplicate(struct string *dst, const struct string *src);
 rstatus_t string_copy(struct string *dst, const uint8_t *src, uint32_t srclen);
+rstatus_t string_copy_c(struct string *dst, const uint8_t *src);
 int string_compare(const struct string *s1, const struct string *s2);
 
 /*
@@ -70,6 +71,9 @@ int string_compare(const struct string *s1, const struct string *s2);
 
 #define dn_strncmp(_s1, _s2, _n)        \
     strncmp((char *)(_s1), (char *)(_s2), (size_t)(_n))
+
+#define dn_strcmp(_s1, _cs2)        \
+    strncmp((char *)(_s1), (char *)(_cs2), strlen((_cs2)))
 
 #define dn_strchr(_p, _l, _c)           \
     _dn_strchr((uint8_t *)(_p), (uint8_t *)(_l), (uint8_t)(_c))

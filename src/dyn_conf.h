@@ -67,6 +67,14 @@
 #define CONF_DEFAULT_GOS_INTERVAL            10000
 #define CONF_DEFAULT_PEERS                   100
 
+#define CONF_STR_NONE                        "none"
+#define CONF_STR_REGION                      "region"
+#define CONF_STR_DC                          "dc"
+#define CONF_STR_ALL                         "all"
+
+#define CONF_DEFAULT_DC                      "localdc"
+#define CONF_DEFAULT_REGION                  "localregion"
+#define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -78,14 +86,16 @@ struct conf_listen {
 
 
 struct conf_server {
-    struct string   pname;      /* server: as "name:port:weight" */
-    struct string   name;       /* name */
-    int             port;       /* port */
-    int             weight;     /* weight */
-    struct sockinfo info;       /* connect socket info */
-    unsigned        valid:1;    /* valid? */
-    struct array    tokens;     /* tokens for this server */
-    struct string   dc;         /* server's datacenter */
+    struct string   pname;       /* server: as "name:port:weight" */
+    struct string   name;        /* name */
+    int             port;        /* port */
+    int             weight;      /* weight - unused and no config parsing support */
+    struct sockinfo info;        /* connect socket info */
+    struct array    tokens;      /* tokens for this server */
+    struct string   dc;          /* peer node or server's datacenter */
+    struct string   region;      /* peer node's region */
+    unsigned        valid:1;     /* valid? */
+    unsigned        is_secure:1; /* is the connection to the server secure? */
 };
 
 struct conf_pool {
@@ -103,18 +113,21 @@ struct conf_pool {
     int                server_connections;    /* server_connections: */
     int                server_retry_timeout;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
-    struct array       server;                /* servers: conf_server[] */
+    struct array       server;                /* servers: conf_server array */
     unsigned           valid:1;               /* valid? */
     struct conf_listen dyn_listen;            /* dyn_listen  */
     int                dyn_read_timeout;      /* inter dyn nodes' read timeout in ms */
     int                dyn_write_timeout;     /* inter dyn nodes' write timeout in ms */ 
     struct string      dyn_seed_provider;     /* seed provider */ 
-    struct array       dyn_seeds;             /* seed nodes */
+    struct array       dyn_seeds;             /* seed nodes: conf_server array */
     int                dyn_port;
     int                dyn_connections;       /* dyn connections */  
     struct string      dc;                    /* this node's logical dc */  
-    struct array       tokens;                /* this node's token */  
+    struct array       tokens;                /* this node's token: dyn_token array */
     int                gos_interval;          /* wake up interval in ms */
+    /* none | region | dc | all in order of increasing number of connections. (default is region) */
+    struct string      secure_server_option;
+    struct string      region;                /* this node's region */
 };
 
 

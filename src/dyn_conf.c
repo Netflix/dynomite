@@ -147,6 +147,14 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, gos_interval) }, 
 
+    { string("secure_server_option"),
+	  conf_set_string,
+	  offsetof(struct conf_pool, secure_server_option) },
+
+    { string(CONF_STR_REGION),
+	  conf_set_string,
+	  offsetof(struct conf_pool, region) },
+
     null_command
 };
 
@@ -156,6 +164,7 @@ conf_server_init(struct conf_server *cs)
     string_init(&cs->pname);
     string_init(&cs->name);
     string_init(&cs->dc);
+    string_init(&cs->region);
     
     rstatus_t status = array_init(&cs->tokens, CONF_DEFAULT_VNODE_TOKENS,
                         sizeof(struct dyn_token));
@@ -163,6 +172,7 @@ conf_server_init(struct conf_server *cs)
         string_deinit(&cs->pname);
         string_deinit(&cs->name);
         string_deinit(&cs->dc);
+        string_deinit(&cs->region);
         return status;
     }
 
@@ -183,12 +193,13 @@ conf_server_deinit(struct conf_server *cs)
     string_deinit(&cs->pname);
     string_deinit(&cs->name);
     string_deinit(&cs->dc);
+    string_deinit(&cs->region);
     array_deinit(&cs->tokens);
     cs->valid = 0;
     log_debug(LOG_VVERB, "deinit conf server %p", cs);
 }
 
-// copy the server info from the config struct over to the real one
+// copy from struct conf_server to struct server
 rstatus_t
 conf_server_each_transform(void *elem, void *data)
 {
@@ -225,7 +236,7 @@ conf_server_each_transform(void *elem, void *data)
     return DN_OK;
 }
 
-
+// Copy seed struct conf_server to struct server
 rstatus_t
 conf_seed_each_transform(void *elem, void *data)
 {
@@ -249,6 +260,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->port = (uint16_t)cseed->port;
     s->weight = (uint32_t)cseed->weight;
     s->dc = cseed->dc;
+    s->region = cseed->region;
     s->is_local = false;
     //TODO-jeb need to copy over tokens, not sure if this is good enough
     s->tokens = cseed->tokens;
@@ -263,6 +275,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->next_retry = 0LL;
     s->failure_count = 0;
     s->is_seed = 1;
+    s->is_secure = cseed->is_secure;
 
     log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
               s->idx, s->pname.len, s->pname.data);
@@ -307,6 +320,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->dyn_seed_provider);
     string_init(&cp->dyn_listen.pname);
     string_init(&cp->dyn_listen.name);
+    string_init(&cp->secure_server_option);
+    string_init(&cp->region);
     cp->dyn_listen.port = 0;
     memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
     cp->dyn_listen.valid = 0;
@@ -374,6 +389,8 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->dyn_seed_provider);
     string_deinit(&cp->dyn_listen.pname);
     string_deinit(&cp->dyn_listen.name);
+    string_deinit(&cp->secure_server_option);
+    string_deinit(&cp->region);
     array_deinit(&cp->dyn_seeds);
     array_deinit(&cp->tokens);
 
@@ -447,6 +464,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
     sp->d_connections = (uint32_t)cp->dyn_connections;   
     sp->dc = cp->dc;
+    sp->region = cp->region;
     sp->tokens = cp->tokens;
 
     array_null(&sp->seeds);
@@ -527,6 +545,9 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
         log_debug(LOG_VVERB, "  datacenter: %.*s", cp->dc.len, cp->dc.data);
         log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
+        log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
+                cp->secure_server_option.len, cp->secure_server_option.data);
+        log_debug(LOG_VVERB, "  region: \"%.*s\"", cp->region.len, cp->region.data);
     }
 }
 
@@ -1367,6 +1388,7 @@ conf_validate_server(struct conf *cf, struct conf_pool *cp)
     return DN_OK;
 }
 
+/* Validate pool config and set defaults. */
 static rstatus_t
 conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 {
@@ -1446,6 +1468,31 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->gos_interval = CONF_DEFAULT_GOS_INTERVAL;
     }
 
+    if (string_empty(&cp->dc)) {
+        string_copy_c(&cp->dc, &CONF_DEFAULT_DC);
+        log_debug(LOG_INFO, "setting dc to default value:%s", CONF_DEFAULT_DC);
+    }
+
+    if (string_empty(&cp->region)) {
+        string_copy_c(&cp->region, &CONF_DEFAULT_REGION);
+        log_debug(LOG_INFO, "setting region to default value:%s", CONF_DEFAULT_REGION);
+    }
+
+    if (string_empty(&cp->secure_server_option)) {
+        string_copy_c(&cp->secure_server_option,
+                &CONF_DEFAULT_SECURE_SERVER_OPTION);
+        log_debug(LOG_INFO, "setting secure_server_option to default value:%s",
+                CONF_DEFAULT_SECURE_SERVER_OPTION);
+    }
+
+    if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
+    dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
+    dn_strcmp(cp->secure_server_option.data, CONF_STR_REGION) &&
+    dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
+        log_error(
+                "conf: directive \"secure_server_option:\"must be one of 'none' 'dc' 'region' 'all'");
+    }
+
     status = conf_validate_server(cf, cp);
     if (status != DN_OK) {
         return status;
@@ -1454,6 +1501,43 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     cp->valid = 1;
 
     return DN_OK;
+}
+
+
+/* Determine which peer node communications need to be secured  */
+static bool conf_set_is_secure(struct conf *cf, uint32_t npool) {
+    bool valid = true;
+    uint32_t i, j, dpool;
+
+    for (i = 0; i < npool; i++) {
+        struct conf_pool *cp = array_get(&cf->pool, i);
+
+        dpool = array_n(&cp->dyn_seeds);
+        for (j = 0; j < dpool; j++) {
+            struct conf_server *cs = array_get(&cp->dyn_seeds, j);
+            // if region then communication only between nodes in different region is secured
+            if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_REGION)) {
+                if (string_compare(&cp->region, &cs->region)) {
+                    cs->is_secure = 1;
+                }
+            }
+            // if dc then communication only between nodes in different dc is secured.
+            // communication secured between nodes if they are in dc with same name across regions.
+            else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_DC)) {
+                // if not same dc or region
+                if (string_compare(&cp->dc, &cs->dc)
+                        || string_compare(&cp->region, &cs->region)) {
+                    cs->is_secure = 1;
+                }
+            }
+            // if all then all communication between nodes will be secured.
+            else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
+                cs->is_secure = 1;
+            }
+        }
+    }
+
+    return valid;
 }
 
 static rstatus_t
@@ -1518,6 +1602,12 @@ conf_post_validate(struct conf *cf)
             break;
         }
     }
+
+    /* Determine which peer node communications need to be secured  */
+    if(!conf_set_is_secure(cf, npool)) {
+        return DN_ERROR;
+    }
+
     if (!valid) {
         return DN_ERROR;
     }
@@ -1675,6 +1765,7 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
     return CONF_OK;
 }
 
+/* Parses servers: from yaml */
 char *
 conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 {
@@ -1820,11 +1911,10 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 
 
 /*
- * Well, this just blows. I've copy and pasted the conf_add_server() instead
- * of fixing the fucking yaml. ffs, why is there a colon delimited string in the yaml
- * that requires a few levels of magic in order to guess the structure of, rather than
- * doing the right thing and making proper fields. Granted, all I've done is perpetuated the horseshit,
- * but, oi, there's bigger fish to deep fry, at this point.
+ * Well, this just blows. Copied from conf_add_server() there is a colon delimited
+ * string in the yaml that requires a few levels of magic in order to guess the
+ * structure of, rather than doing the right thing and making proper fields.
+ * Need to fix however, there's bigger fish to deep fry at this point.
  */
 char *
 conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
@@ -1834,29 +1924,30 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     struct string *value;
     struct conf_server *field;
     uint8_t *p, *q, *start;
-    uint8_t *pname, *addr, *port, *dc, *tokens, *name;
-    uint32_t k, delimlen, pnamelen, addrlen, portlen, dclen, tokenslen, namelen;
+    uint8_t *pname, *addr, *port, *dc, *tokens, *name, *region;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, dclen, tokenslen, namelen, regionlen;
     struct string address;
-    char delim[] = " :::";
+    char delim[] = " ::::";
+    struct conf_pool *cfpool = conf;
 
     string_init(&address);
-    p = conf;
-    a = (struct array *)(p + cmd->offset);
+    p = conf; // conf_pool
+    a = (struct array *)(p + cmd->offset); // a is conf_server array
 
     field = array_push(a);
     if (field == NULL) {
         return CONF_ERROR;
     }
 
-    status = conf_server_init(field);
+    status = conf_server_init(field); // field is conf_server
     if (status != DN_OK) {
         return CONF_ERROR;
     }
 
     value = array_top(&cf->arg);
 
-    /* parse "hostname:port:dc:tokens [name]" */
-    p = value->data + value->len - 1;
+    /* parse "hostname:port:dc:region:tokens [name]" */
+    p = value->data + value->len - 1; // p is now pointing to a string
     start = value->data;
     addr = NULL;
     addrlen = 0;
@@ -1868,15 +1959,17 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     portlen = 0;
     name = NULL;
     namelen = 0;
+    region = NULL;
+    regionlen = 0;
 
-    delimlen = 4;
+    delimlen = 5;
 
     for (k = 0; k < sizeof(delim); k++) {
         q = dn_strrchr(p, start, delim[k]);
         if (q == NULL) {
             if (k == 0) {
                 /*
-                 * name in "hostname:port:dc:tokens [name]" format string is
+                 * name in "hostname:port:dc:region:tokens [name]" format string is
                  * optional
                  */
                 continue;
@@ -1896,11 +1989,16 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
             break;
 
         case 2:
+            region = q + 1;
+            regionlen = (uint32_t)(p - region + 1);
+            break;
+
+        case 3:
             dc = q + 1;
             dclen = (uint32_t)(p - dc + 1);
             break;
 
-        case 3:
+        case 4:
             port = q + 1;
             portlen = (uint32_t)(p - port + 1);
             break;
@@ -1913,12 +2011,18 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     if (k != delimlen) {
-        return "has an invalid \"hostname:port:weight [name]\"or \"/path/unix_socket:weight [name]\" format string";
+        return "has an invalid format must match \"hostname:port:dc:region:tokens [name]\"";
     }
 
-    pname = value->data;
+    pname = value->data; // seed node config string.
     pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
     status = string_copy(&field->pname, pname, pnamelen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&field->region, region, regionlen);
     if (status != DN_OK) {
         array_pop(a);
         return CONF_ERROR;
