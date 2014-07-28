@@ -103,6 +103,12 @@ string_copy(struct string *dst, const uint8_t *src, uint32_t srclen)
     return DN_OK;
 }
 
+/* For copying constant string into dst */
+rstatus_t string_copy_c(struct string *dst, const uint8_t *src)
+{
+    return string_copy(dst, src, (uint32_t) dn_strlen(src));
+}
+
 int
 string_compare(const struct string *s1, const struct string *s2)
 {
