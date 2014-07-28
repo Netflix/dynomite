@@ -125,7 +125,7 @@ struct conf_pool {
     struct string      dc;                    /* this node's logical dc */  
     struct array       tokens;                /* this node's token: dyn_token array */
     int                gos_interval;          /* wake up interval in ms */
-    /* none | region | dc | all in order of increasing number of connections. (default is region) */
+    /* none | region | dc | all in order of increasing number of connections. (default is none) */
     struct string      secure_server_option;
     struct string      region;                /* this node's region */
 };
