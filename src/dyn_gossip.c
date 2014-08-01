@@ -100,7 +100,7 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *region_
 	}
 
 	pname = seeds->data;
-	pnamelen = seeds->len - (tokenslen + dclen + 2);
+	pnamelen = seeds->len - (tokenslen + dclen + regionlen + 3);
 	status = string_copy(address, pname, pnamelen);
 
 
@@ -333,6 +333,11 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 		string_copy(&temp, seed_node, seed_node_len);
 		array_init(&tokens, 1, sizeof(struct dyn_token));
 		parse_seeds(&temp, &dc_name, &region_name, &port_str, &address, &ip,  &tokens);
+                //log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
+                //log_debug(LOG_VERB, "dc_name         : '%.*s'", dc_name.len, dc_name.data);
+                //log_debug(LOG_VERB, "region_name        : '%.*s'", region_name.len, region_name.data);
+                //log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
+
 
 		gossip_add_seed_if_absent(sp, &dc_name, &address, &ip, &port_str, &tokens);
 
