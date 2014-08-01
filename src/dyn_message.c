@@ -265,6 +265,7 @@ done:
     //dynomite
     msg->dyn_state = 0;
     msg->dmsg = NULL;
+    msg->msg_type = 0;
 
     return msg;
 }

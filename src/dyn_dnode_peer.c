@@ -903,6 +903,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 			break;
 		}
 		token = dnode_peer_pool_hash(pool, key, keylen);
+		//print_dyn_token(token, 1);
 		idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
 		break;
 
