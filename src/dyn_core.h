@@ -124,11 +124,18 @@ struct dyn_ring;
 #include "event/dyn_event.h"
 
 typedef enum dyn_state {
-    STATE_NORMAL,
-    STATE_LEAVING,
-    STATE_COLD_HIBERNATE,
-    STATE_WARM_HIBERNATE,
-    STATE_UNKNOWN
+	INIT,
+	STANDBY,
+	WRITES_ONLY,
+	RESUMING,
+	NORMAL,
+	SUSPENDING,
+	LEAVING,
+	JOINING,
+	DOWN,
+	REMOVED,
+	EXITING,
+	UNKNOWN
 } dyn_state_t;
 
 struct context {

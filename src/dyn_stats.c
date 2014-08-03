@@ -821,12 +821,14 @@ static stats_cmd_t parse_request(int sd)
 					log_debug(LOG_VERB, "URL Parameters : %s", reqline[1]);
 					char* state = reqline[1] + 7;
 					log_debug(LOG_VERB, "cmd === %s", state);
-					if (strcmp(state, "cold_hibernate") == 0) {
-					   return STATS_COLD_HIBERNATE;
-					} else if (strcmp(state, "warm_hibernate") == 0) {
-					   return STATS_WARM_HIBERNATE;
+					if (strcmp(state, "standby") == 0) {
+					   return STATS_STANDBY;
+					} else if (strcmp(state, "writes_only") == 0) {
+					   return STATS_WRITES_ONLY;
 				    } else if (strcmp(state, "normal") == 0) {
 					   return STATS_NORMAL;
+					} else if (strcmp(state, "resuming") == 0) {
+						return STATS_RESUMING;
 					}
 				}
 
@@ -906,15 +908,18 @@ stats_send_rsp(struct stats *st)
     if (cmd == STATS_INFO) {
         log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
         return stats_http_rsp(sd, st->buf.data, st->buf.len);
-    } else if (cmd == STATS_COLD_HIBERNATE) {
-        st->ctx->dyn_state = STATE_COLD_HIBERNATE;
-        return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == STATS_NORMAL) {
-        st->ctx->dyn_state = STATE_NORMAL;
+        st->ctx->dyn_state = NORMAL;
         return stats_http_rsp(sd, ok.data, ok.len);
-    } else if (cmd == STATS_WARM_HIBERNATE) {
-        st->ctx->dyn_state = STATE_WARM_HIBERNATE;
+    } else if (cmd == STATS_STANDBY) {
+        st->ctx->dyn_state = STANDBY;
         return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == STATS_WRITES_ONLY) {
+        st->ctx->dyn_state = WRITES_ONLY;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == STATS_RESUMING) {
+    	st->ctx->dyn_state = RESUMING;
+    	return stats_http_rsp(sd, ok.data, ok.len);
     } else {
         log_debug(LOG_VERB, "Unsupported cmd");
     }

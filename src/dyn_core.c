@@ -52,7 +52,7 @@ core_ctx_create(struct instance *nci)
 	array_null(&ctx->pool);
 	ctx->max_timeout = nci->stats_interval;
 	ctx->timeout = ctx->max_timeout;
-	ctx->dyn_state = STATS_BOOTSTRAPING;
+	ctx->dyn_state = INIT;
 
 	/* parse and create configuration */
 	ctx->cf = conf_create(nci->conf_filename);
@@ -165,7 +165,7 @@ core_ctx_create(struct instance *nci)
 	gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-    ctx->dyn_state = STATS_NORMAL;
+	ctx->dyn_state = NORMAL;
 	return ctx;
 }
 
