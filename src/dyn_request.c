@@ -385,22 +385,6 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         return true;
     }
 
-    if (ctx->dyn_state == STATE_COLD_HIBERNATE) {
-    	log_debug(LOG_VERB, "Node is in Cold Hiberate state. Drop write/read connection");
-    	conn->eof = 1;
-    	conn->recv_ready = 0;
-    	req_put(msg);
-    	return true;
-    }
-
-    if (ctx->dyn_state == STATE_WARM_HIBERNATE && msg->is_read) {
-    	log_debug(LOG_VERB, "Node is in Warm Hibernate state. Drop read connection");
-    	conn->eof = 1;
-    	conn->recv_ready = 0;
-    	req_put(msg);
-    	return true;
-    }
-
     /*
      * Handle "quit\r\n", which is the protocol way of doing a
      * passive close
@@ -456,7 +440,6 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
     stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
-
 void
 local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 		               uint8_t *key, uint32_t keylen)
@@ -478,18 +461,46 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
     ASSERT(!s_conn->client && !s_conn->proxy);
 
-    /* enqueue the message (request) into server inq */
-    if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-        status = event_add_out(ctx->evb, s_conn);
-        if (status != DN_OK) {
-            req_forward_error(ctx, c_conn, msg);
-            s_conn->err = errno;
-            return;
-        }
-    }
-    s_conn->enqueue_inq(ctx, s_conn, msg);
 
-    req_forward_stats(ctx, s_conn->owner, msg);
+    if (ctx->dyn_state == NORMAL) {
+        /* enqueue the message (request) into server inq */
+        if (TAILQ_EMPTY(&s_conn->imsg_q)) {
+            status = event_add_out(ctx->evb, s_conn);
+
+            if (status != DN_OK) {
+                req_forward_error(ctx, c_conn, msg);
+                s_conn->err = errno;
+                return;
+            }
+        }
+    } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
+    	log_debug(LOG_VERB, "Node is in STANDBY state. Drop write/read requests");
+    	req_forward_error(ctx, c_conn, msg);
+    	return;
+    } else if (ctx->dyn_state == WRITES_ONLY && msg->is_read) {
+    	//no reads from peers/clients but allow writes from peers/clients
+    	log_debug(LOG_VERB, "Node is in WRITES_ONLY state. Drop read requests");
+    	req_forward_error(ctx, c_conn, msg);
+        return;
+    } else if (ctx->dyn_state == RESUMING) {
+    	log_debug(LOG_VERB, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
+    	if (msg->is_read) {
+    		req_forward_error(ctx, c_conn, msg);
+    		return;
+    	}
+
+    	status = event_add_out(ctx->evb, s_conn);
+
+    	if (status != DN_OK) {
+    	    req_forward_error(ctx, c_conn, msg);
+    	    s_conn->err = errno;
+    	    return;
+    	}
+    }
+
+    s_conn->enqueue_inq(ctx, s_conn, msg);
+    //req_forward_stats(ctx, s_conn->owner, msg);
+
 
     log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
               " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
