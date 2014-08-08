@@ -783,59 +783,57 @@ static stats_cmd_t parse_request(int sd)
 	rcvd=recv(sd, mesg, max_buf_size, 0);
 
 	if (rcvd<0)    // receive error
-		fprintf(stderr,("recv() error\n"));
+	   fprintf(stderr,("recv() error\n"));
 	else if (rcvd==0)    // receive socket closed
-		fprintf(stderr,"Client disconnected upexpectedly.\n");
+	   fprintf(stderr,"Client disconnected upexpectedly.\n");
 	else  {  // message received
-		printf("%s", mesg);
-		reqline[0] = strtok (mesg, " \t\n");
-		if ( strncmp(reqline[0], "GET\0", 4)==0 ) {
-			reqline[1] = strtok (NULL, " \t");
-			reqline[2] = strtok (NULL, " \t\n");
-			printf("0: %s\n", reqline[0]);
-			printf("1: %s\n", reqline[1]);
-			printf("2: %s\n", reqline[2]);
+	   printf("%s", mesg);
+	   reqline[0] = strtok (mesg, " \t\n");
+	   if ( strncmp(reqline[0], "GET\0", 4)==0 ) {
+              reqline[1] = strtok (NULL, " \t");
+              reqline[2] = strtok (NULL, " \t\n");
+              printf("0: %s\n", reqline[0]);
+              printf("1: %s\n", reqline[1]);
+              printf("2: %s\n", reqline[2]);
 
+              if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
+                  write(sd, "HTTP/1.0 400 Bad Request\n", 25);
+                  return UNKNOWN;
+              } else {
+                  if (strncmp(reqline[1], "/\0", 2)==0 )
+                      reqline[1] = "/info";
 
-			if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
-				write(sd, "HTTP/1.0 400 Bad Request\n", 25);
-				return UNKNOWN;
-			}
-			else {
-				if ( strncmp(reqline[1], "/\0", 2)==0 )
-					reqline[1] = "/info";
+                  if (strcmp(reqline[1], "/info") == 0) {
+                      return STATS_INFO;
+                  }
 
-				if (strcmp(reqline[1], "/info") == 0) {
-					return STATS_INFO;
-				}
+                  if (strcmp(reqline[1], "/ping") == 0) {
+                      return STATS_PING;
+                  }
 
-				if (strcmp(reqline[1], "/ping") == 0) {
-					return STATS_PING;
-				}
+                  if (strcmp(reqline[1], "/describe") == 0) {
+                      return STATS_DESCRIBE;
+                  }
 
-				if (strcmp(reqline[1], "/describe") == 0) {
-					return STATS_DESCRIBE;
-				}
+                  if (str6icmp(reqline[1], '//', 's', 't', 'a', 't', 'e') == 0) {
+                      log_debug(LOG_VERB, "URL Parameters : %s", reqline[1]);
+                      char* state = reqline[1] + 7;
+                      log_debug(LOG_VERB, "cmd === %s", state);
+                      if (strcmp(state, "standby") == 0) {
+                          return STATS_STANDBY;
+                      } else if (strcmp(state, "writes_only") == 0) {
+                          return STATS_WRITES_ONLY;
+                      } else if (strcmp(state, "normal") == 0) {
+                          return STATS_NORMAL;
+                      } else if (strcmp(state, "resuming") == 0) {
+                          return STATS_RESUMING;
+                      }
+                   }
 
-				if (str6icmp(reqline[1], '//', 's', 't', 'a', 't', 'e') == 0) {
-					log_debug(LOG_VERB, "URL Parameters : %s", reqline[1]);
-					char* state = reqline[1] + 7;
-					log_debug(LOG_VERB, "cmd === %s", state);
-					if (strcmp(state, "standby") == 0) {
-					   return STATS_STANDBY;
-					} else if (strcmp(state, "writes_only") == 0) {
-					   return STATS_WRITES_ONLY;
-				    } else if (strcmp(state, "normal") == 0) {
-					   return STATS_NORMAL;
-					} else if (strcmp(state, "resuming") == 0) {
-						return STATS_RESUMING;
-					}
-				}
-
-				return STATS_PING;
-			}
-		}    	
-	}
+                   return STATS_PING;
+              }
+        }
+    }
 
 	return 0;
 }

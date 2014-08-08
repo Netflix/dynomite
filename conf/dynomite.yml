@@ -15,4 +15,4 @@ dyn_o_mite:
   timeout: 30000
   tokens: '3101134286'
   redis: true
-  dyn_seed_provider: simple_provider
+  dyn_seed_provider: florida_provider
