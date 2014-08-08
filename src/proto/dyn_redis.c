@@ -881,7 +881,7 @@ redis_parse_req(struct msg *r)
                 if (str7icmp(m, 's', 'l', 'a', 'v', 'e', 'o', 'f')) {
                     r->type = MSG_REQ_REDIS_SLAVEOF;
                     r->msg_type = 1;
-                    r->is_read = 1;
+                    r->is_read = 0;
                     break;
                 }
 
