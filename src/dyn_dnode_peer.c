@@ -615,7 +615,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 
 	 status = dnode_peer_pool_run(sp);
          if (status != DN_OK)
-             return status;
+            return status;
 
 	 status = dnode_peer_each_preconnect(s, NULL);
 
@@ -666,7 +666,7 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
     uint32_t i,nelem;
     bool node_exist = false;
     //TODOs: use hash table here
-    for (i=0, nelem = array_n(peers); i< nelem; i++) {
+    for (i=1, nelem = array_n(peers); i< nelem; i++) {
        struct server * peer = (struct server *) array_get(peers, i);
        if (string_compare(&peer->dc, &node->dc) == 0) {
     	   //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
@@ -679,6 +679,7 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
        }
     }
 
+
     if (s != NULL) {
     	log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
     	log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
@@ -688,8 +689,22 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
         string_copy(&s->pname, node->pname.data, node->pname.len);
         string_copy(&s->name, node->name.data, node->name.len);
 
+        //TODOs: need to free the previous s->addr?
+        //if (s->addr != NULL) {
+        //   dn_free(s->addr);
+        //}
+
+        struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
+        dn_resolve(&s->name, s->port, info);
+        s->family = info->family;
+        s->addrlen = info->addrlen;
+        s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+
+
         dnode_peer_each_disconnect(s, NULL);
         dnode_peer_each_preconnect(s, NULL);
+    } else {
+    	log_debug(LOG_INFO, "Unable to find any node matched the token");
     }
 
 	return DN_OK;
