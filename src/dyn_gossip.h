@@ -15,6 +15,27 @@
 
 typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 
+struct node {
+    struct array       tokens;        /* array of dyn_tokens */
+    struct string      dc;
+    //struct gossip_dc   *dc;           /* logical datacenter */
+
+    struct string      pname;         /* name:port */
+    struct string      name;          /* name  */
+
+    int                port;          /* port */
+    struct sockinfo    info;
+
+    int64_t            next_retry;    /* next retry time in usec */
+    int64_t            last_retry;    /* last retry time in usec */
+    uint32_t           failure_count; /* # consecutive failures */
+
+    bool               is_seed;       /* seed? */
+    bool               is_local;      /* is this peer the current running node?  */
+    uint8_t            state;        /* state of a node that this host knows */
+
+};
+
 
 struct gossip_dc {
     struct string      name;

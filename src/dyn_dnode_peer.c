@@ -139,6 +139,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 	peer->next_retry = 0LL;
 	peer->failure_count = 0;
 	peer->is_seed = 1;
+	string_copy(&peer->region, pool->region.data, pool->region.len);
 	peer->owner = pool;
 
 	log_debug(LOG_VERB, "dyn: transform to local node to peer %"PRIu32" '%.*s'",
@@ -549,6 +550,33 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 	conn_put(conn);
 }
+
+rstatus_t
+dnode_handshake_peers(struct server_pool *sp)
+{
+	rstatus_t status;
+	log_debug(LOG_VVERB, "dyn: handshaking peers");
+	struct array *peers = &sp->peers;
+
+	uint32_t i,nelem;
+	nelem = array_n(peers);
+	for (i = 0; i < nelem; i++) {
+	    struct server *peer = (struct server *) array_get(peers, i);
+	    if (peer->is_local)
+	    	continue;
+
+	    struct conn *conn, *nconn;
+	    log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
+	    for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL; conn = nconn) {
+	        nconn = TAILQ_NEXT(conn, conn_tqe);
+	        //conn->owner = peer; //re-link to the owner in case of an resize/allocation
+	        log_debug(LOG_VVERB, "\tGossiping to connection  '%d'", conn->sd);
+	    }
+	}
+
+	return DN_OK;
+}
+
 
 static void
 dnode_peer_relink_conn_owner(struct server_pool *sp) {

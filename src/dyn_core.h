@@ -138,6 +138,7 @@ typedef enum dyn_state {
 	UNKNOWN
 } dyn_state_t;
 
+
 struct context {
     uint32_t           id;          /* unique context id */
     struct conf        *cf;         /* configuration */

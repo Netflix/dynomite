@@ -64,7 +64,7 @@
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
 #define CONF_DEFAULT_DYN_CONNECTIONS         100
 #define CONF_DEFAULT_VNODE_TOKENS            8
-#define CONF_DEFAULT_GOS_INTERVAL            10000
+#define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
 #define CONF_DEFAULT_PEERS                   100
 
 #define CONF_STR_NONE                        "none"

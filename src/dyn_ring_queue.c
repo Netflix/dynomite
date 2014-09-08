@@ -38,7 +38,9 @@ ring_message_deinit(struct ring_message *msg)
 	if (msg == NULL)
 		return DN_ERROR;
 
-    dn_free(msg->node);
+	if (msg->node != NULL)
+       dn_free(msg->node);
+
     dn_free(msg);
 
     return DN_OK;
@@ -75,7 +77,7 @@ node_init(struct node *node)
 
      node->is_seed = false;
      node->is_local = false;
-     node->status = 2;
+     node->state = INIT;
 
      return DN_OK;
 }
@@ -104,7 +106,7 @@ node_copy(const struct node *src, struct node *dst)
      if (src == NULL || dst == NULL)
     	 return DN_ERROR;
 
-     dst->status = src->status;
+     dst->state = src->state;
      dst->is_local = src->is_local;
      dst->is_seed = src->is_seed;
      dst->failure_count = src->failure_count;

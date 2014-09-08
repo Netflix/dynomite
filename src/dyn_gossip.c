@@ -39,6 +39,15 @@ gossip_msg_to_core(struct server_pool *sp, struct node *node, void *cb)
 }
 
 static rstatus_t
+gossip_handshake_known_nodes(struct server_pool *sp)
+{
+	rstatus_t status;
+
+	gossip_msg_to_core(sp, NULL, dnode_handshake_peers);
+	return DN_OK;
+}
+
+static rstatus_t
 parse_seeds(struct string *seeds, struct string *dc_name, struct string *region_name,
 		struct string *port_str, struct string *address, struct string *name,
 		struct array * ptokens)
@@ -147,10 +156,10 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 	log_debug(LOG_VERB, "gossip_add_node_to_dc : dc[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
 					     g_dc->name, address->len, address->data, ip->len, ip->data, port->len, port->data);
 
-        int port_i = dn_atoi(port->data, port->len);
-        if (port_i == 0) {
-            return NULL; //bad data
-        }
+    int port_i = dn_atoi(port->data, port->len);
+    if (port_i == 0) {
+        return NULL; //bad data
+    }
 
 	struct node *gnode = (struct node *) array_push(&g_dc->nodes);
 	node_init(gnode);
@@ -380,34 +389,39 @@ gossip_loop(void *arg)
 {
 	struct server_pool *sp = arg;
 	struct string seeds;
+    uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
 	string_init(&seeds);
 
 	for(;;) {
-		usleep(2000000); //TODOs: get this from a setting
+		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
-			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
-			gossip_update_seeds(sp, &seeds);
-			string_deinit(&seeds);
+           log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
+           gossip_update_seeds(sp, &seeds);
+           string_deinit(&seeds);
 		}
+
+		if (gn_pool.ctx->dyn_state == JOINING) {
+           log_debug(LOG_VERB, "I am still joining......");
+           //aggressively contact all known nodes before changing to state NORMAL
+           gossip_handshake_known_nodes(sp);
+        }
 
 		//loga("From gossip thread, Length of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
 
 		//while (!CBUF_IsEmpty(C2G_InQ)) {
-			//char* s = (char*) CBUF_Pop( C2G_InQ );
-			//loga("Gossip: %s", s);
-			//dn_free(s);
+			  //char* s = (char*) CBUF_Pop( C2G_InQ );
+			  //loga("Gossip: %s", s);
+			  //dn_free(s);
 		//}
 
 		//void* ss = "hello main, from gossip";
-		//CBUF_Push( C2G_OutQ, ss );
+	   //CBUF_Push( C2G_OutQ, ss );
 
 
 	}
-
-	//event_loop_stats(gossip_loop_callback, arg);
 
 	return NULL;
 }
@@ -513,24 +527,12 @@ gossip_pool_each_init(void *elem, void *data)
 		goto error;
 	}
 
-
 	return DN_OK;
 
 	error:
 	gossip_destroy(sp);
 	return DN_OK;
 
-	//loga("seed provider....................... %s", sp->name);
-	//if (!sp->preconnect) {
-	//    return DN_OK;
-	//}
-
-	//status = array_each(&sp->peers, dnode_peer_each_preconnect, NULL);
-	//if (status != DN_OK) {
-	//    return status;
-	//}
-
-	return DN_OK;
 }
 
 
