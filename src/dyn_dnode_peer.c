@@ -551,6 +551,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 	conn_put(conn);
 }
 
+
 rstatus_t
 dnode_handshake_peers(struct server_pool *sp)
 {
@@ -565,13 +566,26 @@ dnode_handshake_peers(struct server_pool *sp)
 	    if (peer->is_local)
 	    	continue;
 
-	    struct conn *conn, *nconn;
 	    log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
-	    for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL; conn = nconn) {
-	        nconn = TAILQ_NEXT(conn, conn_tqe);
-	        //conn->owner = peer; //re-link to the owner in case of an resize/allocation
-	        log_debug(LOG_VVERB, "\tGossiping to connection  '%d'", conn->sd);
+
+		struct conn * conn = dnode_peer_conn(peer);
+		if (conn == NULL) {
+		    //running out of connection due to memory exhaust
+	        log_debug(LOG_DEBUG, "Unable to obtain a connection object");
+		    return DN_ERROR;
+		}
+
+	    status = dnode_peer_connect(sp->ctx, peer, conn);
+	    if (status != DN_OK ) {
+	         dnode_peer_close(sp->ctx, conn);
+	         log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
+	         return DN_OK;
 	    }
+
+	    struct string data = string("12435345,12423523532,1,STARTING,ec2-22-4-33-234.amazon.com|124343451,1242352334444,0,RUNNING,ec2-22-5-31-34.amazon.com");
+
+		peer_gossip_forward(sp->ctx, conn, sp->redis, &data);
+
 	}
 
 	return DN_OK;
@@ -658,7 +672,7 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
 	status = dnode_peer_add_node(sp, node);
 
-	return DN_OK;
+	return status;
 }
 
 
@@ -670,14 +684,14 @@ dnode_peer_add_dc(struct server_pool *sp, struct node *node)
 	log_debug(LOG_VVERB, "dyn: peer has an add-dc message '%.*s'", node->name.len, node->name.data);
 	status = dnode_peer_add_node(sp, node);
 
-	return DN_OK;
+	return status;
 }
 
 
 rstatus_t
 dnode_peer_remove(struct server_pool *sp, struct node *node)
 {
-	rstatus_t status;
+	//rstatus_t status;
 	log_debug(LOG_VVERB, "dyn: peer has a removed message '%.*s'", node->name.len, node->name.data);
 	return DN_OK;
 }
@@ -686,13 +700,13 @@ dnode_peer_remove(struct server_pool *sp, struct node *node)
 rstatus_t
 dnode_peer_replace(struct server_pool *sp, struct node *node)
 {
-    rstatus_t status;
+    //rstatus_t status;
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
     struct array *peers = &sp->peers;
     struct server *s = NULL;
 
     uint32_t i,nelem;
-    bool node_exist = false;
+    //bool node_exist = false;
     //TODOs: use hash table here
     for (i=1, nelem = array_n(peers); i< nelem; i++) {
        struct server * peer = (struct server *) array_get(peers, i);

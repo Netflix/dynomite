@@ -24,9 +24,8 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
-static
-struct string client_request_dyn_msg = string("Client_request");
-
+static struct string client_request_dyn_msg = string("Client_request");
+static uint64_t peer_msg_id = 0;
 
 struct msg *
 req_get(struct conn *conn)
@@ -553,22 +552,15 @@ peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, 
         }
     }
 
-
     struct mbuf *nbuf = mbuf_get();
     if (nbuf == NULL) {
        return;
     }
-  
-    struct msg *nmsg = msg_get(msg->owner, msg->request, c_conn->redis);
-    if (nmsg == NULL) {
-        mbuf_put(nbuf);
-        return;
-    }
-
+ 
     //dyn message's meta data
-    uint64_t msg_id = 1234;
-    uint8_t type = 1;
-    uint8_t version = 1;
+    uint64_t msg_id = peer_msg_id++;
+    uint8_t type = DMSG_REQ;
+    uint8_t version = VERSION_10;
 
     dmsg_write(nbuf, msg_id, type, version, &client_request_dyn_msg);
     mbuf_insert_head(&msg->mhdr, nbuf);
@@ -581,6 +573,44 @@ peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, 
     log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
               " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
               msg->mlen, msg->type, keylen, key);
+}
+
+
+void
+peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct string *data)
+{
+	struct msg *msg = msg_get(conn, 1, redis);
+
+	struct mbuf *nbuf = mbuf_get();
+	if (nbuf == NULL) {
+        log_debug(LOG_DEBUG, "Unable to obtain a mbuf");
+	    //return DN_ERROR;
+        return;
+	}
+
+	if (msg == NULL) {
+		mbuf_put(nbuf);
+	    //return DN_ERROR;
+		return;
+	}
+
+	msg->owner = conn;
+    uint64_t msg_id = peer_msg_id++;
+    uint8_t type = GOSSIP_SYN;
+    uint8_t version = VERSION_10;
+
+	dmsg_write(nbuf, msg_id, type, version, data);
+	mbuf_insert_head(&msg->mhdr, nbuf);
+
+	conn->enqueue_inq(ctx, conn, msg);
+
+    //fix me - gossip stats
+    //req_forward_stats(ctx, s_conn->owner, msg);
+
+    log_debug(LOG_VERB, "gossip to peer %d with msg_id %"PRIu64" '%.*s'", conn->sd, msg->id,
+    		             data->len, data->data);
+
+	//return DN_OK;
 }
 
 

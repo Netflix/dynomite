@@ -279,6 +279,12 @@ dyn_parse_core(struct msg *r)
               r->state = 0;
               r->result = MSG_PARSE_OK;
        }
+       if (dmsg->type == GOSSIP_SYN) {
+              ASSERT(r->pos <= b->last);
+              r->state = 0;
+              r->result = MSG_PARSE_OK;
+              log_debug(LOG_DEBUG, "got a GOSSIP_SYN");
+       }
       //if (dmsg->type == GOSSIP_PING) {
       //      r->pos = p;
       //      r->dyn_state = DYN_DONE;
@@ -330,7 +336,8 @@ dyn_parse_req(struct msg *r)
 
          if (r->redis)
              return redis_parse_req(r);  
-	 return memcache_parse_req(r);
+
+	     return memcache_parse_req(r);
     } 
    
     //bad case
@@ -463,14 +470,13 @@ dmsg_get(void)
     }
 
 done:
-    dmsg->id = ++dmsg_id;
+    //dmsg->id = ++dmsg_id;
 
     STAILQ_INIT(&dmsg->mhdr);
     dmsg->mlen = 0;
     dmsg->data = NULL;
 
     dmsg->type = MSG_UNKNOWN;
-    dmsg->id = 0;
     dmsg->version = VERSION_10;
     
     dmsg->source_address = NULL;
