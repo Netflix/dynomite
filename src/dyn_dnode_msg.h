@@ -22,6 +22,7 @@ typedef enum dmsg_type {
     GOSSIP_PING,
     GOSSIP_PING_REPLY,
     GOSSIP_SYN,
+    GOSSIP_SYN_REPLY,
     GOSSIP_ACK,
     GOSSIP_DIGEST_SYN,
     GOSSIP_DIGEST_ACK,
@@ -41,7 +42,7 @@ struct dmsg {
     TAILQ_ENTRY(dmsg)     m_tqe;           /* link in free q */
 
     struct msg           *owner;
-    struct mhdr          mhdr;            /* message mbuf header */
+    //struct mhdr          mhdr;            /* message mbuf header */
 
     uint64_t             id;              /* message id */
     dmsg_type_t          type;            /* message type */
@@ -67,6 +68,7 @@ void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
 rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
+rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct mbuf *data);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 #endif

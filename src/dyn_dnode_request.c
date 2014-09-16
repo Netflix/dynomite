@@ -7,6 +7,11 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
+static struct string client_request_dyn_msg = string("Client_request");
+static uint64_t peer_msg_id = 0;
+
+static uint8_t version = VERSION_10;
+
 struct msg *
 dnode_req_get(struct conn *conn)
 {
@@ -121,64 +126,6 @@ dnode_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
     return req_recv_next(ctx, conn, alloc);
 }
 
-
-static void
-dnode_req_gos_forward(struct context *ctx, struct conn *dc_conn, struct msg *msg)
-{
-    rstatus_t status;
-    struct msg *pmsg;
-
-    ASSERT(dc_conn->dnode_client && !dc_conn->dnode_server);
-
-    //add messsage
-    struct mbuf *nbuf = mbuf_get();
-     if (nbuf == NULL) {
-         loga("Error happened in calling mbuf_get");
-         return;  //TODOs: need to address this further
-     }
-
-     dc_conn->enqueue_outq(ctx, dc_conn, msg);
-     msg->done = 1;
-
-     //TODOs: need to free the old msg object
-     pmsg = msg_get(dc_conn, 1, 0);
-     if (pmsg == NULL) {
-         mbuf_put(nbuf);
-         return;
-     }
-
-     //dyn message's meta data
-     uint64_t msg_id = 1234;
-     uint8_t type = GOSSIP_PING_REPLY;
-     uint8_t version = 1;
-     struct string data = string("PingReply");
-
-     dmsg_write(nbuf, msg_id, type, version, &data);
-     mbuf_insert(&pmsg->mhdr, nbuf);
-
-     //should we do this?
-     //s_conn->dequeue_outq(ctx, s_conn, pmsg);
-     //pmsg->done = 1;
-
-     /* establish msg <-> pmsg (response <-> request) link */
-     msg->peer = pmsg;
-     pmsg->peer = msg;
-
-     //pmsg->pre_coalesce(pmsg);
-
-
-    if (dnode_req_done(dc_conn, msg)) {
-       status = event_add_out(ctx->evb, dc_conn);
-       if (status != DN_OK) {
-          dc_conn->err = errno;
-       }
-    }
-
-    //dc_conn->enqueue_outq(ctx, dc_conn, pmsg);
-
-    //dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
-}
-
 static bool
 dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
@@ -195,26 +142,9 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     /* dynomite hanlder */
     if (msg->dmsg != NULL) {
-       if (dmsg_process(ctx, conn, msg->dmsg)) {
-           //forward request
-           dnode_req_gos_forward(ctx, conn, msg);
-          return true;
-       }
+       return dmsg_process(ctx, conn, msg->dmsg);
     }
 
-    /*
-     * Handle "quit\r\n", which is the protocol way of doing a
-     * passive close
-     */
-    if (msg->quit) {
-        ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_INFO, "dyn: filter quit req %"PRIu64" from c %d", msg->id,
-                  conn->sd);
-        conn->eof = 1;
-        conn->recv_ready = 0;
-        dnode_req_put(msg);
-        return true;
-    }
 
     return false;
 }
@@ -333,3 +263,139 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     req_send_done(ctx, conn, msg);
 }
 
+
+void
+peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
+                 struct datacenter *dc, uint8_t *key, uint32_t keylen)
+{
+
+    rstatus_t status;
+    /* enqueue message (request) into client outq, if response is expected */
+    if (!msg->noreply) {
+      c_conn->enqueue_outq(ctx, c_conn, msg);
+    }
+
+    ASSERT(!p_conn->dnode_client && !p_conn->dnode_server);
+    ASSERT(c_conn->client);
+
+    /* enqueue the message (request) into peer inq */
+    if (TAILQ_EMPTY(&p_conn->imsg_q)) {
+        status = event_add_out(ctx->evb, p_conn);
+        if (status != DN_OK) {
+            dnode_req_forward_error(ctx, p_conn, msg);
+            p_conn->err = errno;
+            return;
+        }
+    }
+
+    struct mbuf *nbuf = mbuf_get();
+    if (nbuf == NULL) {
+       return;
+    }
+
+    //dyn message's meta data
+    uint64_t msg_id = peer_msg_id++;
+
+    dmsg_write(nbuf, msg_id, DMSG_REQ, version, &client_request_dyn_msg);
+    mbuf_insert_head(&msg->mhdr, nbuf);
+
+    p_conn->enqueue_inq(ctx, p_conn, msg);
+
+    //fix me - coordinator stats
+    //req_forward_stats(ctx, s_conn->owner, msg);
+
+    log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
+              msg->mlen, msg->type, keylen, key);
+}
+
+
+/*
+void
+peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct string *data)
+{
+	rstatus_t status;
+	struct msg *msg = msg_get(conn, 1, redis);
+
+	if (msg == NULL) {
+		log_debug(LOG_DEBUG, "Unable to obtain a msg");
+		return;
+	}
+
+	struct mbuf *nbuf = mbuf_get();
+	if (nbuf == NULL) {
+        log_debug(LOG_DEBUG, "Unable to obtain a mbuf");
+        msg_put(msg);
+        return;
+	}
+
+    uint64_t msg_id = peer_msg_id++;
+
+	dmsg_write(nbuf, msg_id, GOSSIP_SYN, version, data);
+	mbuf_insert_head(&msg->mhdr, nbuf);
+
+    if (TAILQ_EMPTY(&conn->imsg_q)) {
+        status = event_add_out(ctx->evb, conn);
+        if (status != DN_OK) {
+            dnode_req_forward_error(ctx, conn, msg);
+            conn->err = errno;
+            return;
+        }
+    }
+
+	conn->enqueue_inq(ctx, conn, msg);
+
+
+    log_debug(LOG_VERB, "gossip to peer %d with msg_id %"PRIu64" '%.*s'", conn->sd, msg->id,
+    		             data->len, data->data);
+
+}
+*/
+
+
+void
+peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *mbuf)
+{
+	    rstatus_t status;
+	    struct msg *msg = msg_get(conn, 1, redis);
+
+	    if (msg == NULL) {
+		   log_debug(LOG_DEBUG, "Unable to obtain a msg");
+		   return;
+	    }
+
+	    struct mbuf *nbuf = mbuf_get();
+	    if (nbuf == NULL) {
+           log_debug(LOG_DEBUG, "Unable to obtain a mbuf");
+           msg_put(msg);
+           return;
+	    }
+
+	    uint64_t msg_id = peer_msg_id++;
+
+	    dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, version, mbuf);
+		mbuf_insert_head(&msg->mhdr, nbuf);
+		mbuf_put(mbuf); //free this as nobody else will do
+
+	    /* enqueue the message (request) into peer inq */
+	    if (TAILQ_EMPTY(&conn->imsg_q)) {
+	        status = event_add_out(ctx->evb, conn);
+	        if (status != DN_OK) {
+	            dnode_req_forward_error(ctx, conn, msg);
+	            conn->err = errno;
+	            return;
+	        }
+	    }
+
+	    //need to handle a reply
+	    //conn->enqueue_outq(ctx, conn, msg);
+
+	    //msg->noreply = 1;
+		conn->enqueue_inq(ctx, conn, msg);
+
+	    //fix me - gossip stats
+	    //req_forward_stats(ctx, s_conn->owner, msg);
+
+	    //log_debug(LOG_VERB, "gossip to peer %d with msg_id %"PRIu64" '%.*s'", conn->sd, msg->id,
+	    //		             data->len, data->data);
+}

@@ -42,7 +42,7 @@ static bool
 dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg;
-
+    //loga("MINHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH@@@@@@@@@@@@@@@@@@@@@@@@@");
     ASSERT(!conn->dnode_client && !conn->dnode_server);
 
     if (msg_empty(msg)) {
@@ -128,6 +128,77 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
     dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
 
+
+
+
+void
+dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
+{
+     rstatus_t status;
+     struct msg *pmsg;
+
+     //ASSERT(p_conn->dnode_client && !p_conn->dnode_server);
+
+     //add messsage
+     struct mbuf *nbuf = mbuf_get();
+     if (nbuf == NULL) {
+         loga("Error happened in calling mbuf_get");
+         return;  //TODOs: need to address this further
+     }
+
+     //dc_conn->enqueue_outq(ctx, dc_conn, msg);
+     msg->done = 1;
+
+     //TODOs: need to free the old msg object
+     pmsg = msg_get(p_conn, 0, msg->redis);
+     if (pmsg == NULL) {
+         mbuf_put(nbuf);
+         return;
+     }
+
+     pmsg->done = 1;
+     /* establish msg <-> pmsg (response <-> request) link */
+     msg->peer = pmsg;
+     pmsg->peer = msg;
+     pmsg->pre_coalesce(pmsg);
+     pmsg->owner = p_conn;
+
+     //dyn message's meta data
+     uint64_t msg_id = msg->dmsg->id;
+     uint8_t type = GOSSIP_SYN_REPLY;
+     uint8_t version = VERSION_10;
+     struct string data = string("SYN_REPLY_OK");
+
+     dmsg_write(nbuf, msg_id, type, version, &data);
+     mbuf_insert(&pmsg->mhdr, nbuf);
+
+     //dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
+     //should we do this?
+     //s_conn->dequeue_outq(ctx, s_conn, pmsg);
+
+
+     /*
+     p_conn->enqueue_outq(ctx, p_conn, pmsg);
+     if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+        status = event_add_out(ctx->evb, p_conn);
+        if (status != DN_OK) {
+           p_conn->err = errno;
+        }
+     }
+     */
+
+     if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+        status = event_add_out(ctx->evb, p_conn);
+        if (status != DN_OK) {
+           p_conn->err = errno;
+        }
+     }
+
+    //dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
+}
+
+
+
 void
 dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
               struct msg *nmsg)
@@ -176,4 +247,5 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 
     req_put(pmsg);
 }
+
 

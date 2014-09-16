@@ -157,8 +157,7 @@ struct server_pool {
     uint32_t           d_connections;        /* maximum # dyn connections */
     struct string      dc;                   /* the datacenter for this node */  
     struct array       tokens;               /* the DHT tokens for this server */
-    /* for gossiping */
-    struct dyn_ring    ring;                 /* ring info (shared with ring/gossip)  */
+
     int                g_interval;           /* gossip interval */
     struct string      region;               /* server's region */
 

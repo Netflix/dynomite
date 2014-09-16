@@ -35,6 +35,6 @@ rstatus_t dnode_peer_add(struct server_pool *sp, struct node *node);
 rstatus_t dnode_peer_replace(struct server_pool *sp, struct node *node);
 rstatus_t dnode_peer_remove(struct server_pool *sp, struct node *node);
 rstatus_t dnode_peer_add_dc(struct server_pool *sp, struct node *node);
-rstatus_t dnode_handshake_peers(struct server_pool *sp);
+rstatus_t dnode_peer_handshake_announcing(struct server_pool *sp);
 
 #endif 

@@ -165,7 +165,7 @@ core_ctx_create(struct instance *nci)
 	gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-	ctx->dyn_state = JOINING;
+	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
 	return ctx;
 }
 

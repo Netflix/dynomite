@@ -39,11 +39,11 @@ gossip_msg_to_core(struct server_pool *sp, struct node *node, void *cb)
 }
 
 static rstatus_t
-gossip_handshake_known_nodes(struct server_pool *sp)
+gossip_announce_joining(struct server_pool *sp)
 {
 	rstatus_t status;
 
-	gossip_msg_to_core(sp, NULL, dnode_handshake_peers);
+	gossip_msg_to_core(sp, NULL, dnode_peer_handshake_announcing);
 	return DN_OK;
 }
 
@@ -406,7 +406,7 @@ gossip_loop(void *arg)
 		if (gn_pool.ctx->dyn_state == JOINING) {
            log_debug(LOG_VERB, "I am still joining......");
            //aggressively contact all known nodes before changing to state NORMAL
-           gossip_handshake_known_nodes(sp);
+           gossip_announce_joining(sp);
         }
 
 		//loga("From gossip thread, Length of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));

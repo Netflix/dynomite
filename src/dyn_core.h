@@ -117,7 +117,6 @@ struct dyn_ring;
 #include "dyn_mbuf.h"
 #include "dyn_message.h"
 #include "dyn_connection.h"
-#include "dyn_ring.h"
 #include "dyn_cbuf.h"
 #include "dyn_ring_queue.h"
 

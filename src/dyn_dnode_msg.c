@@ -48,7 +48,7 @@ dyn_parse_core(struct msg *r)
     struct mbuf *b;
     uint8_t *p;
     uint8_t ch;
-    uint32_t num = 0;
+    uint64_t num = 0;
 	    
     state = r->dyn_state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);    
@@ -109,16 +109,20 @@ dyn_parse_core(struct msg *r)
                 case DYN_MSG_ID:
                     log_debug(LOG_DEBUG, "DYN_MSG_ID");
                     log_debug(LOG_DEBUG, "num = %d", num);
+
                     if (isdigit(ch))  {
                         num = num*10 + (ch - '0'); 
-                    } else {  
-                        if (num > 0) {
+                    } else if (ch != ' ') {
+                        goto error;
+                    } else {
+
+                        //if (num >= 0) {
                            log_debug(LOG_DEBUG, "MSG ID : %d", num);
                            dmsg->id = num;
                            state = DYN_SPACES_BEFORE_TYPE_ID;
-                        } else {
-                           goto error;
-                        }
+                        //} else {
+                        //   goto error;
+                        //}
                     }
                     break;                         
               
@@ -274,27 +278,6 @@ dyn_parse_core(struct msg *r)
                             r->dyn_state, r->pos - b->pos, b->last - b->pos);
 
       
-       if (dmsg->type == GOSSIP_PING || dmsg->type == GOSSIP_PING_REPLY) {
-              ASSERT(r->pos <= b->last);
-              r->state = 0;
-              r->result = MSG_PARSE_OK;
-       }
-       if (dmsg->type == GOSSIP_SYN) {
-              ASSERT(r->pos <= b->last);
-              r->state = 0;
-              r->result = MSG_PARSE_OK;
-              log_debug(LOG_DEBUG, "got a GOSSIP_SYN");
-       }
-      //if (dmsg->type == GOSSIP_PING) {
-      //      r->pos = p;
-      //      r->dyn_state = DYN_DONE;
-      //      b->pos = p;
-      //      ASSERT(r->pos <= b->last);
-      //      r->state = 0;
-      //      r->result = MSG_PARSE_OK;
-      //      return;
-       //}
-       //return memcache_parse_req(r);
        return true;
 
     skip:
@@ -334,6 +317,16 @@ dyn_parse_req(struct msg *r)
              return;
          }
 
+         if (dmsg->type == GOSSIP_SYN) {
+        	 log_debug(LOG_DEBUG, "got a GOSSIP_SYNC");
+        	 r->state = 0;
+        	 r->result = MSG_PARSE_OK;
+        	 r->dyn_state = DYN_DONE;
+        	 return;
+         }
+
+
+
          if (r->redis)
              return redis_parse_req(r);  
 
@@ -350,16 +343,26 @@ void dyn_parse_rsp(struct msg *r)
 {
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;
-	 if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
-	     log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLY");
-	     r->state = 0;
-             r->result = MSG_PARSE_OK;
-             r->dyn_state = DYN_DONE;
-             return;
-	 }
-         if (r->redis)
+         if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
+	        log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLY");
+	        r->state = 0;
+            r->result = MSG_PARSE_OK;
+            r->dyn_state = DYN_DONE;
+            return;
+	     }
+
+         if (dmsg->type == GOSSIP_SYN_REPLY) {
+    	    log_debug(LOG_DEBUG, "I got a GOSSIP_SYN_REPLY");
+            r->state = 0;
+    	    r->result = MSG_PARSE_OK;
+    	    r->dyn_state = DYN_DONE;
+    	    return;
+         }
+
+	     if (r->redis)
             return redis_parse_rsp(r);
-	 return memcache_parse_rsp(r);
+
+	     return memcache_parse_rsp(r);
    } 
 
    //bad case
@@ -386,11 +389,13 @@ dmsg_put(struct dmsg *dmsg)
 {
     log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
 
-    while (!STAILQ_EMPTY(&dmsg->mhdr)) {
-        struct mbuf *mbuf = STAILQ_FIRST(&dmsg->mhdr);
-        mbuf_remove(&dmsg->mhdr, mbuf);
-        mbuf_put(mbuf);
-    }
+    //while (!STAILQ_EMPTY(&dmsg->mhdr)) {
+    //    struct mbuf *mbuf = STAILQ_FIRST(&dmsg->mhdr);
+    //    mbuf_remove(&dmsg->mhdr, mbuf);
+    //    mbuf_put(mbuf);
+    //}
+
+    //need to free other like source_address
 
     nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
@@ -402,17 +407,17 @@ dmsg_dump(struct dmsg *dmsg)
     struct mbuf *mbuf;
 
     log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
+    loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
+    //STAILQ_FOREACH(mbuf, &dmsg->owner->mhdr, next) {
+    //    uint8_t *p, *q;
+    //    long int len;
 
-    STAILQ_FOREACH(mbuf, &dmsg->mhdr, next) {
-        uint8_t *p, *q;
-        long int len;
+    //    p = mbuf->pos;
+    //    q = mbuf->last;
+    //    len = q - p;
 
-        p = mbuf->start;
-        q = mbuf->last;
-        len = q - p;
-
-        loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
-    }
+    //    loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+    //}
 }
 
 
@@ -472,7 +477,7 @@ dmsg_get(void)
 done:
     //dmsg->id = ++dmsg_id;
 
-    STAILQ_INIT(&dmsg->mhdr);
+   // STAILQ_INIT(&dmsg->mhdr);
     dmsg->mlen = 0;
     dmsg->data = NULL;
 
@@ -508,6 +513,27 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
     return DN_OK;
 }
 
+rstatus_t
+dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct mbuf *data)
+{
+    mbuf_write_string(mbuf, &MAGIC_STR);
+    mbuf_write_uint64(mbuf, msg_id);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_uint8(mbuf, type);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_uint8(mbuf, version);
+    mbuf_write_string(mbuf, &CRLF_STR);
+    mbuf_write_char(mbuf, '*');
+    mbuf_write_uint32(mbuf, (data->last - data->pos));
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_bytes(mbuf, data);
+    mbuf_write_string(mbuf, &CRLF_STR);
+
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");
+
+    return DN_OK;
+}
+
 
 bool
 dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
@@ -523,23 +549,31 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
            s.len = dmsg->mlen;
            s.data = dmsg->data;
            log_hexdump(LOG_VERB, s.data, s.len, "dyn processing message ");
-           break;
+           return true;
 
         case GOSSIP_DIGEST_SYN:
-           break;
+           return true;
 
         case GOSSIP_DIGEST_ACK:
-          break;
+           return true;
 
         case GOSSIP_DIGEST_ACK2:
-          break;
+           return true;
 
         case GOSSIP_PING:
-          log_debug(LOG_DEBUG, "I have got a ping msgggggg!!!!!!");
-          return true;
- 
+           log_debug(LOG_DEBUG, "I have got a ping msgggggg!!!!!!");
+           return true;
+        case GOSSIP_SYN:
+           log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN!!!!!!");
+           dmsg_dump(dmsg);
+           //dnode_rsp_gos_syn(ctx, conn, dmsg->owner);
+           return true;
+        case GOSSIP_SYN_REPLY:
+           log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN_REPLY!!!!!!");
+
+           return true;
         default:
-          log_debug(LOG_DEBUG, "nothing to do");
+           log_debug(LOG_DEBUG, "nothing to do");
     }
        
     return false;

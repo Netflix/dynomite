@@ -255,9 +255,6 @@ dnode_peer_each_pool_init(void *elem, void *context)
 
 	dnode_peer_pool_run(sp);
 
-	//TODOs: need to clean this
-	status = dyn_ring_init(&sp->peers, sp);
-
 	log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool %"PRIu32" '%.*s'",
 			nseed, sp->idx, sp->name.len, sp->name.data);
 
@@ -553,7 +550,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 
 rstatus_t
-dnode_handshake_peers(struct server_pool *sp)
+dnode_peer_handshake_announcing(struct server_pool *sp)
 {
 	rstatus_t status;
 	log_debug(LOG_VVERB, "dyn: handshaking peers");
@@ -561,6 +558,40 @@ dnode_handshake_peers(struct server_pool *sp)
 
 	uint32_t i,nelem;
 	nelem = array_n(peers);
+
+	//we assume one mbuf is enough for now - will enhance with multiple mbufs later
+    struct mbuf *mbuf = mbuf_get();
+    if (mbuf == NULL) {
+       log_debug(LOG_VVERB, "Too bad, not enough memory!");
+       return DN_ENOMEM;
+    }
+
+    //annoucing myself by sending msg: 'region-dc-token,started_ts,apps_version,node_state,node_dns'
+    mbuf_write_string(mbuf, &sp->region);
+    mbuf_write_char(mbuf, '-');
+    mbuf_write_string(mbuf, &sp->dc);
+    mbuf_write_char(mbuf, '-');
+    struct dyn_token *token = (struct dyn_token *) array_get(&sp->tokens, 0);
+    if (token == NULL) {
+       log_debug(LOG_VVERB, "Why? This should not be null!");
+       mbuf_put(mbuf);
+       return DN_ERROR;
+    }
+
+    mbuf_write_uint32(mbuf, token->mag[0]);
+    mbuf_write_char(mbuf, ',');
+    int64_t cur_ts = (int64_t)time(NULL);
+    mbuf_write_uint64(mbuf, cur_ts);
+    mbuf_write_char(mbuf, ',');
+    mbuf_write_uint8(mbuf, VERSION_10);
+    mbuf_write_char(mbuf, ',');
+    mbuf_write_uint8(mbuf, sp->ctx->dyn_state);
+    mbuf_write_char(mbuf, ',');
+    struct string host_name = string("ec2-22-4-33-234.amazon.com");
+    mbuf_write_string(mbuf,&host_name);
+
+	//struct string data = string("12435345,12423523532,1,STARTING,ec2-22-4-33-234.amazon.com|124343451,1242352334444,0,RUNNING,ec2-22-5-31-34.amazon.com");
+
 	for (i = 0; i < nelem; i++) {
 	    struct server *peer = (struct server *) array_get(peers, i);
 	    if (peer->is_local)
@@ -582,10 +613,10 @@ dnode_handshake_peers(struct server_pool *sp)
 	         return DN_OK;
 	    }
 
-	    struct string data = string("12435345,12423523532,1,STARTING,ec2-22-4-33-234.amazon.com|124343451,1242352334444,0,RUNNING,ec2-22-5-31-34.amazon.com");
 
-		peer_gossip_forward(sp->ctx, conn, sp->redis, &data);
 
+		peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
+	    //peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);
 	}
 
 	return DN_OK;
@@ -1013,7 +1044,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datac
 	}
 
 	if (msg_type == 1) {  //always local
-            server = array_get(&pool->peers, 0);
+        server = array_get(&pool->peers, 0);
 	} else {
 	    /* from a given {key, keylen} pick a server from pool */
 	    server = dnode_peer_pool_server(pool, dc, key, keylen);
