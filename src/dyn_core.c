@@ -290,16 +290,16 @@ core_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->sd > 0);
 
-    if (conn->dyn_mode) {
-    	core_dnode_close_log(conn);
-    } else {
-    	core_close_log(conn);
-    }
+	if (conn->dyn_mode) {
+		core_dnode_close_log(conn);
+	} else {
+		core_close_log(conn);
+	}
 
 	status = event_del_conn(ctx->evb, conn);
 	if (status < 0) {
 		log_warn("event del conn %c %d failed, ignored: %s",
-				 type, conn->sd, strerror(errno));
+				type, conn->sd, strerror(errno));
 	}
 
 	conn->close(ctx, conn);
@@ -375,10 +375,10 @@ core_core(void *arg, uint32_t events)
 
 	if (conn->dyn_mode) {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
-				      	 conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
+				conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
 	} else {
-	    log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
-		      	 conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
+		log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
+				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
 	}
 
 	conn->events = events;

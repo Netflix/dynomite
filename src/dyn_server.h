@@ -160,6 +160,7 @@ struct server_pool {
 
     int                g_interval;           /* gossip interval */
     struct string      region;               /* server's region */
+    struct string      env;                  /* aws, network, ect */
 
 };
 

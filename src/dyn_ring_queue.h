@@ -38,7 +38,7 @@ volatile struct
 
 
 
-volatile struct ring_message {
+struct ring_message {
 	callback_t         cb;
     struct node        *node;
 	struct server_pool *sp;
@@ -63,7 +63,7 @@ volatile struct
 } C2S_OutQ;
 
 
-volatile struct stat_message {
+struct stat_message {
 	void*         cb;
 	void*         post_cb;
 	void*         data;

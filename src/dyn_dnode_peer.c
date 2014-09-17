@@ -467,7 +467,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 		 */
 		if (msg->swallow || msg->noreply) {
 			log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
-					  " type %d", conn->sd, msg->id, msg->mlen, msg->type);
+					" type %d", conn->sd, msg->id, msg->mlen, msg->type);
 			req_put(msg);
 		} else {
 			c_conn = msg->owner;
@@ -483,10 +483,10 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 			}
 
 			log_debug(LOG_INFO, "dyn: close s %d schedule error for req %"PRIu64" "
-					  "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
-					  msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
-					  conn->err ? strerror(conn->err): " ");
-			}
+					"len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
+					msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
+							conn->err ? strerror(conn->err): " ");
+		}
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -560,63 +560,64 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 	nelem = array_n(peers);
 
 	//we assume one mbuf is enough for now - will enhance with multiple mbufs later
-    struct mbuf *mbuf = mbuf_get();
-    if (mbuf == NULL) {
-       log_debug(LOG_VVERB, "Too bad, not enough memory!");
-       return DN_ENOMEM;
-    }
+	struct mbuf *mbuf = mbuf_get();
+	if (mbuf == NULL) {
+		log_debug(LOG_VVERB, "Too bad, not enough memory!");
+		return DN_ENOMEM;
+	}
 
-    //annoucing myself by sending msg: 'region-dc-token,started_ts,apps_version,node_state,node_dns'
-    mbuf_write_string(mbuf, &sp->region);
-    mbuf_write_char(mbuf, '-');
-    mbuf_write_string(mbuf, &sp->dc);
-    mbuf_write_char(mbuf, '-');
-    struct dyn_token *token = (struct dyn_token *) array_get(&sp->tokens, 0);
-    if (token == NULL) {
-       log_debug(LOG_VVERB, "Why? This should not be null!");
-       mbuf_put(mbuf);
-       return DN_ERROR;
-    }
+	//annoucing myself by sending msg: 'region-dc-token,started_ts,apps_version,node_state,node_dns'
+	mbuf_write_string(mbuf, &sp->region);
+	mbuf_write_char(mbuf, '-');
+	mbuf_write_string(mbuf, &sp->dc);
+	mbuf_write_char(mbuf, '-');
+	struct dyn_token *token = (struct dyn_token *) array_get(&sp->tokens, 0);
+	if (token == NULL) {
+		log_debug(LOG_VVERB, "Why? This should not be null!");
+		mbuf_put(mbuf);
+		return DN_ERROR;
+	}
 
-    mbuf_write_uint32(mbuf, token->mag[0]);
-    mbuf_write_char(mbuf, ',');
-    int64_t cur_ts = (int64_t)time(NULL);
-    mbuf_write_uint64(mbuf, cur_ts);
-    mbuf_write_char(mbuf, ',');
-    mbuf_write_uint8(mbuf, VERSION_10);
-    mbuf_write_char(mbuf, ',');
-    mbuf_write_uint8(mbuf, sp->ctx->dyn_state);
-    mbuf_write_char(mbuf, ',');
-    struct string host_name = string("ec2-22-4-33-234.amazon.com");
-    mbuf_write_string(mbuf,&host_name);
+	mbuf_write_uint32(mbuf, token->mag[0]);
+	mbuf_write_char(mbuf, ',');
+	int64_t cur_ts = (int64_t)time(NULL);
+	mbuf_write_uint64(mbuf, cur_ts);
+	mbuf_write_char(mbuf, ',');
+	mbuf_write_uint8(mbuf, VERSION_10);
+	mbuf_write_char(mbuf, ',');
+	mbuf_write_uint8(mbuf, sp->ctx->dyn_state);
+	mbuf_write_char(mbuf, ',');
+
+	mbuf_write_bytes(mbuf, get_broadcast_address(sp));
+
+	//struct string host_name = string("ec2-22-4-33-234.amazon.com");
+	//mbuf_write_string(mbuf,&host_name);
 
 	//struct string data = string("12435345,12423523532,1,STARTING,ec2-22-4-33-234.amazon.com|124343451,1242352334444,0,RUNNING,ec2-22-5-31-34.amazon.com");
 
 	for (i = 0; i < nelem; i++) {
-	    struct server *peer = (struct server *) array_get(peers, i);
-	    if (peer->is_local)
-	    	continue;
+		struct server *peer = (struct server *) array_get(peers, i);
+		if (peer->is_local)
+			continue;
 
-	    log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
+		log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
 		struct conn * conn = dnode_peer_conn(peer);
 		if (conn == NULL) {
-		    //running out of connection due to memory exhaust
-	        log_debug(LOG_DEBUG, "Unable to obtain a connection object");
-		    return DN_ERROR;
+			//running out of connection due to memory exhaust
+			log_debug(LOG_DEBUG, "Unable to obtain a connection object");
+			return DN_ERROR;
 		}
 
-	    status = dnode_peer_connect(sp->ctx, peer, conn);
-	    if (status != DN_OK ) {
-	         dnode_peer_close(sp->ctx, conn);
-	         log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
-	         return DN_OK;
-	    }
-
-
+		status = dnode_peer_connect(sp->ctx, peer, conn);
+		if (status != DN_OK ) {
+			dnode_peer_close(sp->ctx, conn);
+			log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
+			return DN_OK;
+		}
 
 		peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
-	    //peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);
+		//peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);
 	}
 
 	return DN_OK;
@@ -624,75 +625,76 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 
 
 static void
-dnode_peer_relink_conn_owner(struct server_pool *sp) {
-        struct array *peers = &sp->peers;
-  
-        uint32_t i,nelem; 
-        nelem = array_n(peers);
-        for (i = 0; i < nelem; i++) {
-                struct server *peer = (struct server *) array_get(peers, i);
-                struct conn *conn, *nconn;
-                for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
-                      conn = nconn) {
-                      nconn = TAILQ_NEXT(conn, conn_tqe);
-                      conn->owner = peer; //re-link to the owner in case of an resize/allocation
-                }
-        }
-         
+dnode_peer_relink_conn_owner(struct server_pool *sp)
+{
+	struct array *peers = &sp->peers;
+
+	uint32_t i,nelem;
+	nelem = array_n(peers);
+	for (i = 0; i < nelem; i++) {
+		struct server *peer = (struct server *) array_get(peers, i);
+		struct conn *conn, *nconn;
+		for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
+				conn = nconn) {
+			nconn = TAILQ_NEXT(conn, conn_tqe);
+			conn->owner = peer; //re-link to the owner in case of an resize/allocation
+		}
+	}
+
 }
 
 static rstatus_t
 dnode_peer_add_node(struct server_pool *sp, struct node *node)
 {
-	 rstatus_t status;
+	rstatus_t status;
 
-	 struct array *peers = &sp->peers;
-	 struct server *s = array_push(peers);
+	struct array *peers = &sp->peers;
+	struct server *s = array_push(peers);
 
-	 s->owner = sp;
+	s->owner = sp;
 
-         uint32_t i,nelem;
-	 s->idx = array_idx(peers, s);
+	uint32_t i,nelem;
+	s->idx = array_idx(peers, s);
 
-	 string_copy(&s->pname, node->pname.data, node->pname.len);
-	 string_copy(&s->name, node->name.data, node->name.len);
-	 string_copy(&s->dc, node->dc.data, node->dc.len);
+	string_copy(&s->pname, node->pname.data, node->pname.len);
+	string_copy(&s->name, node->name.data, node->name.len);
+	string_copy(&s->dc, node->dc.data, node->dc.len);
 
-	 s->port = (uint16_t) node->port;
-	 s->is_local = node->is_local;
+	s->port = (uint16_t) node->port;
+	s->is_local = node->is_local;
 
-	 nelem = array_n(&node->tokens);
-	 array_init(&s->tokens, nelem, sizeof(struct dyn_token));
-	 for (i = 0; i < nelem; i++) {
+	nelem = array_n(&node->tokens);
+	array_init(&s->tokens, nelem, sizeof(struct dyn_token));
+	for (i = 0; i < nelem; i++) {
 		struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
 		struct dyn_token *dst_token = array_push(&s->tokens);
 		copy_dyn_token(src_token, dst_token);
-	 }
+	}
 
-	 struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
-	 dn_resolve(&s->name, s->port, info);
-	 s->family = info->family;
-	 s->addrlen = info->addrlen;
-	 s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
-	 s->ns_conn_q = 0;
-	 TAILQ_INIT(&s->s_conn_q);
+	struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
+	dn_resolve(&s->name, s->port, info);
+	s->family = info->family;
+	s->addrlen = info->addrlen;
+	s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+	s->ns_conn_q = 0;
+	TAILQ_INIT(&s->s_conn_q);
 
-	 s->next_retry = 0LL;
-	 s->failure_count = 0;
-	 s->is_seed = node->is_seed;
+	s->next_retry = 0LL;
+	s->failure_count = 0;
+	s->is_seed = node->is_seed;
 
-	 log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
-	   		   s->idx, s->pname.len, s->pname.data);
+	log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
+			s->idx, s->pname.len, s->pname.data);
 
-         dnode_peer_relink_conn_owner(sp);
+	dnode_peer_relink_conn_owner(sp);
 
-	 status = dnode_peer_pool_run(sp);
-         if (status != DN_OK)
-            return status;
+	status = dnode_peer_pool_run(sp);
+	if (status != DN_OK)
+		return status;
 
-	 status = dnode_peer_each_preconnect(s, NULL);
+	status = dnode_peer_each_preconnect(s, NULL);
 
-	 return status;
+	return status;
 }
 
 rstatus_t
@@ -731,54 +733,54 @@ dnode_peer_remove(struct server_pool *sp, struct node *node)
 rstatus_t
 dnode_peer_replace(struct server_pool *sp, struct node *node)
 {
-    //rstatus_t status;
-    log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
-    struct array *peers = &sp->peers;
-    struct server *s = NULL;
+	//rstatus_t status;
+	log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
+	struct array *peers = &sp->peers;
+	struct server *s = NULL;
 
-    uint32_t i,nelem;
-    //bool node_exist = false;
-    //TODOs: use hash table here
-    for (i=1, nelem = array_n(peers); i< nelem; i++) {
-       struct server * peer = (struct server *) array_get(peers, i);
-       if (string_compare(&peer->dc, &node->dc) == 0) {
-    	   //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
-           struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
-           struct dyn_token *ntoken = (struct dyn_token *) array_get(&node->tokens, 0);
+	uint32_t i,nelem;
+	//bool node_exist = false;
+	//TODOs: use hash table here
+	for (i=1, nelem = array_n(peers); i< nelem; i++) {
+		struct server * peer = (struct server *) array_get(peers, i);
+		if (string_compare(&peer->dc, &node->dc) == 0) {
+			//TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
+			struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
+			struct dyn_token *ntoken = (struct dyn_token *) array_get(&node->tokens, 0);
 
-           if (cmp_dyn_token(ptoken, ntoken) == 0) {
-              s = peer; //found a node to replace
-           }
-       }
-    }
-
-
-    if (s != NULL) {
-    	log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
-    	log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
-
-        string_deinit(&s->pname);
-        string_deinit(&s->name);
-        string_copy(&s->pname, node->pname.data, node->pname.len);
-        string_copy(&s->name, node->name.data, node->name.len);
-
-        //TODOs: need to free the previous s->addr?
-        //if (s->addr != NULL) {
-        //   dn_free(s->addr);
-        //}
-
-        struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
-        dn_resolve(&s->name, s->port, info);
-        s->family = info->family;
-        s->addrlen = info->addrlen;
-        s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+			if (cmp_dyn_token(ptoken, ntoken) == 0) {
+				s = peer; //found a node to replace
+			}
+		}
+	}
 
 
-        dnode_peer_each_disconnect(s, NULL);
-        dnode_peer_each_preconnect(s, NULL);
-    } else {
-    	log_debug(LOG_INFO, "Unable to find any node matched the token");
-    }
+	if (s != NULL) {
+		log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
+		log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
+
+		string_deinit(&s->pname);
+		string_deinit(&s->name);
+		string_copy(&s->pname, node->pname.data, node->pname.len);
+		string_copy(&s->name, node->name.data, node->name.len);
+
+		//TODOs: need to free the previous s->addr?
+		//if (s->addr != NULL) {
+		//   dn_free(s->addr);
+		//}
+
+		struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
+		dn_resolve(&s->name, s->port, info);
+		s->family = info->family;
+		s->addrlen = info->addrlen;
+		s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+
+
+		dnode_peer_each_disconnect(s, NULL);
+		dnode_peer_each_preconnect(s, NULL);
+	} else {
+		log_debug(LOG_INFO, "Unable to find any node matched the token");
+	}
 
 	return DN_OK;
 }
@@ -1014,7 +1016,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 		return NULL;
 	}
 
-        //TODOs: should reuse the token
+	//TODOs: should reuse the token
 	if (token != NULL) {
 		deinit_dyn_token(token);
 		dn_free(token);
@@ -1031,7 +1033,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 
 struct conn *
 dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc,
-		             uint8_t *key, uint32_t keylen, uint8_t msg_type)
+		uint8_t *key, uint32_t keylen, uint8_t msg_type)
 {
 	rstatus_t status;
 	struct server *server;
@@ -1040,29 +1042,29 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datac
 	//status = dnode_peer_pool_update(pool);
 	status = dnode_peer_pool_run(pool);
 	if (status != DN_OK) {
-            return NULL;
+		return NULL;
 	}
 
 	if (msg_type == 1) {  //always local
-        server = array_get(&pool->peers, 0);
+		server = array_get(&pool->peers, 0);
 	} else {
-	    /* from a given {key, keylen} pick a server from pool */
-	    server = dnode_peer_pool_server(pool, dc, key, keylen);
-	    if (server == NULL) {
-                return NULL;
-	    }
+		/* from a given {key, keylen} pick a server from pool */
+		server = dnode_peer_pool_server(pool, dc, key, keylen);
+		if (server == NULL) {
+			return NULL;
+		}
 	}
 
 	/* pick a connection to a given server */
 	conn = dnode_peer_conn(server);
 	if (conn == NULL) {
-            return NULL;
+		return NULL;
 	}
 
 	status = dnode_peer_connect(ctx, server, conn);
 	if (status != DN_OK) {
-           dnode_peer_close(ctx, conn);
-           return NULL;
+		dnode_peer_close(ctx, conn);
+		return NULL;
 	}
 
 	return conn;

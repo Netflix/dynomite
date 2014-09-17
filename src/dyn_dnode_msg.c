@@ -526,7 +526,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t versio
     mbuf_write_char(mbuf, '*');
     mbuf_write_uint32(mbuf, (data->last - data->pos));
     mbuf_write_char(mbuf, ' ');
-    mbuf_write_bytes(mbuf, data);
+    mbuf_write_mbuf(mbuf, data);
     mbuf_write_string(mbuf, &CRLF_STR);
 
     log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");

@@ -49,6 +49,7 @@ dynomite_SOURCES =			                          \
         dyn_response.c			                          \
         dyn_mbuf.c dyn_mbuf.h		                          \
         dyn_conf.c dyn_conf.h		                          \
+        dyn_node_snitch.c dyn_node_snitch.h                       \
         dyn_stats.c dyn_stats.h		                          \
         dyn_signal.c dyn_signal.h		                  \
         dyn_rbtree.c dyn_rbtree.h		                  \

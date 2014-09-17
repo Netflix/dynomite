@@ -125,9 +125,9 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *region_
 
 	//status = dn_resolve(&address, field->port, &field->info);
 	//if (status != DN_OK) {
-		//    string_deinit(&address);
-		//    return CONF_ERROR;
-		//}
+	//    string_deinit(&address);
+	//    return CONF_ERROR;
+	//}
 
 	return GOS_OK;
 }
@@ -154,12 +154,12 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 	rstatus_t status;
 
 	log_debug(LOG_VERB, "gossip_add_node_to_dc : dc[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
-					     g_dc->name, address->len, address->data, ip->len, ip->data, port->len, port->data);
+			g_dc->name, address->len, address->data, ip->len, ip->data, port->len, port->data);
 
-    int port_i = dn_atoi(port->data, port->len);
-    if (port_i == 0) {
-        return NULL; //bad data
-    }
+	int port_i = dn_atoi(port->data, port->len);
+	if (port_i == 0) {
+		return NULL; //bad data
+	}
 
 	struct node *gnode = (struct node *) array_push(&g_dc->nodes);
 	node_init(gnode);
@@ -170,16 +170,16 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 
 	status = dn_resolve(&gnode->name, gnode->port, &gnode->info);
 	if (status != DN_OK) {
-            array_pop(&g_dc->nodes);
-            node_deinit(gnode);
-	    return NULL;  //need to deinit
+		array_pop(&g_dc->nodes);
+		node_deinit(gnode);
+		return NULL;  //need to deinit
 	}
 
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(tokens); i < nelem; i++) {
-	    struct dyn_token * token = (struct dyn_token *) array_get(tokens, i);
-	    struct dyn_token * gtoken = (struct dyn_token *) array_push(&gnode->tokens);
-	    copy_dyn_token(token, gtoken);
+		struct dyn_token * token = (struct dyn_token *) array_get(tokens, i);
+		struct dyn_token * gtoken = (struct dyn_token *) array_push(&gnode->tokens);
+		copy_dyn_token(token, gtoken);
 	}
 
 	g_dc->nnodes++;
@@ -194,12 +194,12 @@ gossip_add_node(struct server_pool *sp, struct gossip_dc *g_dc,
 {
 	rstatus_t status;
 	log_debug(LOG_VERB, "gossip_add_node : dc[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
-			  g_dc->name.len, g_dc->name.data, address->len, address->data, ip->len, ip->data, port->len, port->data);
+			g_dc->name.len, g_dc->name.data, address->len, address->data, ip->len, ip->data, port->len, port->data);
 
 	struct node *gnode = gossip_add_node_to_dc(sp, g_dc, address, ip, port, tokens);
-    if (gnode == NULL) {
-       return DN_ENOMEM;
-    }
+	if (gnode == NULL) {
+		return DN_ENOMEM;
+	}
 
 	status = gossip_msg_to_core(sp, gnode, dnode_peer_add);
 	return status;
@@ -207,11 +207,11 @@ gossip_add_node(struct server_pool *sp, struct gossip_dc *g_dc,
 
 static rstatus_t
 gossip_replace_node(struct server_pool *sp, struct node *node,
-		            struct string *new_address, struct string *new_ip)
+		struct string *new_address, struct string *new_ip)
 {
 	rstatus_t status;
 	log_debug(LOG_VERB, "gossip_replace_node : dc[%.*s] oldaddr[%.*s] newaddr[%.*s] newip[%.*s]",
-				  node->dc, node->name, new_address->len, new_address->data, new_ip->len, new_ip->data);
+			node->dc, node->name, new_address->len, new_address->data, new_ip->len, new_ip->data);
 
 	string_deinit(&node->name);
 	string_deinit(&node->pname);
@@ -228,21 +228,21 @@ gossip_replace_node(struct server_pool *sp, struct node *node,
 
 static rstatus_t
 gossip_add_dc(struct server_pool *sp, struct string *dc,
-		      struct string *address, struct string *ip,
-		      struct string *port, struct array * tokens)
+		struct string *address, struct string *ip,
+		struct string *port, struct array * tokens)
 {
 	rstatus_t status;
 	log_debug(LOG_VERB, "gossip_add_dc : dc[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
-			  dc->len, dc->data, address->len, address->data, ip->len, ip->data, port->len, port->data);
-    //add dc
-    struct gossip_dc *g_dc = (struct gossip_dc *)  array_push(&gn_pool.datacenters);
-    status = gossip_dc_init(g_dc, dc);
+			dc->len, dc->data, address->len, address->data, ip->len, ip->data, port->len, port->data);
+	//add dc
+	struct gossip_dc *g_dc = (struct gossip_dc *)  array_push(&gn_pool.datacenters);
+	status = gossip_dc_init(g_dc, dc);
 
 	struct node *gnode = gossip_add_node_to_dc(sp, g_dc, address, ip, port, tokens);
-    if (gnode == NULL) {
-        array_pop(&gn_pool.datacenters);
-        return DN_ENOMEM;
-    }
+	if (gnode == NULL) {
+		array_pop(&gn_pool.datacenters);
+		return DN_ENOMEM;
+	}
 
 	status = gossip_msg_to_core(sp, gnode, dnode_peer_add_dc);
 
@@ -278,18 +278,18 @@ gossip_add_seed_if_absent(struct server_pool *sp, struct string *dc,
 					log_debug(LOG_VERB, "\t\tip         : '%.*s'", ip->len, ip->data);
 
 					if (string_compare(&g_node->name, ip) == 0) {
-						 exist = true;
-						 break;
+						exist = true;
+						break;
 					} else {  //name is different. Now compare tokens
-						 //TODOs: only compare the 1st token for now.  Support Vnode later
-						 struct dyn_token * node_token = (struct dyn_token *) array_get(&g_node->tokens, 0);
-						 struct dyn_token * seed_token = (struct dyn_token *) array_get(tokens, 0);
-						 if (node_token != NULL && cmp_dyn_token(node_token, seed_token) == 0) {
-							  //replace node
-							  gossip_replace_node(sp, g_node, address, ip);
-							  exist = true;
-							  break;
-						 }
+						//TODOs: only compare the 1st token for now.  Support Vnode later
+						struct dyn_token * node_token = (struct dyn_token *) array_get(&g_node->tokens, 0);
+						struct dyn_token * seed_token = (struct dyn_token *) array_get(tokens, 0);
+						if (node_token != NULL && cmp_dyn_token(node_token, seed_token) == 0) {
+							//replace node
+							gossip_replace_node(sp, g_node, address, ip);
+							exist = true;
+							break;
+						}
 					}
 
 				}
@@ -303,7 +303,7 @@ gossip_add_seed_if_absent(struct server_pool *sp, struct string *dc,
 	}
 
 	if (!dc_existed) {
-	    gossip_add_dc(sp, dc, address, ip, port, tokens);
+		gossip_add_dc(sp, dc, address, ip, port, tokens);
 	}
 
 	return 0;
@@ -342,10 +342,10 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 		string_copy(&temp, seed_node, seed_node_len);
 		array_init(&tokens, 1, sizeof(struct dyn_token));
 		parse_seeds(&temp, &dc_name, &region_name, &port_str, &address, &ip,  &tokens);
-                //log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
-                //log_debug(LOG_VERB, "dc_name         : '%.*s'", dc_name.len, dc_name.data);
-                //log_debug(LOG_VERB, "region_name        : '%.*s'", region_name.len, region_name.data);
-                //log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
+		//log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
+		//log_debug(LOG_VERB, "dc_name         : '%.*s'", dc_name.len, dc_name.data);
+		//log_debug(LOG_VERB, "region_name        : '%.*s'", region_name.len, region_name.data);
+		//log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
 
 
 		gossip_add_seed_if_absent(sp, &dc_name, &address, &ip, &port_str, &tokens);
@@ -389,36 +389,41 @@ gossip_loop(void *arg)
 {
 	struct server_pool *sp = arg;
 	struct string seeds;
-    uint64_t gossip_interval = gn_pool.g_interval * 1000;
+	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
 	string_init(&seeds);
 
 	for(;;) {
 		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
+		//log_debug(LOG_VERB, "Sp addrstr  '%.*s'", sp->addrstr.len, sp->addrstr.data);
+        //struct server *peer = (struct server *) array_get(&sp->peers, 0);
+
+		//log_debug(LOG_VERB, "peer name == '%.*s' ", peer->name.len, peer->name.data);
+
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
-           log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
-           gossip_update_seeds(sp, &seeds);
-           string_deinit(&seeds);
+			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
+			gossip_update_seeds(sp, &seeds);
+			string_deinit(&seeds);
 		}
 
 		if (gn_pool.ctx->dyn_state == JOINING) {
-           log_debug(LOG_VERB, "I am still joining......");
-           //aggressively contact all known nodes before changing to state NORMAL
-           gossip_announce_joining(sp);
-        }
+			log_debug(LOG_VERB, "I am still joining......");
+			//aggressively contact all known nodes before changing to state NORMAL
+			gossip_announce_joining(sp);
+		}
 
 		//loga("From gossip thread, Length of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
 
 		//while (!CBUF_IsEmpty(C2G_InQ)) {
-			  //char* s = (char*) CBUF_Pop( C2G_InQ );
-			  //loga("Gossip: %s", s);
-			  //dn_free(s);
+		//char* s = (char*) CBUF_Pop( C2G_InQ );
+		//loga("Gossip: %s", s);
+		//dn_free(s);
 		//}
 
 		//void* ss = "hello main, from gossip";
-	   //CBUF_Push( C2G_OutQ, ss );
+		//CBUF_Push( C2G_OutQ, ss );
 
 
 	}
@@ -447,7 +452,7 @@ static void
 gossip_set_seeds_provider(struct string * seeds_provider_str)
 {
 	log_debug(LOG_VERB, "Seed provider :::::: '%.*s'",
-			  seeds_provider_str->len, seeds_provider_str->data);
+			seeds_provider_str->len, seeds_provider_str->data);
 
 	if (dn_strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
 		gn_pool.seeds_provider = florida_get_seeds;

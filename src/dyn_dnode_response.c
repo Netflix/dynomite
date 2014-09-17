@@ -10,122 +10,122 @@
 struct msg *
 dnode_rsp_get(struct conn *conn)
 {
-    struct msg *msg;
+	struct msg *msg;
 
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
 
-    msg = msg_get(conn, false, conn->redis);
-    if (msg == NULL) {
-        conn->err = errno;
-    }
+	msg = msg_get(conn, false, conn->redis);
+	if (msg == NULL) {
+		conn->err = errno;
+	}
 
-    return msg;
+	return msg;
 }
 
 void
 dnode_rsp_put(struct msg *msg)
 {
-    ASSERT(!msg->request);
-    ASSERT(msg->peer == NULL);
-    msg_put(msg);
+	ASSERT(!msg->request);
+	ASSERT(msg->peer == NULL);
+	msg_put(msg);
 }
 
 
 struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
-    return rsp_recv_next(ctx, conn, alloc);
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	return rsp_recv_next(ctx, conn, alloc);
 }
 
 static bool
 dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    struct msg *pmsg;
-    //loga("MINHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH@@@@@@@@@@@@@@@@@@@@@@@@@");
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+	struct msg *pmsg;
 
-    if (msg_empty(msg)) {
-        ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
-                  conn->sd);
-        dnode_rsp_put(msg);
-        return true;
-    }
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
 
-    pmsg = TAILQ_FIRST(&conn->omsg_q);
-    if (pmsg == NULL) {
-        log_debug(LOG_ERR, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d",
-                  msg->id, msg->mlen, conn->sd);
-        dnode_rsp_put(msg);
-        return true;
-    }
-    ASSERT(pmsg->peer == NULL);
-    ASSERT(pmsg->request && !pmsg->done);
+	if (msg_empty(msg)) {
+		ASSERT(conn->rmsg == NULL);
+		log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
+				conn->sd);
+		dnode_rsp_put(msg);
+		return true;
+	}
 
-    if (pmsg->swallow) {
-        conn->dequeue_outq(ctx, conn, pmsg);
-        pmsg->done = 1;
+	pmsg = TAILQ_FIRST(&conn->omsg_q);
+	if (pmsg == NULL) {
+		log_debug(LOG_ERR, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d",
+				msg->id, msg->mlen, conn->sd);
+		dnode_rsp_put(msg);
+		return true;
+	}
+	ASSERT(pmsg->peer == NULL);
+	ASSERT(pmsg->request && !pmsg->done);
 
-        log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
-                  "%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
-                  conn->sd);
+	if (pmsg->swallow) {
+		conn->dequeue_outq(ctx, conn, pmsg);
+		pmsg->done = 1;
 
-        dnode_rsp_put(msg);
-        req_put(pmsg);
-        return true;
-    }
+		log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
+				"%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
+				conn->sd);
 
-    return false;
+		dnode_rsp_put(msg);
+		req_put(pmsg);
+		return true;
+	}
+
+	return false;
 }
 
 static void
 dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
-    ASSERT(!msg->request);
+	ASSERT(!msg->request);
 
-    //fixme for dnode  stats    
-    /* stats_server_incr(ctx, server, responses); */
-    /* stats_server_incr_by(ctx, server, response_bytes, msg->mlen); */
+	//fixme for dnode  stats
+	/* stats_server_incr(ctx, server, responses); */
+	/* stats_server_incr_by(ctx, server, response_bytes, msg->mlen); */
 }
 
 static void
 dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 {
-    rstatus_t status;
-    struct msg *pmsg;
-    struct conn *c_conn;
+	rstatus_t status;
+	struct msg *pmsg;
+	struct conn *c_conn;
 
-    ASSERT(!s_conn->dnode_client && !s_conn->dnode_server);
+	ASSERT(!s_conn->dnode_client && !s_conn->dnode_server);
 
-    /* response from server implies that server is ok and heartbeating */
-    dnode_peer_ok(ctx, s_conn);
+	/* response from server implies that server is ok and heartbeating */
+	dnode_peer_ok(ctx, s_conn);
 
-    /* dequeue peer message (request) from server */
-    pmsg = TAILQ_FIRST(&s_conn->omsg_q);
-    ASSERT(pmsg != NULL && pmsg->peer == NULL);
-    ASSERT(pmsg->request && !pmsg->done);
+	/* dequeue peer message (request) from server */
+	pmsg = TAILQ_FIRST(&s_conn->omsg_q);
+	ASSERT(pmsg != NULL && pmsg->peer == NULL);
+	ASSERT(pmsg->request && !pmsg->done);
 
-    s_conn->dequeue_outq(ctx, s_conn, pmsg);
-    pmsg->done = 1;
+	s_conn->dequeue_outq(ctx, s_conn, pmsg);
+	pmsg->done = 1;
 
-    /* establish msg <-> pmsg (response <-> request) link */
-    pmsg->peer = msg;
-    msg->peer = pmsg;
+	/* establish msg <-> pmsg (response <-> request) link */
+	pmsg->peer = msg;
+	msg->peer = pmsg;
 
-    msg->pre_coalesce(msg);
+	msg->pre_coalesce(msg);
 
-    c_conn = pmsg->owner;
-    ASSERT(c_conn->client && !c_conn->proxy);
+	c_conn = pmsg->owner;
+	ASSERT(c_conn->client && !c_conn->proxy);
 
-    if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-        status = event_add_out(ctx->evb, c_conn);
-        if (status != DN_OK) {
-            c_conn->err = errno;
-        }
-    }
+	if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
+		status = event_add_out(ctx->evb, c_conn);
+		if (status != DN_OK) {
+			c_conn->err = errno;
+		}
+	}
 
-    dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
+	dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
 
 
@@ -134,50 +134,50 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 void
 dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 {
-     rstatus_t status;
-     struct msg *pmsg;
+	rstatus_t status;
+	struct msg *pmsg;
 
-     //ASSERT(p_conn->dnode_client && !p_conn->dnode_server);
+	//ASSERT(p_conn->dnode_client && !p_conn->dnode_server);
 
-     //add messsage
-     struct mbuf *nbuf = mbuf_get();
-     if (nbuf == NULL) {
-         loga("Error happened in calling mbuf_get");
-         return;  //TODOs: need to address this further
-     }
+	//add messsage
+	struct mbuf *nbuf = mbuf_get();
+	if (nbuf == NULL) {
+		loga("Error happened in calling mbuf_get");
+		return;  //TODOs: need to address this further
+	}
 
-     //dc_conn->enqueue_outq(ctx, dc_conn, msg);
-     msg->done = 1;
+	//dc_conn->enqueue_outq(ctx, dc_conn, msg);
+	msg->done = 1;
 
-     //TODOs: need to free the old msg object
-     pmsg = msg_get(p_conn, 0, msg->redis);
-     if (pmsg == NULL) {
-         mbuf_put(nbuf);
-         return;
-     }
+	//TODOs: need to free the old msg object
+	pmsg = msg_get(p_conn, 0, msg->redis);
+	if (pmsg == NULL) {
+		mbuf_put(nbuf);
+		return;
+	}
 
-     pmsg->done = 1;
-     /* establish msg <-> pmsg (response <-> request) link */
-     msg->peer = pmsg;
-     pmsg->peer = msg;
-     pmsg->pre_coalesce(pmsg);
-     pmsg->owner = p_conn;
+	pmsg->done = 1;
+	/* establish msg <-> pmsg (response <-> request) link */
+	msg->peer = pmsg;
+	pmsg->peer = msg;
+	pmsg->pre_coalesce(pmsg);
+	pmsg->owner = p_conn;
 
-     //dyn message's meta data
-     uint64_t msg_id = msg->dmsg->id;
-     uint8_t type = GOSSIP_SYN_REPLY;
-     uint8_t version = VERSION_10;
-     struct string data = string("SYN_REPLY_OK");
+	//dyn message's meta data
+	uint64_t msg_id = msg->dmsg->id;
+	uint8_t type = GOSSIP_SYN_REPLY;
+	uint8_t version = VERSION_10;
+	struct string data = string("SYN_REPLY_OK");
 
-     dmsg_write(nbuf, msg_id, type, version, &data);
-     mbuf_insert(&pmsg->mhdr, nbuf);
+	dmsg_write(nbuf, msg_id, type, version, &data);
+	mbuf_insert(&pmsg->mhdr, nbuf);
 
-     //dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
-     //should we do this?
-     //s_conn->dequeue_outq(ctx, s_conn, pmsg);
+	//dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
+	//should we do this?
+	//s_conn->dequeue_outq(ctx, s_conn, pmsg);
 
 
-     /*
+	/*
      p_conn->enqueue_outq(ctx, p_conn, pmsg);
      if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
         status = event_add_out(ctx->evb, p_conn);
@@ -185,67 +185,67 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
            p_conn->err = errno;
         }
      }
-     */
+	 */
 
-     if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-        status = event_add_out(ctx->evb, p_conn);
-        if (status != DN_OK) {
-           p_conn->err = errno;
-        }
-     }
+	if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+		status = event_add_out(ctx->evb, p_conn);
+		if (status != DN_OK) {
+			p_conn->err = errno;
+		}
+	}
 
-    //dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
+	//dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
 
 
 
 void
 dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
-              struct msg *nmsg)
+		struct msg *nmsg)
 {
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
-    ASSERT(msg != NULL && conn->rmsg == msg);
-    ASSERT(!msg->request);
-    ASSERT(msg->owner == conn);
-    ASSERT(nmsg == NULL || !nmsg->request);
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	ASSERT(msg != NULL && conn->rmsg == msg);
+	ASSERT(!msg->request);
+	ASSERT(msg->owner == conn);
+	ASSERT(nmsg == NULL || !nmsg->request);
 
-    /* enqueue next message (response), if any */
-    conn->rmsg = nmsg;
+	/* enqueue next message (response), if any */
+	conn->rmsg = nmsg;
 
-    if (dnode_rsp_filter(ctx, conn, msg)) {
-        return;
-    }
+	if (dnode_rsp_filter(ctx, conn, msg)) {
+		return;
+	}
 
-    dnode_rsp_forward(ctx, conn, msg);
+	dnode_rsp_forward(ctx, conn, msg);
 }
 
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
-    return rsp_send_next(ctx, conn);
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	return rsp_send_next(ctx, conn);
 }
 
 void
 dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    struct msg *pmsg; /* peer message (request) */
+	struct msg *pmsg; /* peer message (request) */
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
-    ASSERT(conn->smsg == NULL);
+	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT(conn->smsg == NULL);
 
-    log_debug(LOG_VVERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+	log_debug(LOG_VVERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
 
-    pmsg = msg->peer;
+	pmsg = msg->peer;
 
-    ASSERT(!msg->request && pmsg->request);
-    ASSERT(pmsg->peer == msg);
-    ASSERT(pmsg->done && !pmsg->swallow);
+	ASSERT(!msg->request && pmsg->request);
+	ASSERT(pmsg->peer == msg);
+	ASSERT(pmsg->done && !pmsg->swallow);
 
-    /* dequeue request from client outq */
-    conn->dequeue_outq(ctx, conn, pmsg);
+	/* dequeue request from client outq */
+	conn->dequeue_outq(ctx, conn, pmsg);
 
-    req_put(pmsg);
+	req_put(pmsg);
 }
 
 

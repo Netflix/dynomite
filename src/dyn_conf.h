@@ -72,9 +72,12 @@
 #define CONF_STR_DC                          "dc"
 #define CONF_STR_ALL                         "all"
 
+#define CONF_DEFAULT_ENV                      "aws"
+
 #define CONF_DEFAULT_DC                      "localdc"
 #define CONF_DEFAULT_REGION                  "localregion"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
+
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -128,6 +131,7 @@ struct conf_pool {
     /* none | region | dc | all in order of increasing number of connections. (default is region) */
     struct string      secure_server_option;
     struct string      region;                /* this node's region */
+    struct string      env;                   /* aws, google, network, ... */
 };
 
 

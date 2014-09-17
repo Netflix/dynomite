@@ -148,12 +148,16 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, gos_interval) }, 
 
     { string("secure_server_option"),
-	  conf_set_string,
-	  offsetof(struct conf_pool, secure_server_option) },
+      conf_set_string,
+      offsetof(struct conf_pool, secure_server_option) },
 
     { string(CONF_STR_REGION),
-	  conf_set_string,
-	  offsetof(struct conf_pool, region) },
+      conf_set_string,
+      offsetof(struct conf_pool, region) },
+
+    { string("env"),
+      conf_set_string,
+      offsetof(struct conf_pool, env) },
 
     null_command
 };
@@ -322,6 +326,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->dyn_listen.name);
     string_init(&cp->secure_server_option);
     string_init(&cp->region);
+    string_init(&cp->env);
     cp->dyn_listen.port = 0;
     memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
     cp->dyn_listen.valid = 0;
@@ -391,6 +396,7 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->dyn_listen.name);
     string_deinit(&cp->secure_server_option);
     string_deinit(&cp->region);
+    string_deinit(&cp->env);
     array_deinit(&cp->dyn_seeds);
     array_deinit(&cp->tokens);
 
@@ -466,6 +472,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->dc = cp->dc;
     sp->region = cp->region;
     sp->tokens = cp->tokens;
+    sp->env = cp->env;
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
@@ -1486,11 +1493,16 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
-    dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
-    dn_strcmp(cp->secure_server_option.data, CONF_STR_REGION) &&
-    dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
-        log_error(
-                "conf: directive \"secure_server_option:\"must be one of 'none' 'dc' 'region' 'all'");
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_REGION) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL))
+    {
+        log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'dc' 'region' 'all'");
+    }
+
+    if (string_empty(&cp->env)) {
+        string_copy_c(&cp->env, &CONF_DEFAULT_ENV);
+        log_debug(LOG_INFO, "setting env to default value:%s", CONF_DEFAULT_ENV);
     }
 
     status = conf_validate_server(cf, cp);
