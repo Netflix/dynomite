@@ -59,9 +59,9 @@ static struct stats_desc stats_server_desc[] = {
 
 #define  MAX_HTTP_HEADER_SIZE 1024
 static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
-static struct string endline = string("\r\n");
+//static struct string endline = string("\r\n");
 static struct string ok = string("OK");
-static struct string error = string("ERR");
+//static struct string error = string("ERR");
 
 void
 stats_describe(void)

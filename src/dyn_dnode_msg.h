@@ -15,12 +15,10 @@ typedef enum dmsg_version {
 
 
 typedef enum dmsg_type {
-    DMSG_DEBUG = 1,
-    DMSG_UNKNOWN,
+    DMSG_UNKNOWN = 0,
+    DMSG_DEBUG,
     DMSG_PARSE_ERROR,
     DMSG_REQ,
-    GOSSIP_PING,
-    GOSSIP_PING_REPLY,
     GOSSIP_SYN,
     GOSSIP_SYN_REPLY,
     GOSSIP_ACK,
@@ -40,9 +38,7 @@ struct dval {
 
 struct dmsg {
     TAILQ_ENTRY(dmsg)     m_tqe;           /* link in free q */
-
     struct msg           *owner;
-    //struct mhdr          mhdr;            /* message mbuf header */
 
     uint64_t             id;              /* message id */
     dmsg_type_t          type;            /* message type */

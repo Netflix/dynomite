@@ -1940,7 +1940,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     uint32_t k, delimlen, pnamelen, addrlen, portlen, dclen, tokenslen, namelen, regionlen;
     struct string address;
     char delim[] = " ::::";
-    struct conf_pool *cfpool = conf;
+    //struct conf_pool *cfpool = conf;
 
     string_init(&address);
     p = conf; // conf_pool

@@ -10,10 +10,15 @@
 #include "hashkit/dyn_token.h"
 
 
+//should use queue technique to store struct ring_message so that we can reuse
 struct ring_message *
 create_ring_message()
 {
 	struct ring_message *result = dn_alloc(sizeof(*result));
+
+	if (result == NULL)
+		return NULL;
+
 	ring_message_init(result);
 
 	return result;
@@ -26,7 +31,7 @@ ring_message_init(struct ring_message *msg)
 		return DN_ERROR;
 
 	//msg->node = dn_alloc(sizeof(struct node));
-        msg->node = create_node();
+    msg->node = create_node();
 
 	return DN_OK;
 }
@@ -39,7 +44,7 @@ ring_message_deinit(struct ring_message *msg)
 		return DN_ERROR;
 
 	if (msg->node != NULL)
-       dn_free(msg->node);
+		node_deinit(msg->node);
 
     dn_free(msg);
 

@@ -18,13 +18,11 @@ typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 struct node {
     struct array       tokens;        /* array of dyn_tokens */
     struct string      dc;
-    //struct gossip_dc   *dc;           /* logical datacenter */
 
     struct string      pname;         /* name:port */
     struct string      name;          /* name  */
 
     int                port;          /* port */
-    struct sockinfo    info;
 
     int64_t            next_retry;    /* next retry time in usec */
     int64_t            last_retry;    /* last retry time in usec */
@@ -32,7 +30,7 @@ struct node {
 
     bool               is_seed;       /* seed? */
     bool               is_local;      /* is this peer the current running node?  */
-    uint8_t            state;        /* state of a node that this host knows */
+    uint8_t            state;         /* state of a node that this host knows */
 
 };
 
@@ -43,6 +41,7 @@ struct gossip_dc {
     uint32_t           nlive_nodes;      /* # live nodes */
     struct array       nodes;            /* nodes */
 };
+
 
 struct gossip_node_pool {
 	struct string      *name;                /* pool name (ref in conf_pool) */

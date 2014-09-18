@@ -309,6 +309,8 @@ dyn_parse_req(struct msg *r)
 {
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;   	
+
+         /*
          if (dmsg->type == GOSSIP_PING) { //replace with switch as it will be big
              log_debug(LOG_DEBUG, "got a GOSSIP_PING"); 
              r->state = 0;
@@ -316,9 +318,10 @@ dyn_parse_req(struct msg *r)
              r->dyn_state = DYN_DONE;
              return;
          }
+         */
 
-         if (dmsg->type == GOSSIP_SYN) {
-        	 log_debug(LOG_DEBUG, "got a GOSSIP_SYNC");
+         if (dmsg->type != 0) {
+        	 log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
         	 r->state = 0;
         	 r->result = MSG_PARSE_OK;
         	 r->dyn_state = DYN_DONE;
@@ -343,6 +346,7 @@ void dyn_parse_rsp(struct msg *r)
 {
     if (dyn_parse_core(r)) {
          struct dmsg *dmsg = r->dmsg;
+         /*
          if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
 	        log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLY");
 	        r->state = 0;
@@ -350,13 +354,14 @@ void dyn_parse_rsp(struct msg *r)
             r->dyn_state = DYN_DONE;
             return;
 	     }
+	     */
 
-         if (dmsg->type == GOSSIP_SYN_REPLY) {
-    	    log_debug(LOG_DEBUG, "I got a GOSSIP_SYN_REPLY");
-            r->state = 0;
-    	    r->result = MSG_PARSE_OK;
-    	    r->dyn_state = DYN_DONE;
-    	    return;
+         if (dmsg->type != 0) {
+        	 log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
+        	 r->state = 0;
+        	 r->result = MSG_PARSE_OK;
+        	 r->dyn_state = DYN_DONE;
+        	 return;
          }
 
 	     if (r->redis)
@@ -389,14 +394,6 @@ dmsg_put(struct dmsg *dmsg)
 {
     log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
 
-    //while (!STAILQ_EMPTY(&dmsg->mhdr)) {
-    //    struct mbuf *mbuf = STAILQ_FIRST(&dmsg->mhdr);
-    //    mbuf_remove(&dmsg->mhdr, mbuf);
-    //    mbuf_put(mbuf);
-    //}
-
-    //need to free other like source_address
-
     nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
 }
@@ -408,16 +405,6 @@ dmsg_dump(struct dmsg *dmsg)
 
     log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
     loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
-    //STAILQ_FOREACH(mbuf, &dmsg->owner->mhdr, next) {
-    //    uint8_t *p, *q;
-    //    long int len;
-
-    //    p = mbuf->pos;
-    //    q = mbuf->last;
-    //    len = q - p;
-
-    //    loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
-    //}
 }
 
 
@@ -475,15 +462,13 @@ dmsg_get(void)
     }
 
 done:
-    //dmsg->id = ++dmsg_id;
-
    // STAILQ_INIT(&dmsg->mhdr);
     dmsg->mlen = 0;
     dmsg->data = NULL;
 
-    dmsg->type = MSG_UNKNOWN;
+    dmsg->type = DMSG_UNKNOWN;
     dmsg->version = VERSION_10;
-    
+    dmsg->id = -1;
     dmsg->source_address = NULL;
     dmsg->owner = NULL;
     
@@ -508,7 +493,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
     mbuf_write_string(mbuf, data);
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message (writer): ");
      
     return DN_OK;
 }
@@ -529,9 +514,80 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t versio
     mbuf_write_mbuf(mbuf, data);
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message ");
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message (writer):  ");
 
     return DN_OK;
+}
+
+
+static void
+dmsg_parse(struct dmsg *dmsg)
+{
+
+	rstatus_t status;
+	uint8_t *p, *q, *start;
+	uint8_t *host_id, *host_addr, *ts, *state;
+	uint32_t k, delimlen, host_id_len, host_addr_len, ts_len, state_len;
+	char delim[] = ",,,";
+	delimlen = 3;
+
+	/* parse "host_id,generation_ts,host_state,host_broadcast_address" */
+	/* host_id = region-dc-token */
+	p = dmsg->data + dmsg->mlen - 1;
+
+	start = dmsg->data;
+	host_id = NULL;
+	host_addr = NULL;
+	ts = NULL;
+	state = NULL;
+
+	host_id_len = 0;
+	host_addr_len = 0;
+	ts_len = 0;
+	state_len = 0;
+
+	for (k = 0; k < sizeof(delim)-1; k++) {
+		q = dn_strrchr(p, start, delim[k]);
+
+		switch (k) {
+		case 0:
+			host_addr = q + 1;
+			host_addr_len = (uint32_t)(p - host_addr + 1);
+
+			break;
+		case 1:
+			state = q + 1;
+			state_len = (uint32_t)(p - state + 1);
+
+			//string_copy(region_name, region, regionlen);
+			break;
+		case 2:
+			ts = q + 1;
+			ts_len = (uint32_t)(p - ts + 1);
+
+			//string_copy(dc_name, dc, dclen);
+			break;
+
+		default:
+			NOT_REACHED();
+		}
+		p = q - 1;
+
+	}
+
+	if (k != delimlen) {
+		return;// DN_ERROR;
+	}
+
+
+	host_id = dmsg->data;
+	host_id_len = dmsg->mlen - (host_addr_len + state_len + ts_len + 3);
+	//status = string_copy(address, pname, pnamelen);
+
+	log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
+	log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
+	log_hexdump(LOG_VERB, state, state_len, "state: ");
+	log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 }
 
 
@@ -560,13 +616,11 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
         case GOSSIP_DIGEST_ACK2:
            return true;
 
-        case GOSSIP_PING:
-           log_debug(LOG_DEBUG, "I have got a ping msgggggg!!!!!!");
-           return true;
         case GOSSIP_SYN:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN!!!!!!");
            dmsg_dump(dmsg);
            //dnode_rsp_gos_syn(ctx, conn, dmsg->owner);
+           dmsg_parse(dmsg);
            return true;
         case GOSSIP_SYN_REPLY:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN_REPLY!!!!!!");

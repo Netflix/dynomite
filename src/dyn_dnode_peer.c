@@ -583,8 +583,6 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 	int64_t cur_ts = (int64_t)time(NULL);
 	mbuf_write_uint64(mbuf, cur_ts);
 	mbuf_write_char(mbuf, ',');
-	mbuf_write_uint8(mbuf, VERSION_10);
-	mbuf_write_char(mbuf, ',');
 	mbuf_write_uint8(mbuf, sp->ctx->dyn_state);
 	mbuf_write_char(mbuf, ',');
 

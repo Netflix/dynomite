@@ -21,8 +21,23 @@
 
 
 static void gossip_debug(void);
-
 static struct gossip_node_pool gn_pool;
+
+static rstatus_t
+gossip_process_messages(void)
+{
+	//loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+	while (!CBUF_IsEmpty(C2G_InQ)) {
+		struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_InQ);
+		if (msg != NULL && msg->cb != NULL) {
+			msg->cb(msg->sp, msg->node);
+			//core_debug(msg->sp->ctx);
+			ring_message_deinit(msg);
+		}
+	}
+
+	return DN_OK;
+}
 
 
 static rstatus_t
@@ -58,7 +73,6 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *region_
 	uint32_t k, delimlen, pnamelen, portlen, dclen, regionlen, tokenslen, addrlen;
 	char delim[] = "::::";
 
-	/* parse "hostname:port:dc:tokens" */
 	/* parse "hostname:port:dc:region:tokens" */
 	p = seeds->data + seeds->len - 1;
 	start = seeds->data;
@@ -108,14 +122,29 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *region_
 		return GOS_ERROR;
 	}
 
+	//pname = hostname:port
 	pname = seeds->data;
 	pnamelen = seeds->len - (tokenslen + dclen + regionlen + 3);
 	status = string_copy(address, pname, pnamelen);
 
 
+	//addr = hostname or ip only
 	addr = start;
 	addrlen = (uint32_t)(p - start + 1);
-	status = string_copy(name, addr, addrlen);
+	//if it is a dns name, convert to IP or otherwise keep that IP
+	if (!isdigit( (char) addr[0])) {
+		addr[addrlen] = '\0';
+		char *local_ip4 = hostname_to_private_ip4( (char *) addr);
+		if (local_ip4 != NULL)
+		    status = string_copy_c(name, local_ip4);
+		else
+			status = string_copy(name, addr, addrlen);
+	} else {
+	    status = string_copy(name, addr, addrlen);
+	}
+	if (status != DN_OK) {
+		return GOS_ERROR;
+	}
 
 	uint8_t *t_end = tokens + tokenslen;
 	status = derive_tokens(ptokens, tokens, t_end);
@@ -168,12 +197,12 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 	status = string_copy(&gnode->pname, address->data, address->len); //ignore the port for now
 	gnode->port = port_i;
 
-	status = dn_resolve(&gnode->name, gnode->port, &gnode->info);
-	if (status != DN_OK) {
-		array_pop(&g_dc->nodes);
-		node_deinit(gnode);
-		return NULL;  //need to deinit
-	}
+	//status = dn_resolve(&gnode->name, gnode->port, &gnode->info);
+	//if (status != DN_OK) {
+	//	array_pop(&g_dc->nodes);
+	//	node_deinit(gnode);
+	//	return NULL;  //need to deinit
+	//}
 
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(tokens); i < nelem; i++) {
@@ -413,6 +442,8 @@ gossip_loop(void *arg)
 			//aggressively contact all known nodes before changing to state NORMAL
 			gossip_announce_joining(sp);
 		}
+
+		gossip_process_messages();
 
 		//loga("From gossip thread, Length of C2G_InQ ::: %d", CBUF_Len( C2G_InQ ));
 
