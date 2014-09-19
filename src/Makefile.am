@@ -52,6 +52,7 @@ dynomite_SOURCES =			                          \
         dyn_node_snitch.c dyn_node_snitch.h                       \
         dyn_stats.c dyn_stats.h		                          \
         dyn_signal.c dyn_signal.h		                  \
+        dyn_token.c dyn_token.h                                   \
         dyn_rbtree.c dyn_rbtree.h		                  \
         dyn_log.c dyn_log.h		                          \
         dyn_string.c dyn_string.h		                  \

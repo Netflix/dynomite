@@ -2,8 +2,9 @@
 #ifndef DYN_GOSSIP_H_
 #define DYN_GOSSIP_H_
 
+
+#include "dyn_token.h"
 #include "dyn_core.h"
-#include "hashkit/dyn_token.h"
 
 
 #define GOS_NOOPS     1
@@ -16,7 +17,8 @@
 typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 
 struct node {
-    struct array       tokens;        /* array of dyn_tokens */
+    struct dyn_token   token;        /* token for this node */
+    struct string      region;
     struct string      dc;
 
     struct string      pname;         /* name:port */

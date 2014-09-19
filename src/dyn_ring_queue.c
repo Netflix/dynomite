@@ -7,7 +7,7 @@
 
 #include "dyn_core.h"
 #include "dyn_ring_queue.h"
-#include "hashkit/dyn_token.h"
+#include "dyn_token.h"
 
 
 //should use queue technique to store struct ring_message so that we can reuse
@@ -69,7 +69,9 @@ node_init(struct node *node)
      if (node == NULL)
     	 return DN_ERROR;
 
-     array_init(&node->tokens, 1, sizeof(struct dyn_token));
+     //array_init(&node->tokens, 1, sizeof(struct dyn_token));
+     init_dyn_token(&node->token);
+     string_init(&node->region);
      string_init(&node->dc);
      string_init(&node->name);
      string_init(&node->pname);
@@ -94,7 +96,9 @@ node_deinit(struct node *node)
      if (node == NULL)
     	 return DN_ERROR;
 
-     array_deinit(&node->tokens);
+     //array_deinit(&node->tokens);
+     deinit_dyn_token(&node->token);
+     string_deinit(&node->region);
      string_deinit(&node->dc);
      string_deinit(&node->name);
      string_deinit(&node->pname);
@@ -119,16 +123,19 @@ node_copy(const struct node *src, struct node *dst)
      dst->next_retry = src->next_retry;
      dst->port = src->port;
 
+
      string_copy(&dst->pname, src->pname.data, src->pname.len);
      string_copy(&dst->name, src->name.data, src->name.len);
      string_copy(&dst->dc, src->dc.data, src->dc.len);
 
-     uint32_t i, nelem = array_n(&src->tokens);
-     array_init(&dst->tokens, nelem, sizeof(struct dyn_token));
-     for (i = 0; i < nelem; i++) {
-         	struct dyn_token *src_token = (struct dyn_token *) array_get(&src->tokens, i);
-         	struct dyn_token *dst_token = array_push(&dst->tokens);
-         	copy_dyn_token(src_token, dst_token);
-     }
+     //uint32_t i, nelem = array_n(&src->tokens);
+     //array_init(&dst->tokens, nelem, sizeof(struct dyn_token));
+     //for (i = 0; i < nelem; i++) {
+     //    	struct dyn_token *src_token = (struct dyn_token *) array_get(&src->tokens, i);
+     //    	struct dyn_token *dst_token = array_push(&dst->tokens);
+     //    	copy_dyn_token(src_token, dst_token);
+     //}
+
+     copy_dyn_token(&src->token, &dst->token);
 
 }

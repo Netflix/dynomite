@@ -20,10 +20,12 @@
  * limitations under the License.
  */
 
+#include "dyn_core.h"
+
 #ifndef _DYN_STATS_H_
 #define _DYN_STATS_H_
 
-#include "dyn_core.h"
+
 
 #define STATS_POOL_CODEC(ACTION)                                                                                    \
     /* client behavior */                                                                                           \

@@ -16,7 +16,7 @@
 #include "dyn_util.h"
 #include "dyn_string.h"
 #include "dyn_ring_queue.h"
-#include "hashkit/dyn_token.h"
+#include "dyn_token.h"
 #include "seedsprovider/dyn_seeds_provider.h"
 
 
@@ -204,12 +204,17 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 	//	return NULL;  //need to deinit
 	//}
 
-	uint32_t i, nelem;
-	for (i = 0, nelem = array_n(tokens); i < nelem; i++) {
-		struct dyn_token * token = (struct dyn_token *) array_get(tokens, i);
-		struct dyn_token * gtoken = (struct dyn_token *) array_push(&gnode->tokens);
-		copy_dyn_token(token, gtoken);
-	}
+	//uint32_t i, nelem;
+	//for (i = 0, nelem = array_n(tokens); i < nelem; i++) {
+	//	struct dyn_token * token = (struct dyn_token *) array_get(tokens, i);
+	//	struct dyn_token * gtoken = &gnode->tokens;
+	//	copy_dyn_token(token, gtoken);
+	//}
+
+	//only use one token
+	struct dyn_token * token = (struct dyn_token *) array_get(tokens, 0);
+	struct dyn_token * gtoken = &gnode->token;
+	copy_dyn_token(token, gtoken);
 
 	g_dc->nnodes++;
 
@@ -311,8 +316,9 @@ gossip_add_seed_if_absent(struct server_pool *sp, struct string *dc,
 						break;
 					} else {  //name is different. Now compare tokens
 						//TODOs: only compare the 1st token for now.  Support Vnode later
-						struct dyn_token * node_token = (struct dyn_token *) array_get(&g_node->tokens, 0);
+						//struct dyn_token * node_token = (struct dyn_token *) array_get(&g_node->tokens, 0);
 						struct dyn_token * seed_token = (struct dyn_token *) array_get(tokens, 0);
+						struct dyn_token * node_token = &g_node->token;
 						if (node_token != NULL && cmp_dyn_token(node_token, seed_token) == 0) {
 							//replace node
 							gossip_replace_node(sp, g_node, address, ip);
@@ -539,16 +545,21 @@ gossip_pool_each_init(void *elem, void *data)
 				gnode->port = peer->port;
 
 				//gnode->dc = g_dc;
+
 				//adding stuff into gossip structure
-				uint32_t ntokens = array_n(&peer->tokens);
-				status = array_init(&gnode->tokens, ntokens, sizeof(struct dyn_token));
-				uint32_t k;
-				for(k = 0; k < ntokens; k++) {
-					struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, k);
-					struct dyn_token *gtoken = array_push(&gnode->tokens);
-					init_dyn_token(gtoken);
-					copy_dyn_token(ptoken, gtoken);
-				}
+				//uint32_t ntokens = array_n(&peer->tokens);
+				//status = array_init(&gnode->tokens, ntokens, sizeof(struct dyn_token));
+				//uint32_t k;
+				//for(k = 0; k < ntokens; k++) {
+				//	struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, k);
+				//	struct dyn_token *gtoken = array_push(&gnode->tokens);
+				//	init_dyn_token(gtoken);
+				//	copy_dyn_token(ptoken, gtoken);
+				//}
+
+				struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
+				copy_dyn_token(ptoken, &gnode->token);
+
 				//copy socket stuffs
 
 				g_dc->nnodes++;
@@ -617,12 +628,14 @@ void gossip_debug(void)
 			log_debug(LOG_VERB, "\t\tNode is_local      : %"PRIu32" ", node->is_local);
 			log_debug(LOG_VERB, "\t\tNode last_retry    : %"PRIu32" ", node->last_retry);
 			log_debug(LOG_VERB, "\t\tNode failure_count : %"PRIu32" ", node->failure_count);
-			log_debug(LOG_VERB, "\t\tNum tokens         : %d", array_n(&node->tokens));
+			log_debug(LOG_VERB, "\t\tNum tokens         : %d", array_n(&node->token));
 			uint32_t k;
-			for (k = 0; k < array_n(&node->tokens); k++) {
-				struct dyn_token *token = (struct dyn_token *) array_get(&node->tokens, k);
-				print_dyn_token(token, 8);
-			}
+			//for (k = 0; k < array_n(&node->tokens); k++) {
+			//	struct dyn_token *token = (struct dyn_token *) array_get(&node->tokens, k);
+			//	print_dyn_token(token, 8);
+			//}
+
+			print_dyn_token(&node->token, 8);
 		}
 	}
 	log_debug(LOG_VERB, "...........................................................");

@@ -26,7 +26,7 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
-#include "hashkit/dyn_token.h"
+#include "dyn_token.h"
 #include "proto/dyn_proto.h"
 
 #define DEFINE_ACTION(_hash, _name) string(#_name),

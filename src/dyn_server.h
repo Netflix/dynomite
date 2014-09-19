@@ -20,11 +20,14 @@
  * limitations under the License.
  */
 
+#include "dyn_core.h"
+#include "dyn_token.h"
+
+
 #ifndef _DYN_SERVER_H_
 #define _DYN_SERVER_H_
 
-#include "dyn_core.h"
-#include "hashkit/dyn_token.h"
+
 
 /*
  * server_pool is a collection of servers and their continuum. Each

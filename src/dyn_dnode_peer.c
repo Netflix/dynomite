@@ -10,7 +10,7 @@
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
-#include "hashkit/dyn_token.h"
+#include "dyn_token.h"
 
 
 void
@@ -661,13 +661,17 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	s->port = (uint16_t) node->port;
 	s->is_local = node->is_local;
 
-	nelem = array_n(&node->tokens);
-	array_init(&s->tokens, nelem, sizeof(struct dyn_token));
-	for (i = 0; i < nelem; i++) {
-		struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
-		struct dyn_token *dst_token = array_push(&s->tokens);
-		copy_dyn_token(src_token, dst_token);
-	}
+	//nelem = array_n(&node->tokens);
+	//array_init(&s->tokens, nelem, sizeof(struct dyn_token));
+	//for (i = 0; i < nelem; i++) {
+	//	struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
+	//	struct dyn_token *dst_token = array_push(&s->tokens);
+	//	copy_dyn_token(src_token, dst_token);
+	//}
+
+	struct dyn_token *src_token = &node->token;
+	copy_dyn_token(src_token, &s->tokens);
+
 
 	struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
 	dn_resolve(&s->name, s->port, info);
@@ -744,7 +748,7 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
 		if (string_compare(&peer->dc, &node->dc) == 0) {
 			//TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
 			struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
-			struct dyn_token *ntoken = (struct dyn_token *) array_get(&node->tokens, 0);
+			struct dyn_token *ntoken = &node->token;
 
 			if (cmp_dyn_token(ptoken, ntoken) == 0) {
 				s = peer; //found a node to replace

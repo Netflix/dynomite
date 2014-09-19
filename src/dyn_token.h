@@ -4,10 +4,12 @@
  */ 
 
 
+#include "dyn_core.h"
+
 #ifndef _DYN_TOKEN_H_
 #define _DYN_TOKEN_H_
 
-#include <dyn_core.h>
+
 
 struct dyn_token {
     uint32_t signum;

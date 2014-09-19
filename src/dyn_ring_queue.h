@@ -4,10 +4,12 @@
  */
 
 
+#include "dyn_gossip.h"
+
+
 #ifndef _DYN_RING_QUEUE_
 #define _DYN_RING_QUEUE_
 
-#include "dyn_gossip.h"
 
 #define C2G_InQ_SIZE     256
 #define C2G_OutQ_SIZE    256
