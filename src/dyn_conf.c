@@ -287,7 +287,7 @@ conf_seed_each_transform(void *elem, void *data)
     return DN_OK;
 }
 
-
+//TODOs: make sure to do a mem release for all these
 static rstatus_t
 conf_pool_init(struct conf_pool *cp, struct string *name)
 {
