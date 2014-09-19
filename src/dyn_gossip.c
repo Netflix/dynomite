@@ -26,11 +26,13 @@ static struct gossip_node_pool gn_pool;
 static rstatus_t
 gossip_process_messages(void)
 {
-	//loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+	//TODOs: fix this to process an array of nodes
 	while (!CBUF_IsEmpty(C2G_InQ)) {
 		struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_InQ);
 		if (msg != NULL && msg->cb != NULL) {
-			msg->cb(msg->sp, msg->node);
+			struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
+			msg->cb(msg->sp, rnode);
+			//msg->cb(msg->sp, msg->node);
 			//core_debug(msg->sp->ctx);
 			ring_message_deinit(msg);
 		}
@@ -44,7 +46,9 @@ static rstatus_t
 gossip_msg_to_core(struct server_pool *sp, struct node *node, void *cb)
 {
 	struct ring_message *msg = create_ring_message();
-	node_copy(node, msg->node);
+	struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
+	//node_copy(node, msg->node);
+	node_copy(node, rnode);
 
 	msg->cb = cb;
 	msg->sp = sp;
@@ -639,6 +643,18 @@ void gossip_debug(void)
 		}
 	}
 	log_debug(LOG_VERB, "...........................................................");
+}
+
+
+rstatus_t
+gossip_peer_join(struct server_pool *sp, struct node *node)
+{
+        rstatus_t status;
+
+        log_debug(LOG_VVERB, "Processing msg   gossip_peer_join '%.*s'", node->name.len, node->name.data);
+        //status = dnode_peer_add_node(sp, node);
+
+        return status;
 }
 
 

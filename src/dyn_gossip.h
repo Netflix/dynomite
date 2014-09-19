@@ -33,7 +33,7 @@ struct node {
     bool               is_seed;       /* seed? */
     bool               is_local;      /* is this peer the current running node?  */
     uint8_t            state;         /* state of a node that this host knows */
-
+    uint64_t           ts;            /* timestamp */
 };
 
 
@@ -63,6 +63,9 @@ rstatus_t gossip_pool_init(struct context *ctx);
 void gossip_pool_deinit(struct context *ctx);
 rstatus_t gossip_start(struct server_pool *sp);
 rstatus_t gossip_destroy(struct server_pool *sp);
+
+
+rstatus_t gossip_peer_join(struct server_pool *sp, struct node *node);
 
 
 #endif /* DYN_GOSSIP_H_ */

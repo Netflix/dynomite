@@ -459,7 +459,9 @@ core_process_messages(void)
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
-			msg->cb(msg->sp, msg->node);
+			struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
+			msg->cb(msg->sp, rnode);
+			//msg->cb(msg->sp, msg->node);
 			core_debug(msg->sp->ctx);
 			ring_message_deinit(msg);
 		}

@@ -568,9 +568,9 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 
 	//annoucing myself by sending msg: 'region-dc-token,started_ts,apps_version,node_state,node_dns'
 	mbuf_write_string(mbuf, &sp->region);
-	mbuf_write_char(mbuf, '-');
+	mbuf_write_char(mbuf, '$');
 	mbuf_write_string(mbuf, &sp->dc);
-	mbuf_write_char(mbuf, '-');
+	mbuf_write_char(mbuf, '$');
 	struct dyn_token *token = (struct dyn_token *) array_get(&sp->tokens, 0);
 	if (token == NULL) {
 		log_debug(LOG_VVERB, "Why? This should not be null!");

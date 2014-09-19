@@ -1,7 +1,10 @@
+
+#include "dyn_core.h"
+
+
 #ifndef _DYN_SNITCH_H_
 #define _DYN_SNITCH_H_
 
-#include "dyn_core.h"
 
 char *get_broadcast_address(struct server_pool *sp);
 char *get_public_hostname(struct server_pool *sp);

@@ -7,7 +7,7 @@
 
 #include "dyn_core.h"
 #include "dyn_dnode_msg.h"
-
+#include "dyn_server.h"
 #include "proto/dyn_proto.h"
 
 
@@ -20,7 +20,7 @@ static uint32_t MAGIC_NUMBER = 2014;
 static const struct string MAGIC_STR = string("2014 ");
 static const struct string CRLF_STR = string(CRLF);
 
-
+static rstatus_t dmsg_to_gossip(struct ring_message *rmsg);
 
 enum {
         DYN_START,
@@ -521,7 +521,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t versio
 
 
 static void
-dmsg_parse(struct dmsg *dmsg)
+dmsg_parse1(struct dmsg *dmsg)
 {
 
 	rstatus_t status;
@@ -589,6 +589,176 @@ dmsg_parse(struct dmsg *dmsg)
 	log_hexdump(LOG_VERB, state, state_len, "state: ");
 	log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 }
+
+
+static rstatus_t
+dmsg_to_gossip(struct ring_message *rmsg)
+{
+        CBUF_Push(C2G_InQ, rmsg);
+
+        return DN_OK;
+}
+
+static void
+dmsg_parse_host_id(uint8_t *start, uint32_t len,
+		struct string *region, struct string *dc, struct dyn_token *token)
+{
+	uint8_t *p, *q;
+	uint8_t *region_p, *dc_p, *token_p;
+	uint32_t k, delimlen, region_len, dc_len, token_len;
+	char delim[] = "$$";
+	delimlen = 2;
+
+	/* parse "region$dc$token : don't support vnode for now */
+	log_hexdump(LOG_VERB, start, len, "host_addr testing: ");
+	p = start + len - 1;
+	region_p = NULL;
+	dc_p = NULL;
+	token_p = NULL;
+
+	region_len = dc_len = token_len = 0;
+
+	for (k = 0; k < sizeof(delim)-1; k++) {
+		q = dn_strrchr(p, start, delim[k]);
+
+		switch (k) {
+		case 0:
+			//no support for vnode at this time
+			token_p = q + 1;
+			token_len = (uint32_t)(p - token_p + 1);
+			parse_dyn_token(token_p, token_len, token);
+			break;
+		case 1:
+			dc_p = q + 1;
+			dc_len = (uint32_t)(p - dc_p + 1);
+
+			string_copy(dc, dc_p, dc_len);
+			break;
+
+		default:
+			NOT_REACHED();
+		}
+		p = q - 1;
+	}
+
+	if (k != delimlen) {
+		loga("Error: this should not happen");
+		return;// DN_ERROR;
+	}
+
+	region_p = start;
+	region_len = len - (token_len + dc_len + 2);
+	string_copy(region, region_p, region_len);
+
+}
+
+
+
+static struct ring_message *
+dmsg_parse(struct dmsg *dmsg)
+{
+	//rstatus_t status;
+	uint8_t *p, *q, *start;
+	uint8_t *host_id, *host_addr, *ts, *node_state;
+	uint32_t k, delimlen, host_id_len, host_addr_len, ts_len, state_len;
+	char delim[] = ",,,";
+	delimlen = 3;
+
+	/* parse "host_id,generation_ts,host_state,host_broadcast_address" */
+	/* host_id = region-dc-token */
+	p = dmsg->data + dmsg->mlen - 1;
+
+	start = dmsg->data;
+	host_id = NULL;
+	host_addr = NULL;
+	ts = NULL;
+	node_state = NULL;
+
+	host_id_len = 0;
+	host_addr_len = 0;
+	ts_len = 0;
+	state_len = 0;
+
+	//TODOs: do an outer loop for multiple nodes
+
+	for (k = 0; k < sizeof(delim)-1; k++) {
+		q = dn_strrchr(p, start, delim[k]);
+
+		switch (k) {
+		case 0:
+			host_addr = q + 1;
+			host_addr_len = (uint32_t)(p - host_addr + 1);
+
+			break;
+		case 1:
+			node_state = q + 1;
+			state_len = (uint32_t)(p - node_state + 1);
+
+			break;
+		case 2:
+			ts = q + 1;
+			ts_len = (uint32_t)(p - ts + 1);
+
+			break;
+
+		default:
+			NOT_REACHED();
+		}
+		p = q - 1;
+
+	}
+
+	if (k != delimlen) {
+		loga("Error: this is insanely bad");
+		return NULL;// DN_ERROR;
+	}
+
+
+	host_id = dmsg->data;
+	host_id_len = dmsg->mlen - (host_addr_len + state_len + ts_len + 3);
+
+	//log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
+	//log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
+	//log_hexdump(LOG_VERB, node_state, state_len, "state: ");
+	//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
+
+	struct ring_message *ring_msg = create_ring_message();
+
+	struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
+
+	ring_msg->sp = sp;
+
+	//TODOs: will take care of 1+ nodes later
+	struct node *rnode = (struct node *) array_get(&ring_msg->nodes, 0);
+
+	dmsg_parse_host_id(host_id, host_id_len, &rnode->region, &rnode->dc, &rnode->token);
+
+	string_copy(&rnode->name, host_addr, host_addr_len);
+	string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
+
+	rnode->port = sp->d_port;
+	rnode->is_local = false;
+	rnode->is_seed = false;
+
+	ts[ts_len] = '\0';
+	rnode->ts = atol(ts);
+
+	node_state[state_len] = '\0';
+	rnode->state = (uint8_t) atoi(node_state);
+
+	//log_debug(LOG_VERB, "parser's region2 == '%.*s' ", rnode->region);
+	//log_debug(LOG_VERB, "parser's dc2 == '%.*s' ", rnode->dc);
+
+	print_dyn_token(&rnode->token, 1);
+
+	ring_msg->cb = gossip_peer_join;
+
+	//TODOs: should move this outside
+	dmsg_to_gossip(ring_msg);
+
+	return ring_msg;
+}
+
 
 
 bool

@@ -42,7 +42,7 @@ volatile struct
 
 struct ring_message {
 	callback_t         cb;
-    struct node        *node;
+    struct array       nodes;
 	struct server_pool *sp;
 };
 
@@ -76,7 +76,8 @@ struct stat_message {
 
 
 struct ring_message * create_ring_message(void);
-rstatus_t ring_message_init(struct ring_message *msg);
+struct ring_message *create_ring_message_with_size(uint32_t size, bool init_node);
+rstatus_t ring_message_init(struct ring_message *msg, uint32_t size, bool init_node);
 rstatus_t ring_message_deinit(struct ring_message *msg);
 
 struct node * create_node(void);
