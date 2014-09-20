@@ -139,9 +139,9 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *region_
 	if (!isdigit( (char) addr[0])) {
 		addr[addrlen] = '\0';
 		char *local_ip4 = hostname_to_private_ip4( (char *) addr);
-		if (local_ip4 != NULL)
+		if (local_ip4 != NULL) {
 		    status = string_copy_c(name, local_ip4);
-		else
+		} else
 			status = string_copy(name, addr, addrlen);
 	} else {
 	    status = string_copy(name, addr, addrlen);

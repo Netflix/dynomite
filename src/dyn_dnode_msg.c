@@ -320,7 +320,8 @@ dyn_parse_req(struct msg *r)
          }
          */
 
-         if (dmsg->type != 0) {
+
+         if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
         	 log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
         	 r->state = 0;
         	 r->result = MSG_PARSE_OK;
@@ -356,13 +357,17 @@ void dyn_parse_rsp(struct msg *r)
 	     }
 	     */
 
-         if (dmsg->type != 0) {
+
+
+         if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
         	 log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
         	 r->state = 0;
         	 r->result = MSG_PARSE_OK;
         	 r->dyn_state = DYN_DONE;
         	 return;
          }
+
+
 
 	     if (r->redis)
             return redis_parse_rsp(r);
@@ -468,7 +473,7 @@ done:
 
     dmsg->type = DMSG_UNKNOWN;
     dmsg->version = VERSION_10;
-    dmsg->id = -1;
+    dmsg->id = 0;
     dmsg->source_address = NULL;
     dmsg->owner = NULL;
     
