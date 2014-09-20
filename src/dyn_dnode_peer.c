@@ -167,7 +167,7 @@ rstatus_t
 dnode_peer_each_pool_init(void *elem, void *context)
 {
 	struct server_pool *sp = (struct server_pool *) elem;
-	struct context *ctx = context;
+	//struct context *ctx = context;
 	struct array *conf_seeds = &sp->conf_pool->dyn_seeds;
 
 	struct array * seeds = &sp->seeds;
@@ -389,7 +389,7 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 			pool->name.data, server->pname.len, server->pname.data,
 			pool->server_retry_timeout / 1000 / 1000);
 
-	//stats_pool_incr(ctx, pool, server_ejects);
+	stats_pool_incr(ctx, pool, peer_ejects);
 
 	server->failure_count = 0;
 	server->next_retry = next;
@@ -406,19 +406,20 @@ dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
 		unsigned eof, unsigned connected)
 {
 	if (connected) {
-		//fix me
 		//stats_server_decr(ctx, server, server_connections);
+		stats_pool_incr(ctx, server->owner, peer_connections);
 	}
 
 	if (eof) {
-		//fix me
 		//stats_server_incr(ctx, server, server_eof);
+		stats_pool_incr(ctx, server->owner, peer_eof);
 		return;
 	}
 
 	switch (err) {
 	case ETIMEDOUT:
 		//stats_server_incr(ctx, server, server_timedout);
+		stats_pool_incr(ctx, server->owner, peer_timedout);
 		break;
 	case EPIPE:
 	case ECONNRESET:
@@ -431,6 +432,7 @@ dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
 	case EHOSTUNREACH:
 	default:
 		//stats_server_incr(ctx, server, server_err);
+		stats_pool_incr(ctx, server->owner, peer_err);
 		break;
 	}
 }

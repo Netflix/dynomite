@@ -1,10 +1,9 @@
+#include "dyn_token.h"
+#include "dyn_core.h"
+
 
 #ifndef DYN_GOSSIP_H_
 #define DYN_GOSSIP_H_
-
-
-#include "dyn_token.h"
-#include "dyn_core.h"
 
 
 #define GOS_NOOPS     1

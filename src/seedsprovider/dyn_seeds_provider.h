@@ -1,7 +1,9 @@
-#ifndef _DYN_SEEDS_PROVIDER_H_
-#define _DYN_SEEDS_PROVIDER_H_
 
 #include "dyn_core.h"
+
+
+#ifndef _DYN_SEEDS_PROVIDER_H_
+#define _DYN_SEEDS_PROVIDER_H_
 
 
 #define SEEDS_CHECK_INTERVAL  (30 * 1000) /* in msec */

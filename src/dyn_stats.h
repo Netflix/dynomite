@@ -27,17 +27,36 @@
 
 
 
-#define STATS_POOL_CODEC(ACTION)                                                                                    \
-    /* client behavior */                                                                                           \
-    ACTION( client_eof,             STATS_COUNTER,      "# eof on client connections")                              \
-    ACTION( client_err,             STATS_COUNTER,      "# errors on client connections")                           \
-    ACTION( client_connections,     STATS_GAUGE,        "# active client connections")                              \
-    /* pool behavior */                                                                                             \
-    ACTION( server_ejects,          STATS_COUNTER,      "# times backend server was ejected")                       \
-    /* forwarder behavior */                                                                                        \
-    ACTION( forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
-    ACTION( fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
-    ACTION( stats_count,            STATS_COUNTER,      "#stats request")                                           \
+#define STATS_POOL_CODEC(ACTION)                                                                                          \
+    /* client behavior */                                                                                                 \
+    ACTION( client_eof,                   STATS_COUNTER,      "# eof on client connections")                              \
+    ACTION( client_err,                   STATS_COUNTER,      "# errors on client connections")                           \
+    ACTION( client_connections,           STATS_GAUGE,        "# active client connections")                              \
+    /* pool behavior */                                                                                                   \
+    ACTION( server_ejects,                STATS_COUNTER,      "# times backend server was ejected")                       \
+    /* dnode client behavior */                                                                                           \
+    ACTION( dnode_client_eof,             STATS_COUNTER,      "# eof on dnode client connections")                        \
+    ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                     \
+    ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                        \
+    /* peer behavior */                                                                                                   \
+    ACTION( peer_eof,                     STATS_COUNTER,              "# eof on peer connections")                        \
+    ACTION( peer_err,                     STATS_COUNTER,              "# errors on peer connections")                     \
+    ACTION( peer_timedout,                STATS_COUNTER,              "# timeouts on peer connections")                   \
+    ACTION( peer_connections,             STATS_GAUGE,                "# active peer connections")                        \
+    ACTION( peer_forward_error,           STATS_GAUGE,        "# times we encountered a peer forwarding error")           \
+    ACTION( peer_requests,                STATS_COUNTER,      "# peer requests")                                          \
+    ACTION( peer_request_bytes,           STATS_COUNTER,      "total peer request bytes")                                 \
+    ACTION( peer_responses,               STATS_COUNTER,      "# peer respones")                                          \
+    ACTION( peer_response_bytes,          STATS_COUNTER,      "total peer response bytes")                                \
+    ACTION( peer_ejects,                  STATS_COUNTER,      "# times a peer was ejected")                               \
+    ACTION( peer_in_queue,                STATS_GAUGE,        "# peer requests in incoming queue")                        \
+    ACTION( peer_in_queue_bytes,          STATS_GAUGE,        "current peer request bytes in incoming queue")             \
+    ACTION( peer_out_queue,               STATS_GAUGE,        "# peer requests in outgoing queue")                        \
+    ACTION( peer_out_queue_bytes,         STATS_GAUGE,        "current peer request bytes in outgoing queue")             \
+    /* forwarder behavior */                                                                                              \
+    ACTION( forward_error,                STATS_COUNTER,      "# times we encountered a forwarding error")                \
+    ACTION( fragments,                    STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+    ACTION( stats_count,                  STATS_COUNTER,      "# stats request")                                          \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \
@@ -141,6 +160,9 @@ struct stats {
 
     struct string       datacenter_str;
     struct string       datacenter;
+
+    struct string       region_str;
+    struct string       region;
 
     volatile int        aggregate;      /* shadow (b) aggregate? */
     volatile int        updated;        /* current (a) updated? */

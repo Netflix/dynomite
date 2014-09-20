@@ -19,12 +19,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <dyn_core.h>
+#include <dyn_server.h>
+
 
 #ifndef _DYN_HASHKIT_H_
 #define _DYN_HASHKIT_H_
 
-#include <dyn_core.h>
-#include <dyn_server.h>
+
 
 #define HASH_CODEC(ACTION)                      \
     ACTION( HASH_ONE_AT_A_TIME, one_at_a_time ) \

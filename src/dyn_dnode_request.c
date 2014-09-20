@@ -69,6 +69,9 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 	//fixme for peer stats
 	/* stats_server_decr(ctx, conn->owner, in_queue); */
 	/* stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
+	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+    stats_pool_decr(ctx, pool, peer_in_queue);
+    stats_pool_decr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
 }
 
 void
@@ -91,6 +94,11 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 	//fixme for peer stats
 	/* stats_server_incr(ctx, conn->owner, out_queue); */
 	/* stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
+
+	//use only the 1st pool
+	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+	stats_pool_incr(ctx, pool, peer_out_queue);
+	stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
 }
 
 void
@@ -115,6 +123,11 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 	//fixme for peer stats
 	/* stats_server_decr(ctx, conn->owner, out_queue); */
 	/* stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
+
+	//use the 1st pool
+	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+	stats_pool_decr(ctx, pool, peer_out_queue);
+    stats_pool_decr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
 }
 
 struct msg *
@@ -176,16 +189,6 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 			conn->err = errno;
 		}
 	}
-}
-
-static void
-dnode_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
-{
-	ASSERT(msg->request);
-
-	//fix me
-	//stats_server_incr(ctx, server, requests);
-	//stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
 }
 
 
@@ -264,6 +267,16 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 
+static void
+dnode_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
+{
+    ASSERT(msg->request);
+    //use only the 1st pool
+    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+	stats_pool_incr(ctx, pool, peer_requests);
+	stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
+}
+
 void
 peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
 		struct datacenter *dc, uint8_t *key, uint32_t keylen)
@@ -303,6 +316,7 @@ peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, 
 
 	//fix me - coordinator stats
 	//req_forward_stats(ctx, s_conn->owner, msg);
+	dnode_req_forward_stats(ctx, p_conn->owner, msg);
 
 	log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
 			" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,

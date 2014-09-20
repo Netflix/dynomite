@@ -20,10 +20,12 @@
  * limitations under the License.
  */
 
+
+#include "dyn_core.h"
+
 #ifndef _DYN_SIGNAL_H_
 #define _DYN_SIGNAL_H_
 
-#include "dyn_core.h"
 
 struct signal {
     int  signo;

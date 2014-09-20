@@ -83,10 +83,8 @@ static void
 dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
 	ASSERT(!msg->request);
-
-	//fixme for dnode  stats
-	/* stats_server_incr(ctx, server, responses); */
-	/* stats_server_incr_by(ctx, server, response_bytes, msg->mlen); */
+	stats_pool_incr(ctx, server->owner, peer_responses);
+	stats_pool_incr_by(ctx, server->owner, peer_response_bytes, msg->mlen);
 }
 
 static void

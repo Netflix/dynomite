@@ -20,10 +20,11 @@
  * limitations under the License.
  */
 
+#include <dyn_core.h>
+
 #ifndef _DN_EVENT_H_
 #define _DN_EVENT_H_
 
-#include <dyn_core.h>
 
 #define EVENT_SIZE  1024
 

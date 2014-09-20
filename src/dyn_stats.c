@@ -381,6 +381,10 @@ stats_create_buf(struct stats *st)
     size += st->datacenter.len;
     size += key_value_extra;
 
+    size += st->region_str.len;
+    size += st->region.len;
+    size += key_value_extra;
+
     /* server pools */
     for (i = 0; i < array_n(&st->sum); i++) {
         struct stats_pool *stp = array_get(&st->sum, i);
@@ -538,6 +542,11 @@ stats_add_header(struct stats *st)
     }
 
     status = stats_add_string(st, &st->datacenter_str, &st->datacenter);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_string(st, &st->region_str, &st->region);
     if (status != DN_OK) {
         return status;
     }
@@ -726,6 +735,8 @@ stats_make_rsp(struct stats *st)
         struct stats_pool *stp = array_get(&st->sum, i);
         uint32_t j;
 
+        log_debug(LOG_VERB, "\tssssssssssssstp->name          : '%.*s'", stp->name);
+
         status = stats_begin_nesting(st, &stp->name);
         if (status != DN_OK) {
             return status;
@@ -739,6 +750,8 @@ stats_make_rsp(struct stats *st)
 
         for (j = 0; j < array_n(&stp->server); j++) {
             struct stats_server *sts = array_get(&stp->server, j);
+
+            log_debug(LOG_VERB, "\tssssssssssssstp2222->name          : '%.*s'", sts->name);
 
             status = stats_begin_nesting(st, &sts->name);
             if (status != DN_OK) {
@@ -1067,8 +1080,15 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
 
+    //only display the first pool
+    struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
+
     string_set_text(&st->datacenter_str, "datacenter");
-    string_set_text(&st->datacenter, "DC1");
+    //string_set_text(&st->datacenter, sp->dc.data);
+    string_copy(&st->datacenter, sp->dc.data, sp->dc.len);
+
+    string_set_text(&st->region_str, "region");
+    string_copy(&st->region, sp->region.data, sp->region.len);
 
     st->updated = 0;
     st->aggregate = 0;

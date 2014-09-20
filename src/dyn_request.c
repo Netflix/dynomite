@@ -255,6 +255,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
     if (!conn->dyn_mode) {
        stats_server_incr(ctx, conn->owner, in_queue);
        stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    } else {
+       struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+       stats_pool_incr(ctx, pool, peer_in_queue);
+       stats_pool_incr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
     }
 }
 
@@ -496,7 +500,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
-    //req_forward_stats(ctx, s_conn->owner, msg);
+    req_forward_stats(ctx, s_conn->owner, msg);
 
 
     log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32

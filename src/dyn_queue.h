@@ -51,11 +51,13 @@
  *    @(#)queue.h    8.5 (Berkeley) 8/20/94
  * $FreeBSD: src/sys/sys/queue.h,v 1.73 2010/02/20 01:05:30 emaste Exp $
  */
+#include "dyn_log.h"
+
 
 #ifndef _DYN_QUEUE_H_
 #define _DYN_QUEUE_H_
 
-#include "dyn_log.h"
+
 
 #ifndef __offsetof
 #define __offsetof(type, field) ((size_t)(&((type *)NULL)->field))

@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <unistd.h>
-
+#include <ctype.h>
 
 #include "dyn_core.h"
 #include "dyn_server.h"
@@ -16,6 +16,7 @@
 #include "dyn_util.h"
 #include "dyn_string.h"
 #include "dyn_ring_queue.h"
+#include "dyn_node_snitch.h"
 #include "dyn_token.h"
 #include "seedsprovider/dyn_seeds_provider.h"
 
@@ -60,10 +61,7 @@ gossip_msg_to_core(struct server_pool *sp, struct node *node, void *cb)
 static rstatus_t
 gossip_announce_joining(struct server_pool *sp)
 {
-	rstatus_t status;
-
-	gossip_msg_to_core(sp, NULL, dnode_peer_handshake_announcing);
-	return DN_OK;
+	return gossip_msg_to_core(sp, NULL, dnode_peer_handshake_announcing);
 }
 
 static rstatus_t
@@ -185,7 +183,6 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 		struct string *address, struct string *ip, struct string *port, struct array *tokens)
 {
 	rstatus_t status;
-
 	log_debug(LOG_VERB, "gossip_add_node_to_dc : dc[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
 			g_dc->name, address->len, address->data, ip->len, ip->data, port->len, port->data);
 
@@ -200,20 +197,6 @@ gossip_add_node_to_dc(struct server_pool *sp, struct gossip_dc *g_dc,
 	status = string_copy(&gnode->name, ip->data, ip->len);
 	status = string_copy(&gnode->pname, address->data, address->len); //ignore the port for now
 	gnode->port = port_i;
-
-	//status = dn_resolve(&gnode->name, gnode->port, &gnode->info);
-	//if (status != DN_OK) {
-	//	array_pop(&g_dc->nodes);
-	//	node_deinit(gnode);
-	//	return NULL;  //need to deinit
-	//}
-
-	//uint32_t i, nelem;
-	//for (i = 0, nelem = array_n(tokens); i < nelem; i++) {
-	//	struct dyn_token * token = (struct dyn_token *) array_get(tokens, i);
-	//	struct dyn_token * gtoken = &gnode->tokens;
-	//	copy_dyn_token(token, gtoken);
-	//}
 
 	//only use one token
 	struct dyn_token * token = (struct dyn_token *) array_get(tokens, 0);
@@ -632,8 +615,7 @@ void gossip_debug(void)
 			log_debug(LOG_VERB, "\t\tNode is_local      : %"PRIu32" ", node->is_local);
 			log_debug(LOG_VERB, "\t\tNode last_retry    : %"PRIu32" ", node->last_retry);
 			log_debug(LOG_VERB, "\t\tNode failure_count : %"PRIu32" ", node->failure_count);
-			log_debug(LOG_VERB, "\t\tNum tokens         : %d", array_n(&node->token));
-			uint32_t k;
+			//uint32_t k;
 			//for (k = 0; k < array_n(&node->tokens); k++) {
 			//	struct dyn_token *token = (struct dyn_token *) array_get(&node->tokens, k);
 			//	print_dyn_token(token, 8);

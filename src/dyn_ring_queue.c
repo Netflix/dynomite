@@ -47,7 +47,7 @@ ring_message_init(struct ring_message *msg, uint32_t size, bool init_node)
 
 	array_init(&msg->nodes, size, sizeof(struct node));
 	if (init_node) {
-		int i;
+		uint32_t i;
 		for(i=0; i<size; i++) {
 			struct node *node = (struct node *) array_push(&msg->nodes);
 			node_init(node);
@@ -69,7 +69,7 @@ ring_message_deinit(struct ring_message *msg)
 
 	//if (msg->node != NULL)
 	//	node_deinit(msg->node);
-	int i;
+	uint32_t i;
 	for(i=0; i<array_n(&msg->nodes); i++) {
 		struct node *node = (struct node *) array_get(&msg->nodes, i);
 		node_deinit(node);
@@ -166,5 +166,5 @@ node_copy(const struct node *src, struct node *dst)
 	//}
 
 	copy_dyn_token(&src->token, &dst->token);
-
+    return DN_OK;
 }

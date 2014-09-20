@@ -2,12 +2,12 @@
  * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
  * Copyright (C) 2014 Netflix, Inc.
  */ 
+#include "dyn_core.h"
+#include "dyn_server.h"
+
 
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
-
-#include "dyn_core.h"
-#include "dyn_server.h"
 
 
 void dnode_peer_ref(struct conn *conn, void *owner);
