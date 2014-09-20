@@ -20,10 +20,12 @@
  * limitations under the License.
  */
 
+#include <dyn_core.h>
+
+
 #ifndef _DN_PROTO_H_
 #define _DN_PROTO_H_
 
-#include <dyn_core.h>
 
 
 

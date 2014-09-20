@@ -3,10 +3,11 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
+#include "dyn_core.h"
+
+
 #ifndef _DYN_DNODE_CLIENT_H_
 #define _DYN_DNODE_CLIENT_H_
-
-#include "dyn_core.h"
 
 bool dnode_client_active(struct conn *conn);
 void dnode_client_ref(struct conn *conn, void *owner);

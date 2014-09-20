@@ -4,6 +4,9 @@
  */
 
 
+#include "dyn_gossip.h"
+
+
 #ifndef _DYN_RING_QUEUE_
 #define _DYN_RING_QUEUE_
 
@@ -37,30 +40,9 @@ volatile struct
 
 
 
-volatile struct node {
-    struct array       tokens;        /* array of dyn_tokens */
-    struct string      dc;
-    //struct gossip_dc   *dc;           /* logical datacenter */
-
-    struct string      pname;         /* name:port */
-    struct string      name;          /* name  */
-
-    int                port;          /* port */
-    struct sockinfo    info;
-
-    int64_t            next_retry;    /* next retry time in usec */
-    int64_t            last_retry;    /* last retry time in usec */
-    uint32_t           failure_count; /* # consecutive failures */
-
-    bool               is_seed;       /* seed? */
-    bool               is_local;      /* is this peer the current running node?  */
-    uint8_t            status;        /* 0: down, 1: up, 2:unknown */
-};
-
-
-volatile struct ring_message {
+struct ring_message {
 	callback_t         cb;
-    struct node        *node;
+    struct array       nodes;
 	struct server_pool *sp;
 };
 
@@ -83,7 +65,7 @@ volatile struct
 } C2S_OutQ;
 
 
-volatile struct stat_message {
+struct stat_message {
 	void*         cb;
 	void*         post_cb;
 	void*         data;
@@ -94,7 +76,8 @@ volatile struct stat_message {
 
 
 struct ring_message * create_ring_message(void);
-rstatus_t ring_message_init(struct ring_message *msg);
+struct ring_message *create_ring_message_with_size(uint32_t size, bool init_node);
+rstatus_t ring_message_init(struct ring_message *msg, uint32_t size, bool init_node);
 rstatus_t ring_message_deinit(struct ring_message *msg);
 
 struct node * create_node(void);

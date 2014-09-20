@@ -3,10 +3,11 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
+#include "dyn_core.h"
+
+
 #ifndef _DYN_DNODE_MSG_H_
 #define _DYN_DNODE_MSG_H_
-
-#include "dyn_core.h"
 
 
 typedef enum dmsg_version {
@@ -15,14 +16,13 @@ typedef enum dmsg_version {
 
 
 typedef enum dmsg_type {
-    DMSG_DEBUG = 1,
-    DMSG_UNKNOWN,
+    DMSG_UNKNOWN = 0,
+    DMSG_DEBUG,
     DMSG_PARSE_ERROR,
-    DMSG_REQ_MC_READ,                       /* memcache retrieval requests */
-    DMSG_REQ_MC_WRITE,
-    DMSG_REQ_MC_DELETE,
-    GOSSIP_PING,
-    GOSSIP_PING_REPLY,
+    DMSG_REQ,
+    GOSSIP_SYN,
+    GOSSIP_SYN_REPLY,
+    GOSSIP_ACK,
     GOSSIP_DIGEST_SYN,
     GOSSIP_DIGEST_ACK,
     GOSSIP_DIGEST_ACK2,
@@ -39,9 +39,7 @@ struct dval {
 
 struct dmsg {
     TAILQ_ENTRY(dmsg)     m_tqe;           /* link in free q */
-
     struct msg           *owner;
-    struct mhdr          mhdr;            /* message mbuf header */
 
     uint64_t             id;              /* message id */
     dmsg_type_t          type;            /* message type */
@@ -67,6 +65,7 @@ void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
 rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
+rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct mbuf *data);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 #endif

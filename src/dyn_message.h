@@ -20,11 +20,13 @@
  * limitations under the License.
  */
 
+#include "dyn_core.h"
+#include "dyn_dnode_msg.h"
+
+
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
 
-#include "dyn_core.h"
-#include "dyn_dnode_msg.h"
 
 
 typedef void (*msg_parse_t)(struct msg *);
@@ -311,8 +313,14 @@ struct msg *dnode_rsp_send_next(struct context *ctx, struct conn *conn);
 void dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
-void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, struct datacenter *dc, uint8_t *key, uint32_t keylen);
+void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg);
 
+
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, struct datacenter *dc, uint8_t *key, uint32_t keylen);
+void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
+void peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
+                      struct datacenter *dc, uint8_t *key, uint32_t keylen);
+//void peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct string *data);
+void peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *data);
 
 #endif

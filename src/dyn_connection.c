@@ -187,7 +187,7 @@ conn_get_peer(void *owner, bool client, bool redis)
     conn->dyn_mode = 1;
 
     if (conn->dnode_client) {
-        /*
+        /* incoming peer connection to dnode server
          * dyn client receives a request, possibly parsing it, and sends a
          * response downstream.
          */
@@ -211,6 +211,7 @@ conn_get_peer(void *owner, bool client, bool redis)
         conn->dequeue_outq = dnode_req_client_dequeue_omsgq;
     } else {
         /*
+         * outgoing peer connection
          * dyn server receives a response, possibly parsing it, and sends a
          * request upstream.
          */

@@ -20,11 +20,14 @@
  * limitations under the License.
  */
 
+#include "dyn_core.h"
+#include "dyn_token.h"
+
+
 #ifndef _DYN_SERVER_H_
 #define _DYN_SERVER_H_
 
-#include "dyn_core.h"
-#include "hashkit/dyn_token.h"
+
 
 /*
  * server_pool is a collection of servers and their continuum. Each
@@ -157,10 +160,10 @@ struct server_pool {
     uint32_t           d_connections;        /* maximum # dyn connections */
     struct string      dc;                   /* the datacenter for this node */  
     struct array       tokens;               /* the DHT tokens for this server */
-    /* for gossiping */
-    struct dyn_ring    ring;                 /* ring info (shared with ring/gossip)  */
+
     int                g_interval;           /* gossip interval */
     struct string      region;               /* server's region */
+    struct string      env;                  /* aws, network, ect */
 
 };
 

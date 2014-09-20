@@ -3,10 +3,12 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
+
+#include "dyn_core.h"
+
 #ifndef _DYN_DNODE_SERVER_H_
 #define _DYN_DNODE_SERVER_H_
 
-#include "dyn_core.h"
 
 void dnode_ref(struct conn *conn, void *owner);
 void dnode_unref(struct conn *conn);

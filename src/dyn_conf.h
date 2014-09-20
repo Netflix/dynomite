@@ -19,10 +19,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#ifndef _DYN_CONF_H_
-#define _DYN_CONF_H_
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -30,6 +26,12 @@
 
 #include "dyn_core.h"
 #include "hashkit/dyn_hashkit.h"
+
+
+#ifndef _DYN_CONF_H_
+#define _DYN_CONF_H_
+
+
 
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
@@ -64,7 +66,7 @@
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
 #define CONF_DEFAULT_DYN_CONNECTIONS         100
 #define CONF_DEFAULT_VNODE_TOKENS            8
-#define CONF_DEFAULT_GOS_INTERVAL            10000
+#define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
 #define CONF_DEFAULT_PEERS                   100
 
 #define CONF_STR_NONE                        "none"
@@ -72,9 +74,12 @@
 #define CONF_STR_DC                          "dc"
 #define CONF_STR_ALL                         "all"
 
+#define CONF_DEFAULT_ENV                      "aws"
+
 #define CONF_DEFAULT_DC                      "localdc"
 #define CONF_DEFAULT_REGION                  "localregion"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
+
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -128,6 +133,7 @@ struct conf_pool {
     /* none | region | dc | all in order of increasing number of connections. (default is none) */
     struct string      secure_server_option;
     struct string      region;                /* this node's region */
+    struct string      env;                   /* aws, google, network, ... */
 };
 
 

@@ -24,9 +24,6 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
-static
-struct string client_request_dyn_msg = string("Client_request");
-
 
 struct msg *
 req_get(struct conn *conn)
@@ -246,7 +243,7 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
      * the server in_q; the clock continues to tick until it either expires
      * or the message is dequeued from the server out_q
      *
-     * noreply request are free from timeouts because client is not intrested
+     * noreply request are free from timeouts because client is not interested
      * in the reponse anyway!
      */
     if (!msg->noreply) {
@@ -258,6 +255,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
     if (!conn->dyn_mode) {
        stats_server_incr(ctx, conn->owner, in_queue);
        stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    } else {
+       struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+       stats_pool_incr(ctx, pool, peer_in_queue);
+       stats_pool_incr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
     }
 }
 
@@ -499,7 +500,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
-    //req_forward_stats(ctx, s_conn->owner, msg);
+    req_forward_stats(ctx, s_conn->owner, msg);
 
 
     log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
@@ -528,59 +529,6 @@ request_send_to_all_datacenters(struct msg *msg) {
     return t == MSG_REQ_MC_SET || t == MSG_REQ_MC_CAS || t == MSG_REQ_MC_DELETE || t == MSG_REQ_MC_ADD ||
            t == MSG_REQ_MC_REPLACE || t == MSG_REQ_MC_APPEND || t == MSG_REQ_MC_PREPEND || t == MSG_REQ_MC_INCR ||
            t == MSG_REQ_MC_DECR;
-}
-
-static void 
-peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
-                 struct datacenter *dc, uint8_t *key, uint32_t keylen) {
-
-    rstatus_t status;	
-    /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
-      c_conn->enqueue_outq(ctx, c_conn, msg);
-    }
-	
-    ASSERT(!p_conn->dnode_client && !p_conn->dnode_server);
-    ASSERT(c_conn->client);
-
-    /* enqueue the message (request) into peer inq */
-    if (TAILQ_EMPTY(&p_conn->imsg_q)) {
-        status = event_add_out(ctx->evb, p_conn);
-        if (status != DN_OK) {
-            req_forward_error(ctx, p_conn, msg);
-            p_conn->err = errno;
-            return;
-        }
-    }
-
-
-    struct mbuf *nbuf = mbuf_get();
-    if (nbuf == NULL) {
-       return;
-    }
-  
-    struct msg *nmsg = msg_get(msg->owner, msg->request, c_conn->redis);
-    if (nmsg == NULL) {
-        mbuf_put(nbuf);
-        return;
-    }
-
-    //dyn message's meta data
-    uint64_t msg_id = 1234;
-    uint8_t type = 1;
-    uint8_t version = 1;
-
-    dmsg_write(nbuf, msg_id, type, version, &client_request_dyn_msg);
-    mbuf_insert_head(&msg->mhdr, nbuf);
-
-    p_conn->enqueue_inq(ctx, p_conn, msg);
-
-    //fix me - coordinator stats
-    //req_forward_stats(ctx, s_conn->owner, msg);
-
-    log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
-              msg->mlen, msg->type, keylen, key);
 }
 
 

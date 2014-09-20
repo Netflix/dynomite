@@ -315,6 +315,15 @@ mbuf_write_string(struct mbuf *mbuf, struct string *s)
    mbuf_copy(mbuf, s->data, s->len);
 }
 
+void mbuf_write_mbuf(struct mbuf *mbuf, struct mbuf *data)
+{
+	mbuf_copy(mbuf, data->pos, data->last - data->pos);
+}
+
+void mbuf_write_bytes(struct mbuf *mbuf, char *data)
+{
+	mbuf_copy(mbuf, data, dn_strlen(data));
+}
 
 void
 mbuf_write_uint8(struct mbuf *mbuf, uint8_t num)

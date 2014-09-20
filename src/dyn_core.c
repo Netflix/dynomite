@@ -33,7 +33,6 @@
 
 
 static uint32_t ctx_id; /* context generation */
-static int64_t last; //storing last time for gossip
 
 static struct context *
 core_ctx_create(struct instance *nci)
@@ -165,7 +164,7 @@ core_ctx_create(struct instance *nci)
 	gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-	ctx->dyn_state = NORMAL;
+	ctx->dyn_state = NORMAL;  //TODOS: change this to JOINING
 	return ctx;
 }
 
@@ -186,7 +185,7 @@ struct context *
 core_start(struct instance *nci)
 {
 	struct context *ctx;
-	last = dn_msec_now();
+	//last = dn_msec_now();
 
 	mbuf_init(nci);
 	msg_init();
@@ -290,16 +289,16 @@ core_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->sd > 0);
 
-    if (conn->dyn_mode) {
-    	core_dnode_close_log(conn);
-    } else {
-    	core_close_log(conn);
-    }
+	if (conn->dyn_mode) {
+		core_dnode_close_log(conn);
+	} else {
+		core_close_log(conn);
+	}
 
 	status = event_del_conn(ctx->evb, conn);
 	if (status < 0) {
 		log_warn("event del conn %c %d failed, ignored: %s",
-				 type, conn->sd, strerror(errno));
+				type, conn->sd, strerror(errno));
 	}
 
 	conn->close(ctx, conn);
@@ -375,10 +374,10 @@ core_core(void *arg, uint32_t events)
 
 	if (conn->dyn_mode) {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
-				      	 conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
+				conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
 	} else {
-	    log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
-		      	 conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
+		log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
+				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
 	}
 
 	conn->events = events;
@@ -411,19 +410,6 @@ core_core(void *arg, uint32_t events)
 	return DN_OK;
 }
 
-static bool core_run_gossip(void)
-{
-	int64_t now = dn_msec_now();
-
-	int delta = (int)(now - last);
-	if (delta > 10000) {
-		last = now;
-		return true;
-	}
-
-	return false;
-}
-
 
 void
 core_debug(struct context *ctx)
@@ -437,7 +423,8 @@ core_debug(struct context *ctx)
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer DC          : '%.*s'", server->dc);
+			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'", server->dc);
+			log_debug(LOG_VERB, "\tPeer Region        : '%.*s'",server->region);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
@@ -472,9 +459,11 @@ core_process_messages(void)
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
-			msg->cb(msg->sp, msg->node);
-			ring_message_deinit(msg);
+			struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
+			msg->cb(msg->sp, rnode);
+			//msg->cb(msg->sp, msg->node);
 			core_debug(msg->sp->ctx);
+			ring_message_deinit(msg);
 		}
 	}
 
@@ -498,8 +487,7 @@ core_loop(struct context *ctx)
 	core_process_messages();
 
 	//core_debug(ctx);
-	//if (core_run_gossip())
-	//   dyn_gos_run(ctx);
+
 
 	stats_swap(ctx->stats);
 

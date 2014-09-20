@@ -34,7 +34,6 @@ dynomite_SOURCES =			                          \
         dyn_cbuf.h                                                \
         dyn_ring_queue.h dyn_ring_queue.c                         \
         dyn_gossip.c dyn_gossip.h                                 \
-        dyn_ring.c dyn_ring.h                                     \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
         dyn_dnode_client.h dyn_dnode_client.c                     \
         dyn_dnode_request.c                                       \
@@ -50,8 +49,10 @@ dynomite_SOURCES =			                          \
         dyn_response.c			                          \
         dyn_mbuf.c dyn_mbuf.h		                          \
         dyn_conf.c dyn_conf.h		                          \
+        dyn_node_snitch.c dyn_node_snitch.h                       \
         dyn_stats.c dyn_stats.h		                          \
         dyn_signal.c dyn_signal.h		                  \
+        dyn_token.c dyn_token.h                                   \
         dyn_rbtree.c dyn_rbtree.h		                  \
         dyn_log.c dyn_log.h		                          \
         dyn_string.c dyn_string.h		                  \

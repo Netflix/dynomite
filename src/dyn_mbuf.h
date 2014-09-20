@@ -19,11 +19,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "dyn_core.h"
 
 #ifndef _DYN_MBUF_H_
 #define _DYN_MBUF_H_
 
-#include "dyn_core.h"
+
 
 typedef void (*mbuf_copy_t)(struct mbuf *, void *);
 
@@ -75,6 +76,7 @@ void mbuf_write_string(struct mbuf *mbuf,  struct string *s);
 void mbuf_write_uint8(struct mbuf *mbuf, uint8_t num);
 void mbuf_write_uint32(struct mbuf *mbuf, uint32_t num);
 void mbuf_write_uint64(struct mbuf *mbuf, uint64_t num);
-
+void mbuf_write_mbuf(struct mbuf *mbuf, struct mbuf *data);
+void mbuf_write_bytes(struct mbuf *mbuf, char *data);
 
 #endif
