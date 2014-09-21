@@ -88,6 +88,8 @@
  * out_q ensures that we always send back the response of request at the head
  * of the queue, before sending out responses of other completed requests in
  * the queue.
+ *
+ * TODOs: Minh: add explanation for peer-to-peer communication
  */
 
 static uint32_t nfree_connq;       /* # free conn q */
