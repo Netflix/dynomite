@@ -76,18 +76,6 @@
     ACTION( out_queue_bytes,        STATS_GAUGE,        "current request bytes in outgoing queue")                  \
 
 
-#define STATS_DNODE_CODEC(ACTION)                                                                                    \
-    /* client behavior */                                                                                           \
-    ACTION( dnode_client_eof,             STATS_COUNTER,      "# eof on dnode client connections")                              \
-    ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                           \
-    ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                              \
-    /* dnode behavior */                                                                                             \
-    ACTION( dnode_server_ejects,          STATS_COUNTER,      "# times backend server was ejected")                       \
-    /* forwarder behavior */                                                                                        \
-    ACTION( dnode_forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
-    ACTION( dnode_fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
-
-
 #define STATS_ADDR      "0.0.0.0"
 #define STATS_PORT      22222
 #define STATS_INTERVAL  (30 * 1000) /* in msec */

@@ -66,7 +66,6 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
 	TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
 
-	//fixme for peer stats
 	/* stats_server_decr(ctx, conn->owner, in_queue); */
 	/* stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
 	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
@@ -91,7 +90,7 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
 	TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
 
-	//fixme for peer stats
+
 	/* stats_server_incr(ctx, conn->owner, out_queue); */
 	/* stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
 
@@ -120,7 +119,6 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
 	TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
 
-	//fixme for peer stats
 	/* stats_server_decr(ctx, conn->owner, out_queue); */
 	/* stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
 
