@@ -85,7 +85,6 @@ static void
 dnode_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
                    unsigned eof)
 {
-    //fix this for dnode_client_connections
     stats_pool_decr(ctx, pool, dnode_client_connections);
 
     if (eof) {

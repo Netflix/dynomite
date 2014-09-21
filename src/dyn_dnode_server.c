@@ -296,8 +296,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     }
     c->sd = sd;
 
-    //fixme for dnode server stats
-    //stats_pool_incr(ctx, c->owner, client_connections);
+    stats_pool_incr(ctx, c->owner, dnode_client_connections);
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
