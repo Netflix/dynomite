@@ -134,7 +134,7 @@ core_ctx_create(struct instance *nci)
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
-		return status;
+		return NULL;
 	}
 
 	core_debug(ctx);
@@ -142,7 +142,7 @@ core_ctx_create(struct instance *nci)
 	/* preconntect peers - probably start gossip here */
 	status = dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK) {
-		dnode_peer_deinit(ctx);
+		dnode_peer_deinit(&ctx->pool);
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -285,7 +285,6 @@ static void
 core_close(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
-	char type, *addrstr;
 
 	ASSERT(conn->sd > 0);
 
@@ -297,8 +296,8 @@ core_close(struct context *ctx, struct conn *conn)
 
 	status = event_del_conn(ctx->evb, conn);
 	if (status < 0) {
-		log_warn("event del conn %c %d failed, ignored: %s",
-				type, conn->sd, strerror(errno));
+		log_warn("event del conn %d failed, ignored: %s",
+		          conn->sd, strerror(errno));
 	}
 
 	conn->close(ctx, conn);

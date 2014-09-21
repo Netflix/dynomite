@@ -312,8 +312,6 @@ peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, 
 
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
-	//fix me - coordinator stats
-	//req_forward_stats(ctx, s_conn->owner, msg);
 	dnode_req_forward_stats(ctx, p_conn->owner, msg);
 
 	log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
