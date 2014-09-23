@@ -32,6 +32,8 @@
     ACTION( client_eof,                   STATS_COUNTER,      "# eof on client connections")                              \
     ACTION( client_err,                   STATS_COUNTER,      "# errors on client connections")                           \
     ACTION( client_connections,           STATS_GAUGE,        "# active client connections")                              \
+    ACTION( client_read_requests,         STATS_COUNTER,      "# client read requests")                                   \
+    ACTION( client_write_requests,         STATS_COUNTER,     "# client write responses")                                 \
     /* pool behavior */                                                                                                   \
     ACTION( server_ejects,                STATS_COUNTER,      "# times backend server was ejected")                       \
     /* dnode client behavior */                                                                                           \
@@ -39,10 +41,10 @@
     ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                     \
     ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                        \
     /* peer behavior */                                                                                                   \
-    ACTION( peer_eof,                     STATS_COUNTER,              "# eof on peer connections")                        \
-    ACTION( peer_err,                     STATS_COUNTER,              "# errors on peer connections")                     \
-    ACTION( peer_timedout,                STATS_COUNTER,              "# timeouts on peer connections")                   \
-    ACTION( peer_connections,             STATS_GAUGE,                "# active peer connections")                        \
+    ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
+    ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
+    ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on peer connections")                           \
+    ACTION( peer_connections,             STATS_GAUGE,        "# active peer connections")                                \
     ACTION( peer_forward_error,           STATS_GAUGE,        "# times we encountered a peer forwarding error")           \
     ACTION( peer_requests,                STATS_COUNTER,      "# peer requests")                                          \
     ACTION( peer_request_bytes,           STATS_COUNTER,      "total peer request bytes")                                 \
