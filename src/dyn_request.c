@@ -549,11 +549,6 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
     struct server *peer = s_conn->owner;
 
-    if (msg->is_read)
-        stats_pool_incr(ctx, peer->owner, client_read_requests);
-    else
-        stats_pool_incr(ctx, peer->owner, client_write_requests);
-
     if (peer->is_local) {
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
@@ -566,13 +561,17 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
-    struct server_pool *pool;
+    struct server_pool *pool = c_conn->owner;
     uint8_t *key;
     uint32_t keylen;
 
     ASSERT(c_conn->client && !c_conn->proxy);
 
-    pool = c_conn->owner;
+    if (msg->is_read)
+        stats_pool_incr(ctx, pool, client_read_requests);
+    else
+        stats_pool_incr(ctx, pool, client_write_requests);
+
     key = NULL;
     keylen = 0;
 
