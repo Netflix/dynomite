@@ -437,8 +437,13 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
     ASSERT(msg->request);
 
-    stats_server_incr(ctx, server, requests);
-    stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
+    if (msg->is_read) {
+       stats_server_incr(ctx, server, read_requests);
+       stats_server_incr_by(ctx, server, read_request_bytes, msg->mlen);
+    } else {
+       stats_server_incr(ctx, server, write_requests);
+       stats_server_incr_by(ctx, server, write_request_bytes, msg->mlen);
+    }
 }
 
 void
@@ -553,7 +558,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
-        peer_req_forward(ctx, c_conn, s_conn, msg, dc, key, keylen);
+        dnode_peer_req_forward(ctx, c_conn, s_conn, msg, dc, key, keylen);
     }
 }
 
@@ -615,6 +620,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
                 }
 
                 msg_clone(msg, mbuf_start, dc_msg);
+                //dc_msg->noreply = true;
             } else {
                 dc_msg = msg;
             }

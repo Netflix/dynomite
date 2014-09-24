@@ -62,20 +62,24 @@
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \
-    ACTION( server_eof,             STATS_COUNTER,      "# eof on server connections")                              \
-    ACTION( server_err,             STATS_COUNTER,      "# errors on server connections")                           \
-    ACTION( server_timedout,        STATS_COUNTER,      "# timeouts on server connections")                         \
-    ACTION( server_connections,     STATS_GAUGE,        "# active server connections")                              \
-    ACTION( server_ejected_at,      STATS_TIMESTAMP,    "timestamp when server was ejected in usec since epoch")    \
-    /* data behavior */                                                                                             \
-    ACTION( requests,               STATS_COUNTER,      "# requests")                                               \
-    ACTION( request_bytes,          STATS_COUNTER,      "total request bytes")                                      \
-    ACTION( responses,              STATS_COUNTER,      "# respones")                                               \
-    ACTION( response_bytes,         STATS_COUNTER,      "total response bytes")                                     \
-    ACTION( in_queue,               STATS_GAUGE,        "# requests in incoming queue")                             \
-    ACTION( in_queue_bytes,         STATS_GAUGE,        "current request bytes in incoming queue")                  \
-    ACTION( out_queue,              STATS_GAUGE,        "# requests in outgoing queue")                             \
-    ACTION( out_queue_bytes,        STATS_GAUGE,        "current request bytes in outgoing queue")                  \
+    ACTION( server_eof,             STATS_COUNTER,           "# eof on server connections")                              \
+    ACTION( server_err,             STATS_COUNTER,           "# errors on server connections")                           \
+    ACTION( server_timedout,        STATS_COUNTER,           "# timeouts on server connections")                         \
+    ACTION( server_connections,     STATS_GAUGE,             "# active server connections")                              \
+    ACTION( server_ejected_at,      STATS_TIMESTAMP,         "timestamp when server was ejected in usec since epoch")    \
+    /* data behavior */                                                                                                  \
+    ACTION( read_requests,               STATS_COUNTER,      "# read requests")                                          \
+    ACTION( read_request_bytes,          STATS_COUNTER,      "total read request bytes")                                 \
+    ACTION( write_requests,               STATS_COUNTER,     "# write requests")                                         \
+    ACTION( write_request_bytes,          STATS_COUNTER,     "total write request bytes")                                \
+    ACTION( read_responses,              STATS_COUNTER,      "# read respones")                                          \
+    ACTION( read_response_bytes,         STATS_COUNTER,      "total read response bytes")                                \
+    ACTION( write_responses,              STATS_COUNTER,     "# write respones")                                         \
+    ACTION( write_response_bytes,         STATS_COUNTER,     "total write response bytes")                               \
+    ACTION( in_queue,               STATS_GAUGE,             "# requests in incoming queue")                             \
+    ACTION( in_queue_bytes,         STATS_GAUGE,             "current request bytes in incoming queue")                  \
+    ACTION( out_queue,              STATS_GAUGE,             "# requests in outgoing queue")                             \
+    ACTION( out_queue_bytes,        STATS_GAUGE,             "current request bytes in outgoing queue")                  \
 
 
 #define STATS_ADDR      "0.0.0.0"

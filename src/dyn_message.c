@@ -348,6 +348,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->mlen = src->mlen;
     target->pos = src->pos;
     target->vlen = src->vlen;
+    target->is_read = src->is_read;
 
     struct mbuf *mbuf, *nbuf;
     bool started = false;

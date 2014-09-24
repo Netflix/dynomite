@@ -189,8 +189,13 @@ rsp_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
     ASSERT(!msg->request);
 
-    stats_server_incr(ctx, server, responses);
-    stats_server_incr_by(ctx, server, response_bytes, msg->mlen);
+    if (msg->is_read) {
+       stats_server_incr(ctx, server, read_responses);
+       stats_server_incr_by(ctx, server, read_response_bytes, msg->mlen);
+    } else {
+        stats_server_incr(ctx, server, write_responses);
+        stats_server_incr_by(ctx, server, write_response_bytes, msg->mlen);
+    }
 }
 
 static void

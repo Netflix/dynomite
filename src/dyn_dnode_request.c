@@ -266,17 +266,18 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 static void
-dnode_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
+dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
-    ASSERT(msg->request);
-    //use only the 1st pool
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-	stats_pool_incr(ctx, pool, peer_requests);
-	stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
+        ASSERT(msg->request);
+        //use only the 1st pool
+        //struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+        struct server_pool *pool = server->owner;
+        stats_pool_incr(ctx, pool, peer_requests);
+        stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
 }
 
 void
-peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
+dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
 		struct datacenter *dc, uint8_t *key, uint32_t keylen)
 {
 
@@ -312,7 +313,7 @@ peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, 
 
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
-	dnode_req_forward_stats(ctx, p_conn->owner, msg);
+	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
 	log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
 			" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
@@ -367,7 +368,7 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
  * Sending a mbuf of gossip data over the wire for a peer
  */
 void
-peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *mbuf)
+dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *mbuf)
 {
 	rstatus_t status;
 	struct msg *msg = msg_get(conn, 1, redis);
