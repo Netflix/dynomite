@@ -437,8 +437,13 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
     ASSERT(msg->request);
 
-    stats_server_incr(ctx, server, requests);
-    stats_server_incr_by(ctx, server, request_bytes, msg->mlen);
+    if (msg->is_read) {
+       stats_server_incr(ctx, server, read_requests);
+       stats_server_incr_by(ctx, server, read_request_bytes, msg->mlen);
+    } else {
+       stats_server_incr(ctx, server, write_requests);
+       stats_server_incr_by(ctx, server, write_request_bytes, msg->mlen);
+    }
 }
 
 void
@@ -553,7 +558,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
-        peer_req_forward(ctx, c_conn, s_conn, msg, dc, key, keylen);
+        dnode_peer_req_forward(ctx, c_conn, s_conn, msg, dc, key, keylen);
     }
 }
 
@@ -561,13 +566,17 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
-    struct server_pool *pool;
+    struct server_pool *pool = c_conn->owner;
     uint8_t *key;
     uint32_t keylen;
 
     ASSERT(c_conn->client && !c_conn->proxy);
 
-    pool = c_conn->owner;
+    if (msg->is_read)
+        stats_pool_incr(ctx, pool, client_read_requests);
+    else
+        stats_pool_incr(ctx, pool, client_write_requests);
+
     key = NULL;
     keylen = 0;
 
@@ -611,6 +620,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
                 }
 
                 msg_clone(msg, mbuf_start, dc_msg);
+                dc_msg->noreply = true;
             } else {
                 dc_msg = msg;
             }

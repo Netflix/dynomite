@@ -735,8 +735,6 @@ stats_make_rsp(struct stats *st)
         struct stats_pool *stp = array_get(&st->sum, i);
         uint32_t j;
 
-        log_debug(LOG_VERB, "\tssssssssssssstp->name          : '%.*s'", stp->name);
-
         status = stats_begin_nesting(st, &stp->name);
         if (status != DN_OK) {
             return status;
@@ -750,8 +748,6 @@ stats_make_rsp(struct stats *st)
 
         for (j = 0; j < array_n(&stp->server); j++) {
             struct stats_server *sts = array_get(&stp->server, j);
-
-            log_debug(LOG_VERB, "\tssssssssssssstp2222->name          : '%.*s'", sts->name);
 
             status = stats_begin_nesting(st, &sts->name);
             if (status != DN_OK) {

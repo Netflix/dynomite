@@ -616,7 +616,7 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 			return DN_OK;
 		}
 
-		peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
+		dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
 		//peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);
 	}
 
