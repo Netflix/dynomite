@@ -620,7 +620,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
                 }
 
                 msg_clone(msg, mbuf_start, dc_msg);
-                //dc_msg->noreply = true;
+                dc_msg->noreply = true;
             } else {
                 dc_msg = msg;
             }
