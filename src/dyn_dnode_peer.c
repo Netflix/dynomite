@@ -407,7 +407,7 @@ dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
 {
 	if (connected) {
 		//stats_server_decr(ctx, server, server_connections);
-		stats_pool_incr(ctx, server->owner, peer_connections);
+		stats_pool_decr(ctx, server->owner, peer_connections);
 	}
 
 	if (eof) {
@@ -877,6 +877,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 
 	//fix me
 	//stats_server_incr(ctx, server, server_connections);
+	stats_pool_incr(ctx, server->owner, peer_connections);
 
 	conn->connecting = 0;
 	conn->connected = 1;
