@@ -18,4 +18,4 @@ dyn_o_mite:
   redis: true
   dyn_seed_provider: simple_provider
   dyn_seeds:
-  - 127.0.0.2:8101:florida-v000:localregion:437425602
+  - 127.0.0.2:8101:florida-v000:localdc:437425602

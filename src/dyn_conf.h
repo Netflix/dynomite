@@ -70,14 +70,14 @@
 #define CONF_DEFAULT_PEERS                   200
 
 #define CONF_STR_NONE                        "none"
-#define CONF_STR_REGION                      "region"
+#define CONF_STR_DC                      "datacenter"
 #define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
 
 #define CONF_DEFAULT_ENV                      "aws"
 
 #define CONF_DEFAULT_RACK                    "localrack"
-#define CONF_DEFAULT_REGION                  "localregion"
+#define CONF_DEFAULT_DC                  "localdc"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
 
 
@@ -97,8 +97,8 @@ struct conf_server {
     int             weight;      /* weight - unused and no config parsing support */
     struct sockinfo info;        /* connect socket info */
     struct array    tokens;      /* tokens for this server */
-    struct string   rack;          /* peer node or server's rack */
-    struct string   region;      /* peer node's region */
+    struct string   rack;        /* peer node or server's rack */
+    struct string   dc;          /* peer node's dc */
     unsigned        valid:1;     /* valid? */
     unsigned        is_secure:1; /* is the connection to the server secure? */
 };
@@ -130,9 +130,10 @@ struct conf_pool {
     struct string      rack;                    /* this node's logical rack */  
     struct array       tokens;                /* this node's token: dyn_token array */
     int                gos_interval;          /* wake up interval in ms */
-    /* none | region | rack | all in order of increasing number of connections. (default is region) */
+
+    /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
-    struct string      region;                /* this node's region */
+    struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
 };
 

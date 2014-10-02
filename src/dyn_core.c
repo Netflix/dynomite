@@ -427,7 +427,7 @@ core_debug(struct context *ctx)
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
 			log_debug(LOG_VERB, "\tPeer Rack            : '%.*s'", server->rack);
-			log_debug(LOG_VERB, "\tPeer Region        : '%.*s'",server->region);
+			log_debug(LOG_VERB, "\tPeer DC        : '%.*s'",server->dc);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);

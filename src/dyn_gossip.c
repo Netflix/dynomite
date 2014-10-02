@@ -65,23 +65,23 @@ gossip_announce_joining(struct server_pool *sp)
 }
 
 static rstatus_t
-parse_seeds(struct string *seeds, struct string *rack_name, struct string *region_name,
+parse_seeds(struct string *seeds, struct string *rack_name, struct string *dc_name,
 		struct string *port_str, struct string *address, struct string *name,
 		struct array * ptokens)
 {
 	rstatus_t status;
 	uint8_t *p, *q, *start;
-	uint8_t *pname, *port, *rack, *region, *tokens, *addr;
-	uint32_t k, delimlen, pnamelen, portlen, racklen, regionlen, tokenslen, addrlen;
+	uint8_t *pname, *port, *rack, *dc, *tokens, *addr;
+	uint32_t k, delimlen, pnamelen, portlen, racklen, dclen, tokenslen, addrlen;
 	char delim[] = "::::";
 
-	/* parse "hostname:port:rack:region:tokens" */
+	/* parse "hostname:port:rack:dc:tokens" */
 	p = seeds->data + seeds->len - 1;
 	start = seeds->data;
 	rack = NULL;
-	region = NULL;
+	dc = NULL;
 	racklen = 0;
-	regionlen = 0;
+	dclen = 0;
 	tokens = NULL;
 	tokenslen = 0;
 	port = NULL;
@@ -97,9 +97,9 @@ parse_seeds(struct string *seeds, struct string *rack_name, struct string *regio
 			tokenslen = (uint32_t)(p - tokens + 1);
 			break;
 		case 1:
-			region = q + 1;
-			regionlen = (uint32_t)(p - region + 1);
-			string_copy(region_name, region, regionlen);
+			dc = q + 1;
+			dclen = (uint32_t)(p - dc + 1);
+			string_copy(dc_name, dc, dclen);
 			break;
 		case 2:
 			rack = q + 1;
@@ -126,7 +126,7 @@ parse_seeds(struct string *seeds, struct string *rack_name, struct string *regio
 
 	//pname = hostname:port
 	pname = seeds->data;
-	pnamelen = seeds->len - (tokenslen + racklen + regionlen + 3);
+	pnamelen = seeds->len - (tokenslen + racklen + dclen + 3);
 	status = string_copy(address, pname, pnamelen);
 
 
@@ -336,7 +336,7 @@ static rstatus_t
 gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 {
 	struct string rack_name;
-	struct string region_name; //TODOs: need to process region name
+	struct string dc_name; //TODOs: need to process dc name
 	struct string port_str;
 	struct string address;
 	struct string ip;
@@ -345,7 +345,7 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 	struct string temp;
 
 	string_init(&rack_name);
-	string_init(&region_name);
+	string_init(&dc_name);
 	string_init(&port_str);
 	string_init(&address);
 	string_init(&ip);
@@ -363,10 +363,10 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 		seed_node_len = (uint32_t)(p - seed_node + 1);
 		string_copy(&temp, seed_node, seed_node_len);
 		array_init(&tokens, 1, sizeof(struct dyn_token));
-		parse_seeds(&temp, &rack_name, &region_name, &port_str, &address, &ip,  &tokens);
+		parse_seeds(&temp, &rack_name, &dc_name, &port_str, &address, &ip,  &tokens);
 		//log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
 		//log_debug(LOG_VERB, "rack_name         : '%.*s'", rack_name.len, rack_name.data);
-		//log_debug(LOG_VERB, "region_name        : '%.*s'", region_name.len, region_name.data);
+		//log_debug(LOG_VERB, "dc_name        : '%.*s'", dc_name.len, dc_name.data);
 		//log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
 
 
@@ -377,7 +377,7 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 		string_deinit(&temp);
 		array_deinit(&tokens);
 		string_deinit(&rack_name);
-		string_deinit(&region_name);
+		string_deinit(&dc_name);
 		string_deinit(&port_str);
 		string_deinit(&address);
 		string_deinit(&ip);
@@ -389,14 +389,14 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 
 		string_copy(&temp, seed_node, seed_node_len);
 		array_init(&tokens, 1, sizeof(struct dyn_token));
-		parse_seeds(&temp, &rack_name, &region_name, &port_str, &address, &ip, &tokens);
+		parse_seeds(&temp, &rack_name, &dc_name, &port_str, &address, &ip, &tokens);
 		gossip_add_seed_if_absent(sp, &rack_name, &address, &ip, &port_str, &tokens);
 	}
 
 	string_deinit(&temp);
 	array_deinit(&tokens);
 	string_deinit(&rack_name);
-	string_deinit(&region_name);
+	string_deinit(&dc_name);
 	string_deinit(&port_str);
 	string_deinit(&address);
 	string_deinit(&ip);

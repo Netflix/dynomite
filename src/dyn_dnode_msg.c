@@ -537,7 +537,7 @@ dmsg_parse1(struct dmsg *dmsg)
 	delimlen = 3;
 
 	/* parse "host_id,generation_ts,host_state,host_broadcast_address" */
-	/* host_id = region-rack-token */
+	/* host_id = dc-rack-token */
 	p = dmsg->data + dmsg->mlen - 1;
 
 	start = dmsg->data;
@@ -604,22 +604,22 @@ dmsg_to_gossip(struct ring_message *rmsg)
 
 static void
 dmsg_parse_host_id(uint8_t *start, uint32_t len,
-		struct string *region, struct string *rack, struct dyn_token *token)
+		struct string *dc, struct string *rack, struct dyn_token *token)
 {
 	uint8_t *p, *q;
-	uint8_t *region_p, *rack_p, *token_p;
-	uint32_t k, delimlen, region_len, rack_len, token_len;
+	uint8_t *dc_p, *rack_p, *token_p;
+	uint32_t k, delimlen, dc_len, rack_len, token_len;
 	char delim[] = "$$";
 	delimlen = 2;
 
-	/* parse "region$rack$token : don't support vnode for now */
+	/* parse "dc$rack$token : don't support vnode for now */
 	log_hexdump(LOG_VERB, start, len, "host_addr testing: ");
 	p = start + len - 1;
-	region_p = NULL;
+	dc_p = NULL;
 	rack_p = NULL;
 	token_p = NULL;
 
-	region_len = rack_len = token_len = 0;
+	dc_len = rack_len = token_len = 0;
 
 	for (k = 0; k < sizeof(delim)-1; k++) {
 		q = dn_strrchr(p, start, delim[k]);
@@ -649,9 +649,9 @@ dmsg_parse_host_id(uint8_t *start, uint32_t len,
 		return;// DN_ERROR;
 	}
 
-	region_p = start;
-	region_len = len - (token_len + rack_len + 2);
-	string_copy(region, region_p, region_len);
+	dc_p = start;
+	dc_len = len - (token_len + rack_len + 2);
+	string_copy(dc, dc_p, dc_len);
 
 }
 
@@ -668,7 +668,7 @@ dmsg_parse(struct dmsg *dmsg)
 	delimlen = 3;
 
 	/* parse "host_id,generation_ts,host_state,host_broadcast_address" */
-	/* host_id = region-rack-token */
+	/* host_id = dc-rack-token */
 	p = dmsg->data + dmsg->mlen - 1;
 
 	start = dmsg->data;
@@ -734,7 +734,7 @@ dmsg_parse(struct dmsg *dmsg)
 	//TODOs: will take care of 1+ nodes later
 	struct node *rnode = (struct node *) array_get(&ring_msg->nodes, 0);
 
-	dmsg_parse_host_id(host_id, host_id_len, &rnode->region, &rnode->rack, &rnode->token);
+	dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
 	string_copy(&rnode->name, host_addr, host_addr_len);
 	string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port

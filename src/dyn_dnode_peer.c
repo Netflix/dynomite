@@ -139,7 +139,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 	peer->next_retry = 0LL;
 	peer->failure_count = 0;
 	peer->is_seed = 1;
-	string_copy(&peer->region, pool->region.data, pool->region.len);
+	string_copy(&peer->dc, pool->dc.data, pool->dc.len);
 	peer->owner = pool;
 
 	log_debug(LOG_VERB, "dyn: transform to local node to peer %"PRIu32" '%.*s'",
@@ -568,8 +568,8 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 		return DN_ENOMEM;
 	}
 
-	//annoucing myself by sending msg: 'region-rack-token,started_ts,apps_version,node_state,node_dns'
-	mbuf_write_string(mbuf, &sp->region);
+	//annoucing myself by sending msg: 'dc-rack-token,started_ts,apps_version,node_state,node_dns'
+	mbuf_write_string(mbuf, &sp->dc);
 	mbuf_write_char(mbuf, '$');
 	mbuf_write_string(mbuf, &sp->rack);
 	mbuf_write_char(mbuf, '$');

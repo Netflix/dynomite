@@ -17,7 +17,7 @@ typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 
 struct node {
     struct dyn_token   token;        /* token for this node */
-    struct string      region;
+    struct string      dc;
     struct string      rack;
 
     struct string      pname;         /* name:port */

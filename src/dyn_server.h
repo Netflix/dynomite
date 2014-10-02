@@ -102,7 +102,7 @@ struct server {
     uint32_t           failure_count; /* # consecutive failures */
     
     struct string      rack;          /* logical rack */
-    struct string      region;        /* server's region */
+    struct string      dc;            /* server's dc */
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
     unsigned           is_seed:1;     /* seed? */
@@ -162,7 +162,7 @@ struct server_pool {
     struct array       tokens;               /* the DHT tokens for this server */
 
     int                g_interval;           /* gossip interval */
-    struct string      region;               /* server's region */
+    struct string      dc;                   /* server's dc */
     struct string      env;                  /* aws, network, ect */
 
 };

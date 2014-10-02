@@ -155,8 +155,8 @@ struct stats {
     struct string       rack_str;
     struct string       rack;
 
-    struct string       region_str;
-    struct string       region;
+    struct string       dc_str;
+    struct string       dc;
 
     volatile int        aggregate;      /* shadow (b) aggregate? */
     volatile int        updated;        /* current (a) updated? */

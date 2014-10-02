@@ -381,8 +381,8 @@ stats_create_buf(struct stats *st)
     size += st->rack.len;
     size += key_value_extra;
 
-    size += st->region_str.len;
-    size += st->region.len;
+    size += st->dc_str.len;
+    size += st->dc.len;
     size += key_value_extra;
 
     /* server pools */
@@ -538,7 +538,7 @@ stats_add_header(struct stats *st)
         return status;
     }
 
-    status = stats_add_string(st, &st->region_str, &st->region);
+    status = stats_add_string(st, &st->dc_str, &st->dc);
     if (status != DN_OK) {
         return status;
     }
@@ -1075,8 +1075,8 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     string_copy(&st->rack, sp->rack.data, sp->rack.len);
 
-    string_set_text(&st->region_str, "region");
-    string_copy(&st->region, sp->region.data, sp->region.len);
+    string_set_text(&st->dc_str, "dc");
+    string_copy(&st->dc, sp->dc.data, sp->dc.len);
 
     st->updated = 0;
     st->aggregate = 0;
