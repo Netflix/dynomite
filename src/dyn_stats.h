@@ -152,11 +152,11 @@ struct stats {
     struct string       uptime_str;     /* uptime string */
     struct string       timestamp_str;  /* timestamp string */
 
-    struct string       datacenter_str;
-    struct string       datacenter;
+    struct string       rack_str;
+    struct string       rack;
 
-    struct string       region_str;
-    struct string       region;
+    struct string       dc_str;
+    struct string       dc;
 
     volatile int        aggregate;      /* shadow (b) aggregate? */
     volatile int        updated;        /* current (a) updated? */

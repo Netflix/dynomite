@@ -518,7 +518,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
  * TODOs: Should replace these by using msg_type in struct msg
  */
 static bool
-request_send_to_all_datacenters(struct msg *msg) {
+request_send_to_all_racks(struct msg *msg) {
     msg_type_t t = msg->type;
 
     if (msg->redis) {
@@ -539,13 +539,13 @@ request_send_to_all_datacenters(struct msg *msg) {
 
 void 
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        struct datacenter *dc, uint8_t *key, uint32_t keylen)
+                        struct rack *rack, uint8_t *key, uint32_t keylen)
 {
     struct conn *s_conn;
 
     ASSERT(c_conn->client);
 
-    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, dc, key, keylen, msg->msg_type);
+    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;
@@ -558,7 +558,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
-        dnode_peer_req_forward(ctx, c_conn, s_conn, msg, dc, key, keylen);
+        dnode_peer_req_forward(ctx, c_conn, s_conn, msg, rack, key, keylen);
     }
 }
 
@@ -599,37 +599,37 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         keylen = (uint32_t)(msg->key_end - msg->key_start);
     }
 
-    struct datacenter *dc;
-    uint32_t dc_cnt = array_n(&pool->datacenter);
-    if (dc_cnt > 1 && request_send_to_all_datacenters(msg)) {
+    struct rack *rack;
+    uint32_t rack_cnt = array_n(&pool->racks);
+    if (rack_cnt > 1 && request_send_to_all_racks(msg)) {
         // need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg), 
-        // that will bork the request sent to secondary dcs
+        // that will bork the request sent to secondary racks
         struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
 
         uint32_t i;
-        for (i = 0; i < dc_cnt; i++) {
-            dc = array_get(&pool->datacenter, i);
-            struct msg *dc_msg;
+        for (i = 0; i < rack_cnt; i++) {
+            rack = array_get(&pool->racks, i);
+            struct msg *rack_msg;
             
-            // clone the msg struct if not the current dc
-            if (string_compare(dc->name, &pool->dc) != 0) {
-                dc_msg = msg_get(c_conn, msg->request, msg->redis);
-                if (dc_msg == NULL) {
-                    log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-dc messages for you!");
+            // clone the msg struct if not the current rack
+            if (string_compare(rack->name, &pool->rack) != 0) {
+                rack_msg = msg_get(c_conn, msg->request, msg->redis);
+                if (rack_msg == NULL) {
+                    log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
                     continue;
                 }
 
-                msg_clone(msg, mbuf_start, dc_msg);
-                dc_msg->noreply = true;
+                msg_clone(msg, mbuf_start, rack_msg);
+                rack_msg->noreply = true;
             } else {
-                dc_msg = msg;
+                rack_msg = msg;
             }
 
-            remote_req_forward(ctx, c_conn, dc_msg, dc, key, keylen);
+            remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
         }
     } else {
-        dc = server_get_datacenter(pool, &pool->dc);
-        remote_req_forward(ctx, c_conn, msg, dc, key, keylen);
+        rack = server_get_rack(pool, &pool->rack);
+        remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
     }
 }
 

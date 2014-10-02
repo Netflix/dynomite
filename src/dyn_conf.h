@@ -70,14 +70,14 @@
 #define CONF_DEFAULT_PEERS                   200
 
 #define CONF_STR_NONE                        "none"
-#define CONF_STR_REGION                      "region"
-#define CONF_STR_DC                          "dc"
+#define CONF_STR_DC                      "datacenter"
+#define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
 
 #define CONF_DEFAULT_ENV                      "aws"
 
-#define CONF_DEFAULT_DC                      "localdc"
-#define CONF_DEFAULT_REGION                  "localregion"
+#define CONF_DEFAULT_RACK                    "localrack"
+#define CONF_DEFAULT_DC                  "localdc"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
 
 
@@ -97,8 +97,8 @@ struct conf_server {
     int             weight;      /* weight - unused and no config parsing support */
     struct sockinfo info;        /* connect socket info */
     struct array    tokens;      /* tokens for this server */
-    struct string   dc;          /* peer node or server's datacenter */
-    struct string   region;      /* peer node's region */
+    struct string   rack;        /* peer node or server's rack */
+    struct string   dc;          /* peer node's dc */
     unsigned        valid:1;     /* valid? */
     unsigned        is_secure:1; /* is the connection to the server secure? */
 };
@@ -127,12 +127,13 @@ struct conf_pool {
     struct array       dyn_seeds;             /* seed nodes: conf_server array */
     int                dyn_port;
     int                dyn_connections;       /* dyn connections */  
-    struct string      dc;                    /* this node's logical dc */  
+    struct string      rack;                    /* this node's logical rack */  
     struct array       tokens;                /* this node's token: dyn_token array */
     int                gos_interval;          /* wake up interval in ms */
-    /* none | region | dc | all in order of increasing number of connections. (default is none) */
+
+    /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
-    struct string      region;                /* this node's region */
+    struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
 };
 

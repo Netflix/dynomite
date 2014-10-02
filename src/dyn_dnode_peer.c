@@ -124,7 +124,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 	peer->port = pool->d_port;
 
 	peer->weight = 0;  /* hacking this out of the way for now */
-	peer->dc = pool->dc;
+	peer->rack = pool->rack;
 	peer->is_local = true;
 	//TODO-jeb might need to copy over tokens, not sure if this is good enough
 	peer->tokens = pool->tokens;
@@ -139,7 +139,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 	peer->next_retry = 0LL;
 	peer->failure_count = 0;
 	peer->is_seed = 1;
-	string_copy(&peer->region, pool->region.data, pool->region.len);
+	string_copy(&peer->dc, pool->dc.data, pool->dc.len);
 	peer->owner = pool;
 
 	log_debug(LOG_VERB, "dyn: transform to local node to peer %"PRIu32" '%.*s'",
@@ -568,10 +568,10 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 		return DN_ENOMEM;
 	}
 
-	//annoucing myself by sending msg: 'region-dc-token,started_ts,apps_version,node_state,node_dns'
-	mbuf_write_string(mbuf, &sp->region);
-	mbuf_write_char(mbuf, '$');
+	//annoucing myself by sending msg: 'dc-rack-token,started_ts,apps_version,node_state,node_dns'
 	mbuf_write_string(mbuf, &sp->dc);
+	mbuf_write_char(mbuf, '$');
+	mbuf_write_string(mbuf, &sp->rack);
 	mbuf_write_char(mbuf, '$');
 	struct dyn_token *token = (struct dyn_token *) array_get(&sp->tokens, 0);
 	if (token == NULL) {
@@ -658,7 +658,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 
 	string_copy(&s->pname, node->pname.data, node->pname.len);
 	string_copy(&s->name, node->name.data, node->name.len);
-	string_copy(&s->dc, node->dc.data, node->dc.len);
+	string_copy(&s->rack, node->rack.data, node->rack.len);
 
 	s->port = (uint16_t) node->port;
 	s->is_local = node->is_local;
@@ -672,7 +672,8 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	//}
 
 	struct dyn_token *src_token = &node->token;
-	copy_dyn_token(src_token, &s->tokens);
+	struct dyn_token *dst_token = (struct dyn_token *) array_get(&s->tokens, 0);
+	copy_dyn_token(src_token, dst_token);
 
 
 	struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
@@ -715,10 +716,10 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 
 
 rstatus_t
-dnode_peer_add_dc(struct server_pool *sp, struct node *node)
+dnode_peer_add_rack(struct server_pool *sp, struct node *node)
 {
 	rstatus_t status;
-	log_debug(LOG_VVERB, "dyn: peer has an add-dc message '%.*s'", node->name.len, node->name.data);
+	log_debug(LOG_VVERB, "dyn: peer has an add-rack message '%.*s'", node->name.len, node->name.data);
 	status = dnode_peer_add_node(sp, node);
 
 	return status;
@@ -747,7 +748,7 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
 	//TODOs: use hash table here
 	for (i=1, nelem = array_n(peers); i< nelem; i++) {
 		struct server * peer = (struct server *) array_get(peers, i);
-		if (string_compare(&peer->dc, &node->dc) == 0) {
+		if (string_compare(&peer->rack, &node->rack) == 0) {
 			//TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
 			struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
 			struct dyn_token *ntoken = &node->token;
@@ -974,7 +975,7 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 static struct server *
-dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t *key, uint32_t keylen)
+dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
 	struct server *server;
 	uint32_t hash, idx;
@@ -983,13 +984,13 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 	ASSERT(array_n(&pool->peers) != 0);
 	ASSERT(key != NULL && keylen != 0);
 
-	ASSERT(dc != NULL);
+	ASSERT(rack != NULL);
 
 	switch (pool->dist_type) {
 	case DIST_KETAMA:
 		token = dnode_peer_pool_hash(pool, key, keylen);
 		hash = token->mag[0];
-		idx = ketama_dispatch(dc->continuum, dc->ncontinuum, hash);
+		idx = ketama_dispatch(rack->continuum, rack->ncontinuum, hash);
 		break;
 
 	case DIST_VNODE:
@@ -999,17 +1000,17 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 		}
 		token = dnode_peer_pool_hash(pool, key, keylen);
 		//print_dyn_token(token, 1);
-		idx = vnode_dispatch(dc->continuum, dc->ncontinuum, token);
+		idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
 		break;
 
 	case DIST_MODULA:
 		token = dnode_peer_pool_hash(pool, key, keylen);
 		hash = token->mag[0];
-		idx = modula_dispatch(dc->continuum, dc->ncontinuum, hash);
+		idx = modula_dispatch(rack->continuum, rack->ncontinuum, hash);
 		break;
 
 	case DIST_RANDOM:
-		idx = random_dispatch(dc->continuum, dc->ncontinuum, 0);
+		idx = random_dispatch(rack->continuum, rack->ncontinuum, 0);
 		break;
 
 	case DIST_SINGLE:
@@ -1037,7 +1038,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct datacenter *dc, uint8_t 
 }
 
 struct conn *
-dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datacenter *dc,
+dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack *rack,
 		uint8_t *key, uint32_t keylen, uint8_t msg_type)
 {
 	rstatus_t status;
@@ -1054,7 +1055,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct datac
 		server = array_get(&pool->peers, 0);
 	} else {
 		/* from a given {key, keylen} pick a server from pool */
-		server = dnode_peer_pool_server(pool, dc, key, keylen);
+		server = dnode_peer_pool_server(pool, rack, key, keylen);
 		if (server == NULL) {
 			return NULL;
 		}
@@ -1165,10 +1166,10 @@ dnode_peer_pool_run(struct server_pool *pool)
 
 
 static rstatus_t
-dc_deinit(void *elem, void *data)
+rack_destroy(void *elem, void *data)
 {
-	struct datacenter *dc = elem;
-	return datacenter_deinit(dc);
+	struct rack *rack = elem;
+	return rack_deinit(rack);
 }
 
 void
@@ -1186,7 +1187,7 @@ dnode_peer_pool_deinit(struct array *server_pool)
 
 
 		dnode_peer_deinit(&sp->peers);
-		array_each(&sp->datacenter, dc_deinit, NULL);
+		array_each(&sp->racks, rack_destroy, NULL);
 		sp->nlive_server = 0;
 
 		log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,

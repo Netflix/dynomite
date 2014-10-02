@@ -76,7 +76,7 @@ struct continuum {
     struct dyn_token *token;  /* used in vnode/dyn_token situations */
 };
 
-struct datacenter {
+struct rack {
     struct string      *name;
     uint32_t           ncontinuum;           /* # continuum points */
     uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
@@ -101,8 +101,8 @@ struct server {
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
     
-    struct string      dc;            /* logical datacenter */
-    struct string      region;        /* server's region */
+    struct string      rack;          /* logical rack */
+    struct string      dc;            /* server's dc */
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
     unsigned           is_seed:1;     /* seed? */
@@ -120,7 +120,7 @@ struct server_pool {
     struct conn_tqh    c_conn_q;             /* client connection q */
 
     struct array       server;               /* server[] */
-    struct array       datacenter;           /* datacenter info  */
+    struct array       racks;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     int64_t            next_rebuild;         /* next distribution rebuild time in usec */
 
@@ -158,11 +158,11 @@ struct server_pool {
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
     uint32_t           d_connections;        /* maximum # dyn connections */
-    struct string      dc;                   /* the datacenter for this node */  
+    struct string      rack;                   /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 
     int                g_interval;           /* gossip interval */
-    struct string      region;               /* server's region */
+    struct string      dc;                   /* server's dc */
     struct string      env;                  /* aws, network, ect */
 
 };
@@ -179,9 +179,9 @@ void server_close(struct context *ctx, struct conn *conn);
 void server_connected(struct context *ctx, struct conn *conn);
 void server_ok(struct context *ctx, struct conn *conn);
 
-struct datacenter *server_get_datacenter(struct server_pool *pool, struct string *dcname);
-void datacenter_init(struct datacenter *dc);
-rstatus_t datacenter_deinit(struct datacenter *dc);
+struct rack *server_get_rack(struct server_pool *pool, struct string *rackname);
+void rack_init(struct rack *rack);
+rstatus_t rack_deinit(struct rack *rack);
 
 struct conn *server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key, uint32_t keylen);
 rstatus_t server_pool_run(struct server_pool *pool);

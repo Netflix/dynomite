@@ -426,8 +426,8 @@ core_debug(struct context *ctx)
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'", server->dc);
-			log_debug(LOG_VERB, "\tPeer Region        : '%.*s'",server->region);
+			log_debug(LOG_VERB, "\tPeer Rack            : '%.*s'", server->rack);
+			log_debug(LOG_VERB, "\tPeer DC        : '%.*s'",server->dc);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
@@ -442,13 +442,13 @@ core_debug(struct context *ctx)
 			}
 		}
 
-		log_debug(LOG_VERB, "Peers DCs.................................................");
-		log_debug(LOG_VERB, "Peer DC size    : %d", array_n(&sp->datacenter));
-		for (j = 0, n = array_n(&sp->datacenter); j < n; j++) {
-			struct datacenter *dc = (struct datacenter *) array_get(&sp->datacenter, j);
-			log_debug(LOG_VERB, "\tDC '%.*s'", dc->name->len, dc->name->data);
-			log_debug(LOG_VERB, "\tPeer DC ncontinuumm    : %d", dc->ncontinuum);
-			log_debug(LOG_VERB, "\tPeer DC nserver_continuum    : %d", dc->nserver_continuum);
+		log_debug(LOG_VERB, "Peers Racks.................................................");
+		log_debug(LOG_VERB, "Peer RACK size    : %d", array_n(&sp->racks));
+		for (j = 0, n = array_n(&sp->racks); j < n; j++) {
+			struct rack *rack = (struct rack *) array_get(&sp->racks, j);
+			log_debug(LOG_VERB, "\tRACK '%.*s'", rack->name->len, rack->name->data);
+			log_debug(LOG_VERB, "\tPeer RACK ncontinuumm    : %d", rack->ncontinuum);
+			log_debug(LOG_VERB, "\tPeer RACK nserver_continuum    : %d", rack->nserver_continuum);
 		}
 	}
 	log_debug(LOG_VERB, "..........................................................");

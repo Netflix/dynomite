@@ -17,8 +17,8 @@ typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 
 struct node {
     struct dyn_token   token;        /* token for this node */
-    struct string      region;
     struct string      dc;
+    struct string      rack;
 
     struct string      pname;         /* name:port */
     struct string      name;          /* name  */
@@ -36,7 +36,7 @@ struct node {
 };
 
 
-struct gossip_dc {
+struct gossip_rack {
     struct string      name;
     uint32_t           nnodes;           /* # total nodes */
     uint32_t           nlive_nodes;      /* # live nodes */
@@ -49,7 +49,7 @@ struct gossip_node_pool {
     uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
     seeds_provider_t   seeds_provider;       /* seeds provider */
-    struct array       datacenters;          /* gossip_dc  */
+    struct array       racks;               /* gossip racks */
     uint32_t           nlive_server;         /* # live server */
     int64_t            last_run;             /* last time run in usec */
 

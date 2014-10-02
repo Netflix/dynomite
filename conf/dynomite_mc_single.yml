@@ -1,6 +1,6 @@
 dyn_o_mite:
   auto_eject_hosts: false
-  datacenter: DC1
+  rack: RACK1
   distribution: vnode
   dyn_listen: 127.0.0.1:8101
   dyn_read_timeout: 200000

@@ -144,7 +144,6 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 		return;  //TODOs: need to address this further
 	}
 
-	//dc_conn->enqueue_outq(ctx, dc_conn, msg);
 	msg->done = 1;
 
 	//TODOs: need to free the old msg object
