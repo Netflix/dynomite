@@ -788,32 +788,25 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
 }
 
 void 
-datacenter_init(struct datacenter *dc)
+rack_init(struct rack *rack)
 {
-	dc->continuum = NULL;
-	dc->ncontinuum = 0;
-	dc->nserver_continuum = 0;
-	dc->name = dn_alloc(sizeof(struct string));
-	string_init(dc->name);
+	rack->continuum = NULL;
+	rack->ncontinuum = 0;
+	rack->nserver_continuum = 0;
+	rack->name = dn_alloc(sizeof(struct string));
+	string_init(rack->name);
 }
 
 rstatus_t
-datacenter_deinit(struct datacenter *dc)
+rack_deinit(struct rack *rack)
 {
-	if (dc->continuum != NULL) {
-		dn_free(dc->continuum);
+	if (rack->continuum != NULL) {
+		dn_free(rack->continuum);
 	}
 
 	return DN_OK;
 }
 
-static rstatus_t
-dc_deinit(void *elem, void *data)
-{
-	struct datacenter *dc = elem;
-
-	return datacenter_deinit(dc);
-}
 
 void
 server_pool_deinit(struct array *server_pool)
@@ -828,7 +821,7 @@ server_pool_deinit(struct array *server_pool)
 		ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
 
 		server_deinit(&sp->server);
-		array_each(&sp->datacenter, dc_deinit, NULL);
+		array_each(&sp->racks, rack_deinit, NULL);
 		sp->nlive_server = 0;
 
 		log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,
@@ -840,18 +833,18 @@ server_pool_deinit(struct array *server_pool)
 	log_debug(LOG_DEBUG, "deinit %"PRIu32" pools", npool);
 }
 
-struct datacenter *
-server_get_datacenter(struct server_pool *pool, struct string *dcname)
+struct rack *
+server_get_rack(struct server_pool *pool, struct string *rackname)
 {
 	uint32_t i, len;
-	for (i = 0, len = array_n(&pool->datacenter); i < len; i++) {
-		struct datacenter *dc = (struct datacenter *) array_get(&pool->datacenter, i);
-		ASSERT(dc != NULL);
-		ASSERT(dc->name != NULL);
+	for (i = 0, len = array_n(&pool->racks); i < len; i++) {
+		struct rack *rack = (struct rack *) array_get(&pool->racks, i);
+		ASSERT(rack != NULL);
+		ASSERT(rack->name != NULL);
 
-		int cmp = string_compare(dc->name, dcname);
+		int cmp = string_compare(rack->name, rackname);
 		if (cmp == 0) {
-			return dc;
+			return rack;
 		}
 	}
 

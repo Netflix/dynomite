@@ -152,8 +152,8 @@ struct stats {
     struct string       uptime_str;     /* uptime string */
     struct string       timestamp_str;  /* timestamp string */
 
-    struct string       datacenter_str;
-    struct string       datacenter;
+    struct string       rack_str;
+    struct string       rack;
 
     struct string       region_str;
     struct string       region;

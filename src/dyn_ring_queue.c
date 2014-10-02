@@ -101,7 +101,7 @@ node_init(struct node *node)
 	//array_init(&node->tokens, 1, sizeof(struct dyn_token));
 	init_dyn_token(&node->token);
 	string_init(&node->region);
-	string_init(&node->dc);
+	string_init(&node->rack);
 	string_init(&node->name);
 	string_init(&node->pname);
 
@@ -128,7 +128,7 @@ node_deinit(struct node *node)
 	//array_deinit(&node->tokens);
 	deinit_dyn_token(&node->token);
 	string_deinit(&node->region);
-	string_deinit(&node->dc);
+	string_deinit(&node->rack);
 	string_deinit(&node->name);
 	string_deinit(&node->pname);
 
@@ -155,7 +155,7 @@ node_copy(const struct node *src, struct node *dst)
 
 	string_copy(&dst->pname, src->pname.data, src->pname.len);
 	string_copy(&dst->name, src->name.data, src->name.len);
-	string_copy(&dst->dc, src->dc.data, src->dc.len);
+	string_copy(&dst->rack, src->rack.data, src->rack.len);
 
 	//uint32_t i, nelem = array_n(&src->tokens);
 	//array_init(&dst->tokens, nelem, sizeof(struct dyn_token));

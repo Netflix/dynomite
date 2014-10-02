@@ -87,7 +87,7 @@ struct conf;
 struct stats;
 struct instance;
 struct event_base;
-struct datacenter;
+struct rack;
 struct dyn_ring;
 
 #include <stddef.h>

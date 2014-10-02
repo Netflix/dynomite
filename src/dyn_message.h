@@ -241,8 +241,8 @@ struct msg {
     uint8_t              msg_type;       /* for special message types
                                               0 : normal,
                                               1 : local cmd only no matter what
-                                              2 : cmd to all nodes in same DC no matter whats
-                                              3 : cmd to all DCs (one node from each DC)
+                                              2 : cmd to all nodes in same RACK no matter whats
+                                              3 : cmd to all RACKs (one node from each RACK)
                                           */
     unsigned             is_read:1;       /*  0 : write
                                               1 : read */
@@ -316,10 +316,10 @@ void dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg
 void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg);
 
 
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, struct datacenter *dc, uint8_t *key, uint32_t keylen);
+void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen);
 void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
 void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
-                      struct datacenter *dc, uint8_t *key, uint32_t keylen);
+                      struct rack *rack, uint8_t *key, uint32_t keylen);
 //void peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *data);
 

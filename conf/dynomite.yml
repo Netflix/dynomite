@@ -1,7 +1,7 @@
 dyn_o_mite:
   auto_eject_hosts: false
   env: network
-  datacenter: florida-v000
+  rack: florida-v000
   distribution: vnode
   dyn_listen: 127.0.0.1:8101
   dyn_read_timeout: 15000

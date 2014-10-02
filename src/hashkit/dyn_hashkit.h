@@ -80,7 +80,7 @@ rstatus_t hash_jenkins(const char *key, size_t length, struct dyn_token *token);
 rstatus_t hash_murmur(const char *key, size_t length, struct dyn_token *token);
 rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *token);
 
-rstatus_t datacenter_verify_continuum(void *elem, void *data);
+rstatus_t rack_verify_continuum(void *elem, void *data);
 rstatus_t vnode_update(struct server_pool *pool);
 uint32_t vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token);
 

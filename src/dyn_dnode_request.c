@@ -278,7 +278,7 @@ dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct 
 
 void
 dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
-		struct datacenter *dc, uint8_t *key, uint32_t keylen)
+		struct rack *rack, uint8_t *key, uint32_t keylen)
 {
 
 	rstatus_t status;

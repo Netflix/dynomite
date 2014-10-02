@@ -135,9 +135,9 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, dyn_connections) },
 
-    { string("datacenter"),
+    { string("rack"),
       conf_set_string,
-      offsetof(struct conf_pool, dc) },
+      offsetof(struct conf_pool, rack) },
 
     { string("tokens"),
       conf_set_tokens,
@@ -167,7 +167,7 @@ conf_server_init(struct conf_server *cs)
 {
     string_init(&cs->pname);
     string_init(&cs->name);
-    string_init(&cs->dc);
+    string_init(&cs->rack);
     string_init(&cs->region);
     
     rstatus_t status = array_init(&cs->tokens, CONF_DEFAULT_VNODE_TOKENS,
@@ -175,7 +175,7 @@ conf_server_init(struct conf_server *cs)
     if (status != DN_OK) {
         string_deinit(&cs->pname);
         string_deinit(&cs->name);
-        string_deinit(&cs->dc);
+        string_deinit(&cs->rack);
         string_deinit(&cs->region);
         return status;
     }
@@ -196,7 +196,7 @@ conf_server_deinit(struct conf_server *cs)
 {
     string_deinit(&cs->pname);
     string_deinit(&cs->name);
-    string_deinit(&cs->dc);
+    string_deinit(&cs->rack);
     string_deinit(&cs->region);
     array_deinit(&cs->tokens);
     cs->valid = 0;
@@ -263,7 +263,7 @@ conf_seed_each_transform(void *elem, void *data)
 
     s->port = (uint16_t)cseed->port;
     s->weight = (uint32_t)cseed->weight;
-    s->dc = cseed->dc;
+    s->rack = cseed->rack;
     s->region = cseed->region;
     s->is_local = false;
     //TODO-jeb need to copy over tokens, not sure if this is good enough
@@ -298,7 +298,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->listen.pname);
     string_init(&cp->listen.name);
 
-    string_init(&cp->dc);
+    string_init(&cp->rack);
 
     cp->listen.port = 0;
     memset(&cp->listen.info, 0, sizeof(cp->listen.info));
@@ -424,7 +424,7 @@ conf_pool_each_transform(void *elem, void *data)
     TAILQ_INIT(&sp->c_conn_q);
 
     array_null(&sp->server);
-    array_null(&sp->datacenter);
+    array_null(&sp->racks);
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
     /* sp->continuum = NULL; */
@@ -469,14 +469,14 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
     sp->d_connections = (uint32_t)cp->dyn_connections;   
-    sp->dc = cp->dc;
+    sp->rack = cp->rack;
     sp->region = cp->region;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
-    array_init(&sp->datacenter, 1, sizeof(struct datacenter));
+    array_init(&sp->racks, 1, sizeof(struct rack));
     sp->conf_pool = cp;
 
     /* gossip */
@@ -550,7 +550,7 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
         log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
         log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
-        log_debug(LOG_VVERB, "  datacenter: %.*s", cp->dc.len, cp->dc.data);
+        log_debug(LOG_VVERB, "  rack: %.*s", cp->rack.len, cp->rack.data);
         log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
         log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
                 cp->secure_server_option.len, cp->secure_server_option.data);
@@ -1475,9 +1475,9 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->gos_interval = CONF_DEFAULT_GOS_INTERVAL;
     }
 
-    if (string_empty(&cp->dc)) {
-        string_copy_c(&cp->dc, &CONF_DEFAULT_DC);
-        log_debug(LOG_INFO, "setting dc to default value:%s", CONF_DEFAULT_DC);
+    if (string_empty(&cp->rack)) {
+        string_copy_c(&cp->rack, &CONF_DEFAULT_RACK);
+        log_debug(LOG_INFO, "setting rack to default value:%s", CONF_DEFAULT_RACK);
     }
 
     if (string_empty(&cp->region)) {
@@ -1493,11 +1493,11 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK) &&
         dn_strcmp(cp->secure_server_option.data, CONF_STR_REGION) &&
         dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL))
     {
-        log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'dc' 'region' 'all'");
+        log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'rack' 'region' 'all'");
     }
 
     if (string_empty(&cp->env)) {
@@ -1533,11 +1533,11 @@ static bool conf_set_is_secure(struct conf *cf, uint32_t npool) {
                     cs->is_secure = 1;
                 }
             }
-            // if dc then communication only between nodes in different dc is secured.
-            // communication secured between nodes if they are in dc with same name across regions.
-            else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_DC)) {
-                // if not same dc or region
-                if (string_compare(&cp->dc, &cs->dc)
+            // if rack then communication only between nodes in different rack is secured.
+            // communication secured between nodes if they are in rack with same name across regions.
+            else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK)) {
+                // if not same rack or region
+                if (string_compare(&cp->rack, &cs->rack)
                         || string_compare(&cp->region, &cs->region)) {
                     cs->is_secure = 1;
                 }
@@ -1936,8 +1936,8 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     struct string *value;
     struct conf_server *field;
     uint8_t *p, *q, *start;
-    uint8_t *pname, *addr, *port, *dc, *tokens, *name, *region;
-    uint32_t k, delimlen, pnamelen, addrlen, portlen, dclen, tokenslen, namelen, regionlen;
+    uint8_t *pname, *addr, *port, *rack, *tokens, *name, *region;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, racklen, tokenslen, namelen, regionlen;
     struct string address;
     char delim[] = " ::::";
     //struct conf_pool *cfpool = conf;
@@ -1958,13 +1958,13 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
 
     value = array_top(&cf->arg);
 
-    /* parse "hostname:port:dc:region:tokens [name]" */
+    /* parse "hostname:port:rack:region:tokens [name]" */
     p = value->data + value->len - 1; // p is now pointing to a string
     start = value->data;
     addr = NULL;
     addrlen = 0;
-    dc = NULL;
-    dclen = 0;
+    rack = NULL;
+    racklen = 0;
     tokens = NULL;
     tokenslen = 0;
     port = NULL;
@@ -1981,7 +1981,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
         if (q == NULL) {
             if (k == 0) {
                 /*
-                 * name in "hostname:port:dc:region:tokens [name]" format string is
+                 * name in "hostname:port:rack:region:tokens [name]" format string is
                  * optional
                  */
                 continue;
@@ -2006,8 +2006,8 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
             break;
 
         case 3:
-            dc = q + 1;
-            dclen = (uint32_t)(p - dc + 1);
+            rack = q + 1;
+            racklen = (uint32_t)(p - rack + 1);
             break;
 
         case 4:
@@ -2023,7 +2023,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     }
 
     if (k != delimlen) {
-        return "has an invalid format must match \"hostname:port:dc:region:tokens [name]\"";
+        return "has an invalid format must match \"hostname:port:rack:region:tokens [name]\"";
     }
 
     pname = value->data; // seed node config string.
@@ -2040,7 +2040,7 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
-    status = string_copy(&field->dc, dc, dclen);
+    status = string_copy(&field->rack, rack, racklen);
     if (status != DN_OK) {
         array_pop(a);
         return CONF_ERROR;

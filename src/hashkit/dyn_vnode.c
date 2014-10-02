@@ -38,19 +38,19 @@ vnode_item_cmp(const void *t1, const void *t2)
 }
 
 rstatus_t
-vnode_datacenter_verify_continuum(void *elem, void *data)
+vnode_rack_verify_continuum(void *elem, void *data)
 {
-    struct datacenter *dc = elem;
-    qsort(dc->continuum, dc->ncontinuum, sizeof(*dc->continuum),
+    struct rack *rack = elem;
+    qsort(rack->continuum, rack->ncontinuum, sizeof(*rack->continuum),
           vnode_item_cmp);
 
-    log_debug(LOG_VERB, "**** printing continuums for dc '%.*s'", dc->name->len, dc->name->data);
+    log_debug(LOG_VERB, "**** printing continuums for rack '%.*s'", rack->name->len, rack->name->data);
     uint32_t i;
-    for (i = 0; i < dc->ncontinuum; i++) {
-        struct continuum *c = &dc->continuum[i];
+    for (i = 0; i < rack->ncontinuum; i++) {
+        struct continuum *c = &rack->continuum[i];
         log_debug(LOG_VERB, "next c[%d]: idx = %u, token->mag = %u", i, c->index, c->token->mag[0]);
     }
-    log_debug(LOG_VERB, "**** end printing continuums for dc '%.*s'", dc->name->len, dc->name->data);
+    log_debug(LOG_VERB, "**** end printing continuums for rack '%.*s'", rack->name->len, rack->name->data);
 
     return DN_OK;
 }
@@ -68,7 +68,7 @@ vnode_update(struct server_pool *sp)
     int i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
         struct server *peer = array_get(&sp->peers, i);
-        struct datacenter *dc = server_get_datacenter(sp, &peer->dc);
+        struct rack *rack = server_get_rack(sp, &peer->rack);
 
         if (peer->processed) {
             continue;
@@ -76,36 +76,36 @@ vnode_update(struct server_pool *sp)
             peer->processed = 1;
         }
 
-        if (dc == NULL) {
-            dc = array_push(&sp->datacenter);
-            datacenter_init(dc);
-            string_copy(dc->name, peer->dc.data, peer->dc.len);
-            dc->continuum = dn_alloc(sizeof(struct continuum));
+        if (rack == NULL) {
+            rack = array_push(&sp->racks);
+            rack_init(rack);
+            string_copy(rack->name, peer->rack.data, peer->rack.len);
+            rack->continuum = dn_alloc(sizeof(struct continuum));
         }
 
         uint32_t token_cnt = array_n(&peer->tokens);
-        uint32_t orig_cnt = dc->nserver_continuum;
+        uint32_t orig_cnt = rack->nserver_continuum;
         uint32_t new_cnt = orig_cnt + token_cnt;
 
-        struct continuum *continuum = dn_realloc(dc->continuum, sizeof(struct continuum) * new_cnt);
+        struct continuum *continuum = dn_realloc(rack->continuum, sizeof(struct continuum) * new_cnt);
         if (continuum == NULL) {
             return DN_ENOMEM;
         }
 
-        dc->continuum = continuum;
-        dc->nserver_continuum = new_cnt;
+        rack->continuum = continuum;
+        rack->nserver_continuum = new_cnt;
 
         int j;
         for (j = 0; j < token_cnt; j++) {
-            struct continuum *c = &dc->continuum[orig_cnt + j];
+            struct continuum *c = &rack->continuum[orig_cnt + j];
             c->index = i;
             c->value = 0;  /* set this to an empty value, only used by ketama */
             c->token = array_get(&peer->tokens, j);
-            dc->ncontinuum++;
+            rack->ncontinuum++;
         }
     }
 
-    rstatus_t status = array_each(&sp->datacenter, vnode_datacenter_verify_continuum, NULL);
+    rstatus_t status = array_each(&sp->racks, vnode_rack_verify_continuum, NULL);
     if (status != DN_OK) {
         return status;
     }
