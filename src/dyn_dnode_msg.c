@@ -752,7 +752,7 @@ dmsg_parse(struct dmsg *dmsg)
 
 	print_dyn_token(&rnode->token, 1);
 
-	ring_msg->cb = gossip_peer_join;
+	ring_msg->cb = gossip_msg_peer_join;
 
 	//TODOs: should move this outside
 	dmsg_to_gossip(ring_msg);

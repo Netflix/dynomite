@@ -552,6 +552,15 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 
 rstatus_t
+dnode_peer_sync_state(struct server_pool *sp)
+{
+	rstatus_t status;
+    loga("dnode_peer_sync_state: syncingggggggggggggggggggggggggggg");
+	return status;
+}
+
+
+rstatus_t
 dnode_peer_handshake_announcing(struct server_pool *sp)
 {
 	rstatus_t status;
@@ -568,7 +577,7 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 		return DN_ENOMEM;
 	}
 
-	//annoucing myself by sending msg: 'dc-rack-token,started_ts,apps_version,node_state,node_dns'
+	//annoucing myself by sending msg: 'dc$rack$token,started_ts,node_state,node_dns'
 	mbuf_write_string(mbuf, &sp->dc);
 	mbuf_write_char(mbuf, '$');
 	mbuf_write_string(mbuf, &sp->rack);
@@ -595,6 +604,7 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 
 	//struct string data = string("12435345,12423523532,1,STARTING,ec2-22-4-33-234.amazon.com|124343451,1242352334444,0,RUNNING,ec2-22-5-31-34.amazon.com");
 
+	//for each peer, send a registered msg
 	for (i = 0; i < nelem; i++) {
 		struct server *peer = (struct server *) array_get(peers, i);
 		if (peer->is_local)
@@ -662,6 +672,8 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 
 	s->port = (uint16_t) node->port;
 	s->is_local = node->is_local;
+    s->state = node->state;
+
 
 	//nelem = array_n(&node->tokens);
 	//array_init(&s->tokens, nelem, sizeof(struct dyn_token));

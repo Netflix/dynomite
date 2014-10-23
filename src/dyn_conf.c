@@ -151,7 +151,7 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, secure_server_option) },
 
-    { string(CONF_STR_DC),
+    { string("datacenter"),
       conf_set_string,
       offsetof(struct conf_pool, dc) },
 
@@ -256,6 +256,8 @@ conf_seed_each_transform(void *elem, void *data)
     s->idx = array_idx(seeds, s);
     s->owner = NULL;
     s->pname = cseed->pname;
+
+    s->state = UNKNOWN;
 
     uint8_t *p = cseed->name.data + cseed->name.len - 1;
     uint8_t *start = cseed->name.data;

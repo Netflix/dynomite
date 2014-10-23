@@ -122,8 +122,9 @@ struct dyn_ring;
 
 #include "event/dyn_event.h"
 
+
 typedef enum dyn_state {
-	INIT,
+	INIT = 0,
 	STANDBY,
 	WRITES_ONLY,
 	RESUMING,

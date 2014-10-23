@@ -33,7 +33,6 @@ dynomite_SOURCES =			                          \
         dyn_dnode_server.c dyn_dnode_server.h                     \
         dyn_cbuf.h                                                \
         dyn_ring_queue.h dyn_ring_queue.c                         \
-        dyn_gossip.c dyn_gossip.h                                 \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
         dyn_dnode_client.h dyn_dnode_client.c                     \
         dyn_dnode_request.c                                       \
@@ -59,6 +58,8 @@ dynomite_SOURCES =			                          \
         dyn_array.c dyn_array.h		                          \
         dyn_util.c dyn_util.h		                          \
         dyn_queue.h			                          \
+        dyn_gossip.c dyn_gossip.h                                 \
+        dyn_dict.c dyn_dict.h                                     \
         dynomite.c
 
 dynomite_LDADD = $(top_builddir)/src/hashkit/libhashkit.a

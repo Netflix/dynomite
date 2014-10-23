@@ -124,6 +124,8 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
+	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
+
 	/* initialize peers */
 	status = dnode_peer_init(&ctx->pool, ctx);
 	if (status != DN_OK) {
@@ -164,7 +166,7 @@ core_ctx_create(struct instance *nci)
 	gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-	ctx->dyn_state = NORMAL;  //TODOS: change this to JOINING
+
 	return ctx;
 }
 
@@ -430,6 +432,7 @@ core_debug(struct context *ctx)
 			log_debug(LOG_VERB, "\tPeer DC        : '%.*s'",server->dc);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
+			log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
 			log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
 			log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", server->failure_count);

@@ -68,7 +68,7 @@ vnode_update(struct server_pool *sp)
     int i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
         struct server *peer = array_get(&sp->peers, i);
-        struct rack *rack = server_get_rack(sp, &peer->rack);
+        struct rack *rack = server_get_rack(sp, &peer->rack, &peer->dc);
 
         if (peer->processed) {
             continue;
@@ -80,6 +80,7 @@ vnode_update(struct server_pool *sp)
             rack = array_push(&sp->racks);
             rack_init(rack);
             string_copy(rack->name, peer->rack.data, peer->rack.len);
+            string_copy(rack->dc, peer->dc.data, peer->dc.len);
             rack->continuum = dn_alloc(sizeof(struct continuum));
         }
 

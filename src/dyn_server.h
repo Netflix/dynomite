@@ -78,10 +78,13 @@ struct continuum {
 
 struct rack {
     struct string      *name;
+    struct string      *dc;
     uint32_t           ncontinuum;           /* # continuum points */
     uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
     struct continuum   *continuum;           /* continuum */
 };
+
+
 
 struct server {
     uint32_t           idx;           /* server index */
@@ -108,6 +111,7 @@ struct server {
     unsigned           is_seed:1;     /* seed? */
     unsigned           processed:1;   /* flag to indicate whether this has been processed */
     unsigned           is_secure:1;   /* is the connection to the server secure? */
+    uint8_t            state;         /* state of the server - used mainly in peers  */
 };
 
 struct server_pool {
@@ -179,7 +183,8 @@ void server_close(struct context *ctx, struct conn *conn);
 void server_connected(struct context *ctx, struct conn *conn);
 void server_ok(struct context *ctx, struct conn *conn);
 
-struct rack *server_get_rack(struct server_pool *pool, struct string *rackname);
+//struct rack *server_get_rack(struct server_pool *pool, struct string *rackname);
+struct rack *server_get_rack(struct server_pool *pool, struct string *rackname, struct string *dc);
 void rack_init(struct rack *rack);
 rstatus_t rack_deinit(struct rack *rack);
 

@@ -70,14 +70,14 @@
 #define CONF_DEFAULT_PEERS                   200
 
 #define CONF_STR_NONE                        "none"
-#define CONF_STR_DC                      "datacenter"
+#define CONF_STR_DC                          "datacenter"
 #define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
 
-#define CONF_DEFAULT_ENV                      "aws"
+#define CONF_DEFAULT_ENV                     "aws"
 
 #define CONF_DEFAULT_RACK                    "localrack"
-#define CONF_DEFAULT_DC                  "localdc"
+#define CONF_DEFAULT_DC                      "localdc"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
 
 
