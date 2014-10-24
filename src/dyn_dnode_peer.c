@@ -599,11 +599,6 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 
 	mbuf_write_bytes(mbuf, get_broadcast_address(sp));
 
-	//struct string host_name = string("ec2-22-4-33-234.amazon.com");
-	//mbuf_write_string(mbuf,&host_name);
-
-	//struct string data = string("12435345,12423523532,1,STARTING,ec2-22-4-33-234.amazon.com|124343451,1242352334444,0,RUNNING,ec2-22-5-31-34.amazon.com");
-
 	//for each peer, send a registered msg
 	for (i = 0; i < nelem; i++) {
 		struct server *peer = (struct server *) array_get(peers, i);
@@ -666,12 +661,11 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	uint32_t i,nelem;
 	s->idx = array_idx(peers, s);
 
+	//log_debug(LOG_VERB, "node rack_name         : '%.*s'", node->rack.len, node->rack.data);
+	//log_debug(LOG_VERB, "node dc_name        : '%.*s'", node->dc.len, node->dc.data);
+	//log_debug(LOG_VERB, "node address          : '%.*s'", node->pname.len, node->pname.data);
+	//log_debug(LOG_VERB, "node ip         : '%.*s'", node->name.len, node->name.data);
 
-
-	log_debug(LOG_VERB, "node rack_name         : '%.*s'", node->rack.len, node->rack.data);
-	log_debug(LOG_VERB, "node dc_name        : '%.*s'", node->dc.len, node->dc.data);
-	log_debug(LOG_VERB, "node address          : '%.*s'", node->pname.len, node->pname.data);
-	log_debug(LOG_VERB, "node ip         : '%.*s'", node->name.len, node->name.data);
 
 	string_copy(&s->pname, node->pname.data, node->pname.len);
 	string_copy(&s->name, node->name.data, node->name.len);
@@ -682,20 +676,10 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	s->is_local = node->is_local;
     s->state = node->state;
 
-
-	//nelem = array_n(&node->tokens);
-	//array_init(&s->tokens, nelem, sizeof(struct dyn_token));
-	//for (i = 0; i < nelem; i++) {
-	//	struct dyn_token *src_token = (struct dyn_token *) array_get(&node->tokens, i);
-	//	struct dyn_token *dst_token = array_push(&s->tokens);
-	//	copy_dyn_token(src_token, dst_token);
-	//}
-
     array_init(&s->tokens, 1, sizeof(struct dyn_token));
 	struct dyn_token *src_token = &node->token;
-	struct dyn_token *dst_token = (struct dyn_token *) array_get(&s->tokens, 0);
+	struct dyn_token *dst_token = array_push(&s->tokens);
 	copy_dyn_token(src_token, dst_token);
-
 
 	struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
 	dn_resolve(&s->name, s->port, info);
@@ -710,7 +694,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	s->is_seed = node->is_seed;
 
 	log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
-			s->idx, s->pname.len, s->pname.data);
+			  s->idx, s->pname.len, s->pname.data);
 
 	dnode_peer_relink_conn_owner(sp);
 

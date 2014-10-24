@@ -70,7 +70,13 @@ vnode_update(struct server_pool *sp)
         struct server *peer = array_get(&sp->peers, i);
         struct rack *rack = server_get_rack(sp, &peer->rack, &peer->dc);
 
-        log_debug(LOG_VERB, "peer        : '%.*s'", peer->name.len, peer->name.data);
+        //log_debug(LOG_VERB, "peer        : '%.*s'", peer->name.len, peer->name.data);
+        //log_debug(LOG_VERB, "peer->processed = %d", peer->processed);
+
+        //update its own state
+        if (i == 0) {
+           peer->state = sp->ctx->dyn_state;
+        }
 
         if (peer->processed) {
             continue;
@@ -94,7 +100,7 @@ vnode_update(struct server_pool *sp)
         if (new_cnt > 1) {
            struct continuum *continuum = dn_realloc(rack->continuum, sizeof(struct continuum) * new_cnt);
            if (continuum == NULL) {
-        	  log_debug(LOG_VERB, "Are we failing? Why???? This is a serious issue");
+        	  log_debug(LOG_ERR, "Are we failing? Why???? This is a serious issue");
               return DN_ENOMEM;
            }
 

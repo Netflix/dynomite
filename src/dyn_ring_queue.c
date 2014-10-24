@@ -105,7 +105,7 @@ node_init(struct node *node)
 	string_init(&node->name);
 	string_init(&node->pname);
 
-	node->port = 0;
+	node->port = 8101;
 
 	node->next_retry = 0;
 	node->last_retry = 0;
