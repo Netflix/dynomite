@@ -736,6 +736,9 @@ dmsg_parse(struct dmsg *dmsg)
 
 	dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
+	log_debug(LOG_VERB, "DDDCCCCC          : '%.*s'", rnode->dc);
+	log_debug(LOG_VERB, "RACKKKKKK          : '%.*s'", rnode->rack);
+
 	string_copy(&rnode->name, host_addr, host_addr_len);
 	string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 

@@ -666,9 +666,17 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	uint32_t i,nelem;
 	s->idx = array_idx(peers, s);
 
+
+
+	log_debug(LOG_VERB, "node rack_name         : '%.*s'", node->rack.len, node->rack.data);
+	log_debug(LOG_VERB, "node dc_name        : '%.*s'", node->dc.len, node->dc.data);
+	log_debug(LOG_VERB, "node address          : '%.*s'", node->pname.len, node->pname.data);
+	log_debug(LOG_VERB, "node ip         : '%.*s'", node->name.len, node->name.data);
+
 	string_copy(&s->pname, node->pname.data, node->pname.len);
 	string_copy(&s->name, node->name.data, node->name.len);
 	string_copy(&s->rack, node->rack.data, node->rack.len);
+	string_copy(&s->dc, node->dc.data, node->dc.len);
 
 	s->port = (uint16_t) node->port;
 	s->is_local = node->is_local;
@@ -683,6 +691,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	//	copy_dyn_token(src_token, dst_token);
 	//}
 
+    array_init(&s->tokens, 1, sizeof(struct dyn_token));
 	struct dyn_token *src_token = &node->token;
 	struct dyn_token *dst_token = (struct dyn_token *) array_get(&s->tokens, 0);
 	copy_dyn_token(src_token, dst_token);
@@ -720,18 +729,7 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 	rstatus_t status;
 
 	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
-	status = dnode_peer_add_node(sp, node);
-
-	return status;
-}
-
-
-
-rstatus_t
-dnode_peer_add_rack(struct server_pool *sp, struct node *node)
-{
-	rstatus_t status;
-	log_debug(LOG_VVERB, "dyn: peer has an add-rack message '%.*s'", node->name.len, node->name.data);
+	log_debug(LOG_VERB, "nnnnnnnnnode dc_name        : '%.*s'", node->dc.len, node->dc.data);
 	status = dnode_peer_add_node(sp, node);
 
 	return status;

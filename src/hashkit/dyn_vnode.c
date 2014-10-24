@@ -70,6 +70,8 @@ vnode_update(struct server_pool *sp)
         struct server *peer = array_get(&sp->peers, i);
         struct rack *rack = server_get_rack(sp, &peer->rack, &peer->dc);
 
+        log_debug(LOG_VERB, "peer        : '%.*s'", peer->name.len, peer->name.data);
+
         if (peer->processed) {
             continue;
         } else {
@@ -77,6 +79,7 @@ vnode_update(struct server_pool *sp)
         }
 
         if (rack == NULL) {
+        	log_debug(LOG_VERB, "Creating a new rack");
             rack = array_push(&sp->racks);
             rack_init(rack);
             string_copy(rack->name, peer->rack.data, peer->rack.len);
@@ -88,12 +91,15 @@ vnode_update(struct server_pool *sp)
         uint32_t orig_cnt = rack->nserver_continuum;
         uint32_t new_cnt = orig_cnt + token_cnt;
 
-        struct continuum *continuum = dn_realloc(rack->continuum, sizeof(struct continuum) * new_cnt);
-        if (continuum == NULL) {
-            return DN_ENOMEM;
-        }
+        if (new_cnt > 1) {
+           struct continuum *continuum = dn_realloc(rack->continuum, sizeof(struct continuum) * new_cnt);
+           if (continuum == NULL) {
+        	  log_debug(LOG_VERB, "Are we failing? Why???? This is a serious issue");
+              return DN_ENOMEM;
+           }
 
-        rack->continuum = continuum;
+           rack->continuum = continuum;
+        }
         rack->nserver_continuum = new_cnt;
 
         int j;

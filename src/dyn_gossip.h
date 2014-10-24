@@ -39,6 +39,7 @@ struct node {
 
 struct gossip_rack {
     struct string      name;
+    struct string      dc;
     uint32_t           nnodes;           /* # total nodes */
     uint32_t           nlive_nodes;      /* # live nodes */
     struct array       nodes;            /* nodes */

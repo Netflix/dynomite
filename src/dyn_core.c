@@ -419,7 +419,7 @@ core_core(void *arg, uint32_t events)
 void
 core_debug(struct context *ctx)
 {
-	log_debug(LOG_VERB, "Peers info.................................................");
+	log_debug(LOG_VERB, "=====================Peers info=====================");
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
 		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
@@ -428,8 +428,8 @@ core_debug(struct context *ctx)
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer Rack            : '%.*s'", server->rack);
-			log_debug(LOG_VERB, "\tPeer DC        : '%.*s'",server->dc);
+			log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
+			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",server->dc);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
 			log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
@@ -484,7 +484,7 @@ core_loop(struct context *ctx)
 
 	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
-	nsd = event_wait(ctx->evb, ctx->timeout);
+	nsd = event_wait(ctx->evb, 10000); //ctx->timeout);
 	if (nsd < 0) {
 		return nsd;
 	}

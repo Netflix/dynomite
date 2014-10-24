@@ -837,7 +837,7 @@ server_pool_deinit(struct array *server_pool)
 }
 
 struct rack *
-server_get_rack(struct server_pool *pool, struct string *rackname, struct string *dc)
+server_get_rack(struct server_pool *pool, struct string *rackname, struct string *dcname)
 {
 	uint32_t i, len;
 	for (i = 0, len = array_n(&pool->racks); i < len; i++) {
@@ -847,8 +847,8 @@ server_get_rack(struct server_pool *pool, struct string *rackname, struct string
 
 		//int cmp = string_compare(rack->name, rackname);
 		//if (cmp == 0) {
-		//use dict for fast access/check-up
-		if (string_compare(rack->name, rackname) == 0 && string_compare(rack->dc, dc) == 0)
+		//TODOs: use dict for fast access/check-up
+		if (string_compare(rack->name, rackname) == 0 && string_compare(rack->dc, dcname) == 0)
 			return rack;
 	}
 

@@ -156,6 +156,7 @@ node_copy(const struct node *src, struct node *dst)
 	string_copy(&dst->pname, src->pname.data, src->pname.len);
 	string_copy(&dst->name, src->name.data, src->name.len);
 	string_copy(&dst->rack, src->rack.data, src->rack.len);
+	string_copy(&dst->dc, src->dc.data, src->dc.len);
 
 	//uint32_t i, nelem = array_n(&src->tokens);
 	//array_init(&dst->tokens, nelem, sizeof(struct dyn_token));
