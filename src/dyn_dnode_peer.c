@@ -552,18 +552,64 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 
 rstatus_t
-dnode_peer_forward_state(struct server_pool *sp)
+dnode_peer_forward_state(void *rmsg)
 {
 	rstatus_t status;
-    loga("dnode_peer_forward_state: forwarding");
+	struct ring_msg *msg = rmsg;
+	struct server_pool *sp = msg->sp;
+	loga("dnode_peer_forward_state: forwarding");
+
+	//we assume one mbuf is enough for now - will enhance with multiple mbufs later
+	struct mbuf *mbuf = mbuf_get();
+	if (mbuf == NULL) {
+		log_debug(LOG_VVERB, "Too bad, not enough memory!");
+		return DN_ENOMEM;
+	}
+
+	mbuf_copy(mbuf, msg->data, msg->len);
+
+	struct array *peers = &sp->peers;
+	uint32_t i,nelem;
+	nelem = array_n(peers);
+
+	//for each peer, send this updated msg
+	for (i = 0; i < nelem; i++) {
+		struct server *peer = (struct server *) array_get(peers, i);
+		if (peer->is_local)
+			continue;
+
+		log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
+
+		struct conn * conn = dnode_peer_conn(peer);
+		if (conn == NULL) {
+			//running out of connection due to memory exhaust
+			log_debug(LOG_ERR, "Unable to obtain a connection object");
+			return DN_ERROR;
+		}
+
+		status = dnode_peer_connect(sp->ctx, peer, conn);
+		if (status != DN_OK ) {
+			dnode_peer_close(sp->ctx, conn);
+			log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
+			return DN_ERROR;
+		}
+
+		dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
+	}
+
+	//free this as nobody else will do
+	mbuf_put(mbuf);
+
 	return status;
 }
 
 
 rstatus_t
-dnode_peer_handshake_announcing(struct server_pool *sp)
+dnode_peer_handshake_announcing(void *rmsg)
 {
 	rstatus_t status;
+	struct ring_msg *msg = rmsg;
+	struct server_pool *sp = msg->sp;
 	log_debug(LOG_VVERB, "dyn: handshaking peers");
 	struct array *peers = &sp->peers;
 
@@ -618,12 +664,15 @@ dnode_peer_handshake_announcing(struct server_pool *sp)
 		if (status != DN_OK ) {
 			dnode_peer_close(sp->ctx, conn);
 			log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
-			return DN_OK;
+			return DN_ERROR;
 		}
 
 		dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
 		//peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);
 	}
+
+	//free this as nobody else will do
+	mbuf_put(mbuf);
 
 	return DN_OK;
 }
@@ -652,7 +701,6 @@ static rstatus_t
 dnode_peer_add_node(struct server_pool *sp, struct node *node)
 {
 	rstatus_t status;
-
 	struct array *peers = &sp->peers;
 	struct server *s = array_push(peers);
 
@@ -708,6 +756,20 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 }
 
 rstatus_t
+dnode_peer_add(void *rmsg)
+{
+	rstatus_t status;
+	struct ring_msg *msg = rmsg;
+	struct server_pool *sp = msg->sp;
+	struct node *node = array_get(&msg->nodes, 0);
+	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
+	status = dnode_peer_add_node(sp, node);
+
+	return status;
+}
+
+/*
+rstatus_t
 dnode_peer_add(struct server_pool *sp, struct node *node)
 {
 	rstatus_t status;
@@ -717,8 +779,20 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 
 	return status;
 }
+*/
 
+rstatus_t
+dnode_peer_remove(void *rmsg)
+{
+	//rstatus_t status;
+	struct ring_msg *msg = rmsg;
+	struct server_pool *sp = msg->sp;
+	struct node *node = array_get(&msg->nodes, 0);
+	log_debug(LOG_VVERB, "dyn: peer has a removed message '%.*s'", node->name.len, node->name.data);
+	return DN_OK;
+}
 
+/*
 rstatus_t
 dnode_peer_remove(struct server_pool *sp, struct node *node)
 {
@@ -726,8 +800,70 @@ dnode_peer_remove(struct server_pool *sp, struct node *node)
 	log_debug(LOG_VVERB, "dyn: peer has a removed message '%.*s'", node->name.len, node->name.data);
 	return DN_OK;
 }
+*/
 
 
+
+rstatus_t
+dnode_peer_replace(void *rmsg)
+{
+	//rstatus_t status;
+	struct ring_msg *msg = rmsg;
+	struct server_pool *sp = msg->sp;
+	struct node *node = array_get(&msg->nodes, 0);
+	log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
+	struct array *peers = &sp->peers;
+	struct server *s = NULL;
+
+	uint32_t i,nelem;
+	//bool node_exist = false;
+	//TODOs: use hash table here
+	for (i=1, nelem = array_n(peers); i< nelem; i++) {
+		struct server * peer = (struct server *) array_get(peers, i);
+		if (string_compare(&peer->rack, &node->rack) == 0) {
+			//TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
+			struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
+			struct dyn_token *ntoken = &node->token;
+
+			if (cmp_dyn_token(ptoken, ntoken) == 0) {
+				s = peer; //found a node to replace
+			}
+		}
+	}
+
+
+	if (s != NULL) {
+		log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
+		log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
+
+		string_deinit(&s->pname);
+		string_deinit(&s->name);
+		string_copy(&s->pname, node->pname.data, node->pname.len);
+		string_copy(&s->name, node->name.data, node->name.len);
+
+		//TODOs: need to free the previous s->addr?
+		//if (s->addr != NULL) {
+		//   dn_free(s->addr);
+		//}
+
+		struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
+		dn_resolve(&s->name, s->port, info);
+		s->family = info->family;
+		s->addrlen = info->addrlen;
+		s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+
+
+		dnode_peer_each_disconnect(s, NULL);
+		dnode_peer_each_preconnect(s, NULL);
+	} else {
+		log_debug(LOG_INFO, "Unable to find any node matched the token");
+	}
+
+	return DN_OK;
+}
+
+
+/*
 rstatus_t
 dnode_peer_replace(struct server_pool *sp, struct node *node)
 {
@@ -782,6 +918,7 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
 
 	return DN_OK;
 }
+*/
 
 
 rstatus_t

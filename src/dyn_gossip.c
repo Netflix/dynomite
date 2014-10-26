@@ -132,7 +132,7 @@ gossip_process_msgs(void)
 			uint32_t i;
 			for(i = 0; i<n; i++) {
 				struct node *rnode = (struct node *) array_get(&msg->nodes, i);
-				msg->cb(msg->sp, rnode);
+				msg->cb(msg);
 			}
 			ring_msg_deinit(msg);
 		}
@@ -149,6 +149,16 @@ gossip_msg_to_core(struct server_pool *sp, struct node *node, void *cb)
 	struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
 	node_copy(node, rnode);
 
+	msg->cb = cb;
+	msg->sp = sp;
+	CBUF_Push(C2G_OutQ, msg);
+
+	return DN_OK;
+}
+
+static rstatus_t
+gossip_ring_msg_to_core(struct server_pool *sp, struct ring_msg *msg, void *cb)
+{
 	msg->cb = cb;
 	msg->sp = sp;
 	CBUF_Push(C2G_OutQ, msg);
@@ -221,26 +231,25 @@ gossip_forward_state(struct server_pool *sp)
     struct ring_msg *msg = create_ring_msg_with_data(256 * node_count);
     uint8_t *data = msg->data; //dn_zalloc(sizeof(uint8_t) * 256 * node_count);//msg->data;
     uint8_t *pos = data;
-    uint32_t len = 0;
 
     dictIterator *dc_it;
     dictEntry *dc_de;
     dc_it = dictGetIterator(gn_pool.dict_dc);
     while ((dc_de = dictNext(dc_it)) != NULL) {
     	struct gossip_dc *g_dc = dictGetVal(dc_de);
-    	log_debug(LOG_VERB, "\tDC name           : '%.*s'", g_dc->name.len, g_dc->name.data);
+    	//log_debug(LOG_VERB, "\tDC name           : '%.*s'", g_dc->name.len, g_dc->name.data);
     	dictIterator *rack_it = dictGetIterator(g_dc->dict_rack);
     	dictEntry *rack_de;
     	while ((rack_de = dictNext(rack_it)) != NULL) {
     		struct gossip_rack *g_rack = dictGetVal(rack_de);
-    		log_debug(LOG_VERB, "\tRack name           : '%.*s'", g_rack->name.len, g_rack->name.data);
+    		//log_debug(LOG_VERB, "\tRack name           : '%.*s'", g_rack->name.len, g_rack->name.data);
 
     		dictIterator *node_it = dictGetIterator(g_rack->dict_token_nodes);
     		dictEntry *node_de;
             int i = 0;
     		while ((node_de = dictNext(node_it)) != NULL) {
     			struct node *gnode = dictGetVal(node_de);
-    			log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
+    			//log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
 
     			if (i++ > 0) {
                    //pipe separator
@@ -266,7 +275,7 @@ gossip_forward_state(struct server_pool *sp)
 
     		    //write node token
     		    struct string *token_str = dictGetKey(node_de);
-    		    log_debug(LOG_VERB, "\tToken string          : '%.*s'", token_str->len, token_str->data);
+    		    //log_debug(LOG_VERB, "\tToken string          : '%.*s'", token_str->len, token_str->data);
     		    int k;
     		    for(k=0; k<token_str->len;k++, pos++) {
     		    	*pos = *(token_str->data + k);
@@ -296,9 +305,14 @@ gossip_forward_state(struct server_pool *sp)
     		    write_number(pos, gnode->state, &count);
                 pos += count;
 
+    		    //comma separator
+    		    *pos = ',';
+    		    pos += 1;
 
-
-    		    log_debug(LOG_VERB, "\tData           : '%.*s'", (pos-data), data);
+                //write addresss
+                for(k=0; k<gnode->name.len; k++, pos++) {
+                	*pos = *(gnode->name.data + k);
+                }
 
     		}
     		dictReleaseIterator(node_it);
@@ -306,9 +320,13 @@ gossip_forward_state(struct server_pool *sp)
     	dictReleaseIterator(rack_it);
     }
 
+    msg->len = pos-data;
+
+    log_debug(LOG_VERB, "\tData           : '%.*s'", (pos-data), data);
+
     dictReleaseIterator(dc_it);
 
-	return gossip_msg_to_core(sp, NULL, dnode_peer_forward_state);
+	return gossip_ring_msg_to_core(sp, msg, dnode_peer_forward_state);
 }
 
 
@@ -669,9 +687,6 @@ gossip_loop(void *arg)
 		loga("gossip_interval === %d", gossip_interval);
 		usleep(gossip_interval * 1);
 		log_debug(LOG_VERB, "Gossip is running ...");
-		//log_debug(LOG_VERB, "Sp addrstr  '%.*s'", sp->addrstr.len, sp->addrstr.data);
-		//log_debug(LOG_VERB, "peer name == '%.*s' ", peer->name.len, peer->name.data);
-
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
@@ -886,10 +901,13 @@ void gossip_debug(void)
 
 
 rstatus_t
-gossip_msg_peer_update(struct server_pool *sp, struct node *node)
+gossip_msg_peer_update(void *rmsg)
 {
         rstatus_t status;
-
+        struct ring_msg *msg = rmsg;
+        loga("Num nodessssssssssssssssssssssssssssssssss %d", array_n(&msg->nodes));
+        struct server_pool *sp = msg->sp;
+        struct node *node = array_get(&msg->nodes, 0);
         log_debug(LOG_VVERB, "Processing msg   gossip_peer_join '%.*s'", node->name.len, node->name.data);
         log_debug(LOG_VVERB, "Processing    gossip_peer_join : datacenter '%.*s'", node->dc.len, node->dc.data);
         log_debug(LOG_VVERB, "Processing    gossip_peer_join : rack '%.*s'", node->rack.len, node->rack.data);

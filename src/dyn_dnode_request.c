@@ -390,8 +390,6 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, version, mbuf);
 	mbuf_insert_head(&msg->mhdr, nbuf);
 
-	mbuf_put(mbuf); //free this as nobody else will do
-
 	/* enqueue the message (request) into peer inq */
 	if (TAILQ_EMPTY(&conn->imsg_q)) {
 		status = event_add_out(ctx->evb, conn);
@@ -408,9 +406,4 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	//msg->noreply = 1;
 	conn->enqueue_inq(ctx, conn, msg);
 
-	//fix me - gossip stats
-	//req_forward_stats(ctx, s_conn->owner, msg);
-
-	//log_debug(LOG_VERB, "gossip to peer %d with msg_id %"PRIu64" '%.*s'", conn->sd, msg->id,
-	//		             data->len, data->data);
 }

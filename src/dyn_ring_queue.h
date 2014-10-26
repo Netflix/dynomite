@@ -19,7 +19,7 @@
 
 struct node;
 
-typedef rstatus_t (*callback_t)(struct server_pool *, struct node *);
+typedef rstatus_t (*callback_t)(void *msg);
 typedef void (*data_func_t)(void *);
 
 volatile struct

@@ -75,7 +75,7 @@ rstatus_t gossip_start(struct server_pool *sp);
 rstatus_t gossip_destroy(struct server_pool *sp);
 
 
-rstatus_t gossip_msg_peer_update(struct server_pool *sp, struct node *node);
+rstatus_t gossip_msg_peer_update(void *msg);
 
 
 #endif /* DYN_GOSSIP_H_ */

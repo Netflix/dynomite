@@ -661,7 +661,7 @@ static struct ring_msg *
 dmsg_parse(struct dmsg *dmsg)
 {
 	//rstatus_t status;
-	uint8_t *p, *q, *start;
+	uint8_t *p, *q, *start, *end, *pipe_p;
 	uint8_t *host_id, *host_addr, *ts, *node_state;
 	uint32_t k, delimlen, host_id_len, host_addr_len, ts_len, node_state_len;
 	char delim[] = ",,,";
@@ -675,7 +675,7 @@ dmsg_parse(struct dmsg *dmsg)
 	/* parse "host_id1,generation_ts1,host_state1,host_broadcast_address1|host_id2,generation_ts2,host_state2,host_broadcast_address2" */
 	/* host_id = dc-rack-token */
 	p = dmsg->data + dmsg->mlen - 1;
-
+    end = p;
 	start = dmsg->data;
 	host_id = NULL;
 	host_addr = NULL;
@@ -686,72 +686,89 @@ dmsg_parse(struct dmsg *dmsg)
 	host_addr_len = 0;
 	ts_len = 0;
 	node_state_len = 0;
+    pipe_p = start;
+    int count = 0;
 
-	//TODOs: do an outer loop for multiple nodes
+    do {
 
-	for (k = 0; k < sizeof(delim)-1; k++) {
-		q = dn_strrchr(p, start, delim[k]);
+		for (k = 0; k < sizeof(delim)-1; k++) {
+			q = dn_strrchr(p, start, delim[k]);
 
-		switch (k) {
-		case 0:
-			host_addr = q + 1;
-			host_addr_len = (uint32_t)(p - host_addr + 1);
+			switch (k) {
+			case 0:
+				host_addr = q + 1;
+				host_addr_len = (uint32_t)(p - host_addr + 1);
+				break;
+			case 1:
+				node_state = q + 1;
+				node_state_len = (uint32_t)(p - node_state + 1);
 
-			break;
-		case 1:
-			node_state = q + 1;
-			node_state_len = (uint32_t)(p - node_state + 1);
+				break;
+			case 2:
+				ts = q + 1;
+				ts_len = (uint32_t)(p - ts + 1);
 
-			break;
-		case 2:
-			ts = q + 1;
-			ts_len = (uint32_t)(p - ts + 1);
+				break;
 
-			break;
+			default:
+				NOT_REACHED();
+			}
+			p = q - 1;
 
-		default:
-			NOT_REACHED();
 		}
-		p = q - 1;
 
-	}
+		if (k != delimlen) {
+			loga("Error: this is insanely bad");
+			return NULL;// DN_ERROR;
+		}
 
-	if (k != delimlen) {
-		loga("Error: this is insanely bad");
-		return NULL;// DN_ERROR;
-	}
+		pipe_p = dn_strrchr(p, start, '|');
 
+		if (pipe_p == NULL) {
+			pipe_p = start;
+		} else {
+			pipe_p = pipe_p + 1;
+			p = pipe_p - 2;
+		}
 
-	host_id = dmsg->data;
-	host_id_len = dmsg->mlen - (host_addr_len + node_state_len + ts_len + 3);
+		//host_id = dmsg->data;
+		//host_id_len = dmsg->mlen - (host_addr_len + node_state_len + ts_len + 3);
+		host_id = pipe_p;
+		host_id_len = end - pipe_p - (host_addr_len + node_state_len + ts_len + 3) + 1;
 
-	//log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
-	//log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
-	//log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
-	//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
+		end = p;
 
-	//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
-	//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-	//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
-	//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+		//log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
+		//log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
+		//log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
+		//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 
-	//TODOs: will take care of 1+ nodes later
-	struct node *rnode = (struct node *) array_get(&ring_msg->nodes, 0);
+		log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+		log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
+		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
 
-	dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
+		//TODOs: will take care of 1+ nodes later
+		//struct node *rnode = (struct node *) array_get(&ring_msg->nodes, 0);
+        struct node *rnode = array_push(&ring_msg->nodes);
 
-	string_copy(&rnode->name, host_addr, host_addr_len);
-	string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
+		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
-	rnode->port = sp->d_port;
-	rnode->is_local = false;
-	rnode->is_seed = false;
+		string_copy(&rnode->name, host_addr, host_addr_len);
+		string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 
-	ts[ts_len] = '\0';
-	rnode->ts = atol(ts);
+		rnode->port = sp->d_port;
+		rnode->is_local = false;
+		rnode->is_seed = false;
 
-	node_state[node_state_len] = '\0';
-	rnode->state = (uint8_t) atoi(node_state);
+		ts[ts_len] = '\0';
+		rnode->ts = atol(ts);
+
+		node_state[node_state_len] = '\0';
+		rnode->state = (uint8_t) atoi(node_state);
+        count++;
+
+	} while (pipe_p != start);
 
 	//TODOs: should move this outside
 	dmsg_to_gossip(ring_msg);
@@ -775,15 +792,6 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
            s.len = dmsg->mlen;
            s.data = dmsg->data;
            log_hexdump(LOG_VERB, s.data, s.len, "dyn processing message ");
-           return true;
-
-        case GOSSIP_DIGEST_SYN:
-           return true;
-
-        case GOSSIP_DIGEST_ACK:
-           return true;
-
-        case GOSSIP_DIGEST_ACK2:
            return true;
 
         case GOSSIP_SYN:
