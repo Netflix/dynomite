@@ -17,23 +17,24 @@ typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 
 
 struct node {
-    struct dyn_token   token;        /* token for this node */
+    struct dyn_token   token;            /* token for this node */
     struct string      dc;
     struct string      rack;
 
-    struct string      pname;         /* name:port */
-    struct string      name;          /* name  */
+    struct string      pname;            /* name:port */
+    struct string      name;             /* name  */
 
-    int                port;          /* port */
+    int                port;             /* port */
 
-    int64_t            next_retry;    /* next retry time in usec */
-    int64_t            last_retry;    /* last retry time in usec */
-    uint32_t           failure_count; /* # consecutive failures */
+    int64_t            next_retry;       /* next retry time in usec */
+    int64_t            last_retry;       /* last retry time in usec */
+    uint32_t           failure_count;    /* # consecutive failures */
 
-    bool               is_seed;       /* seed? */
-    bool               is_local;      /* is this peer the current running node?  */
-    uint8_t            state;         /* state of a node that this host knows */
-    uint64_t           ts;            /* timestamp */
+    bool               is_seed;          /* seed? */
+    bool               is_local;         /* is this peer the current running node?  */
+    uint8_t            state;            /* state of a node that this host knows */
+    uint64_t           ts;               /* timestamp */
+
 };
 
 
@@ -74,7 +75,7 @@ rstatus_t gossip_start(struct server_pool *sp);
 rstatus_t gossip_destroy(struct server_pool *sp);
 
 
-rstatus_t gossip_msg_peer_join(struct server_pool *sp, struct node *node);
+rstatus_t gossip_msg_peer_update(struct server_pool *sp, struct node *node);
 
 
 #endif /* DYN_GOSSIP_H_ */

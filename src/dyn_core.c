@@ -463,13 +463,13 @@ core_process_messages(void)
 {
 	//loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
-		struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
+		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
 			struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
 			msg->cb(msg->sp, rnode);
 			//msg->cb(msg->sp, msg->node);
 			core_debug(msg->sp->ctx);
-			ring_message_deinit(msg);
+			ring_msg_deinit(msg);
 		}
 	}
 

@@ -552,10 +552,10 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 
 rstatus_t
-dnode_peer_sync_state(struct server_pool *sp)
+dnode_peer_forward_state(struct server_pool *sp)
 {
 	rstatus_t status;
-    loga("dnode_peer_sync_state: syncingggggggggggggggggggggggggggg");
+    loga("dnode_peer_forward_state: forwarding");
 	return status;
 }
 
@@ -713,7 +713,6 @@ dnode_peer_add(struct server_pool *sp, struct node *node)
 	rstatus_t status;
 
 	log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
-	log_debug(LOG_VERB, "nnnnnnnnnode dc_name        : '%.*s'", node->dc.len, node->dc.data);
 	status = dnode_peer_add_node(sp, node);
 
 	return status;

@@ -20,7 +20,7 @@ static uint32_t MAGIC_NUMBER = 2014;
 static const struct string MAGIC_STR = string("2014 ");
 static const struct string CRLF_STR = string(CRLF);
 
-static rstatus_t dmsg_to_gossip(struct ring_message *rmsg);
+static rstatus_t dmsg_to_gossip(struct ring_msg *rmsg);
 
 enum {
         DYN_START,
@@ -595,7 +595,7 @@ dmsg_parse1(struct dmsg *dmsg)
 
 
 static rstatus_t
-dmsg_to_gossip(struct ring_message *rmsg)
+dmsg_to_gossip(struct ring_msg *rmsg)
 {
         CBUF_Push(C2G_InQ, rmsg);
 
@@ -657,17 +657,22 @@ dmsg_parse_host_id(uint8_t *start, uint32_t len,
 
 
 
-static struct ring_message *
+static struct ring_msg *
 dmsg_parse(struct dmsg *dmsg)
 {
 	//rstatus_t status;
 	uint8_t *p, *q, *start;
 	uint8_t *host_id, *host_addr, *ts, *node_state;
-	uint32_t k, delimlen, host_id_len, host_addr_len, ts_len, state_len;
+	uint32_t k, delimlen, host_id_len, host_addr_len, ts_len, node_state_len;
 	char delim[] = ",,,";
 	delimlen = 3;
 
-	/* parse "host_id,generation_ts,host_state,host_broadcast_address" */
+	struct ring_msg *ring_msg = create_ring_msg();
+	struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
+	ring_msg->sp = sp;
+	ring_msg->cb = gossip_msg_peer_update;
+
+	/* parse "host_id1,generation_ts1,host_state1,host_broadcast_address1|host_id2,generation_ts2,host_state2,host_broadcast_address2" */
 	/* host_id = dc-rack-token */
 	p = dmsg->data + dmsg->mlen - 1;
 
@@ -680,7 +685,7 @@ dmsg_parse(struct dmsg *dmsg)
 	host_id_len = 0;
 	host_addr_len = 0;
 	ts_len = 0;
-	state_len = 0;
+	node_state_len = 0;
 
 	//TODOs: do an outer loop for multiple nodes
 
@@ -695,7 +700,7 @@ dmsg_parse(struct dmsg *dmsg)
 			break;
 		case 1:
 			node_state = q + 1;
-			state_len = (uint32_t)(p - node_state + 1);
+			node_state_len = (uint32_t)(p - node_state + 1);
 
 			break;
 		case 2:
@@ -718,26 +723,22 @@ dmsg_parse(struct dmsg *dmsg)
 
 
 	host_id = dmsg->data;
-	host_id_len = dmsg->mlen - (host_addr_len + state_len + ts_len + 3);
+	host_id_len = dmsg->mlen - (host_addr_len + node_state_len + ts_len + 3);
 
 	//log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
 	//log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
-	//log_hexdump(LOG_VERB, node_state, state_len, "state: ");
+	//log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
 	//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 
-	struct ring_message *ring_msg = create_ring_message();
-
-	struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
-
-	ring_msg->sp = sp;
+	//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+	//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
+	//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+	//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
 
 	//TODOs: will take care of 1+ nodes later
 	struct node *rnode = (struct node *) array_get(&ring_msg->nodes, 0);
 
 	dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
-
-	log_debug(LOG_VERB, "DDDCCCCC          : '%.*s'", rnode->dc);
-	log_debug(LOG_VERB, "RACKKKKKK          : '%.*s'", rnode->rack);
 
 	string_copy(&rnode->name, host_addr, host_addr_len);
 	string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
@@ -749,13 +750,8 @@ dmsg_parse(struct dmsg *dmsg)
 	ts[ts_len] = '\0';
 	rnode->ts = atol(ts);
 
-	node_state[state_len] = '\0';
+	node_state[node_state_len] = '\0';
 	rnode->state = (uint8_t) atoi(node_state);
-
-
-	print_dyn_token(&rnode->token, 1);
-
-	ring_msg->cb = gossip_msg_peer_join;
 
 	//TODOs: should move this outside
 	dmsg_to_gossip(ring_msg);

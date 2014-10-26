@@ -12,35 +12,56 @@
 #include "dyn_token.h"
 
 
-//should use queue technique to store struct ring_message so that we can reuse
-struct ring_message *
-create_ring_message(void)
+//should use pooling to store struct ring_message so that we can reuse
+struct ring_msg *
+create_ring_msg(void)
 {
-	struct ring_message *result = dn_alloc(sizeof(*result));
+	struct ring_msg *msg = dn_alloc(sizeof(*msg));
+
+	if (msg == NULL)
+		return NULL;
+
+	ring_msg_init(msg, 1, true);
+    msg->data = NULL;
+
+	return msg;
+}
+
+
+struct ring_msg *
+create_ring_msg_with_data(int capacity)
+{
+	struct ring_msg *msg = dn_alloc(sizeof(*msg));
+
+	if (msg == NULL)
+		return NULL;
+
+	ring_msg_init(msg, 1, true);
+
+	msg->data = dn_zalloc(sizeof(uint8_t) * capacity);
+	msg->capacity = capacity;
+    msg->len = 0;
+
+	return msg;
+}
+
+
+struct ring_msg *
+create_ring_msg_with_size(uint32_t size, bool init_node)
+{
+	struct ring_msg *result = dn_alloc(sizeof(*result));
 
 	if (result == NULL)
 		return NULL;
 
-	ring_message_init(result, 1, true);
+	ring_msg_init(result, size, init_node);
 
 	return result;
 }
 
-struct ring_message *
-create_ring_message_with_size(uint32_t size, bool init_node)
-{
-	struct ring_message *result = dn_alloc(sizeof(*result));
-
-	if (result == NULL)
-		return NULL;
-
-	ring_message_init(result, size, init_node);
-
-	return result;
-}
 
 rstatus_t
-ring_message_init(struct ring_message *msg, uint32_t size, bool init_node)
+ring_msg_init(struct ring_msg *msg, uint32_t size, bool init_node)
 {
 	if (msg == NULL)
 		return DN_ERROR;
@@ -57,22 +78,25 @@ ring_message_init(struct ring_message *msg, uint32_t size, bool init_node)
 	//msg->node = dn_alloc(sizeof(struct node));
 	//msg->node = create_node();
 
+
 	return DN_OK;
 }
 
 
 rstatus_t
-ring_message_deinit(struct ring_message *msg)
+ring_msg_deinit(struct ring_msg *msg)
 {
 	if (msg == NULL)
 		return DN_ERROR;
 
-	//if (msg->node != NULL)
-	//	node_deinit(msg->node);
 	uint32_t i;
 	for(i=0; i<array_n(&msg->nodes); i++) {
 		struct node *node = (struct node *) array_get(&msg->nodes, i);
 		node_deinit(node);
+	}
+
+	if (msg->data != NULL) {
+		dn_free(msg->data);
 	}
 
 	dn_free(msg);

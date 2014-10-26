@@ -133,6 +133,8 @@ typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 #define dictHashKey(d, key) (d)->type->hashFunction(key)
 #define dictGetKey(he) ((he)->key)
 #define dictGetVal(he) ((he)->v.val)
+#define dictGetEntryKey(he) ((he)->key)
+#define dictGetEntryVal(he) ((he)->val)
 #define dictGetSignedIntegerVal(he) ((he)->v.s64)
 #define dictGetUnsignedIntegerVal(he) ((he)->v.u64)
 #define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
