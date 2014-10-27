@@ -525,75 +525,6 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t versio
 }
 
 
-static void
-dmsg_parse1(struct dmsg *dmsg)
-{
-
-	rstatus_t status;
-	uint8_t *p, *q, *start;
-	uint8_t *host_id, *host_addr, *ts, *state;
-	uint32_t k, delimlen, host_id_len, host_addr_len, ts_len, state_len;
-	char delim[] = ",,,";
-	delimlen = 3;
-
-	/* parse "host_id,generation_ts,host_state,host_broadcast_address" */
-	/* host_id = dc-rack-token */
-	p = dmsg->data + dmsg->mlen - 1;
-
-	start = dmsg->data;
-	host_id = NULL;
-	host_addr = NULL;
-	ts = NULL;
-	state = NULL;
-
-	host_id_len = 0;
-	host_addr_len = 0;
-	ts_len = 0;
-	state_len = 0;
-
-	for (k = 0; k < sizeof(delim)-1; k++) {
-		q = dn_strrchr(p, start, delim[k]);
-
-		switch (k) {
-		case 0:
-			host_addr = q + 1;
-			host_addr_len = (uint32_t)(p - host_addr + 1);
-
-			break;
-		case 1:
-			state = q + 1;
-			state_len = (uint32_t)(p - state + 1);
-
-			break;
-		case 2:
-			ts = q + 1;
-			ts_len = (uint32_t)(p - ts + 1);
-
-			break;
-
-		default:
-			NOT_REACHED();
-		}
-		p = q - 1;
-
-	}
-
-	if (k != delimlen) {
-		return;// DN_ERROR;
-	}
-
-
-	host_id = dmsg->data;
-	host_id_len = dmsg->mlen - (host_addr_len + state_len + ts_len + 3);
-	//status = string_copy(address, pname, pnamelen);
-
-	log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
-	log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
-	log_hexdump(LOG_VERB, state, state_len, "state: ");
-	log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
-}
-
-
 static rstatus_t
 dmsg_to_gossip(struct ring_msg *rmsg)
 {
@@ -613,7 +544,7 @@ dmsg_parse_host_id(uint8_t *start, uint32_t len,
 	delimlen = 2;
 
 	/* parse "dc$rack$token : don't support vnode for now */
-	log_hexdump(LOG_VERB, start, len, "host_addr testing: ");
+	//log_hexdump(LOG_VERB, start, len, "host_addr testing: ");
 	p = start + len - 1;
 	dc_p = NULL;
 	rack_p = NULL;
@@ -656,7 +587,6 @@ dmsg_parse_host_id(uint8_t *start, uint32_t len,
 }
 
 
-
 static struct ring_msg *
 dmsg_parse(struct dmsg *dmsg)
 {
@@ -667,15 +597,11 @@ dmsg_parse(struct dmsg *dmsg)
 	char delim[] = ",,,";
 	delimlen = 3;
 
-	struct ring_msg *ring_msg = create_ring_msg();
-	struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
-	ring_msg->sp = sp;
-	ring_msg->cb = gossip_msg_peer_update;
 
 	/* parse "host_id1,generation_ts1,host_state1,host_broadcast_address1|host_id2,generation_ts2,host_state2,host_broadcast_address2" */
 	/* host_id = dc-rack-token */
 	p = dmsg->data + dmsg->mlen - 1;
-    end = p;
+	end = p;
 	start = dmsg->data;
 	host_id = NULL;
 	host_addr = NULL;
@@ -686,10 +612,26 @@ dmsg_parse(struct dmsg *dmsg)
 	host_addr_len = 0;
 	ts_len = 0;
 	node_state_len = 0;
-    pipe_p = start;
-    int count = 0;
+	pipe_p = start;
+	int count = 0;
 
-    do {
+	do {
+		q = dn_strrchr(p, start, '|');
+		count++;
+		p = q - 1;
+	} while (q != NULL);
+
+
+	struct ring_msg *ring_msg = create_ring_msg_with_size(count, true);
+	struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
+	ring_msg->sp = sp;
+	ring_msg->cb = gossip_msg_peer_update;
+
+	count = 0;
+	p = dmsg->data + dmsg->mlen - 1;
+
+
+	do {
 
 		for (k = 0; k < sizeof(delim)-1; k++) {
 			q = dn_strrchr(p, start, delim[k]);
@@ -743,17 +685,15 @@ dmsg_parse(struct dmsg *dmsg)
 		//log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
 		//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 
-		log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
-		log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
-		log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+		//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+		//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
+		//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
 
-		//TODOs: will take care of 1+ nodes later
-		//struct node *rnode = (struct node *) array_get(&ring_msg->nodes, 0);
-        struct node *rnode = array_push(&ring_msg->nodes);
-
+		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
 		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
+		//print_dyn_token(&rnode->token, 5);
 		string_copy(&rnode->name, host_addr, host_addr_len);
 		string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 
@@ -766,8 +706,7 @@ dmsg_parse(struct dmsg *dmsg)
 
 		node_state[node_state_len] = '\0';
 		rnode->state = (uint8_t) atoi(node_state);
-        count++;
-
+		count++;
 	} while (pipe_p != start);
 
 	//TODOs: should move this outside
