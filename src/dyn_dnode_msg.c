@@ -44,261 +44,259 @@ enum {
 static bool 
 dyn_parse_core(struct msg *r)
 {
-    struct dmsg *dmsg;
-    struct mbuf *b;
-    uint8_t *p;
-    uint8_t ch;
-    uint64_t num = 0;
-	    
-    state = r->dyn_state;
-    b = STAILQ_LAST(&r->mhdr, mbuf, next);    
+	struct dmsg *dmsg;
+	struct mbuf *b;
+	uint8_t *p;
+	uint8_t ch;
+	uint64_t num = 0;
 
-    dmsg = r->dmsg;
-    if (dmsg == NULL) {
-        r->dmsg = dmsg_get();
-        dmsg = r->dmsg;    
-        if (dmsg == NULL) {//should track this as a dropped message
-           goto error; //should count as OOM error
-        }    
-    }
+	state = r->dyn_state;
+	b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    //log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn parser: parsed req %"PRIu64" res %d type %d", r->id, r->result, r->type, r->dyn_state);
-	
-    for (p = r->pos; p < b->last; p++) {
-        ch = *p;
-        switch (state) {
-		 case DYN_START:
-                    log_debug(LOG_DEBUG, "DYN_START");
-		    if (ch == ' ') {
-		         break;
-		    } else if (isdigit(ch)) {
-                        num = ch - '0'; 
-                        state = DYN_MAGIC_NUMBER;
-                    } else {
-                        goto skip;
-                    } 
-                     
-                    break;
-
-                case DYN_MAGIC_NUMBER:
-                    log_debug(LOG_DEBUG, "DYN_MAGIC_NUMBER");
-                    log_debug(LOG_DEBUG, "num = %d", num);
-                    if (isdigit(ch))  {
-                         num = num*10 + (ch - '0');
-                    } else {
-                         if (num == MAGIC_NUMBER) {
-                              state = DYN_SPACES_BEFORE_MSG_ID;
-                         } else {
-                              goto error;
-                         }
-                    }
-
-                    break;
-
-                case DYN_SPACES_BEFORE_MSG_ID:
-                    log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_MSG_ID");
-                    if (ch == ' ') {
-                        break;
-                    } else if (isdigit(ch)) {
-                       num = ch - '0'; 
-                       state = DYN_MSG_ID;
-                    }
-
-                    break;                       
-           
-                case DYN_MSG_ID:
-                    log_debug(LOG_DEBUG, "DYN_MSG_ID");
-                    log_debug(LOG_DEBUG, "num = %d", num);
-
-                    if (isdigit(ch))  {
-                        num = num*10 + (ch - '0'); 
-                    } else if (ch != ' ') {
-                        goto error;
-                    } else {
-
-                        //if (num >= 0) {
-                           log_debug(LOG_DEBUG, "MSG ID : %d", num);
-                           dmsg->id = num;
-                           state = DYN_SPACES_BEFORE_TYPE_ID;
-                        //} else {
-                        //   goto error;
-                        //}
-                    }
-                    break;                         
-              
-                case DYN_SPACES_BEFORE_TYPE_ID:
-                    log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
-                    if (ch == ' ') {
-                        break;
-                    } else if (isdigit(ch)) {
-                       num = ch - '0'; 
-                       state = DYN_TYPE_ID;
-                    }
-
-                    break;
-
-                case DYN_TYPE_ID:
-                    log_debug(LOG_DEBUG, "DYN_TYPE_ID");
-                    log_debug(LOG_DEBUG, "num = %d", num);
-                    if (isdigit(ch))  {
-                        num = num*10 + (ch - '0');
-                    } else {
-                        if (num > 0)  {
-                           log_debug(LOG_DEBUG, "VERB ID: %d", num);
-                           dmsg->type = num;
-                           state = DYN_SPACES_BEFORE_VERSION;
-                        } else {
-                           goto error;       
-                        }
-                    }
-
-                    break;
-
-                case DYN_SPACES_BEFORE_VERSION:
-                    log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
-                    if (ch == ' ') {
-                        break;
-                    } else if (isdigit(ch)) {
-                       num = ch - '0';
-                       state = DYN_VERSION;
-                    }
-                    break;
-
-                case DYN_VERSION:
-                   log_debug(LOG_DEBUG, "DYN_VERSION");
-                   log_debug(LOG_DEBUG, "num = %d", num);
-                   if (isdigit(ch))  {
-                        num = num*10 + (ch - '0');
-                    } else {
-                        if (ch == CR)  {
-                           log_debug(LOG_DEBUG, "VERSION : %d", num);
-                           dmsg->version = num;
-                           state = DYN_CRLF_BEFORE_STAR;
-                        } else {
-                           goto error;
-                        }
-                    }
-
-                    break;
-       
-                case DYN_CRLF_BEFORE_STAR:
-                    log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_STAR");
-                    if (ch == LF)  {
-                        state = DYN_STAR;
-                    } else {
-                        goto error;
-                    }          
- 
-                    break;
-
-                case DYN_STAR:
-                   log_debug(LOG_DEBUG, "DYN_STAR");
-                   if (ch == '*') {
-                       state = DYN_DATA_LEN;
-                       num = 0;
-                   } else {
-                       goto error;
-                   }
-
-                   break;
-
-                case DYN_DATA_LEN:
-                   log_debug(LOG_DEBUG, "DYN_DATA_LEN");
-                   log_debug(LOG_DEBUG, "num = %d", num);
-                   if (isdigit(ch))  {
-                        num = num*10 + (ch - '0');
-                   } else {
-                       if (ch == ' ')  {
-                          log_debug(LOG_DEBUG, "Data len: %d", num);
-                          dmsg->mlen = num;
-                          state = DYN_SPACE_BEFORE_DATA;
-                          num = 0;
-                       } else {
-                          goto error;
-                       }
-                   }
-                   break;
-
-                case DYN_SPACE_BEFORE_DATA:
-                   log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
-                   state = DYN_DATA;
-                   break;
-
-                case DYN_DATA:
-                   log_debug(LOG_DEBUG, "DYN_DATA");
-                   p -= 1;
-                   if (dmsg->mlen > 0)  {
-                        dmsg->data = p;
-                        p += dmsg->mlen - 1;                  
-                        state = DYN_CRLF_BEFORE_DONE;
-                   } else {
-                        goto error;
-                   }
-   
-                   break;
-                        
-                case DYN_CRLF_BEFORE_DONE:
-                   log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
-          
-                   if (ch == CR)  {
-                       if (*(p+1) == LF) {
-                           state = DYN_DONE;
-                       } else {
-                           goto error;
-                       }
-                   } else {
-                       goto error;
-                   }
- 
-                   break;
-
-                case DYN_DONE:
-                   log_debug(LOG_DEBUG, "DYN_DONE");
-                   r->pos = p+1;
-                   r->dyn_state = DYN_DONE; 
-                   b->pos = p+1;
-                   goto done;
-                   break;
-
-		default:
-		   NOT_REACHED();
-	           break;
-		        	
+	dmsg = r->dmsg;
+	if (dmsg == NULL) {
+		r->dmsg = dmsg_get();
+		dmsg = r->dmsg;
+		if (dmsg == NULL) {//should track this as a dropped message
+			goto error; //should count as OOM error
 		}
-		
 	}
 
-    done:
-       dmsg->owner = r;
-       dmsg->source_address = r->owner->addr;
-       log_debug(LOG_DEBUG, "at done with p at %d", p);
-       //dmsg_dump(r->dmsg);
-       log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
-                            "type %d state %d rpos %d of %d", r->id, r->result, r->type,
-                            r->dyn_state, r->pos - b->pos, b->last - b->pos);
+	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn parser: parsed req %"PRIu64" res %d type %d", r->id, r->result, r->type, r->dyn_state);
 
-      
-       return true;
+	for (p = r->pos; p < b->last; p++) {
+		ch = *p;
+		switch (state) {
+		case DYN_START:
+			//log_debug(LOG_DEBUG, "DYN_START");
+			if (ch == ' ') {
+				break;
+			} else if (isdigit(ch)) {
+				num = ch - '0';
+				state = DYN_MAGIC_NUMBER;
+			} else {
+				goto skip;
+			}
 
-    skip:
-       log_debug(LOG_DEBUG, "This is not a dyn message");
-       dmsg->type = DMSG_UNKNOWN;
-       dmsg->owner = r;
-       dmsg->source_address = r->owner->addr;
-       return true;
+			break;
 
-    error:
-       log_debug(LOG_DEBUG, "at error");
-       r->result = MSG_PARSE_ERROR;
-       r->state = state;
-       errno = EINVAL;
+		case DYN_MAGIC_NUMBER:
+			//log_debug(LOG_DEBUG, "DYN_MAGIC_NUMBER");
+			//log_debug(LOG_DEBUG, "num = %d", num);
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else {
+				if (num == MAGIC_NUMBER) {
+					state = DYN_SPACES_BEFORE_MSG_ID;
+				} else {
+					goto error;
+				}
+			}
 
-       log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
-                "res %d type %d state %d", r->id, r->result, r->type,
-                r->state);
-       return false;
+			break;
 
-    return true;    //fix me
+		case DYN_SPACES_BEFORE_MSG_ID:
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_MSG_ID");
+			if (ch == ' ') {
+				break;
+			} else if (isdigit(ch)) {
+				num = ch - '0';
+				state = DYN_MSG_ID;
+			}
+
+			break;
+
+		case DYN_MSG_ID:
+			//log_debug(LOG_DEBUG, "DYN_MSG_ID");
+			//log_debug(LOG_DEBUG, "num = %d", num);
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else if (ch != ' ') {
+				goto error;
+			} else {
+
+				//if (num >= 0) {
+				//log_debug(LOG_DEBUG, "MSG ID : %d", num);
+				dmsg->id = num;
+				state = DYN_SPACES_BEFORE_TYPE_ID;
+				//} else {
+					//   goto error;
+				//}
+			}
+			break;
+
+		case DYN_SPACES_BEFORE_TYPE_ID:
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
+			if (ch == ' ') {
+				break;
+			} else if (isdigit(ch)) {
+				num = ch - '0';
+				state = DYN_TYPE_ID;
+			}
+
+			break;
+
+		case DYN_TYPE_ID:
+			//log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+			//log_debug(LOG_DEBUG, "num = %d", num);
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else {
+				if (num > 0)  {
+					log_debug(LOG_DEBUG, "VERB ID: %d", num);
+					dmsg->type = num;
+					state = DYN_SPACES_BEFORE_VERSION;
+				} else {
+					goto error;
+				}
+			}
+
+			break;
+
+		case DYN_SPACES_BEFORE_VERSION:
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
+			if (ch == ' ') {
+				break;
+			} else if (isdigit(ch)) {
+				num = ch - '0';
+				state = DYN_VERSION;
+			}
+			break;
+
+		case DYN_VERSION:
+			//log_debug(LOG_DEBUG, "DYN_VERSION");
+			//log_debug(LOG_DEBUG, "num = %d", num);
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else {
+				if (ch == CR)  {
+					log_debug(LOG_DEBUG, "VERSION : %d", num);
+					dmsg->version = num;
+					state = DYN_CRLF_BEFORE_STAR;
+				} else {
+					goto error;
+				}
+			}
+
+			break;
+
+		case DYN_CRLF_BEFORE_STAR:
+			//log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_STAR");
+			if (ch == LF)  {
+				state = DYN_STAR;
+			} else {
+				goto error;
+			}
+
+			break;
+
+		case DYN_STAR:
+			//log_debug(LOG_DEBUG, "DYN_STAR");
+			if (ch == '*') {
+				state = DYN_DATA_LEN;
+				num = 0;
+			} else {
+				goto error;
+			}
+
+			break;
+
+		case DYN_DATA_LEN:
+			//log_debug(LOG_DEBUG, "DYN_DATA_LEN");
+			//log_debug(LOG_DEBUG, "num = %d", num);
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else {
+				if (ch == ' ')  {
+					log_debug(LOG_DEBUG, "Data len: %d", num);
+					dmsg->mlen = num;
+					state = DYN_SPACE_BEFORE_DATA;
+					num = 0;
+				} else {
+					goto error;
+				}
+			}
+			break;
+
+		case DYN_SPACE_BEFORE_DATA:
+			//log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
+			state = DYN_DATA;
+			break;
+
+		case DYN_DATA:
+			log_debug(LOG_DEBUG, "DYN_DATA");
+			p -= 1;
+			if (dmsg->mlen > 0)  {
+				dmsg->data = p;
+				p += dmsg->mlen - 1;
+				state = DYN_CRLF_BEFORE_DONE;
+			} else {
+				goto error;
+			}
+
+			break;
+
+		case DYN_CRLF_BEFORE_DONE:
+			//log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
+			if (ch == CR)  {
+				if (*(p+1) == LF) {
+					state = DYN_DONE;
+				} else {
+					goto error;
+				}
+			} else {
+				goto error;
+			}
+
+			break;
+
+		case DYN_DONE:
+			//log_debug(LOG_DEBUG, "DYN_DONE");
+			r->pos = p+1;
+			r->dyn_state = DYN_DONE;
+			b->pos = p+1;
+			goto done;
+			break;
+
+		default:
+			NOT_REACHED();
+			break;
+
+		}
+
+	}
+
+	done:
+	dmsg->owner = r;
+	dmsg->source_address = r->owner->addr;
+	log_debug(LOG_DEBUG, "at done with p at %d", p);
+	//dmsg_dump(r->dmsg);
+	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
+	//		"type %d state %d rpos %d of %d", r->id, r->result, r->type,
+	//		r->dyn_state, r->pos - b->pos, b->last - b->pos);
+
+
+	return true;
+
+	skip:
+	//log_debug(LOG_DEBUG, "This is not a dyn message");
+	dmsg->type = DMSG_UNKNOWN;
+	dmsg->owner = r;
+	dmsg->source_address = r->owner->addr;
+	return true;
+
+	error:
+	log_debug(LOG_ERR, "at error");
+	r->result = MSG_PARSE_ERROR;
+	r->state = state;
+	errno = EINVAL;
+
+	log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
+			"res %d type %d state %d", r->id, r->result, r->type,
+			r->state);
+	return false;
+
+	return true;    //fix me
 }
 
 
@@ -307,80 +305,58 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-    if (dyn_parse_core(r)) {
-         struct dmsg *dmsg = r->dmsg;   	
+	if (dyn_parse_core(r)) {
+		struct dmsg *dmsg = r->dmsg;
 
-         /*
-         if (dmsg->type == GOSSIP_PING) { //replace with switch as it will be big
-             log_debug(LOG_DEBUG, "got a GOSSIP_PING"); 
-             r->state = 0;
-             r->result = MSG_PARSE_OK;
-             r->dyn_state = DYN_DONE;
-             return;
-         }
-         */
-
-
-         if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
-        	 log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
-        	 r->state = 0;
-        	 r->result = MSG_PARSE_OK;
-        	 r->dyn_state = DYN_DONE;
-        	 return;
-         }
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
+			log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
+			r->state = 0;
+			r->result = MSG_PARSE_OK;
+			r->dyn_state = DYN_DONE;
+			return;
+		}
 
 
 
-         if (r->redis)
-             return redis_parse_req(r);  
+		if (r->redis)
+			return redis_parse_req(r);
 
-	     return memcache_parse_req(r);
-    } 
-   
-    //bad case
-    log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
-    msg_dump(r);
+		return memcache_parse_req(r);
+	}
+
+	//bad case
+	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
+	msg_dump(r);
 }
 
 
 void dyn_parse_rsp(struct msg *r)
 {
-    if (dyn_parse_core(r)) {
-         struct dmsg *dmsg = r->dmsg;
-         /*
-         if (dmsg->type == GOSSIP_PING_REPLY) { //replace with switch as it will be big
-	        log_debug(LOG_DEBUG, "I got a GOSSIP_PING_REPLY");
-	        r->state = 0;
-            r->result = MSG_PARSE_OK;
-            r->dyn_state = DYN_DONE;
-            return;
-	     }
-	     */
+	if (dyn_parse_core(r)) {
+		struct dmsg *dmsg = r->dmsg;
+
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
+			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
+			r->state = 0;
+			r->result = MSG_PARSE_OK;
+			r->dyn_state = DYN_DONE;
+			return;
+		}
 
 
 
-         if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
-        	 log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
-        	 r->state = 0;
-        	 r->result = MSG_PARSE_OK;
-        	 r->dyn_state = DYN_DONE;
-        	 return;
-         }
+		if (r->redis)
+			return redis_parse_rsp(r);
 
+		return memcache_parse_rsp(r);
+	}
 
+	//bad case
+	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
+	msg_dump(r);
 
-	     if (r->redis)
-            return redis_parse_rsp(r);
-
-	     return memcache_parse_rsp(r);
-   } 
-
-   //bad case
-   log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
-   msg_dump(r);
-
-   //r->state = 0;
-   //r->result = MSG_PARSE_OK;
+	//r->state = 0;
+	//r->result = MSG_PARSE_OK;
 }
 
 

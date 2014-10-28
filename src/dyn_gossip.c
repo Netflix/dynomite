@@ -739,8 +739,8 @@ gossip_loop(void *arg)
 
 	string_init(&seeds);
 
+	log_debug(LOG_VVERB, "gossip_interval : %d msecs", gn_pool.g_interval);
 	for(;;) {
-		loga("gossip_interval === %d msecs", gn_pool.g_interval);
 		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
 		current_node->ts = (uint64_t) time(NULL);

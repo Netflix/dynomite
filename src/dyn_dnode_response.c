@@ -140,7 +140,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	//add messsage
 	struct mbuf *nbuf = mbuf_get();
 	if (nbuf == NULL) {
-		loga("Error happened in calling mbuf_get");
+		log_debug(LOG_ERR, "Error happened in calling mbuf_get");
 		return;  //TODOs: need to address this further
 	}
 

@@ -484,7 +484,7 @@ core_loop(struct context *ctx)
 
 	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
-	nsd = event_wait(ctx->evb, ctx->timeout); //ctx->timeout);
+	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;
 	}
