@@ -356,7 +356,7 @@ mbuf_write_uint64(struct mbuf *mbuf, uint64_t num)
 {
  
    if (num < 10) {
-      mbuf_write_char(mbuf, '0' + (num % 10));
+      mbuf_write_char(mbuf, '0' + num);
       return;
    }
 

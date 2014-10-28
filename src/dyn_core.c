@@ -40,6 +40,8 @@ core_ctx_create(struct instance *nci)
 	rstatus_t status;
 	struct context *ctx;
 
+	srand((unsigned) time(NULL));
+
 	ctx = dn_alloc(sizeof(*ctx));
 	if (ctx == NULL) {
 		return NULL;
@@ -124,6 +126,8 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
+	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
+
 	/* initialize peers */
 	status = dnode_peer_init(&ctx->pool, ctx);
 	if (status != DN_OK) {
@@ -164,7 +168,7 @@ core_ctx_create(struct instance *nci)
 	gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-	ctx->dyn_state = NORMAL;  //TODOS: change this to JOINING
+
 	return ctx;
 }
 
@@ -417,7 +421,7 @@ core_core(void *arg, uint32_t events)
 void
 core_debug(struct context *ctx)
 {
-	log_debug(LOG_VERB, "Peers info.................................................");
+	log_debug(LOG_VERB, "=====================Peers info=====================");
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
 		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
@@ -426,10 +430,11 @@ core_debug(struct context *ctx)
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer Rack            : '%.*s'", server->rack);
-			log_debug(LOG_VERB, "\tPeer DC        : '%.*s'",server->dc);
+			log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
+			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",server->dc);
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
+			log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
 			log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
 			log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", server->failure_count);
@@ -460,13 +465,11 @@ core_process_messages(void)
 {
 	//loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
-		struct ring_message *msg = (struct ring_message *) CBUF_Pop(C2G_OutQ);
+		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
-			struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
-			msg->cb(msg->sp, rnode);
-			//msg->cb(msg->sp, msg->node);
+			msg->cb(msg);
 			core_debug(msg->sp->ctx);
-			ring_message_deinit(msg);
+			ring_msg_deinit(msg);
 		}
 	}
 

@@ -151,7 +151,7 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, secure_server_option) },
 
-    { string(CONF_STR_DC),
+    { string("datacenter"),
       conf_set_string,
       offsetof(struct conf_pool, dc) },
 
@@ -256,6 +256,8 @@ conf_seed_each_transform(void *elem, void *data)
     s->idx = array_idx(seeds, s);
     s->owner = NULL;
     s->pname = cseed->pname;
+
+    s->state = UNKNOWN;
 
     uint8_t *p = cseed->name.data + cseed->name.len - 1;
     uint8_t *start = cseed->name.data;
@@ -529,7 +531,6 @@ conf_dump(struct conf *cf)
 
         nserver = array_n(&cp->server);
         log_debug(LOG_VVERB, "  servers: %"PRIu32"", nserver);
-
         for (j = 0; j < nserver; j++) {
             s = array_get(&cp->server, j);
             log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
@@ -539,21 +540,26 @@ conf_dump(struct conf *cf)
         
         uint32_t nseeds = array_n(&cp->dyn_seeds);
         log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
-
         for (j = 0; j < nseeds; j++) {
             s = array_get(&cp->dyn_seeds, j);
             log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
         }
+
+        log_debug(LOG_VVERB, "  env: %.*s", cp->env.len, cp->env.data);
+        log_debug(LOG_VVERB, "  rack: %.*s", cp->rack.len, cp->rack.data);
+        log_debug(LOG_VVERB, "  dc: %.*s", cp->dc.len, cp->dc.data);
 
         log_debug(LOG_VVERB, "  dyn_listen: %.*s",
                   cp->dyn_listen.pname.len, cp->dyn_listen.pname.data);
         log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
         log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
         log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
-        log_debug(LOG_VVERB, "  rack: %.*s", cp->rack.len, cp->rack.data);
+
         log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
         log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
-                cp->secure_server_option.len, cp->secure_server_option.data);
+                              cp->secure_server_option.len,
+                              cp->secure_server_option.data);
+
         log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
     }
 }
@@ -1413,6 +1419,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->distribution == CONF_UNSET_DIST) {
         cp->distribution = CONF_DEFAULT_DIST;
+    }
+
+    if (string_empty(&cp->dyn_seed_provider)) {
+    	string_copy_c(&cp->dyn_seed_provider, &CONF_DEFAUTL_SEED_PROVIDER);
     }
 
     if (cp->hash == CONF_UNSET_HASH) {

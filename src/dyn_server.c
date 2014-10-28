@@ -795,6 +795,9 @@ rack_init(struct rack *rack)
 	rack->nserver_continuum = 0;
 	rack->name = dn_alloc(sizeof(struct string));
 	string_init(rack->name);
+
+	rack->dc = dn_alloc(sizeof(struct string));
+	string_init(rack->dc);
 }
 
 rstatus_t
@@ -834,7 +837,7 @@ server_pool_deinit(struct array *server_pool)
 }
 
 struct rack *
-server_get_rack(struct server_pool *pool, struct string *rackname)
+server_get_rack(struct server_pool *pool, struct string *rackname, struct string *dcname)
 {
 	uint32_t i, len;
 	for (i = 0, len = array_n(&pool->racks); i < len; i++) {
@@ -842,10 +845,11 @@ server_get_rack(struct server_pool *pool, struct string *rackname)
 		ASSERT(rack != NULL);
 		ASSERT(rack->name != NULL);
 
-		int cmp = string_compare(rack->name, rackname);
-		if (cmp == 0) {
+		//int cmp = string_compare(rack->name, rackname);
+		//if (cmp == 0) {
+		//TODOs: use dict for fast access/check-up
+		if (string_compare(rack->name, rackname) == 0 && string_compare(rack->dc, dcname) == 0)
 			return rack;
-		}
 	}
 
 	return NULL;

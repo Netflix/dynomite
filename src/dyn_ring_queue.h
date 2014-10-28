@@ -19,8 +19,8 @@
 
 struct node;
 
-typedef rstatus_t (*callback_t)(struct server_pool *, struct node *);
-
+typedef rstatus_t (*callback_t)(void *msg);
+typedef void (*data_func_t)(void *);
 
 volatile struct
 {
@@ -40,10 +40,14 @@ volatile struct
 
 
 
-struct ring_message {
-	callback_t         cb;
-    struct array       nodes;
-	struct server_pool *sp;
+struct ring_msg {
+	callback_t           cb;
+    uint8_t              *data;             /* place holder for a msg */
+    uint32_t             capacity;          /* max capacity */
+    uint32_t             len;               /* # of useful bytes in data (len =< capacity) */
+    struct array         nodes;
+	struct server_pool   *sp;
+
 };
 
 
@@ -65,7 +69,7 @@ volatile struct
 } C2S_OutQ;
 
 
-struct stat_message {
+struct stat_msg {
 	void*         cb;
 	void*         post_cb;
 	void*         data;
@@ -75,10 +79,11 @@ struct stat_message {
 
 
 
-struct ring_message * create_ring_message(void);
-struct ring_message *create_ring_message_with_size(uint32_t size, bool init_node);
-rstatus_t ring_message_init(struct ring_message *msg, uint32_t size, bool init_node);
-rstatus_t ring_message_deinit(struct ring_message *msg);
+struct ring_msg *create_ring_msg(void);
+struct ring_msg *create_ring_msg_with_data(int capacity);
+struct ring_msg *create_ring_msg_with_size(uint32_t size, bool init_node);
+rstatus_t ring_msg_init(struct ring_msg *msg, uint32_t size, bool init_node);
+rstatus_t ring_msg_deinit(struct ring_msg *msg);
 
 struct node * create_node(void);
 rstatus_t node_init(struct node *node);

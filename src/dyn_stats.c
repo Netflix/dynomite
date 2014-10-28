@@ -843,7 +843,7 @@ static stats_cmd_t parse_request(int sd)
 static rstatus_t
 stats_msg_to_core(stats_cmd_t cmd, void *cb, void *post_cb)
 {
-    struct stat_message *msg = dn_alloc(sizeof(*msg));
+    struct stat_msg *msg = dn_alloc(sizeof(*msg));
     msg->cmd = cmd;
     msg->data = NULL;
     msg->cb = cb;

@@ -611,8 +611,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
             rack = array_get(&pool->racks, i);
             struct msg *rack_msg;
             
-            // clone the msg struct if not the current rack
-            if (string_compare(rack->name, &pool->rack) != 0) {
+            // clone the msg struct if not the current rack/dc
+            if (string_compare(rack->name, &pool->rack) != 0 && string_compare(rack->dc, &pool->dc)) {
                 rack_msg = msg_get(c_conn, msg->request, msg->redis);
                 if (rack_msg == NULL) {
                     log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
@@ -628,7 +628,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
             remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
         }
     } else {
-        rack = server_get_rack(pool, &pool->rack);
+        rack = server_get_rack(pool, &pool->rack, &pool->dc);
         remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
     }
 }

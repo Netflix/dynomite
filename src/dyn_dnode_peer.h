@@ -31,10 +31,11 @@ void dnode_peer_pool_disconnect(struct context *ctx);
 //rstatus_t dnode_peer_pool_init(struct array *server_pool, struct array *conf_pool, struct context *ctx);
 //void dnode_peer_pool_deinit(struct array *server_pool);
 
-rstatus_t dnode_peer_add(struct server_pool *sp, struct node *node);
-rstatus_t dnode_peer_replace(struct server_pool *sp, struct node *node);
-rstatus_t dnode_peer_remove(struct server_pool *sp, struct node *node);
-rstatus_t dnode_peer_add_rack(struct server_pool *sp, struct node *node);
-rstatus_t dnode_peer_handshake_announcing(struct server_pool *sp);
+
+rstatus_t dnode_peer_forward_state(void *rmsg);
+rstatus_t dnode_peer_add(void *rmsg);
+rstatus_t dnode_peer_replace(void *rmsg);
+rstatus_t dnode_peer_remove(void *rmsg);
+rstatus_t dnode_peer_handshake_announcing(void *rmsg);
 
 #endif 

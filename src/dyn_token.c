@@ -91,7 +91,7 @@ void print_dyn_token(struct dyn_token *token, int num_tabs)
 	if (num_tabs < 0)
 		num_tabs = 0;
 
-	log_debug(LOG_VERB, "%*cToken : %"PRIu32" %"PRIu32" %"PRIu32" ", num_tabs, '\t', token->signum, *token->mag, token->len);
+	log_debug(LOG_VERB, "%*cToken : %"PRIu32" %"PRIu32" %"PRIu32" ", num_tabs, '\t', token->signum, token->mag[0], token->len);
 
 }
 
@@ -246,4 +246,38 @@ derive_tokens(struct array *tokens, uint8_t *start, uint8_t *end)
 }
 
 
+rstatus_t
+derive_token(struct dyn_token *token, uint8_t *start, uint8_t *end)
+{
+	ASSERT (end > start);
+	uint8_t *p = end;
+	uint8_t *q;
+	ASSERT (token != NULL);
+	init_dyn_token(token);
+
+	if (p >= start) {
+		q = dn_strrchr(p, start, ',');
+		if (q == NULL) {
+			q = start; /* we're at the beginning of the list */
+		} else {
+			q++;
+		}
+
+		uint32_t len = 0;
+		if (p == end) {
+			len = (uint32_t)(p - q);
+		} else {
+			len = (uint32_t)(p - q + 1);
+		}
+
+		rstatus_t status = parse_dyn_token(q, len, token);
+		if (status != DN_OK) {
+			return DN_ERROR;
+		}
+
+		p = q - 2;
+	}
+
+	return DN_OK;
+}
 

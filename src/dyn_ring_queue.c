@@ -12,44 +12,68 @@
 #include "dyn_token.h"
 
 
-//should use queue technique to store struct ring_message so that we can reuse
-struct ring_message *
-create_ring_message(void)
+//should use pooling to store struct ring_message so that we can reuse
+struct ring_msg *
+create_ring_msg(void)
 {
-	struct ring_message *result = dn_alloc(sizeof(*result));
+	struct ring_msg *msg = dn_alloc(sizeof(*msg));
 
-	if (result == NULL)
+	if (msg == NULL)
 		return NULL;
 
-	ring_message_init(result, 1, true);
+	ring_msg_init(msg, 1, true);
+    msg->data = NULL;
 
-	return result;
+	return msg;
 }
 
-struct ring_message *
-create_ring_message_with_size(uint32_t size, bool init_node)
-{
-	struct ring_message *result = dn_alloc(sizeof(*result));
 
-	if (result == NULL)
+struct ring_msg *
+create_ring_msg_with_data(int capacity)
+{
+	struct ring_msg *msg = dn_alloc(sizeof(*msg));
+
+	if (msg == NULL)
 		return NULL;
 
-	ring_message_init(result, size, init_node);
+	ring_msg_init(msg, 1, true);
 
-	return result;
+	msg->data = dn_zalloc(sizeof(uint8_t) * capacity);
+	msg->capacity = capacity;
+    msg->len = 0;
+
+	return msg;
 }
+
+
+struct ring_msg *
+create_ring_msg_with_size(uint32_t size, bool init_node)
+{
+	struct ring_msg *msg = dn_alloc(sizeof(*msg));
+
+	if (msg == NULL)
+		return NULL;
+
+	ring_msg_init(msg, size, init_node);
+	msg->data = NULL;
+	msg->capacity = 0;
+	msg->len = 0;
+
+	return msg;
+}
+
 
 rstatus_t
-ring_message_init(struct ring_message *msg, uint32_t size, bool init_node)
+ring_msg_init(struct ring_msg *msg, uint32_t n, bool init_node)
 {
 	if (msg == NULL)
 		return DN_ERROR;
 
-	array_init(&msg->nodes, size, sizeof(struct node));
+	array_init(&msg->nodes, n, sizeof(struct node));
 	if (init_node) {
 		uint32_t i;
-		for(i=0; i<size; i++) {
-			struct node *node = (struct node *) array_push(&msg->nodes);
+		for(i=0; i<n; i++) {
+			struct node *node = array_push(&msg->nodes);
 			node_init(node);
 		}
 	}
@@ -57,24 +81,28 @@ ring_message_init(struct ring_message *msg, uint32_t size, bool init_node)
 	//msg->node = dn_alloc(sizeof(struct node));
 	//msg->node = create_node();
 
+
 	return DN_OK;
 }
 
 
 rstatus_t
-ring_message_deinit(struct ring_message *msg)
+ring_msg_deinit(struct ring_msg *msg)
 {
 	if (msg == NULL)
 		return DN_ERROR;
 
-	//if (msg->node != NULL)
-	//	node_deinit(msg->node);
 	uint32_t i;
 	for(i=0; i<array_n(&msg->nodes); i++) {
-		struct node *node = (struct node *) array_get(&msg->nodes, i);
+		struct node *node = array_get(&msg->nodes, i);
 		node_deinit(node);
 	}
 
+	if (msg->data != NULL) {
+		dn_free(msg->data);
+	}
+
+	array_deinit(&msg->nodes);
 	dn_free(msg);
 
 	return DN_OK;
@@ -98,14 +126,13 @@ node_init(struct node *node)
 	if (node == NULL)
 		return DN_ERROR;
 
-	//array_init(&node->tokens, 1, sizeof(struct dyn_token));
 	init_dyn_token(&node->token);
 	string_init(&node->dc);
 	string_init(&node->rack);
 	string_init(&node->name);
 	string_init(&node->pname);
 
-	node->port = 0;
+	node->port = 8101;
 
 	node->next_retry = 0;
 	node->last_retry = 0;
@@ -132,7 +159,7 @@ node_deinit(struct node *node)
 	string_deinit(&node->name);
 	string_deinit(&node->pname);
 
-	dn_free(node);
+	//dn_free(node);
 
 	return DN_OK;
 }
@@ -156,14 +183,8 @@ node_copy(const struct node *src, struct node *dst)
 	string_copy(&dst->pname, src->pname.data, src->pname.len);
 	string_copy(&dst->name, src->name.data, src->name.len);
 	string_copy(&dst->rack, src->rack.data, src->rack.len);
+	string_copy(&dst->dc, src->dc.data, src->dc.len);
 
-	//uint32_t i, nelem = array_n(&src->tokens);
-	//array_init(&dst->tokens, nelem, sizeof(struct dyn_token));
-	//for (i = 0; i < nelem; i++) {
-	//    	struct dyn_token *src_token = (struct dyn_token *) array_get(&src->tokens, i);
-	//    	struct dyn_token *dst_token = array_push(&dst->tokens);
-	//    	copy_dyn_token(src_token, dst_token);
-	//}
 
 	copy_dyn_token(&src->token, &dst->token);
     return DN_OK;
