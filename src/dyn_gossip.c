@@ -749,7 +749,7 @@ gossip_loop(void *arg)
 		if (gn_pool.ctx->dyn_state == STANDBY)
 			continue;
 
-		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
+		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
 			gossip_update_seeds(sp, &seeds);
 			string_deinit(&seeds);

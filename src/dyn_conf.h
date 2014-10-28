@@ -48,25 +48,25 @@
 #define CONF_UNSET_HASH (hash_type_t) -1
 #define CONF_UNSET_DIST (dist_type_t) -1
 
-#define CONF_DEFAULT_HASH                    HASH_FNV1A_64
-#define CONF_DEFAULT_DIST                    DIST_KETAMA
-#define CONF_DEFAULT_TIMEOUT                 -1
+#define CONF_DEFAULT_HASH                    HASH_MURMUR
+#define CONF_DEFAULT_DIST                    DIST_VNODE
+#define CONF_DEFAULT_TIMEOUT                 10000
 #define CONF_DEFAULT_LISTEN_BACKLOG          512
 #define CONF_DEFAULT_CLIENT_CONNECTIONS      0
 #define CONF_DEFAULT_REDIS                   false
-#define CONF_DEFAULT_PRECONNECT              false
+#define CONF_DEFAULT_PRECONNECT              true
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        false
-#define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    30 * 1000      /* in msec */
+#define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
 #define CONF_DEFAULT_SERVER_FAILURE_LIMIT    2
 #define CONF_DEFAULT_SERVER_CONNECTIONS      2
 #define CONF_DEFAULT_KETAMA_PORT             11211
 
 #define CONF_DEFAULT_SEEDS                   5
-#define CONF_DEFAULT_DYN_READ_TIMEOUT        30000
-#define CONF_DEFAULT_DYN_WRITE_TIMEOUT       30000
+#define CONF_DEFAULT_DYN_READ_TIMEOUT        10000
+#define CONF_DEFAULT_DYN_WRITE_TIMEOUT       10000
 #define CONF_DEFAULT_DYN_CONNECTIONS         10
 #define CONF_DEFAULT_VNODE_TOKENS            1
-#define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
+#define CONF_DEFAULT_GOS_INTERVAL            5000  //in millisec
 #define CONF_DEFAULT_PEERS                   200
 
 #define CONF_STR_NONE                        "none"
@@ -79,6 +79,8 @@
 #define CONF_DEFAULT_RACK                    "localrack"
 #define CONF_DEFAULT_DC                      "localdc"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
+
+#define CONF_DEFAUTL_SEED_PROVIDER           "simple_provider"
 
 
 struct conf_listen {

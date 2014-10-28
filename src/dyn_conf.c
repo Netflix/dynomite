@@ -1417,6 +1417,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->distribution = CONF_DEFAULT_DIST;
     }
 
+    if (string_empty(&cp->dyn_seed_provider)) {
+    	string_copy_c(&cp->dyn_seed_provider, &CONF_DEFAUTL_SEED_PROVIDER);
+    }
+
     if (cp->hash == CONF_UNSET_HASH) {
         cp->hash = CONF_DEFAULT_HASH;
     }

@@ -155,6 +155,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     ASSERT(msg->request);
     ASSERT(!msg->quit && !msg->noreply);
 
+    //TODOs: need to fix this for different timeouts
     timeout = server_timeout(conn);
     if (timeout <= 0) {
         return;
