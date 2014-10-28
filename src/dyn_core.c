@@ -40,6 +40,8 @@ core_ctx_create(struct instance *nci)
 	rstatus_t status;
 	struct context *ctx;
 
+	srand((unsigned) time(NULL));
+
 	ctx = dn_alloc(sizeof(*ctx));
 	if (ctx == NULL) {
 		return NULL;
@@ -465,7 +467,6 @@ core_process_messages(void)
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
-			//struct node *rnode = (struct node *) array_get(&msg->nodes, 0);
 			msg->cb(msg);
 			core_debug(msg->sp->ctx);
 			ring_msg_deinit(msg);

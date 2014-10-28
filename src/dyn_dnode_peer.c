@@ -4,6 +4,7 @@
  */ 
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include "dyn_core.h"
@@ -557,7 +558,7 @@ dnode_peer_forward_state(void *rmsg)
 	rstatus_t status;
 	struct ring_msg *msg = rmsg;
 	struct server_pool *sp = msg->sp;
-	loga("dnode_peer_forward_state: forwarding");
+	log_debug(LOG_VVERB, "dnode_peer_forward_state: forwarding");
 
 	//we assume one mbuf is enough for now - will enhance with multiple mbufs later
 	struct mbuf *mbuf = mbuf_get();
@@ -572,30 +573,31 @@ dnode_peer_forward_state(void *rmsg)
 	uint32_t i,nelem;
 	nelem = array_n(peers);
 
-	//for each peer, send this updated msg
-	for (i = 0; i < nelem; i++) {
-		struct server *peer = (struct server *) array_get(peers, i);
-		if (peer->is_local)
-			continue;
+	//pick a random peer
+	int ran_index = rand() % nelem;
 
-		log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
+	if (ran_index == 0)
+	   ran_index += 1;
 
-		struct conn * conn = dnode_peer_conn(peer);
-		if (conn == NULL) {
-			//running out of connection due to memory exhaust
-			log_debug(LOG_ERR, "Unable to obtain a connection object");
-			return DN_ERROR;
-		}
+	struct server *peer = (struct server *) array_get(peers, ran_index);
 
-		status = dnode_peer_connect(sp->ctx, peer, conn);
-		if (status != DN_OK ) {
-			dnode_peer_close(sp->ctx, conn);
-			log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
-			return DN_ERROR;
-		}
+	//log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
-		dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
+	struct conn * conn = dnode_peer_conn(peer);
+	if (conn == NULL) {
+		//running out of connection due to memory exhaust
+		log_debug(LOG_ERR, "Unable to obtain a connection object");
+		return DN_ERROR;
 	}
+
+	status = dnode_peer_connect(sp->ctx, peer, conn);
+	if (status != DN_OK ) {
+		dnode_peer_close(sp->ctx, conn);
+		log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
+		return DN_ERROR;
+	}
+
+	dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
 
 	//free this as nobody else will do
 	mbuf_put(mbuf);

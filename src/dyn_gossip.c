@@ -222,133 +222,133 @@ static struct string *token_to_string(struct dyn_token *token) {
 static uint8_t
 gossip_failure_detector(struct node *node)
 {
-   log_debug(LOG_VERB, "In gossip_failure_detector");
+	log_debug(LOG_VERB, "In gossip_failure_detector");
 
-   if (node == NULL)
-	   return UNKNOWN;
+	if (node == NULL)
+		return UNKNOWN;
 
-   if (node->is_local)
-	   return NORMAL;
+	if (node->is_local)
+		return NORMAL;
 
-   uint64_t cur_ts = (uint64_t) time(NULL);
-   uint64_t delta = gn_pool.g_interval/1000 * 40; //g_internal is in milliseconds
+	uint64_t cur_ts = (uint64_t) time(NULL);
+	uint64_t delta = gn_pool.g_interval/1000 * 40; //g_internal is in milliseconds
 
-   //loga("cur_ts %d", cur_ts);
-   //loga("delta %d", delta);
-   //loga("node->ts = %d", node->ts);
-   //loga("node state = %d", node->state);
+	//loga("cur_ts %d", cur_ts);
+	//loga("delta %d", delta);
+	//loga("node->ts = %d", node->ts);
+	//loga("node state = %d", node->state);
 
-   if (cur_ts - node->ts > delta) { //if there is no update for delta time
-	   return DOWN;
-   }
+	if (cur_ts - node->ts > delta) { //if there is no update for delta time
+		return DOWN;
+	}
 
-   return node->state;
+	return node->state;
 }
 
 
 static rstatus_t
 gossip_forward_state(struct server_pool *sp)
 {
-	 //assume each record needs maximum 256 bytes
-    struct ring_msg *msg = create_ring_msg_with_data(256 * node_count);
-    uint8_t *data = msg->data; //dn_zalloc(sizeof(uint8_t) * 256 * node_count);//msg->data;
-    uint8_t *pos = data;
+	//assume each record needs maximum 256 bytes
+	struct ring_msg *msg = create_ring_msg_with_data(256 * node_count);
+	uint8_t *data = msg->data; //dn_zalloc(sizeof(uint8_t) * 256 * node_count);//msg->data;
+	uint8_t *pos = data;
 
-    dictIterator *dc_it;
-    dictEntry *dc_de;
-    dc_it = dictGetIterator(gn_pool.dict_dc);
-    while ((dc_de = dictNext(dc_it)) != NULL) {
-    	struct gossip_dc *g_dc = dictGetVal(dc_de);
-    	//log_debug(LOG_VERB, "\tDC name           : '%.*s'", g_dc->name.len, g_dc->name.data);
-    	dictIterator *rack_it = dictGetIterator(g_dc->dict_rack);
-    	dictEntry *rack_de;
-    	while ((rack_de = dictNext(rack_it)) != NULL) {
-    		struct gossip_rack *g_rack = dictGetVal(rack_de);
-    		//log_debug(LOG_VERB, "\tRack name           : '%.*s'", g_rack->name.len, g_rack->name.data);
+	dictIterator *dc_it;
+	dictEntry *dc_de;
+	dc_it = dictGetIterator(gn_pool.dict_dc);
+	while ((dc_de = dictNext(dc_it)) != NULL) {
+		struct gossip_dc *g_dc = dictGetVal(dc_de);
+		//log_debug(LOG_VERB, "\tDC name           : '%.*s'", g_dc->name.len, g_dc->name.data);
+		dictIterator *rack_it = dictGetIterator(g_dc->dict_rack);
+		dictEntry *rack_de;
+		while ((rack_de = dictNext(rack_it)) != NULL) {
+			struct gossip_rack *g_rack = dictGetVal(rack_de);
+			//log_debug(LOG_VERB, "\tRack name           : '%.*s'", g_rack->name.len, g_rack->name.data);
 
-    		dictIterator *node_it = dictGetIterator(g_rack->dict_token_nodes);
-    		dictEntry *node_de;
-            int i = 0;
-    		while ((node_de = dictNext(node_it)) != NULL) {
-    			struct node *gnode = dictGetVal(node_de);
-    			//log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
+			dictIterator *node_it = dictGetIterator(g_rack->dict_token_nodes);
+			dictEntry *node_de;
+			int i = 0;
+			while ((node_de = dictNext(node_it)) != NULL) {
+				struct node *gnode = dictGetVal(node_de);
+				//log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
 
-    			if (i++ > 0) {
-                   //pipe separator
-                   *pos = '|';
-                   pos += 1;
-    			}
+				if (i++ > 0) {
+					//pipe separator
+					*pos = '|';
+					pos += 1;
+				}
 
-    			//write dc name
-    		    dn_memcpy(pos, g_dc->name.data, g_dc->name.len);
-    		    pos += g_dc->name.len;
+				//write dc name
+				dn_memcpy(pos, g_dc->name.data, g_dc->name.len);
+				pos += g_dc->name.len;
 
-    		    //$ separator
-    		    *pos = '$';
-    		    pos += 1;
+				//$ separator
+				*pos = '$';
+				pos += 1;
 
-    		    //write rack name
-    		    dn_memcpy(pos, g_rack->name.data, g_rack->name.len);
-    		    pos += g_rack->name.len;
+				//write rack name
+				dn_memcpy(pos, g_rack->name.data, g_rack->name.len);
+				pos += g_rack->name.len;
 
-    		    //$ separator
-    		    *pos = '$';
-    		    pos += 1;
+				//$ separator
+				*pos = '$';
+				pos += 1;
 
-    		    //write node token
-    		    struct string *token_str = dictGetKey(node_de);
-    		    //log_debug(LOG_VERB, "\tToken string          : '%.*s'", token_str->len, token_str->data);
-    		    int k;
-    		    for(k=0; k<token_str->len;k++, pos++) {
-    		    	*pos = *(token_str->data + k);
-    		    }
+				//write node token
+				struct string *token_str = dictGetKey(node_de);
+				//log_debug(LOG_VERB, "\tToken string          : '%.*s'", token_str->len, token_str->data);
+				int k;
+				for(k=0; k<token_str->len;k++, pos++) {
+					*pos = *(token_str->data + k);
+				}
 
-    		    //comma separator
-    		    *pos = ',';
-    		    pos += 1;
+				//comma separator
+				*pos = ',';
+				pos += 1;
 
-    		    //write ts
-    		    int count = 0;
-    		    uint64_t ts;
-    		    if (gnode->is_local)  //only update my own timestamp
-    		       ts = (uint64_t) time(NULL);
-    		    else ts = gnode->ts;
+				//write ts
+				int count = 0;
+				uint64_t ts;
+				if (gnode->is_local)  //only update my own timestamp
+					ts = (uint64_t) time(NULL);
+				else ts = gnode->ts;
 
-    		    count = 0;
-    		    write_number(pos, ts, &count);
-                pos += count;
+				count = 0;
+				write_number(pos, ts, &count);
+				pos += count;
 
-    		    //comma separator
-    		    *pos = ',';
-    		    pos += 1;
+				//comma separator
+				*pos = ',';
+				pos += 1;
 
-    		    //write state
-    			uint8_t new_state = gossip_failure_detector(gnode);
-    			gnode->state = new_state;
-    		    count = 0;
-    		    write_number(pos, gnode->state, &count);
-                pos += count;
+				//write state
+				uint8_t new_state = gossip_failure_detector(gnode);
+				gnode->state = new_state;
+				count = 0;
+				write_number(pos, gnode->state, &count);
+				pos += count;
 
-    		    //comma separator
-    		    *pos = ',';
-    		    pos += 1;
+				//comma separator
+				*pos = ',';
+				pos += 1;
 
-                //write addresss
-                for(k=0; k<gnode->name.len; k++, pos++) {
-                	*pos = *(gnode->name.data + k);
-                }
+				//write addresss
+				for(k=0; k<gnode->name.len; k++, pos++) {
+					*pos = *(gnode->name.data + k);
+				}
 
-    		}
-    		dictReleaseIterator(node_it);
-    	}
-    	dictReleaseIterator(rack_it);
-    }
+			}
+			dictReleaseIterator(node_it);
+		}
+		dictReleaseIterator(rack_it);
+	}
 
-    msg->len = pos-data;
+	msg->len = pos-data;
 
-    log_debug(LOG_VERB, "\tData           : '%.*s'", (pos-data), data);
+	log_debug(LOG_VERB, "\tData           : '%.*s'", (pos-data), data);
 
-    dictReleaseIterator(dc_it);
+	dictReleaseIterator(dc_it);
 
 	return gossip_ring_msg_to_core(sp, msg, dnode_peer_forward_state);
 }
@@ -584,9 +584,15 @@ gossip_update_state(struct server_pool *sp, struct node *node, uint8_t state, ui
 
 
 static rstatus_t
-gossip_add_node_if_absent(struct server_pool *sp, struct string *dc, struct string *rack,
-		struct string *address, struct string *ip,
-		struct string *port, struct dyn_token *token, uint8_t state, uint64_t timestamp)
+gossip_add_node_if_absent(struct server_pool *sp,
+		struct string *dc,
+		struct string *rack,
+		struct string *address,
+		struct string *ip,
+		struct string *port,
+		struct dyn_token *token,
+		uint8_t state,
+		uint64_t timestamp)
 {
 	rstatus_t status;
 	bool rack_existed = false;
@@ -595,10 +601,10 @@ gossip_add_node_if_absent(struct server_pool *sp, struct string *dc, struct stri
 
 	struct gossip_dc * g_dc = dictFetchValue(gn_pool.dict_dc, dc);
 	if (g_dc == NULL) {
-		 log_debug(LOG_VERB, "We don't have this datacenter? '%.*s' ", dc->len, dc->data);
-		 g_dc = array_push(&gn_pool.datacenters);
-		 gossip_dc_init(g_dc, dc);
-		 dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
+		log_debug(LOG_VERB, "We don't have this datacenter? '%.*s' ", dc->len, dc->data);
+		g_dc = array_push(&gn_pool.datacenters);
+		gossip_dc_init(g_dc, dc);
+		dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
 	} else {
 		log_debug(LOG_VERB, "We got a datacenter in dict for '%.*s' ", dc->len, dc->data);
 	}
@@ -610,7 +616,7 @@ gossip_add_node_if_absent(struct server_pool *sp, struct string *dc, struct stri
 		gossip_rack_init(g_rack, dc, rack);
 		dictAdd(g_dc->dict_rack, &g_rack->name, g_rack);
 	} else {
-		 log_debug(LOG_VERB, "We got a rack for '%.*s' ", rack->len, rack->data);
+		log_debug(LOG_VERB, "We got a rack for '%.*s' ", rack->len, rack->data);
 	}
 
 	struct string *token_str = token_to_string(token);
@@ -622,16 +628,16 @@ gossip_add_node_if_absent(struct server_pool *sp, struct string *dc, struct stri
 		//log_debug(LOG_VERB, "adding node : address[%.*s]", address->len, address->data);
 		//log_debug(LOG_VERB, "adding node : ip[%.*s]", ip->len, ip->data);
 		//log_debug(LOG_VERB, "adding node : port[%.*s]", port->len, port->data);
-        //log_debug(LOG_VERB, "suggested state : %d", state);
+		//log_debug(LOG_VERB, "suggested state : %d", state);
 		//print_dyn_token(token, 6);
 		gossip_add_node(sp, dc, g_rack, address, ip, port, token, state);
 	} else if (dictFind(g_rack->dict_name_nodes, ip) != NULL) {
 		if (!g_node->is_local) {  //don't update myself here
-		    if (string_compare(&g_node->name, ip) != 0) {
-		       gossip_replace_node(sp, g_node, address, ip, state);
-		    } else {  //update state
-               gossip_update_state(sp, g_node, state, timestamp);
-		    }
+			if (string_compare(&g_node->name, ip) != 0) {
+				gossip_replace_node(sp, g_node, address, ip, state);
+			} else {  //update state
+				gossip_update_state(sp, g_node, state, timestamp);
+			}
 		}
 	}
 
@@ -739,6 +745,10 @@ gossip_loop(void *arg)
 		log_debug(LOG_VERB, "Gossip is running ...");
 		current_node->ts = (uint64_t) time(NULL);
 
+		//STANDBY state for warm bootstrap
+		if (gn_pool.ctx->dyn_state == STANDBY)
+			continue;
+
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
 			gossip_update_seeds(sp, &seeds);
@@ -823,9 +833,9 @@ gossip_pool_each_init(void *elem, void *data)
 	for (i = 0, nelem = array_n(&sp->racks); i < nelem; i++) {
 		struct rack *rack = (struct rack *) array_get(&sp->racks, i);
 		if (dictFind(gn_pool.dict_dc, rack->dc) == NULL) {
-		   struct gossip_dc *g_dc = array_push(&gn_pool.datacenters);
-		   gossip_dc_init(g_dc, rack->dc);
-		   dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
+			struct gossip_dc *g_dc = array_push(&gn_pool.datacenters);
+			gossip_dc_init(g_dc, rack->dc);
+			dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
 		}
 
 		struct gossip_dc *g_dc = dictFetchValue(gn_pool.dict_dc, rack->dc);
@@ -841,7 +851,7 @@ gossip_pool_each_init(void *elem, void *data)
 	for (i = 0, nelem = array_n(&sp->peers); i < nelem; i++) {
 		struct server *peer = array_get(&sp->peers, i);
 		struct gossip_dc *g_dc = dictFetchValue(gn_pool.dict_dc, &peer->dc);
-        struct gossip_rack *g_rack = dictFetchValue(g_dc->dict_rack, &peer->rack);
+		struct gossip_rack *g_rack = dictFetchValue(g_dc->dict_rack, &peer->rack);
 		struct node *gnode = array_push(&g_rack->nodes);
 
 		node_init(gnode);
@@ -857,26 +867,26 @@ gossip_pool_each_init(void *elem, void *data)
 		if (i == 0) { //Don't override its own state
 			gnode->state = sp->ctx->dyn_state;  //likely it is JOINING state
 			gnode->ts = (uint64_t)time(NULL);
-            current_node = gnode;
+			current_node = gnode;
 			char *b_address = get_broadcast_address(sp);
 			string_deinit(&gnode->name);
 			string_copy(&gnode->name, b_address, dn_strlen(b_address));
 		} else {
-            gnode->state = DOWN;
-            gnode->ts = 1010101;  //make this to be a very aged ts
+			gnode->state = DOWN;
+			gnode->ts = 1010101;  //make this to be a very aged ts
 		}
 
-        struct dyn_token *ptoken = array_get(&peer->tokens, 0);
-        copy_dyn_token(ptoken, &gnode->token);
+		struct dyn_token *ptoken = array_get(&peer->tokens, 0);
+		copy_dyn_token(ptoken, &gnode->token);
 
-        //copy socket stuffs
+		//copy socket stuffs
 
-        g_rack->nnodes++;
-        //add into dicts
-        dictAdd(g_rack->dict_name_nodes, &gnode->name, gnode);
-        dictAdd(g_rack->dict_token_nodes, token_to_string(&gnode->token), gnode);
+		g_rack->nnodes++;
+		//add into dicts
+		dictAdd(g_rack->dict_name_nodes, &gnode->name, gnode);
+		dictAdd(g_rack->dict_token_nodes, token_to_string(&gnode->token), gnode);
 
-        node_count++;
+		node_count++;
 
 	}
 
