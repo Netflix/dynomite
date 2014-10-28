@@ -125,17 +125,17 @@ struct dyn_ring;
 
 typedef enum dyn_state {
 	INIT = 0,
-	STANDBY,
-	WRITES_ONLY,
-	RESUMING,
-	NORMAL,
-	SUSPENDING,
-	LEAVING,
-	JOINING,
-	DOWN,
-	REMOVED,
-	EXITING,
-	UNKNOWN
+	STANDBY = 1,
+	WRITES_ONLY = 2,
+	RESUMING = 3,
+	NORMAL = 4,
+	SUSPENDING = 5,
+	LEAVING = 6,
+	JOINING = 7,
+	DOWN = 8,
+	REMOVED = 9,
+	EXITING = 10,
+	UNKNOWN = 11
 } dyn_state_t;
 
 

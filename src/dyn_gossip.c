@@ -30,6 +30,7 @@ static const struct string PEER_SSL_PORT = string("8103");
 static void gossip_debug(void);
 static struct gossip_node_pool gn_pool;
 static uint32_t node_count = 0;
+static struct node *current_node = NULL;
 
 
 static unsigned int dict_string_hash(const void *key) {
@@ -217,6 +218,34 @@ static struct string *token_to_string(struct dyn_token *token) {
 }
 
 
+//Simple failure detector - will have an advanced version later
+static uint8_t
+gossip_failure_detector(struct node *node)
+{
+   log_debug(LOG_VERB, "In gossip_failure_detector");
+
+   if (node == NULL)
+	   return UNKNOWN;
+
+   if (node->is_local)
+	   return NORMAL;
+
+   uint64_t cur_ts = (uint64_t) time(NULL);
+   uint64_t delta = gn_pool.g_interval/1000 * 40; //g_internal is in milliseconds
+
+   //loga("cur_ts %d", cur_ts);
+   //loga("delta %d", delta);
+   //loga("node->ts = %d", node->ts);
+   //loga("node state = %d", node->state);
+
+   if (cur_ts - node->ts > delta) { //if there is no update for delta time
+	   return DOWN;
+   }
+
+   return node->state;
+}
+
+
 static rstatus_t
 gossip_forward_state(struct server_pool *sp)
 {
@@ -282,7 +311,7 @@ gossip_forward_state(struct server_pool *sp)
     		    int count = 0;
     		    uint64_t ts;
     		    if (gnode->is_local)  //only update my own timestamp
-    		       ts = (uint64_t)time(NULL);
+    		       ts = (uint64_t) time(NULL);
     		    else ts = gnode->ts;
 
     		    count = 0;
@@ -294,6 +323,8 @@ gossip_forward_state(struct server_pool *sp)
     		    pos += 1;
 
     		    //write state
+    			uint8_t new_state = gossip_failure_detector(gnode);
+    			gnode->state = new_state;
     		    count = 0;
     		    write_number(pos, gnode->state, &count);
                 pos += count;
@@ -525,6 +556,7 @@ gossip_replace_node(struct server_pool *sp, struct node *node,
 	//port is supposed to be the same
 
 	node->state = state;
+
 	gossip_msg_to_core(sp, node, dnode_peer_replace);
 
 	//should check for status
@@ -532,10 +564,29 @@ gossip_replace_node(struct server_pool *sp, struct node *node,
 }
 
 
+
+static rstatus_t
+gossip_update_state(struct server_pool *sp, struct node *node, uint8_t state, uint64_t timestamp)
+{
+	rstatus_t status = DN_OK;
+	log_debug(LOG_VERB, "gossip_update_state : dc[%.*s] rack[%.*s] name[%.*s] token[%d] state[%d]",
+			node->dc, node->rack, node->name, node->token.mag[0], state);
+
+	if (node->ts < timestamp) {
+	   node->state = state;
+	   node->ts = timestamp;
+	}
+
+	//gossip_msg_to_core(sp, node, dnode_peer_update_state);
+
+	return status;
+}
+
+
 static rstatus_t
 gossip_add_node_if_absent(struct server_pool *sp, struct string *dc, struct string *rack,
 		struct string *address, struct string *ip,
-		struct string *port, struct dyn_token *token, uint8_t state)
+		struct string *port, struct dyn_token *token, uint8_t state, uint64_t timestamp)
 {
 	rstatus_t status;
 	bool rack_existed = false;
@@ -575,8 +626,12 @@ gossip_add_node_if_absent(struct server_pool *sp, struct string *dc, struct stri
 		//print_dyn_token(token, 6);
 		gossip_add_node(sp, dc, g_rack, address, ip, port, token, state);
 	} else if (dictFind(g_rack->dict_name_nodes, ip) != NULL) {
-		if (string_compare(&g_node->name, ip) != 0) {
-		   gossip_replace_node(sp, g_node, address, ip, state);
+		if (!g_node->is_local) {  //don't update myself here
+		    if (string_compare(&g_node->name, ip) != 0) {
+		       gossip_replace_node(sp, g_node, address, ip, state);
+		    } else {  //update state
+               gossip_update_state(sp, g_node, state, timestamp);
+		    }
 		}
 	}
 
@@ -628,7 +683,7 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 		//log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
 
 		//struct dyn_token *token = array_get(&tokens, 0);
-		gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, UNKNOWN);
+		gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
 
 		p = q - 1;
 		q = dn_strrchr(p, start, '|');
@@ -652,7 +707,7 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 		parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip, &token);
 
 		//struct dyn_token *token = array_get(&tokens, 0);
-		gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, UNKNOWN);
+		gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
 	}
 
 	string_deinit(&temp);
@@ -674,16 +729,15 @@ gossip_loop(void *arg)
 {
 	struct server_pool *sp = arg;
 	struct string seeds;
-	uint64_t gossip_interval = gn_pool.g_interval * 2000;
+	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
 	string_init(&seeds);
 
-
-
 	for(;;) {
-		loga("gossip_interval === %d", gossip_interval);
-		usleep(gossip_interval * 1);
+		loga("gossip_interval === %d msecs", gn_pool.g_interval);
+		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
+		current_node->ts = (uint64_t) time(NULL);
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(NULL, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
@@ -692,14 +746,17 @@ gossip_loop(void *arg)
 		}
 
 		if (gn_pool.ctx->dyn_state == JOINING) {
-			log_debug(LOG_VERB, "I am still joining......");
+			log_debug(LOG_NOTICE, "I am still joining the ring!");
 			//aggressively contact all known nodes before changing to state NORMAL
 			gossip_announce_joining(sp);
+			usleep(MAX(gn_pool.ctx->timeout, gossip_interval) * 2);
+		} else if (gn_pool.ctx->dyn_state == NORMAL) {
+			gossip_forward_state(sp);
 		}
 
 		gossip_process_msgs();
-		gossip_forward_state(sp);
-		//gossip_debug();
+
+		gossip_debug();
 	}
 
 	return NULL;
@@ -795,12 +852,19 @@ gossip_pool_each_init(void *elem, void *data)
 		string_copy(&gnode->pname, peer->pname.data, peer->pname.len); //ignore the port for now
 		gnode->port = peer->port;
 		gnode->is_local = peer->is_local;
-		gnode->ts = (uint64_t)time(NULL);  //initial with current time
 
-		if (i != 0)  //Don't override its own state
+
+		if (i == 0) { //Don't override its own state
+			gnode->state = sp->ctx->dyn_state;  //likely it is JOINING state
+			gnode->ts = (uint64_t)time(NULL);
+            current_node = gnode;
+			char *b_address = get_broadcast_address(sp);
+			string_deinit(&gnode->name);
+			string_copy(&gnode->name, b_address, dn_strlen(b_address));
+		} else {
             gnode->state = DOWN;
-        else
-            gnode->state = sp->ctx->dyn_state;
+            gnode->ts = 1010101;  //make this to be a very aged ts
+		}
 
         struct dyn_token *ptoken = array_get(&peer->tokens, 0);
         copy_dyn_token(ptoken, &gnode->token);
@@ -902,9 +966,11 @@ gossip_msg_peer_update(void *rmsg)
 {
 	rstatus_t status;
 	struct ring_msg *msg = rmsg;
-	loga("Num nodes %d", array_n(&msg->nodes));
-
 	struct server_pool *sp = msg->sp;
+
+   	//TODOs: need to fix this as it is breaking warm bootstrap
+	current_node->state = NORMAL;
+	sp->ctx->dyn_state = NORMAL;
 
 	int i=0;
 	int n = array_n(&msg->nodes);
@@ -913,16 +979,24 @@ gossip_msg_peer_update(void *rmsg)
 		log_debug(LOG_VVERB, "Processing msg   gossip_msg_peer_update '%.*s'", node->name.len, node->name.data);
 		log_debug(LOG_VVERB, "Processing    gossip_msg_peer_update : datacenter '%.*s'", node->dc.len, node->dc.data);
 		log_debug(LOG_VVERB, "Processing    gossip_msg_peer_update : rack '%.*s'", node->rack.len, node->rack.data);
+		log_debug(LOG_VVERB, "Processing    gossip_msg_peer_update : name '%.*s'", node->name.len, node->name.data);
+		log_debug(LOG_VVERB, "State %d", node->state);
         print_dyn_token(&node->token, 10);
+
 		status = gossip_add_node_if_absent(sp, &node->dc, &node->rack,
-				&node->name, &node->name,
-				(node->port == 8101)? &PEER_PORT : &PEER_SSL_PORT,
-						&node->token,
-						NORMAL);
+				                           &node->name, &node->name,
+				                           (node->port == 8101)? &PEER_PORT : &PEER_SSL_PORT,
+						                   &node->token,
+						                   node->state,
+						                   node->ts);
 	}
 	gossip_debug();
 
 	return status;
 }
+
+
+
+
 
 

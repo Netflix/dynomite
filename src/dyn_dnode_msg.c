@@ -687,7 +687,7 @@ dmsg_parse(struct dmsg *dmsg)
 
 		//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
 		//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
 		//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
@@ -706,6 +706,7 @@ dmsg_parse(struct dmsg *dmsg)
 
 		node_state[node_state_len] = '\0';
 		rnode->state = (uint8_t) atoi(node_state);
+
 		count++;
 	} while (pipe_p != start);
 

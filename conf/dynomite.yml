@@ -11,7 +11,7 @@ dyn_o_mite:
   hash: murmur
   listen: 127.0.0.1:8102
   preconnect: true
-  server_retry_timeout: 30000
+  server_retry_timeout: 10000
   servers:
   - 127.0.0.1:22122:1
   timeout: 10000
