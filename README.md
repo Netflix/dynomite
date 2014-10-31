@@ -53,7 +53,7 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
 
 ## Configuration
 
-Dynomite can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration file is used to specify the server pools and the servers within each pool that dynomite manages. The configuration files parses and understands the following keys:
+Dynomite can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration files parses and understands the following keys:
 
 + **env**: Specify environment of a node.  Currently support aws and network (for physical datacenter).
 + **datacenter**: The name of the datacenter.  Please refer to architecture document.
