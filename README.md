@@ -53,7 +53,7 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
 
 ## Configuration
 
-dynomite can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration file is used to specify the server pools and the servers within each pool that dynomite manages. The configuration files parses and understands the following keys:
+Dynomite can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration file is used to specify the server pools and the servers within each pool that dynomite manages. The configuration files parses and understands the following keys:
 
 + **env**: Specify environment of a node.  Currently support aws and network (for physical datacenter).
 + **datacenter**: The name of the datacenter.  Please refer to architecture document.
@@ -71,9 +71,10 @@ dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **auto_eject_hosts**: A boolean value that controls if server should be ejected temporarily when it fails consecutively server_failure_limit times. See [liveness recommendations](notes/recommendation.md#liveness) for information. Defaults to false.
 + **server_retry_timeout**: The timeout value in msec to wait for before retrying on a temporarily ejected server, when auto_eject_host is set to true. Defaults to 30000 msec.
 + **server_failure_limit**: The number of conseutive failures on a server that would leads to it being temporarily ejected when auto_eject_host is set to true. Defaults to 2.
-+ **servers**: A list of local server address, port and weight (name:port:weight or ip:port:weight) for this server pool.
++ **servers**: A list of local server address, port and weight (name:port:weight or ip:port:weight) for this server pool. Usually there is just one.
 
 For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
+
 Finally, to make writing syntactically correct configuration file easier, dynomite provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
 
