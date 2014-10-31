@@ -744,16 +744,26 @@ gossip_loop(void *arg)
 		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
 		current_node->ts = (uint64_t) time(NULL);
+                gossip_process_msgs();
 
-		//STANDBY state for warm bootstrap
-		if (gn_pool.ctx->dyn_state == STANDBY)
-			continue;
+                if (current_node->state == NORMAL) {
+                        gn_pool.ctx->dyn_state = NORMAL;
+                }
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
 			gossip_update_seeds(sp, &seeds);
 			string_deinit(&seeds);
 		}
+
+                if (node_count == 1) { //single node deployment
+			gn_pool.ctx->dyn_state = NORMAL;
+			continue;
+		}
+
+                //STANDBY state for warm bootstrap
+		if (gn_pool.ctx->dyn_state == STANDBY)
+			continue;
 
 		if (gn_pool.ctx->dyn_state == JOINING) {
 			log_debug(LOG_NOTICE, "I am still joining the ring!");
@@ -764,7 +774,6 @@ gossip_loop(void *arg)
 			gossip_forward_state(sp);
 		}
 
-		gossip_process_msgs();
 
 		gossip_debug();
 	}

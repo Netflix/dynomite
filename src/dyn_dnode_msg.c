@@ -269,7 +269,7 @@ dyn_parse_core(struct msg *r)
 	done:
 	dmsg->owner = r;
 	dmsg->source_address = r->owner->addr;
-	log_debug(LOG_DEBUG, "at done with p at %d", p);
+	//log_debug(LOG_DEBUG, "at done with p at %d", p);
 	//dmsg_dump(r->dmsg);
 	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
 	//		"type %d state %d rpos %d of %d", r->id, r->result, r->type,

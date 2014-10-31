@@ -153,7 +153,10 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
 	/* dynomite hanlder */
 	if (msg->dmsg != NULL) {
-		return dmsg_process(ctx, conn, msg->dmsg);
+		if (dmsg_process(ctx, conn, msg->dmsg)) {
+                    dnode_req_put(msg);
+                    return true;
+                }
 	}
 
 
@@ -403,7 +406,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	//need to handle a reply
 	//conn->enqueue_outq(ctx, conn, msg);
 
-	//msg->noreply = 1;
+	msg->noreply = 1;
 	conn->enqueue_inq(ctx, conn, msg);
 
 }
