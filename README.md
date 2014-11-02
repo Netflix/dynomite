@@ -7,14 +7,11 @@
 
 ## Build
 
-To build Dynomite from distribution tarbal:
-
-    $ ./configure
-    $ make
-    $ sudo make install
-
 To build Dynomite in _debug mode_:
 
+    $ git clone git@github.com:Netflix/dynomite.git
+    $ cd dynomite
+    $ autoreconf -fvi
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
@@ -80,7 +77,5 @@ Finally, to make writing syntactically correct configuration file easier, dynomi
 
 
 ## License
-
-Copyright 2014 Netflix, Inc.
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
