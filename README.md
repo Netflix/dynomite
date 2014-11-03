@@ -2,7 +2,7 @@
 # Dynomite
 -->
 ![](images/dynomite-logo.png?raw=true =150x150) </br>
-**Dynomite**, inspired by Dynamo whitepaper, is a thin, distributed replication layer to different protocol storages. 
+**Dynomite**, inspired by Dynamo whitepaper, is a thin, distributed dynamo layer to different storages and protocols. 
 
 
 ## Build
