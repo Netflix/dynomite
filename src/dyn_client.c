@@ -132,7 +132,9 @@ client_close(struct context *ctx, struct conn *conn)
 
     ASSERT(conn->client && !conn->proxy);
 
-    client_close_stats(ctx, conn->owner, conn->err, conn->eof);
+    if(ctx->stats != NULL) {
+        client_close_stats(ctx, conn->owner, conn->err, conn->eof);
+    }
 
     if (conn->sd < 0) {
         conn->unref(conn);

@@ -21,6 +21,7 @@
  */
 
 #include "dyn_core.h"
+#include <openssl/ssl.h>
 
 #ifndef _DYN_CONNECTION_H_
 #define _DYN_CONNECTION_H_
@@ -56,6 +57,9 @@ struct conn {
     struct msg         *rmsg;         /* current message being rcvd */
     struct msg         *smsg;         /* current message being sent */
 
+    struct tls_ctx     *tls_ctx;      /* For managing the ssl method and context */
+    SSL         *ssl;          /* SSL connection management. */
+
     conn_recv_t        recv;          /* recv (read) handler */
     conn_recv_next_t   recv_next;     /* recv next message handler */
     conn_recv_done_t   recv_done;     /* read done handler */
@@ -90,9 +94,11 @@ struct conn {
     unsigned           eof:1;         /* eof? aka passive close? */
     unsigned           done:1;        /* done? aka close? */
     unsigned           redis:1;       /* redis? */
-    unsigned           dnode_server:1;       /* dndoe server connection? */
-    unsigned           dnode_client:1;  /* dnode client? */
-    unsigned           dyn_mode:1;      /* is a dyn connection? */
+    unsigned           dnode_server:1;       /* dnode server connection? */
+    unsigned           dnode_tls_server:1;   /* dnode tls server connection? */
+    unsigned           dnode_client:1;       /* dnode client? */
+    unsigned           dnode_tls_client:1;   /* dnode tls client? */
+    unsigned           dyn_mode:1;           /* is a dyn connection? */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
@@ -102,6 +108,7 @@ struct conn *conn_get(void *owner, bool client, bool redis);
 struct conn *conn_get_proxy(void *owner);
 struct conn *conn_get_peer(void *owner, bool client, bool redis);
 struct conn *conn_get_dnode(void *owner);
+struct conn *conn_get_dnode_tls(void *owner);
 void conn_put(struct conn *conn);
 ssize_t conn_recv(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv(struct conn *conn, struct array *sendv, size_t nsend);

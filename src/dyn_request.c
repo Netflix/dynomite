@@ -74,7 +74,9 @@ req_done(struct conn *conn, struct msg *msg)
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->client && !conn->proxy) ||
+            (conn->dnode_client && !conn->dnode_server) ||
+            (!conn->dnode_tls_client && !conn->dnode_tls_server));
     ASSERT(msg->request);
 
     if (!msg->done) {
@@ -323,7 +325,9 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->client && !conn->proxy) ||
+            (conn->dnode_client && !conn->dnode_server) ||
+            (conn->dnode_tls_client && !conn->dnode_tls_server));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -453,7 +457,8 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     rstatus_t status;
     struct conn *s_conn;
 
-    ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
+    ASSERT((c_conn->client || c_conn->dnode_client || c_conn->dnode_tls_client)
+            && !c_conn->proxy && !c_conn->dnode_server && !c_conn->dnode_tls_server);
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {

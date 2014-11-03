@@ -118,6 +118,10 @@ static struct command conf_commands[] = {
     { string("dyn_listen"),
       conf_set_listen,
       offsetof(struct conf_pool, dyn_listen) },
+
+    { string("dyn_secure_listen"),
+      conf_set_listen,
+      offsetof(struct conf_pool, dyn_secure_listen) },
     
     { string("dyn_seed_provider"),
       conf_set_string,
@@ -471,6 +475,15 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
     sp->d_connections = (uint32_t)cp->dyn_connections;   
+
+    // for secure port
+    sp->ds_addrstr = cp->dyn_secure_listen.pname;
+    sp->ds_port = (uint16_t)cp->dyn_secure_listen.port;
+    sp->ds_family = cp->dyn_secure_listen.info.family;
+    sp->ds_addrlen = cp->dyn_secure_listen.info.addrlen;
+    sp->ds_addr = (struct sockaddr *)&cp->dyn_secure_listen.info.addr;
+    sp->ds_connections = (uint32_t)cp->dyn_connections;
+
     sp->rack = cp->rack;
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;

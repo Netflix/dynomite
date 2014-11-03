@@ -447,8 +447,10 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
-	dnode_peer_close_stats(ctx, conn->owner, conn->err, conn->eof,
+	if (ctx->stats != NULL) {
+	    dnode_peer_close_stats(ctx, conn->owner, conn->err, conn->eof,
 			conn->connected);
+	}
 
 	if (conn->sd < 0) {
 		dnode_peer_failure(ctx, conn->owner);

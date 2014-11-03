@@ -219,7 +219,8 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	ASSERT(!conn->dnode_client && !conn->dnode_server &&
+	        !conn->dnode_tls_client && !conn->dnode_tls_server);
 	return rsp_send_next(ctx, conn);
 }
 
@@ -228,7 +229,8 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	struct msg *pmsg; /* peer message (request) */
 
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+	        (conn->dnode_tls_client && !conn->dnode_tls_server));
 	ASSERT(conn->smsg == NULL);
 
 	log_debug(LOG_VVERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);

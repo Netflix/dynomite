@@ -121,6 +121,7 @@ struct dyn_ring;
 #include "dyn_ring_queue.h"
 
 #include "event/dyn_event.h"
+#include "dyn_tls.h"
 
 
 typedef enum dyn_state {

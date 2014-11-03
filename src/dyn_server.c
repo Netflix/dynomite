@@ -339,8 +339,10 @@ server_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(!conn->client && !conn->proxy);
 
-	server_close_stats(ctx, conn->owner, conn->err, conn->eof,
+	if(ctx->stats != NULL) {
+	    server_close_stats(ctx, conn->owner, conn->err, conn->eof,
 			conn->connected);
+	}
 
 	if (conn->sd < 0) {
 		server_failure(ctx, conn->owner);

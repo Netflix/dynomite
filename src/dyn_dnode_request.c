@@ -33,7 +33,6 @@ dnode_req_put(struct msg *msg)
 	req_put(msg);
 }
 
-
 bool
 dnode_req_done(struct conn *conn, struct msg *msg)
 {
@@ -77,7 +76,8 @@ void
 dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	ASSERT(msg->request);
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+	        (conn->dnode_tls_client && !conn->dnode_tls_server));
 
 	TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
 }
@@ -104,7 +104,8 @@ void
 dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	ASSERT(msg->request);
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+	        (conn->dnode_tls_client && !conn->dnode_tls_server));
 
 	TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
 }
@@ -133,14 +134,18 @@ dnode_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
 	struct msg *msg;
 
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+	        (conn->dnode_tls_client && !conn->dnode_tls_server) );
 	return req_recv_next(ctx, conn, alloc);
 }
+
 
 static bool
 dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+           (conn->dnode_tls_client && !conn->dnode_tls_server));
+
 
 	if (msg_empty(msg)) {
 		ASSERT(conn->rmsg == NULL);
@@ -200,7 +205,8 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 	uint8_t *key;
 	uint32_t keylen;
 
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+	       (conn->dnode_tls_client && !conn->dnode_tls_server));
 
 	pool = conn->owner;
 	key = NULL;
@@ -228,12 +234,12 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 	local_req_forward(ctx, conn, msg, key, keylen);
 }
 
-
 void
 dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
 		struct msg *nmsg)
 {
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT((conn->dnode_client && !conn->dnode_server) ||
+	        (conn->dnode_tls_client && !conn->dnode_tls_server));
 	ASSERT(msg->request);
 	ASSERT(msg->owner == conn);
 	ASSERT(conn->rmsg == msg);
@@ -248,6 +254,7 @@ dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
 
 	dnode_req_forward(ctx, conn, msg);
 }
+
 
 struct msg *
 dnode_req_send_next(struct context *ctx, struct conn *conn)

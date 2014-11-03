@@ -28,6 +28,7 @@
 #include "dyn_server.h"
 #include "dyn_proxy.h"
 #include "dyn_dnode_server.h"
+#include "dyn_dnode_tls_server.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 
@@ -126,12 +127,25 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
+    /* initialize dnode tls listener per server pool */
+    status = dnode_tls_init(ctx);
+    if (status != DN_OK) {
+        server_pool_disconnect(ctx);
+        event_base_destroy(ctx->evb);
+        stats_destroy(ctx->stats);
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+        return NULL;
+    }
+
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
 
 	/* initialize peers */
 	status = dnode_peer_init(&ctx->pool, ctx);
 	if (status != DN_OK) {
 		dnode_deinit(ctx);
+		dnode_tls_deinit(ctx);
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
@@ -148,6 +162,7 @@ core_ctx_create(struct instance *nci)
 	if (status != DN_OK) {
 		dnode_peer_deinit(&ctx->pool);
 		dnode_deinit(ctx);
+		dnode_tls_deinit(ctx);
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
@@ -194,6 +209,10 @@ core_start(struct instance *nci)
 	mbuf_init(nci);
 	msg_init();
 	conn_init();
+
+    /* Init openssl library */
+    SSL_load_error_strings();
+    SSL_library_init();
 
 	ctx = core_ctx_create(nci);
 	if (ctx != NULL) {

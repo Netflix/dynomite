@@ -2,7 +2,7 @@
 m4_define([DN_MAJOR], 0)
 m4_define([DN_MINOR], 1)
 m4_define([DN_PATCH], 19)
-m4_define([DN_BUGS], [mdo@netflix.com])
+m4_define([DN_BUGS], [mdo@netflix.com, mdaxini@netflix.com])
 
 # Initialize autoconf
 AC_PREREQ([2.68])
@@ -75,6 +75,8 @@ AC_CHECK_HEADERS([sys/event.h], [], [])
 # Checks for libraries
 AC_CHECK_LIB([m], [pow])
 AC_CHECK_LIB([pthread], [pthread_create])
+#AC_CHECK_LIB([ssl], [SSL_read])
+#AC_CHECK_LIB([crypto], [OPENSSL_init])
 
 # Checks for library functions
 AC_FUNC_FORK

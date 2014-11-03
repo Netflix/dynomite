@@ -13,7 +13,8 @@ dnode_client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT((conn->dnode_client && !conn->dnode_server) ||
+            (conn->dnode_tls_client && !conn->dnode_tls_server));
     ASSERT(conn->owner == NULL);
 
     /*
@@ -40,7 +41,8 @@ dnode_client_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT((conn->dnode_client && !conn->dnode_server) ||
+            (conn->dnode_tls_client && !conn->dnode_tls_server));
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -57,7 +59,8 @@ dnode_client_unref(struct conn *conn)
 bool
 dnode_client_active(struct conn *conn)
 {
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT((conn->dnode_client && !conn->dnode_server) ||
+            (conn->dnode_tls_client && !conn->dnode_tls_server));
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -116,9 +119,12 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT((conn->dnode_client && !conn->dnode_server) ||
+            (conn->dnode_tls_client && !conn->dnode_tls_server));
 
-    dnode_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
+    if (ctx->stats != NULL) {
+        dnode_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
+    }
 
     if (conn->sd < 0) {
         conn->unref(conn);
@@ -174,6 +180,11 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     if (status < 0) {
         log_error("dyn: close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
+
+    if (conn->dnode_tls_client) {
+        SSL_free(conn->ssl);
+    }
+
     conn->sd = -1;
 
     conn_put(conn);

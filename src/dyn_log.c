@@ -42,6 +42,7 @@ log_init(int level, char *name)
         l->fd = STDERR_FILENO;
     } else {
         l->fd = open(name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        l->fp = fdopen(l->fd, "a+b");
         if (l->fd < 0) {
             log_stderr("opening log file '%s' failed: %s", name,
                        strerror(errno));
@@ -62,6 +63,7 @@ log_deinit(void)
     }
 
     close(l->fd);
+    fclose(l->fp);
 }
 
 void
@@ -71,7 +73,9 @@ log_reopen(void)
 
     if (l->fd != STDERR_FILENO) {
         close(l->fd);
+        fclose(l->fp);
         l->fd = open(l->name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        l->fp = fdopen(l->fd, "a+b");
         if (l->fd < 0) {
             log_stderr("reopening log file '%s' failed, ignored: %s", l->name,
                        strerror(errno));
@@ -257,3 +261,8 @@ _log_hexdump(const char *file, int line, char *data, int datalen,
 
     errno = errno_save;
 }
+
+struct logger *getLogger(void) {
+    return &logger;
+}
+

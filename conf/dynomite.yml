@@ -4,6 +4,7 @@ dyn_o_mite:
   datacenter: localdc
   rack: localrack
   dyn_listen: 127.0.0.1:8101
+  dyn_secure_listen: 127.0.0.1:8103
   tokens: '3101134286'
   dyn_seeds:
   - 127.0.0.2:8101:localrack:localdc:437425602

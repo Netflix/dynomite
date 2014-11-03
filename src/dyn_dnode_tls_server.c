@@ -1,30 +1,119 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * dyn_dnode_tls_server.c
+ */
 
 #include <sys/un.h>
 
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
-#include "dyn_dnode_server.h"
+#include "dyn_dnode_tls_server.h"
+
+static rstatus_t
+dnode_tls_listen(struct context *ctx, struct conn *p);
+
+rstatus_t
+dnode_tls_each_init(void *elem, void *data)
+{
+    rstatus_t status;
+    struct server_pool *pool = elem;
+    struct conn *p;
+
+    p = conn_get_dnode_tls(pool);
+
+    if (p == NULL) {
+        return DN_ENOMEM;
+    }
+
+    if (p->tls_ctx == NULL) {
+        log_error("Could not allocate tls_ctx.");
+        return DN_ENOMEM;
+    }
+
+    status = tls_init(p->tls_ctx);
+    if (status != DN_OK) {
+        return status;
+    }
+    status = dnode_tls_listen(pool->ctx, p);
+    if (status != DN_OK) {
+        p->close(pool->ctx, p);
+        return status;
+    }
+
+    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool %"PRIu32" '%.*s'"
+              " with %"PRIu32" servers", p->sd, pool->ds_addrstr.len,
+              pool->ds_addrstr.data, pool->redis ? "redis" : "memcache",
+              pool->idx, pool->name.len, pool->name.data,
+              array_n(&pool->server));
+    return DN_OK;
+}
+
 
 void
-dnode_ref(struct conn *conn, void *owner)
+dnode_tls_deinit(struct context *ctx)
+{
+    rstatus_t status;
+
+    ASSERT(array_n(&ctx->pool) != 0);
+
+    status = array_each(&ctx->pool, dnode_tls_each_deinit, NULL);
+    if (status != DN_OK) {
+        return;
+    }
+
+    log_debug(LOG_VVERB, "deinit dnode with %"PRIu32" pools",
+              array_n(&ctx->pool));
+}
+
+rstatus_t
+dnode_tls_init(struct context *ctx)
+{
+    rstatus_t status;
+
+    ASSERT(array_n(&ctx->pool) != 0);
+
+    status = array_each(&ctx->pool, dnode_tls_each_init, NULL);
+    if (status != DN_OK) {
+        dnode_tls_deinit(ctx);
+        return status;
+    }
+
+    log_debug(LOG_VVERB, "init dnode with %"PRIu32" pools",
+              array_n(&ctx->pool));
+
+    return DN_OK;
+}
+
+rstatus_t
+dnode_tls_each_deinit(void *elem, void *data)
+{
+    struct server_pool *pool = elem;
+    struct conn *p;
+
+    p = pool->d_conn;
+    if (p != NULL) {
+        tls_deinit(p);
+        p->close(pool->ctx, p);
+    }
+
+    return DN_OK;
+}
+
+void
+dnode_tls_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->dnode_server);
+    ASSERT(conn->dnode_tls_server);
     ASSERT(conn->owner == NULL);
 
-    conn->family = pool->d_family;
-    conn->addrlen = pool->d_addrlen;
-    conn->addr = pool->d_addr;
+    conn->family = pool->ds_family;
+    conn->addrlen = pool->ds_addrlen;
+    conn->addr = pool->ds_addr;
 
-    pool->d_conn = conn;
+    pool->ds_conn = conn;
 
-    /* owner of the proxy connection is the server pool */
+    /* owner of the dnode tls connection is the server pool */
     conn->owner = owner;
 
     log_debug(LOG_VVERB, "ref conn %p owner %p into pool %"PRIu32"", conn,
@@ -32,11 +121,11 @@ dnode_ref(struct conn *conn, void *owner)
 }
 
 void
-dnode_unref(struct conn *conn)
+dnode_tls_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->dnode_server);
+    ASSERT(conn->dnode_tls_server);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -49,11 +138,11 @@ dnode_unref(struct conn *conn)
 }
 
 void
-dnode_close(struct context *ctx, struct conn *conn)
+dnode_tls_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-    
-    ASSERT(conn->dnode_server);
+
+    ASSERT(conn->dnode_tls_server);
 
     if (conn->sd < 0) {
         conn->unref(conn);
@@ -74,11 +163,12 @@ dnode_close(struct context *ctx, struct conn *conn)
     }
     conn->sd = -1;
 
+    tls_close(conn);
     conn_put(conn);
 }
 
 static rstatus_t
-dnode_reuse(struct conn *p)
+dnode_tls_reuse(struct conn *p)
 {
     rstatus_t status;
     struct sockaddr_un *un;
@@ -109,12 +199,12 @@ dnode_reuse(struct conn *p)
 }
 
 static rstatus_t
-dnode_listen(struct context *ctx, struct conn *p)
+dnode_tls_listen(struct context *ctx, struct conn *p)
 {
     rstatus_t status;
     struct server_pool *pool = p->owner;
 
-    ASSERT(p->dnode_server);
+    ASSERT(p->dnode_tls_server);
 
     p->sd = socket(p->family, SOCK_STREAM, 0);
     if (p->sd < 0) {
@@ -122,10 +212,10 @@ dnode_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = dnode_reuse(p);
+    status = dnode_tls_reuse(p);
     if (status < 0) {
         log_error("dyn: reuse of addr '%.*s' for listening on p %d failed: %s",
-                  pool->d_addrstr.len, pool->d_addrstr.data, p->sd,
+                  pool->ds_addrstr.len, pool->ds_addrstr.data, p->sd,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -133,21 +223,21 @@ dnode_listen(struct context *ctx, struct conn *p)
     status = bind(p->sd, p->addr, p->addrlen);
     if (status < 0) {
         log_error("dyn: bind on p %d to addr '%.*s' failed: %s", p->sd,
-                  pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
+                  pool->ds_addrstr.len, pool->ds_addrstr.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = listen(p->sd, pool->backlog);
     if (status < 0) {
         log_error("dyn: listen on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
+                  pool->ds_addrstr.len, pool->ds_addrstr.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = dn_set_nonblocking(p->sd);
     if (status < 0) {
         log_error("dyn: set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
+                  pool->ds_addrstr.len, pool->ds_addrstr.data, strerror(errno));
         return DN_ERROR;
     }
 
@@ -155,7 +245,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     status = event_add_conn(ctx->evb, p);
     if (status < 0) {
         log_error("dyn: event add conn p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->d_addrstr.len, pool->d_addrstr.data,
+                  p->sd, pool->ds_addrstr.len, pool->ds_addrstr.data,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -170,94 +260,18 @@ dnode_listen(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
-dnode_each_init(void *elem, void *data)
-{
-    rstatus_t status;
-    struct server_pool *pool = elem;
-    struct conn *p;
-
-    p = conn_get_dnode(pool);
-
-    if (p == NULL) {
-        return DN_ENOMEM;
-    }
-
-    status = dnode_listen(pool->ctx, p);
-    if (status != DN_OK) {
-        p->close(pool->ctx, p);
-        return status;
-    }
-
-    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool %"PRIu32" '%.*s'"
-              " with %"PRIu32" servers", p->sd, pool->addrstr.len,
-              pool->d_addrstr.data, pool->redis ? "redis" : "memcache",
-              pool->idx, pool->name.len, pool->name.data,
-              array_n(&pool->server));
-    return DN_OK;
-}
-
-rstatus_t
-dnode_init(struct context *ctx)
-{
-    rstatus_t status;
-
-    ASSERT(array_n(&ctx->pool) != 0);
-
-    status = array_each(&ctx->pool, dnode_each_init, NULL);
-    if (status != DN_OK) {
-        dnode_deinit(ctx);
-        return status;
-    }
-
-    log_debug(LOG_VVERB, "init dnode with %"PRIu32" pools",
-              array_n(&ctx->pool));
-
-    return DN_OK;
-}
-
-rstatus_t
-dnode_each_deinit(void *elem, void *data)
-{
-    struct server_pool *pool = elem;
-    struct conn *p;
-
-    p = pool->d_conn;
-    if (p != NULL) {
-        p->close(pool->ctx, p);
-    }
-
-    return DN_OK;
-}
-
-void
-dnode_deinit(struct context *ctx)
-{
-    rstatus_t status;
-
-    ASSERT(array_n(&ctx->pool) != 0);
-
-    status = array_each(&ctx->pool, dnode_each_deinit, NULL);
-    if (status != DN_OK) {
-        return;
-    }
-
-    log_debug(LOG_VVERB, "deinit dnode with %"PRIu32" pools",
-              array_n(&ctx->pool));
-}
-
 static rstatus_t
-dnode_accept(struct context *ctx, struct conn *p)
+dnode_tls_accept(struct context *ctx, struct conn *p)
 {
     rstatus_t status;
     struct conn *c;
     int sd;
 
-    ASSERT(p->dnode_server);
+    ASSERT(p->dnode_tls_server);
     ASSERT(p->sd > 0);
     ASSERT(p->recv_active && p->recv_ready);
 
-    
+
     for (;;) {
         sd = accept(p->sd, NULL, NULL);
         if (sd < 0) {
@@ -286,6 +300,9 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     log_debug(LOG_NOTICE, "dyn: accept on sd  %d", sd);
     c = conn_get_peer(p->owner, true, p->redis);
+    c->dnode_tls_client = 1;
+    log_debug(LOG_VVERB, "get dyn peer  conn %p client %d", c, c->dnode_client);
+
     if (c == NULL) {
         log_error("dyn: get conn client peer for c %d from p %d failed: %s", sd, p->sd,
                   strerror(errno));
@@ -297,7 +314,8 @@ dnode_accept(struct context *ctx, struct conn *p)
     }
     c->sd = sd;
 
-    stats_pool_incr(ctx, c->owner, dnode_client_connections);
+    //TODO: Record tls client stats.
+    //stats_pool_incr(ctx, c->owner, dnode_client_connections);
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
@@ -315,6 +333,10 @@ dnode_accept(struct context *ctx, struct conn *p)
         }
     }
 
+    if (tls_accept(p, c, sd) == DN_ERROR) {
+        return DN_ERROR;
+    }
+
     status = event_add_conn(ctx->evb, c);
     if (status < 0) {
         log_error("dyn: event add conn from p %d failed: %s", p->sd,
@@ -323,23 +345,23 @@ dnode_accept(struct context *ctx, struct conn *p)
         return status;
     }
 
-    log_debug(LOG_NOTICE, "dyn: accepted c %d on p %d from '%s'", c->sd, p->sd,
+    log_debug(LOG_NOTICE, "dyn: 2q c %d on p %d from '%s'", c->sd, p->sd,
               dn_unresolve_peer_desc(c->sd));
 
     return DN_OK;
 }
 
 rstatus_t
-dnode_recv(struct context *ctx, struct conn *conn)
+dnode_tls_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->dnode_tls_server && !conn->dnode_tls_client);
     ASSERT(conn->recv_active);
- 
+
     conn->recv_ready = 1;
     do {
-        status = dnode_accept(ctx, conn);
+        status = dnode_tls_accept(ctx, conn);
         if (status != DN_OK) {
             return status;
         }
@@ -347,4 +369,3 @@ dnode_recv(struct context *ctx, struct conn *conn)
 
     return DN_OK;
 }
-

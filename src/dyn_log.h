@@ -23,11 +23,14 @@
 #ifndef _DYN_LOG_H_
 #define _DYN_LOG_H_
 
+#include <stdio.h>
+
 struct logger {
     char *name;  /* log file name */
     int  level;  /* log level */
     int  fd;     /* log file descriptor */
     int  nerror; /* # log error */
+    FILE *fp;    /* File pointer respective to fd */
 };
 
 #define LOG_EMERG   0   /* system in unusable */
@@ -121,5 +124,6 @@ int log_loggable(int level);
 void _log(const char *file, int line, int panic, const char *fmt, ...);
 void _log_stderr(const char *fmt, ...);
 void _log_hexdump(const char *file, int line, char *data, int datalen, const char *fmt, ...);
+struct logger *getLogger(void);
 
 #endif

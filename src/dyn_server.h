@@ -153,7 +153,7 @@ struct server_pool {
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
     struct string      d_addrstr;            /* pool address (ref in conf_pool) */
-    uint16_t           d_port;               /* port */
+    uint16_t           d_port;               /* dyn_listen port */
     int                d_family;             /* socket family */
     socklen_t          d_addrlen;            /* socket length */
     struct sockaddr    *d_addr;              /* socket address (ref in conf_pool) */
@@ -162,6 +162,20 @@ struct server_pool {
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
     uint32_t           d_connections;        /* maximum # dyn connections */
+
+    /* for dnode ssl listening on port = d_port + 2 */
+    struct conn        *ds_conn;              /* dnode secure connection (listener) */
+    struct string      ds_addrstr;            /* address */
+    uint16_t           ds_port;               /* dyn_listen port */
+    int                ds_family;             /* socket family */
+    socklen_t          ds_addrlen;            /* socket length */
+    struct sockaddr    *ds_addr;              /* socket address (ref in conf_pool) */
+    int                ds_timeout;            /* peer timeout in msec */
+    int                ds_backlog;            /* listen backlog */
+    int64_t            ds_retry_timeout;      /* peer retry timeout in usec */
+    uint32_t           ds_failure_limit;      /* peer failure limit */
+    uint32_t           ds_connections;        /* maximum # secure dyn connections */
+
     struct string      rack;                   /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 

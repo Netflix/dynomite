@@ -29,6 +29,7 @@
 #include "dyn_dnode_server.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
+#include "dyn_dnode_tls_server.h"
 
 #include "proto/dyn_proto.h"
 
@@ -103,7 +104,9 @@ conn_to_ctx(struct conn *conn)
 {
     struct server_pool *pool;
 
-    if (conn->proxy || conn->client || conn->dnode_server || conn->dnode_client) {
+    if (conn->proxy || conn->client ||
+            conn->dnode_server || conn->dnode_client ||
+            conn->dnode_tls_server || conn->dnode_tls_client) {
         pool = conn->owner;
     } else {
         struct server *server = conn->owner;
@@ -167,7 +170,9 @@ _conn_get(void)
 
     /* for dynomite */
     conn->dnode_client = 0;
+    conn->dnode_tls_client = 0;
     conn->dnode_server = 0;
+    conn->dnode_tls_server = 0;
     conn->dyn_mode = 0;
 
     return conn;
@@ -188,10 +193,10 @@ conn_get_peer(void *owner, bool client, bool redis)
     conn->dnode_client = client? 1 : 0;   
     conn->dyn_mode = 1;
 
-    if (conn->dnode_client) {
-        /* incoming peer connection to dnode server
-         * dyn client receives a request, possibly parsing it, and sends a
-         * response downstream.
+    if (conn->dnode_client || conn->dnode_tls_client) {
+        /* incoming peer (tls) connection to dnode (tls) server
+         * dyn (tls) client receives a request, possibly parsing it,
+         * and sends a response downstream.
          */
         conn->recv = msg_recv;
         conn->recv_next = dnode_req_recv_next;
@@ -213,9 +218,9 @@ conn_get_peer(void *owner, bool client, bool redis)
         conn->dequeue_outq = dnode_req_client_dequeue_omsgq;
     } else {
         /*
-         * outgoing peer connection
-         * dyn server receives a response, possibly parsing it, and sends a
-         * request upstream.
+         * outgoing peer(tls) connection dyn (tls) server
+         * receives a response, possibly parsing it,
+         * and sends a request upstream.
          */
         conn->recv = msg_recv;
         conn->recv_next = dnode_rsp_recv_next;
@@ -359,6 +364,52 @@ conn_get_dnode(void *owner)
     return conn;
 }
 
+struct conn *
+conn_get_dnode_tls(void *owner)
+{
+    struct server_pool *pool = owner;
+    struct conn *conn;
+
+    conn = _conn_get();
+    if (conn == NULL) {
+        return NULL;
+    }
+
+    if (conn->tls_ctx == NULL) {
+        conn->tls_ctx = dn_alloc(sizeof(*conn->tls_ctx));
+    }
+
+    conn->redis = pool->redis;
+
+    conn->dnode_server = 1;
+    conn->dnode_tls_server = 1;
+    conn->dyn_mode = 1;
+
+    conn->recv = dnode_tls_recv;
+    conn->recv_next = NULL;
+    conn->recv_done = NULL;
+
+    conn->send = NULL;
+    conn->send_next = NULL;
+    conn->send_done = NULL;
+
+    conn->close = dnode_tls_close;
+    conn->active = NULL;
+
+    conn->ref = dnode_tls_ref;
+    conn->unref = dnode_tls_unref;
+
+    conn->enqueue_inq = NULL;
+    conn->dequeue_inq = NULL;
+    conn->enqueue_outq = NULL;
+    conn->dequeue_outq = NULL;
+
+    conn->ref(conn, owner);
+
+    log_debug(LOG_VVERB, "get conn %p dnode %d", conn, conn->dnode_tls_server);
+
+    return conn;
+}
 
 struct conn *
 conn_get_proxy(void *owner)
@@ -453,9 +504,13 @@ conn_recv(struct conn *conn, void *buf, size_t size)
     ASSERT(conn->recv_ready);
 
     for (;;) {
-        n = dn_read(conn->sd, buf, size);
-
-        log_debug(LOG_VERB, "recv on sd %d %zd of %zu", conn->sd, n, size);
+        if(conn->dnode_tls_client || conn->dnode_tls_server) {
+            n = dyn_ssl_read(conn->ssl, buf, size);
+            log_debug(LOG_VERB, "ssl recv on sd %d %zd of %zu", conn->sd, n, size);
+        } else {
+            n = dn_read(conn->sd, buf, size);
+            log_debug(LOG_VERB, "recv on sd %d %zd of %zu", conn->sd, n, size);
+        }
 
         if (n > 0) {
             if (n < (ssize_t) size) {
@@ -503,10 +558,16 @@ conn_sendv(struct conn *conn, struct array *sendv, size_t nsend)
     ASSERT(conn->send_ready);
 
     for (;;) {
-        n = dn_writev(conn->sd, sendv->elem, sendv->nelem);
-
-        log_debug(LOG_VERB, "sendv on sd %d %zd of %zu in %"PRIu32" buffers",
+        if(conn->dnode_tls_client || conn->dnode_tls_server) {
+            n = dyn_ssl_write(conn->ssl, sendv->elem, sendv->nelem);
+            log_debug(LOG_VERB, "ssl sendv on sd %d %zd of %zu in %"PRIu32" buffers",
                   conn->sd, n, nsend, sendv->nelem);
+        }
+        else {
+            n = dn_writev(conn->sd, sendv->elem, sendv->nelem);
+            log_debug(LOG_VERB, "sendv on sd %d %zd of %zu in %"PRIu32" buffers",
+                  conn->sd, n, nsend, sendv->nelem);
+        }
 
         if (n > 0) {
             if (n < (ssize_t) nsend) {

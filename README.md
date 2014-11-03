@@ -75,6 +75,20 @@ For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 Finally, to make writing syntactically correct configuration file easier, dynomite provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
 
+## Quick test of dynomite secure port service
+
+Make using the command:
+
+    make clean && ./configure --enable-debug=log && make
+
+After make, start Dynomite
+    
+    src/dynomite
+
+Run the following command to connect to local dynomite host on the default secure port **8103**:
+
+    openssl s_client -msg -verify -tls1_2  -state -showcerts -cert conf/dynomite.crt -key conf/dynomite.key -connect localhost:8103
+
 
 ## License
 

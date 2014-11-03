@@ -24,12 +24,15 @@ AM_LDFLAGS += -lm -lpthread -rdynamic
 if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
+AM_LDFLAGS += -lssl -lcrypto
 
 SUBDIRS = hashkit proto event seedsprovider
 
 sbin_PROGRAMS = dynomite
 
-dynomite_SOURCES =			                          \
+dynomite_SOURCES =			                                      \
+        dyn_tls.c dyn_tls.h                                       \
+        dyn_dnode_tls_server.c dyn_dnode_tls_server.h             \
         dyn_dnode_server.c dyn_dnode_server.h                     \
         dyn_cbuf.h                                                \
         dyn_ring_queue.h dyn_ring_queue.c                         \

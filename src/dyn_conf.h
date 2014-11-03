@@ -129,6 +129,7 @@ struct conf_pool {
     struct array       dyn_seeds;             /* seed nodes: conf_server array */
     int                dyn_port;
     int                dyn_connections;       /* dyn connections */  
+    struct conf_listen dyn_secure_listen;     /* dyn_secure_listen  */
     struct string      rack;                    /* this node's logical rack */  
     struct array       tokens;                /* this node's token: dyn_token array */
     int                gos_interval;          /* wake up interval in ms */
