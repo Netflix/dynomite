@@ -5,7 +5,7 @@ m4_define([DN_PATCH], 19)
 m4_define([DN_BUGS], [mdo@netflix.com])
 
 # Initialize autoconf
-AC_PREREQ([2.68])
+AC_PREREQ([2.63])
 AC_INIT([dynomite], [DN_MAJOR.DN_MINOR.DN_PATCH], [DN_BUGS])
 AC_CONFIG_SRCDIR([src/dynomite.c])
 AC_CONFIG_AUX_DIR([config])
