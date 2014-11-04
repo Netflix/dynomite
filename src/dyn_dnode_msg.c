@@ -363,8 +363,6 @@ void dyn_parse_rsp(struct msg *r)
 void
 dmsg_free(struct dmsg *dmsg)
 {
-    ASSERT(STAILQ_EMPTY(&dmsg->owner->mhdr));
-
     log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
     dn_free(dmsg);
 }
