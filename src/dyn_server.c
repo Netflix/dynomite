@@ -132,7 +132,7 @@ server_init(struct array *servers, struct array *conf_server,
 
 	nserver = array_n(conf_server);
 	ASSERT(nserver != 0);
-	ASSERT(array_n(server) == 0);
+	ASSERT(array_n(servers) == 0);
 
 	status = array_init(servers, nserver, sizeof(struct server));
 	if (status != DN_OK) {
@@ -145,7 +145,7 @@ server_init(struct array *servers, struct array *conf_server,
 		server_deinit(servers);
 		return status;
 	}
-	ASSERT(array_n(server) == nserver);
+	ASSERT(array_n(servers) == nserver);
 
 	/* set server owner */
 	status = array_each(servers, server_each_set_owner, sp);
