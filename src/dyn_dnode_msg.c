@@ -385,7 +385,7 @@ dmsg_dump(struct dmsg *dmsg)
     struct mbuf *mbuf;
 
     log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
-    loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
+    //loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
 }
 
 
@@ -597,8 +597,13 @@ dmsg_parse(struct dmsg *dmsg)
 		p = q - 1;
 	} while (q != NULL);
 
-
 	struct ring_msg *ring_msg = create_ring_msg_with_size(count, true);
+	if (ring_msg == NULL) {
+		log_debug(LOG_ERR, "Error: unable to create a new ring msg!");
+		//we just drop this msg
+		return NULL;
+	}
+
 	struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
 	ring_msg->sp = sp;
 	ring_msg->cb = gossip_msg_peer_update;
@@ -663,7 +668,7 @@ dmsg_parse(struct dmsg *dmsg)
 
 		//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
 		//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
 		//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);

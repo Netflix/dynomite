@@ -22,7 +22,7 @@ create_ring_msg(void)
 		return NULL;
 
 	ring_msg_init(msg, 1, true);
-    msg->data = NULL;
+	msg->data = NULL;
 
 	return msg;
 }
@@ -36,11 +36,15 @@ create_ring_msg_with_data(int capacity)
 	if (msg == NULL)
 		return NULL;
 
-	ring_msg_init(msg, 1, true);
+	rstatus_t status = ring_msg_init(msg, 1, true);
+	if (status != DN_OK) {
+		dn_free(msg);
+		return NULL;
+	}
 
 	msg->data = dn_zalloc(sizeof(uint8_t) * capacity);
 	msg->capacity = capacity;
-    msg->len = 0;
+	msg->len = 0;
 
 	return msg;
 }
@@ -54,7 +58,12 @@ create_ring_msg_with_size(uint32_t size, bool init_node)
 	if (msg == NULL)
 		return NULL;
 
-	ring_msg_init(msg, size, init_node);
+	rstatus_t status = ring_msg_init(msg, size, init_node);
+	if (status != DN_OK) {
+		dn_free(msg);
+		return NULL;
+	}
+
 	msg->data = NULL;
 	msg->capacity = 0;
 	msg->len = 0;
@@ -69,7 +78,10 @@ ring_msg_init(struct ring_msg *msg, uint32_t n, bool init_node)
 	if (msg == NULL)
 		return DN_ERROR;
 
-	array_init(&msg->nodes, n, sizeof(struct node));
+	rstatus_t status = array_init(&msg->nodes, n, sizeof(struct node));
+	if (status != DN_OK)
+		return status;
+
 	if (init_node) {
 		uint32_t i;
 		for(i=0; i<n; i++) {
@@ -77,10 +89,6 @@ ring_msg_init(struct ring_msg *msg, uint32_t n, bool init_node)
 			node_init(node);
 		}
 	}
-
-	//msg->node = dn_alloc(sizeof(struct node));
-	//msg->node = create_node();
-
 
 	return DN_OK;
 }
