@@ -203,6 +203,7 @@ core_start(struct instance *nci)
 
 	conn_deinit();
 	msg_deinit();
+	dmsg_deinit();
 	mbuf_deinit();
 
 	return NULL;
@@ -213,6 +214,7 @@ core_stop(struct context *ctx)
 {
 	conn_deinit();
 	msg_deinit();
+	dmsg_deinit();
 	mbuf_deinit();
 	core_ctx_destroy(ctx);
 }
