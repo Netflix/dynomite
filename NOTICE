@@ -1,7 +1,7 @@
 Dynomite is a thin replacation layer for multi storages
 Copyright (C) 2014 Netflix, Inc.
 
-Dictionary dyn_dict.c and dyn_dict.h come from redis: redis.io
+Dictionary implementation, dyn_dict.c and dyn_dict.h, comes from redis: redis.io
 
 Portions of Dynomite were derived from twemproxy
 
