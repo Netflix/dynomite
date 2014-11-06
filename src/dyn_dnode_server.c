@@ -151,7 +151,7 @@ dnode_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    log_debug(LOG_INFO, "dyn: e %d with nevent %d", ctx->evb->ep, ctx->evb->nevent);
+    log_debug(LOG_INFO, "dyn: e %d with nevent %d", event_fd(ctx->evb), ctx->evb->nevent);
     status = event_add_conn(ctx->evb, p);
     if (status < 0) {
         log_error("dyn: event add conn p %d on addr '%.*s' failed: %s",
