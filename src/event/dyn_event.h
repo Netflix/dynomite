@@ -51,6 +51,12 @@ struct event_base {
     event_cb_t    cb;          /* event callback */
 };
 
+static inline int
+event_fd(struct event_base *evb)
+{
+    return evb->kq;
+}
+
 #elif DN_HAVE_EPOLL
 
 struct event_base {
@@ -61,6 +67,12 @@ struct event_base {
 
     event_cb_t         cb;      /* event callback */
 };
+
+static inline int
+event_fd(struct event_base *evb)
+{
+    return evb->ep;
+}
 
 #elif DN_HAVE_EVENT_PORTS
 
@@ -74,6 +86,12 @@ struct event_base {
 
     event_cb_t   cb;      /* event callback */
 };
+
+static inline int
+event_fd(struct event_base *evb)
+{
+    return evb->evp;
+}
 
 #else
 # error missing scalable I/O event notification mechanism
