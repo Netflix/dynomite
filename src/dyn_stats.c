@@ -879,6 +879,8 @@ stats_http_rsp(int sd, uint8_t *content, size_t len)
        return DN_ERROR;
     }
 
+    close(sd);
+
     return DN_OK;
 }
 
