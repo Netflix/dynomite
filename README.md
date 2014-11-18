@@ -4,6 +4,8 @@
 ![](images/dynomite-logo.png?raw=true =150x150) </br>
 **Dynomite**, inspired by Dynamo whitepaper, is a thin, distributed dynamo layer for different storages and protocols. 
 
+When Dynomite team decided to settle on using C language, we found Twemproxy and did a fork in order to provide more features than just being a proxy layer.
+
 
 ## Build
 
