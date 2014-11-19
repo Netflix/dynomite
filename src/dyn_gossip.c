@@ -494,6 +494,7 @@ gossip_add_node_to_rack(struct server_pool *sp, struct string *dc, struct gossip
 	log_debug(LOG_VERB, "gossip_add_node_to_rack : dc[%.*s] rack[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
 			dc->len, dc->data, g_rack->name, address->len, address->data, ip->len, ip->data, port->len, port->data);
 
+
 	int port_i = dn_atoi(port->data, port->len);
 	if (port_i == 0) {
 		return NULL; //bad data

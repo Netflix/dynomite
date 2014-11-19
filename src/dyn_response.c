@@ -263,7 +263,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *pmsg; /* response and it's peer request */
 
-    ASSERT((conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL || !req_done(conn, pmsg)) {
