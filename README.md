@@ -9,15 +9,6 @@ When Dynomite team decided to settle on using C language, we found Twemproxy and
 
 ## Build
 
-To build Dynomite in _debug mode_:
-
-    $ git clone git@github.com:Netflix/dynomite.git
-    $ cd dynomite
-    $ autoreconf -fvi
-    $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
-    $ make
-    $ sudo make install
-
 To build Dynomite from source with _debug logs enabled_ and _assertions disabled_:
 
     $ git clone git@github.com:Netflix/dynomite.git
@@ -27,7 +18,15 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
     $ make
     $ src/dynomite -h
 
+To build Dynomite in _debug mode_:
 
+    $ git clone git@github.com:Netflix/dynomite.git
+    $ cd dynomite
+    $ autoreconf -fvi
+    $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
+    $ make
+    $ sudo make install
+    
 ## Help
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
