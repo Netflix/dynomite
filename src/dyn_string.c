@@ -89,7 +89,7 @@ string_duplicate(struct string *dst, const struct string *src)
 rstatus_t
 string_copy(struct string *dst, const uint8_t *src, uint32_t srclen)
 {
-    ASSERT(dst->len == 0 && dst->data == NULL);
+    //ASSERT(dst->len == 0 && dst->data == NULL);
     ASSERT(src != NULL && srclen != 0);
 
     dst->data = dn_strndup(src, srclen + 1);

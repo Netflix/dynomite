@@ -219,7 +219,7 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	ASSERT(conn->dnode_client && !conn->dnode_server);
 	return rsp_send_next(ctx, conn);
 }
 
