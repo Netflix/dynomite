@@ -89,6 +89,9 @@ Run the following command to connect to local dynomite host on the default secur
 
     openssl s_client -msg -verify -tls1_2  -state -showcerts -cert conf/dynomite.crt -key conf/dynomite.key -connect localhost:8103
 
+Run the following command to start an ssl servrer to test dynomite peer ssl connection.
+
+    openssl s_server -accept 4433 -cert conf/dynomite.crt -key conf/dynomite.key -cipher AES128-GCM-SHA256
 
 ## License
 
