@@ -30,7 +30,7 @@ dnode_tls_each_init(void *elem, void *data)
         return DN_ENOMEM;
     }
 
-    status = tls_init(p->tls_ctx);
+    status = dyn_tls_init(p->tls_ctx, false);
     if (status != DN_OK) {
         return status;
     }
@@ -92,7 +92,7 @@ dnode_tls_each_deinit(void *elem, void *data)
 
     p = pool->d_conn;
     if (p != NULL) {
-        tls_deinit(p);
+        dyn_tls_deinit(p);
         p->close(pool->ctx, p);
     }
 
@@ -333,7 +333,7 @@ dnode_tls_accept(struct context *ctx, struct conn *p)
         }
     }
 
-    if (tls_accept(p, c, sd) == DN_ERROR) {
+    if (dyn_tls_accept(p, c, sd) == DN_ERROR) {
         return DN_ERROR;
     }
 

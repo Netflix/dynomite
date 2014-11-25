@@ -9,14 +9,19 @@
 #include "dyn_log.h"
 #include "errno.h"
 
-//static const char* DYN_DEFAULT_CIPHER =  "AES128-GCM-SHA256";
-static const char* DYN_DEFAULT_CIPHER = "AES256-GCM-SHA384";
+static const char* DYN_DEFAULT_CIPHER =  "AES128-GCM-SHA256";
+//static const char* DYN_DEFAULT_CIPHER = "AES256-GCM-SHA384";
 
 
 rstatus_t
-tls_init(struct tls_ctx *t) {
+dyn_tls_init(struct tls_ctx *t, bool client) {
     log_debug(LOG_INFO,"Initializing tls context");
-    t->meth = TLSv1_2_server_method();
+    if (client) {
+        t->meth = TLSv1_2_client_method();
+    }
+    else {
+        t->meth = TLSv1_2_server_method();
+    }
     t->ssl_ctx = SSL_CTX_new(t->meth);
 
     if (!t->ssl_ctx) {
@@ -25,7 +30,7 @@ tls_init(struct tls_ctx *t) {
         return TLS_ERR_CTX;
     }
 
-    /* Cipher AES256-GCM-SHA384 - good performance with AES-NI support. */
+    /* Cipher AES128-GCM-SHA256 and AES256-GCM-SHA384 */
     if (!SSL_CTX_set_cipher_list(t->ssl_ctx, DYN_DEFAULT_CIPHER)) {
         log_error("Could not set cipher.");
         return TLS_ERR_SET_CIPHER;
@@ -85,7 +90,7 @@ tls_init(struct tls_ctx *t) {
 
 
 void
-tls_deinit(struct conn *c) {
+dyn_tls_deinit(struct conn *c) {
     log_debug(LOG_INFO, "Closing secure connection with sd %d.", c->sd);
     SSL_shutdown(c->ssl);
     SSL_free(c->ssl);
@@ -146,7 +151,7 @@ dump_cert_info(SSL *ssl, bool server) {
 }
 
 rstatus_t
-tls_accept(struct conn *s,  /* tls server */
+dyn_tls_accept(struct conn *s,  /* tls server */
            struct conn *c,  /* tls client*/
            int sd          /*accepted*/) {
     SSL* ssl;
@@ -195,7 +200,7 @@ tls_accept(struct conn *s,  /* tls server */
 }
 
 rstatus_t
-tls_connect(struct conn *s,  /* tls dnode peer connect */
+dyn_tls_connect(struct conn *s,  /* tls dnode peer connect */
            struct conn *c,  /* tls client*/
            int sd          /*accepted*/) {
     SSL* ssl;
@@ -210,24 +215,32 @@ tls_connect(struct conn *s,  /* tls dnode peer connect */
 
     SSL_set_fd(ssl, sd);
     SSL_set_connect_state(ssl);
-    int success = SSL_connect(ssl);
 
-    if(success) {
-        dump_cert_info(ssl, false);
-        return DN_OK;
-    }
+    for (;;) {
+        int success = SSL_connect(ssl);
 
-    int32_t err = SSL_get_error(c->ssl, success);
+        if(success) {
+            dump_cert_info(ssl, false);
+            return DN_OK;
+        }
 
-    /* For non-blocking operation did not complete. Try again later. */
-    if (err == SSL_ERROR_WANT_READ             ||
-            err == SSL_ERROR_WANT_WRITE) {
-        return DN_OK;
-    }
-    else {
-        log_error("Error SSL_accept: %d", err);
-        SSL_free(ssl);
-        return DN_ERROR;
+        int32_t err = SSL_get_error(c->ssl, success);
+
+        /* For non-blocking operation did not complete. Try again later. */
+        if (err == SSL_ERROR_WANT_READ        ||
+            err == SSL_ERROR_WANT_WRITE       ||
+            err == SSL_ERROR_WANT_X509_LOOKUP ||
+            err == SSL_ERROR_WANT_CONNECT) {
+            return DN_OK;
+        }
+        else {
+            if(err == SSL_ERROR_ZERO_RETURN) {
+                log_error("SSL_connect: close notify received from peer");
+            }
+            log_error("Error SSL_accept: %d", err);
+            SSL_free(ssl);
+            return DN_ERROR;
+        }
     }
 }
 
@@ -241,13 +254,14 @@ dyn_ssl_read(SSL *ssl,void *buf,int num) {
 
     int32_t err = SSL_get_error(ssl, success);
 
-    if(err == SSL_ERROR_WANT_READ ||
-        err == SSL_ERROR_WANT_WRITE) {
+    if(err == SSL_ERROR_WANT_READ   ||
+        err == SSL_ERROR_WANT_WRITE ||
+        err == SSL_ERROR_WANT_X509_LOOKUP) {
         errno = EAGAIN;
         return (ssize_t) DN_EAGAIN;
     }
     else if(err == SSL_ERROR_ZERO_RETURN) {
-        log_debug(LOG_INFO, "SSL_read close notify received from peer");
+        log_debug(LOG_INFO, "SSL_read: close notify received from peer");
         return DN_OK;
     }
     else {
@@ -266,8 +280,9 @@ dyn_ssl_write(SSL *ssl,const void *buf,int num) {
 
     int32_t err = SSL_get_error(ssl, success);
 
-    if(err == SSL_ERROR_WANT_READ ||
-        err == SSL_ERROR_WANT_WRITE) {
+    if(err == SSL_ERROR_WANT_READ   ||
+        err == SSL_ERROR_WANT_WRITE ||
+        err == SSL_ERROR_WANT_X509_LOOKUP) {
         errno = EAGAIN;
         return (ssize_t) DN_EAGAIN;
     }

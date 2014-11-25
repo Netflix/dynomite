@@ -41,10 +41,11 @@ struct tls_ctx {
     SSL_CTX* ssl_ctx;
 };
 
-rstatus_t tls_init(struct tls_ctx *tls_ctx);
-void tls_deinit(struct conn *c);
+rstatus_t dyn_tls_init(struct tls_ctx *tls_ctx, bool client);
+void dyn_tls_deinit(struct conn *c);
 void tls_close(struct conn *c);
-rstatus_t tls_accept(struct conn *s, struct conn *c, int sd);
+rstatus_t dyn_tls_accept(struct conn *s, struct conn *c, int sd);
+rstatus_t dyn_tls_connect(struct conn *s, struct conn *c, int sd);
 ssize_t dyn_ssl_read(SSL *ssl,void *buf,int num);
 ssize_t dyn_ssl_write(SSL *ssl,const void *buf,int num);
 
