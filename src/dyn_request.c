@@ -254,7 +254,7 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
 
-    if (!conn->dyn_mode) {
+    if (!conn->dnode_mode) {
        stats_server_incr(ctx, conn->owner, in_queue);
        stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
     } else {
@@ -668,9 +668,9 @@ req_send_next(struct context *ctx, struct conn *conn)
     ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     if (conn->connecting) {
-        if (!conn->dyn_mode && !conn->client)
+        if (!conn->dnode_mode && !conn->client)
            server_connected(ctx, conn);
-        else if (conn->dyn_mode && !conn->dnode_client)
+        else if (conn->dnode_mode && !conn->dnode_client)
            dnode_peer_connected(ctx, conn);
     }
 

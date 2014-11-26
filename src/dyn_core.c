@@ -155,6 +155,7 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
+
 	core_debug(ctx);
 
 	/* preconntect peers - probably start gossip here */
@@ -210,14 +211,14 @@ core_start(struct instance *nci)
 	msg_init();
 	conn_init();
 
-    /* Init openssl library */
-    SSL_load_error_strings();
-    SSL_library_init();
+        /* Init openssl library */
+        SSL_library_init();        /* load encryption & hash algorithms for SSL */  
+        SSL_load_error_strings();  /* load the error strings for good error reporting */
 
 	ctx = core_ctx_create(nci);
 	if (ctx != NULL) {
-		nci->ctx = ctx;
-		return ctx;
+           nci->ctx = ctx;
+           return ctx;
 	}
 
 	conn_deinit();
@@ -311,7 +312,7 @@ core_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->sd > 0);
 
-	if (conn->dyn_mode) {
+	if (conn->dnode_mode) {
 		core_dnode_close_log(conn);
 	} else {
 		core_close_log(conn);
@@ -382,7 +383,7 @@ core_timeout(struct context *ctx)
 
 		msg_tmo_delete(msg);
 
-		if (conn->dyn_mode)
+		if (conn->dnode_mode)
 			return;  //don't close dyn connection in this case
 
 		conn->err = ETIMEDOUT;
@@ -398,7 +399,7 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-	if (conn->dyn_mode) {
+	if (conn->dnode_mode) {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
 				conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
 	} else {
@@ -503,7 +504,7 @@ core_loop(struct context *ctx)
 
 	//log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
-        core_process_messages();
+    core_process_messages();
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;

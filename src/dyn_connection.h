@@ -58,7 +58,7 @@ struct conn {
     struct msg         *smsg;         /* current message being sent */
 
     struct tls_ctx     *tls_ctx;      /* For managing the ssl method and context */
-    SSL         *ssl;          /* SSL connection management. */
+    SSL                *ssl;          /* SSL connection management. */
 
     conn_recv_t        recv;          /* recv (read) handler */
     conn_recv_next_t   recv_next;     /* recv next message handler */
@@ -95,10 +95,9 @@ struct conn {
     unsigned           done:1;        /* done? aka close? */
     unsigned           redis:1;       /* redis? */
     unsigned           dnode_server:1;       /* dnode server connection? */
-    unsigned           dnode_tls_server:1;   /* dnode tls server connection? */
     unsigned           dnode_client:1;       /* dnode client? */
-    unsigned           dnode_tls_client:1;   /* dnode tls client? */
-    unsigned           dyn_mode:1;           /* is a dyn connection? */
+    unsigned           dnode_mode:1;         /* is a dyn connection? */
+    unsigned           dnode_secured:1;      /* is a secured/tls connection? */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
@@ -106,7 +105,7 @@ TAILQ_HEAD(conn_tqh, conn);
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *conn_get(void *owner, bool client, bool redis);
 struct conn *conn_get_proxy(void *owner);
-struct conn *conn_get_peer(void *owner, bool client, bool redis);
+struct conn *conn_get_peer(void *owner, bool client, bool is_secured, bool redis);
 struct conn *conn_get_dnode(void *owner);
 struct conn *conn_get_dnode_tls(void *owner);
 void conn_put(struct conn *conn);

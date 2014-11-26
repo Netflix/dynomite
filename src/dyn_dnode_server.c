@@ -285,7 +285,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     }
 
     log_debug(LOG_NOTICE, "dyn: accept on sd  %d", sd);
-    c = conn_get_peer(p->owner, true, p->redis);
+    c = conn_get_peer(p->owner, true, false, p->redis);
     if (c == NULL) {
         log_error("dyn: get conn client peer for c %d from p %d failed: %s", sd, p->sd,
                   strerror(errno));

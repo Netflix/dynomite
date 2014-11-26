@@ -183,6 +183,9 @@ struct server_pool {
     struct string      dc;                   /* server's dc */
     struct string      env;                  /* aws, network, ect */
 
+    /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
+    struct string      secure_server_option;
+
 };
 
 void server_ref(struct conn *conn, void *owner);

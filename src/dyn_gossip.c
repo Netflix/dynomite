@@ -11,6 +11,7 @@
 #include <ctype.h>
 
 #include "dyn_core.h"
+#include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_gossip.h"
 #include "dyn_dnode_peer.h"
@@ -333,7 +334,7 @@ gossip_forward_state(struct server_pool *sp)
 				*pos = ',';
 				pos += 1;
 
-				//write addresss
+				//write address
 				for(k=0; k<gnode->name.len; k++, pos++) {
 					*pos = *(gnode->name.data + k);
 				}
@@ -486,9 +487,39 @@ gossip_rack_init(struct gossip_rack *g_rack, struct string *dc, struct string *r
 }
 
 
+static bool is_conn_secured(struct server_pool *sp, struct node *peer_node)
+{
+	ASSERT(peer_server != NULL);
+	ASSERT(sp != NULL);
+
+    // if dc then communication only between nodes in different dc is secured
+    if (!dn_strcmp(sp->secure_server_option.data, CONF_STR_DC)) {
+        if (string_compare(&sp->dc, &peer_node->dc)) {
+            return true;
+        }
+    }
+    // if rack then communication only between nodes in different rack is secured.
+    // communication secured between nodes if they are in rack with same name across dcs.
+    else if (!dn_strcmp(sp->secure_server_option.data, CONF_STR_RACK)) {
+        // if not same rack or dc
+        if (string_compare(&sp->rack, &peer_node->rack)
+                || string_compare(&sp->dc, &peer_node->dc)) {
+            return true;
+        }
+    }
+    // if all then all communication between nodes will be secured.
+    else if (!dn_strcmp(sp->secure_server_option.data, CONF_STR_ALL)) {
+        return true;
+    }
+
+    return false;
+}
+
+
 static struct node *
 gossip_add_node_to_rack(struct server_pool *sp, struct string *dc, struct gossip_rack *g_rack,
-		struct string *address, struct string *ip, struct string *port, struct dyn_token *token)
+		                struct string *address, struct string *ip, struct string *port,
+		                struct dyn_token *token)
 {
 	rstatus_t status;
 	log_debug(LOG_VERB, "gossip_add_node_to_rack : dc[%.*s] rack[%.*s] address[%.*s] ip[%.*s] port[%.*s]",
@@ -505,7 +536,15 @@ gossip_add_node_to_rack(struct server_pool *sp, struct string *dc, struct gossip
 	status = string_copy(&gnode->rack, g_rack->name.data, g_rack->name.len);
 	status = string_copy(&gnode->name, ip->data, ip->len);
 	status = string_copy(&gnode->pname, address->data, address->len); //ignore the port for now
-	gnode->port = port_i;
+	//gnode->port = port_i;  //ignore port param
+    if (is_conn_secured(sp, gnode)) {
+        gnode->port = sp->ds_port;
+        gnode->is_secure = 1;
+    } else {
+    	gnode->port = sp->d_port;
+    	gnode->is_secure = 0;
+    }
+
 
 	struct dyn_token * gtoken = &gnode->token;
 	copy_dyn_token(token, gtoken);
@@ -598,6 +637,8 @@ gossip_add_node_if_absent(struct server_pool *sp,
 	bool rack_existed = false;
 
 	log_debug(LOG_VERB, "gossip_add_node_if_absent          : '%.*s'", address->len, address->data);
+	log_debug(LOG_VERB, "gossip_add_node_if_absent DC         : '%.*s'", dc->len, dc->data);
+
 
 	struct gossip_dc * g_dc = dictFetchValue(gn_pool.dict_dc, dc);
 	if (g_dc == NULL) {
@@ -743,12 +784,13 @@ gossip_loop(void *arg)
 	for(;;) {
 		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
-		current_node->ts = (uint64_t) time(NULL);
-                gossip_process_msgs();
 
-                if (current_node->state == NORMAL) {
-                        gn_pool.ctx->dyn_state = NORMAL;
-                }
+		current_node->ts = (uint64_t) time(NULL);
+        gossip_process_msgs();
+
+        if (current_node->state == NORMAL) {
+              gn_pool.ctx->dyn_state = NORMAL;
+        }
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
@@ -756,12 +798,12 @@ gossip_loop(void *arg)
 			string_deinit(&seeds);
 		}
 
-                if (node_count == 1) { //single node deployment
+        if (node_count == 1) { //single node deployment
 			gn_pool.ctx->dyn_state = NORMAL;
 			continue;
 		}
 
-                //STANDBY state for warm bootstrap
+        //STANDBY state for warm bootstrap
 		if (gn_pool.ctx->dyn_state == STANDBY)
 			continue;
 
@@ -871,6 +913,8 @@ gossip_pool_each_init(void *elem, void *data)
 		string_copy(&gnode->pname, peer->pname.data, peer->pname.len); //ignore the port for now
 		gnode->port = peer->port;
 		gnode->is_local = peer->is_local;
+
+		log_debug(LOG_VERB, "Portttttttttttttttt %d and is_local is %d", gnode->port, gnode->is_local);
 
 
 		if (i == 0) { //Don't override its own state

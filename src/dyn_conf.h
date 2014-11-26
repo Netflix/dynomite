@@ -170,7 +170,7 @@ struct command {
 char *conf_set_string(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_listen(struct conf *cf, struct command *cmd, void *conf);
 char *conf_add_server(struct conf *cf, struct command *cmd, void *conf);
-char *conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf);
+char *conf_add_dyn_seed(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_num(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_bool(struct conf *cf, struct command *cmd, void *conf);
 char *conf_set_hash(struct conf *cf, struct command *cmd, void *conf);

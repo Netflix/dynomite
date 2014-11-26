@@ -34,7 +34,7 @@ struct node {
     bool               is_local;         /* is this peer the current running node?  */
     uint8_t            state;            /* state of a node that this host knows */
     uint64_t           ts;               /* timestamp */
-
+    bool               is_secure;       /* is a secured conn */
 };
 
 

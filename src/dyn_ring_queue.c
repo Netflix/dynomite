@@ -178,7 +178,7 @@ node_copy(const struct node *src, struct node *dst)
 	dst->last_retry = src->last_retry;
 	dst->next_retry = src->next_retry;
 	dst->port = src->port;
-
+    dst->is_secure = src->is_secure;
 
 	string_copy(&dst->pname, src->pname.data, src->pname.len);
 	string_copy(&dst->name, src->name.data, src->name.len);

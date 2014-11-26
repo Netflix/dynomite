@@ -30,7 +30,7 @@ dnode_tls_each_init(void *elem, void *data)
         return DN_ENOMEM;
     }
 
-    status = tls_init(p->tls_ctx);
+    status = dyn_tls_init(p->tls_ctx);
     if (status != DN_OK) {
         return status;
     }
@@ -92,7 +92,7 @@ dnode_tls_each_deinit(void *elem, void *data)
 
     p = pool->d_conn;
     if (p != NULL) {
-        tls_deinit(p);
+        dyn_tls_deinit(p);
         p->close(pool->ctx, p);
     }
 
@@ -163,7 +163,7 @@ dnode_tls_close(struct context *ctx, struct conn *conn)
     }
     conn->sd = -1;
 
-    tls_close(conn);
+    dyn_tls_close(conn);
     conn_put(conn);
 }
 
@@ -203,6 +203,10 @@ dnode_tls_listen(struct context *ctx, struct conn *p)
 {
     rstatus_t status;
     struct server_pool *pool = p->owner;
+
+    //TODOs: add this for testing
+    //return DN_OK;
+
 
     ASSERT(p->dnode_tls_server);
 
@@ -299,8 +303,8 @@ dnode_tls_accept(struct context *ctx, struct conn *p)
     }
 
     log_debug(LOG_NOTICE, "dyn: accept on sd  %d", sd);
-    c = conn_get_peer(p->owner, true, p->redis);
-    c->dnode_tls_client = 1;
+    c = conn_get_peer(p->owner, true, true, p->redis);
+
     log_debug(LOG_VVERB, "get dyn peer  conn %p client %d", c, c->dnode_client);
 
     if (c == NULL) {
@@ -333,7 +337,7 @@ dnode_tls_accept(struct context *ctx, struct conn *p)
         }
     }
 
-    if (tls_accept(p, c, sd) == DN_ERROR) {
+    if (dyn_tls_accept(p, c, sd) == DN_ERROR) {
         return DN_ERROR;
     }
 
@@ -356,7 +360,7 @@ dnode_tls_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->dnode_tls_server && !conn->dnode_tls_client);
+    //ASSERT(conn->dnode_tls_server && !conn->dnode_tls_client);
     ASSERT(conn->recv_active);
 
     conn->recv_ready = 1;

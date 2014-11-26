@@ -181,7 +181,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
         log_error("dyn: close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
 
-    if (conn->dnode_tls_client) {
+    if (conn->dnode_secured) {
         SSL_free(conn->ssl);
     }
 

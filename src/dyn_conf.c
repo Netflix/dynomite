@@ -128,7 +128,7 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, dyn_seed_provider) },
 
     { string("dyn_seeds"),
-      conf_add_dyn_server,
+      conf_add_dyn_seed,
       offsetof(struct conf_pool, dyn_seeds) }, 
 
     { string("dyn_port"),
@@ -190,6 +190,7 @@ conf_server_init(struct conf_server *cs)
     memset(&cs->info, 0, sizeof(cs->info));
 
     cs->valid = 0;
+    cs->is_secure = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
     return DN_OK;
@@ -488,6 +489,8 @@ conf_pool_each_transform(void *elem, void *data)
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
+
+    sp->secure_server_option = cp->secure_server_option;
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
@@ -1952,7 +1955,7 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
  * Need to fix however, there's bigger fish to deep fry at this point.
  */
 char *
-conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
+conf_add_dyn_seed(struct conf *cf, struct command *cmd, void *conf)
 {
     rstatus_t status;
     struct array *a;
@@ -2098,6 +2101,170 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
             name = addr;
             namelen = addrlen + 1 + portlen;
         }
+    }
+
+    status = string_copy(&field->name, name, namelen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&address, addr, addrlen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    status = dn_resolve(&address, field->port, &field->info);
+    if (status != DN_OK) {
+        string_deinit(&address);
+        return CONF_ERROR;
+    }
+
+    string_deinit(&address);
+    field->valid = 1;
+
+    return CONF_OK;
+}
+
+
+char *
+conf_add_dyn_seed1(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    struct array *a;
+    struct string *value;
+    struct conf_server *field;
+    uint8_t *p, *q, *start;
+    uint8_t *pname, *addr, *rack, *tokens, *name, *dc;
+    uint32_t k, delimlen, pnamelen, addrlen, racklen, tokenslen, namelen, dclen;
+    struct string address;
+    char delim[] = " :::";
+    //struct conf_pool *cfpool = conf;
+
+    string_init(&address);
+    p = conf; // conf_pool
+    a = (struct array *)(p + cmd->offset); // a is conf_server array
+
+    field = array_push(a);
+    if (field == NULL) {
+        return CONF_ERROR;
+    }
+
+    status = conf_server_init(field); // field is conf_server
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    value = array_top(&cf->arg);
+
+    /* parse "hostname:rack:dc:tokens [name]" */
+    p = value->data + value->len - 1; // p is now pointing to a string
+    start = value->data;
+    addr = NULL;
+    addrlen = 0;
+    rack = NULL;
+    racklen = 0;
+    tokens = NULL;
+    tokenslen = 0;
+    //port = NULL;
+    //portlen = 0;
+    name = NULL;
+    namelen = 0;
+    dc = NULL;
+    dclen = 0;
+
+    delimlen = 4;
+
+    for (k = 0; k < sizeof(delim); k++) {
+        q = dn_strrchr(p, start, delim[k]);
+        if (q == NULL) {
+            if (k == 0) {
+                /*
+                 * name in "hostname:rack:dc:tokens [name]" format string is
+                 * optional
+                 */
+                continue;
+            }
+            break;
+        }
+
+        switch (k) {
+        case 0:
+            name = q + 1;
+            namelen = (uint32_t)(p - name + 1);
+            break;
+
+        case 1:
+            tokens = q + 1;
+            tokenslen = (uint32_t)(p - tokens + 1);
+            break;
+
+        case 2:
+            dc = q + 1;
+            dclen = (uint32_t)(p - dc + 1);
+            break;
+
+        case 3:
+            rack = q + 1;
+            racklen = (uint32_t)(p - rack + 1);
+            break;
+
+        //case 4:
+        //    port = q + 1;
+        //    portlen = (uint32_t)(p - port + 1);
+        //    break;
+
+        default:
+            NOT_REACHED();
+        }
+
+        p = q - 1;
+    }
+
+    if (k != delimlen) {
+        return "has an invalid format must match \"hostname:rack:dc:tokens [name]\"";
+    }
+
+    pname = value->data; // seed node config string.
+    pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
+    status = string_copy(&field->pname, pname, pnamelen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&field->dc, dc, dclen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&field->rack, rack, racklen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    uint8_t *t_end = tokens + tokenslen;
+    status = derive_tokens(&field->tokens, tokens, t_end);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    addr = start;
+    addrlen = (uint32_t)(p - start + 1);
+
+    //ignore port
+    //if (value->data[0] != '/') {
+    //    field->port = dn_atoi(port, portlen);
+    //    if (field->port < 0 || !dn_valid_port(field->port)) {
+    //        return "has an invalid port in \"hostname:port:weight [name]\" format string";
+    //    }
+    //}
+
+    if (name == NULL) {
+        name = addr;
+        namelen = addrlen + 1;
     }
 
     status = string_copy(&field->name, name, namelen);

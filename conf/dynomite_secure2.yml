@@ -1,0 +1,24 @@
+dyn_o_mite:
+  auto_eject_hosts: false
+  env: network
+  datacenter: localdc
+  rack: localrack
+  distribution: vnode
+  dyn_listen: 127.0.0.2:8101
+  dyn_secure_listen: 127.0.0.2:8103
+  dyn_read_timeout: 15000
+  dyn_write_timeout: 15000
+  gos_interval: 5000
+  hash: murmur
+  listen: 127.0.0.2:8102
+  preconnect: true
+  server_retry_timeout: 30000
+  servers:
+  - 127.0.0.1:22122:1
+  timeout: 10000
+  tokens: '437425602'
+  redis: true
+  dyn_seed_provider: simple_provider
+  dyn_seeds:
+  - 127.0.0.1:localrack:localdc:3101134286
+  secure_server_option: all

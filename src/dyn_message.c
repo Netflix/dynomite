@@ -287,13 +287,13 @@ msg_get(struct conn *conn, bool request, bool redis)
 
     if (redis) {
         if (request) {
-            if (conn->dyn_mode) {
+            if (conn->dnode_mode) {
                msg->parser = dyn_parse_req;
             } else {
                msg->parser = redis_parse_req;
             }
         } else {
-            if (conn->dyn_mode) {
+            if (conn->dnode_mode) {
                msg->parser = dyn_parse_rsp;
             } else {
                msg->parser = redis_parse_rsp;
@@ -305,13 +305,13 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_coalesce = redis_post_coalesce;
     } else {
         if (request) {
-            if (conn->dyn_mode) {
+            if (conn->dnode_mode) {
                msg->parser = dyn_parse_req;
             } else {
                msg->parser = memcache_parse_req;
             }
         } else {
-            if (conn->dyn_mode) {
+            if (conn->dnode_mode) {
                msg->parser = dyn_parse_rsp;
             } else {
                msg->parser = memcache_parse_rsp;
@@ -621,7 +621,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     nmsg->frag_owner = msg->frag_owner;
     msg->frag_owner->nfrag++;
 
-    if (!conn->dyn_mode) {
+    if (!conn->dnode_mode) {
        stats_pool_incr(ctx, conn->owner, fragments);
     } else {
     	

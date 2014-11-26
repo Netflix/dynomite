@@ -10,13 +10,85 @@
 #include "errno.h"
 
 //static const char* DYN_DEFAULT_CIPHER =  "AES128-GCM-SHA256";
-static const char* DYN_DEFAULT_CIPHER = "AES256-GCM-SHA384";
+static const char* DYN_DEFAULT_CIPHER = "AES128-GCM-SHA256";
 
 
 rstatus_t
-tls_init(struct tls_ctx *t) {
+dyn_tls_init(struct tls_ctx *t) {
     log_debug(LOG_INFO,"Initializing tls context");
     t->meth = TLSv1_2_server_method();
+    //t->meth = TLSv1_2_method();
+    t->ssl_ctx = SSL_CTX_new(t->meth);
+
+    if (!t->ssl_ctx) {
+        log_error("Unable to create ssl context");
+        ERR_print_errors_fp(getLogger()->fp);
+        return TLS_ERR_CTX;
+    }
+
+    /* Cipher AES256-GCM-SHA384 - good performance with AES-NI support. */
+    if (!SSL_CTX_set_cipher_list(t->ssl_ctx, DYN_DEFAULT_CIPHER)) {
+        log_error("Could not set cipher.");
+        return TLS_ERR_SET_CIPHER;
+    }
+    else {
+        log_debug(LOG_INFO, "Cipher set to %s", DYN_DEFAULT_CIPHER);
+    }
+
+    /* Disable compression to help prevent vulnerabilities. */
+    if (!SSL_CTX_set_options(t->ssl_ctx, SSL_OP_NO_COMPRESSION)) {
+        log_error("Could not disable compression.");
+        return TLS_ERR_SET_COMPRESSION;
+    }
+    else {
+        log_debug(LOG_INFO, "TLS Compression disabled.");
+    }
+
+    /* Configure certificates and keys */
+    if (SSL_CTX_load_verify_locations(t->ssl_ctx, CERTF, 0) <= 0) {
+        log_error("Could not load certificates");
+        ERR_print_errors_fp(getLogger()->fp);
+        return TLS_ERR_LOAD_CERT;
+    }
+
+    if (SSL_CTX_use_certificate_file(t->ssl_ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
+        log_error("Cannot use certificate.");
+        ERR_print_errors_fp(getLogger()->fp);
+        return TLS_ERR_USE_CERT;
+    }
+    else {
+        log_debug(LOG_INFO, "Loading cert file: %s", CERTF);
+    }
+
+
+    if (SSL_CTX_use_PrivateKey_file(t->ssl_ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
+        log_error("Cannot use key");
+        ERR_print_errors_fp(getLogger()->fp);
+        return TLS_ERR_USE_KEY;
+    }
+    else {
+        log_debug(LOG_INFO, "Loading key file: %s", KEYF);
+    }
+
+
+    if (!SSL_CTX_check_private_key(t->ssl_ctx)) {
+        log_error("Private key does not match public key in certificate.\n");
+        return TLS_ERR_CHECK_KEY;
+    }
+
+    /* Enable client certificate verification. Enable before accepting connections. */
+    /*SSL_CTX_set_verify(t->ssl_ctx,
+            SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE,
+            0);*/
+
+    return DN_OK;
+}
+
+
+rstatus_t
+dyn_tls_client_init(struct tls_ctx *t) {
+    log_debug(LOG_INFO,"Initializing client tls context");
+    t->meth = TLSv1_2_client_method();
     t->ssl_ctx = SSL_CTX_new(t->meth);
 
     if (!t->ssl_ctx) {
@@ -85,7 +157,7 @@ tls_init(struct tls_ctx *t) {
 
 
 void
-tls_deinit(struct conn *c) {
+dyn_tls_deinit(struct conn *c) {
     log_debug(LOG_INFO, "Closing secure connection with sd %d.", c->sd);
     SSL_shutdown(c->ssl);
     SSL_free(c->ssl);
@@ -96,7 +168,7 @@ tls_deinit(struct conn *c) {
 }
 
 
-void tls_close(struct conn *c) {
+void dyn_tls_close(struct conn *c) {
     log_debug(LOG_INFO, "Closing secure connection with sd %d.", c->sd);
     SSL_free(c->ssl);
 }
@@ -146,7 +218,7 @@ dump_cert_info(SSL *ssl, bool server) {
 }
 
 rstatus_t
-tls_accept(struct conn *s,  /* tls server */
+dyn_tls_accept(struct conn *s,  /* tls server */
            struct conn *c,  /* tls client*/
            int sd          /*accepted*/) {
     SSL* ssl;
@@ -195,39 +267,48 @@ tls_accept(struct conn *s,  /* tls server */
 }
 
 rstatus_t
-tls_connect(struct conn *s,  /* tls dnode peer connect */
-           struct conn *c,  /* tls client*/
-           int sd          /*accepted*/) {
+dyn_tls_connect(struct conn *p_conn,  /* tls dnode peer connect */
+           int sd) {
     SSL* ssl;
 
-    ssl = SSL_new(s->tls_ctx->ssl_ctx);
+    loga("In dyn_tls_connect ...........................................");
+    ssl = SSL_new(p_conn->tls_ctx->ssl_ctx);
     if(!ssl) {
         log_error("Could not create SSL");
         return DN_ERROR;
     }
 
-    c->ssl = ssl;
+    p_conn->ssl = ssl;
 
     SSL_set_fd(ssl, sd);
     SSL_set_connect_state(ssl);
-    int success = SSL_connect(ssl);
 
-    if(success) {
-        dump_cert_info(ssl, false);
-        return DN_OK;
-    }
+    for(;;) {
+		int success = SSL_connect(ssl);
 
-    int32_t err = SSL_get_error(c->ssl, success);
+		if(success) {
+			loga("connecttttttttttttttttttttttttttttttttt");
+			dump_cert_info(ssl, false);
+			return DN_OK;
+		}
 
-    /* For non-blocking operation did not complete. Try again later. */
-    if (err == SSL_ERROR_WANT_READ             ||
-            err == SSL_ERROR_WANT_WRITE) {
-        return DN_OK;
-    }
-    else {
-        log_error("Error SSL_accept: %d", err);
-        SSL_free(ssl);
-        return DN_ERROR;
+		int32_t err = SSL_get_error(p_conn->ssl, success);
+
+		/* For non-blocking operation did not complete. Try again later. */
+		if (err == SSL_ERROR_WANT_READ        ||
+		    err == SSL_ERROR_WANT_WRITE       ||
+		    err == SSL_ERROR_WANT_X509_LOOKUP ||
+		    err == SSL_ERROR_WANT_CONNECT) {
+		            return DN_OK;
+		}
+        else {
+        	if(err == SSL_ERROR_ZERO_RETURN) {
+        	    log_error("SSL_connect: close notify received from peer");
+        	}
+			log_error("Error SSL_accept: %d", err);
+			SSL_free(ssl);
+			return DN_ERROR;
+		}
     }
 }
 
@@ -241,10 +322,11 @@ dyn_ssl_read(SSL *ssl,void *buf,int num) {
 
     int32_t err = SSL_get_error(ssl, success);
 
-    if(err == SSL_ERROR_WANT_READ ||
-        err == SSL_ERROR_WANT_WRITE) {
-        errno = EAGAIN;
-        return (ssize_t) DN_EAGAIN;
+    if(err == SSL_ERROR_WANT_READ   ||
+            err == SSL_ERROR_WANT_WRITE ||
+            err == SSL_ERROR_WANT_X509_LOOKUP) {
+            errno = EAGAIN;
+            return (ssize_t) DN_EAGAIN;
     }
     else if(err == SSL_ERROR_ZERO_RETURN) {
         log_debug(LOG_INFO, "SSL_read close notify received from peer");
@@ -257,9 +339,10 @@ dyn_ssl_read(SSL *ssl,void *buf,int num) {
 }
 
 ssize_t
-dyn_ssl_write(SSL *ssl,const void *buf,int num) {
+dyn_ssl_write1(SSL *ssl,const void *buf,int num) {
     int success = SSL_write(ssl, buf, num);
 
+    loga("successssssssssssssssssssssssssss %d", success);
     if (success > 0) {
         return success;
     }
@@ -279,4 +362,37 @@ dyn_ssl_write(SSL *ssl,const void *buf,int num) {
         log_error("SSL write error: %s", strerror(err));
         return (ssize_t) DN_ERROR;
     }
+}
+
+
+ssize_t
+dyn_ssl_write(SSL *ssl,const void *buf,int num) {
+
+		int success = SSL_write(ssl, buf, num);
+
+		loga("successssssssssssssssssssssssssss %d", success);
+		if (success > 0) {
+			return success;
+		}
+
+		int32_t err = SSL_get_error(ssl, success);
+
+		if(err == SSL_ERROR_WANT_READ ||
+           err == SSL_ERROR_WANT_WRITE ||
+           err == SSL_ERROR_WANT_X509_LOOKUP) {
+           errno = EAGAIN;
+           //continue;
+           return (ssize_t) DN_EAGAIN;
+		}
+		else if(err == SSL_ERROR_ZERO_RETURN) {
+			log_debug(LOG_INFO, "SSL_write close notify received from peer");
+			return DN_OK;
+		}
+		else {
+			log_error("SSL write error: %s", strerror(err));
+			return (ssize_t) DN_ERROR;
+		}
+
+
+	return (ssize_t) DN_EAGAIN;
 }

@@ -381,6 +381,9 @@ void
 dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *mbuf)
 {
 	rstatus_t status;
+
+	log_debug(LOG_DEBUG, "dnode_peer_gossip_forward is running!");
+
 	struct msg *msg = msg_get(conn, 1, redis);
 
 	if (msg == NULL) {

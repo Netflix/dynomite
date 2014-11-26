@@ -110,6 +110,24 @@ dnode_peer_each_set_owner(void *elem, void *data)
 }
 
 static rstatus_t
+dnode_peer_each_set_port(void *elem, void *data)
+{
+	struct server *s = elem;
+	struct server_pool *sp = data;
+
+
+    if (s->is_secure && !s->is_local)
+    	s->port = sp->ds_port;
+    else
+    	s->port = sp->d_port;
+
+    log_debug(LOG_VVERB, "dynnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn: is_local %d on port %d", s->is_local, s->port);
+
+	return DN_OK;
+}
+
+
+static rstatus_t
 dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 {
 	ASSERT(peer != NULL);
@@ -127,6 +145,8 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
 	peer->weight = 0;  /* hacking this out of the way for now */
 	peer->rack = pool->rack;
 	peer->is_local = true;
+    peer->port = pool->d_port;
+
 	//TODO-jeb might need to copy over tokens, not sure if this is good enough
 	peer->tokens = pool->tokens;
 
@@ -254,6 +274,13 @@ dnode_peer_each_pool_init(void *elem, void *context)
 		return status;
 	}
 
+	status = array_each(peers, dnode_peer_each_set_port, sp);
+	if (status != DN_OK) {
+		dnode_peer_deinit(seeds);
+		dnode_peer_deinit(peers);
+		return status;
+	}
+
 	dnode_peer_pool_run(sp);
 
 	log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool %"PRIu32" '%.*s'",
@@ -286,7 +313,13 @@ dnode_peer_conn(struct server *server)
 	pool = server->owner;
 
 	if (server->ns_conn_q < pool->d_connections) {
-		return conn_get_peer(server, false, pool->redis);
+		//bool secured = is_dnode_peer_conn_secured(pool, server);
+		struct conn *conn = conn_get_peer(server, false, server->is_secure, pool->redis);
+		if (server->is_secure && conn->tls_ctx != NULL) {
+			loga("XXXXXXXXXXX Initializing tls_client_init");
+		    dyn_tls_client_init(conn->tls_ctx); //TODOs: check for status
+		    return conn;
+		}
 	}
 	ASSERT(server->ns_conn_q == pool->d_connections);
 
@@ -314,6 +347,9 @@ dnode_peer_each_preconnect(void *elem, void *data)
 
 	peer = elem;
 	sp = peer->owner;
+
+	if (peer->is_local)  //don't bother to connect if it is a self-connection
+		return DN_OK;
 
 	conn = dnode_peer_conn(peer);
 	if (conn == NULL) {
@@ -548,6 +584,11 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 	if (status < 0) {
 		log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
 	}
+
+    if (conn->dnode_secured) {
+        SSL_free(conn->ssl);
+    }
+
 	conn->sd = -1;
 
 	conn_put(conn);
@@ -655,7 +696,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 		if (peer->is_local)
 			continue;
 
-		log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
+		log_debug(LOG_VVERB, "Gossiping to node  '%.*s' at port %d", peer->name.len, peer->name.data, peer->port);
 
 		struct conn * conn = dnode_peer_conn(peer);
 		if (conn == NULL) {
@@ -725,6 +766,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	string_copy(&s->dc, node->dc.data, node->dc.len);
 
 	s->port = (uint16_t) node->port;
+	s->is_secure = node->is_secure;
 	s->is_local = node->is_local;
     s->state = node->state;
 
@@ -940,7 +982,8 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 	log_debug(LOG_VVERB, "dyn: connect to peer '%.*s'", server->pname.len,
 			server->pname.data);
 
-	conn->sd = socket(conn->family, SOCK_STREAM, 0);
+	//conn->sd = socket(conn->family, SOCK_STREAM, 0);
+	conn->sd = socket(conn->family, SOCK_STREAM, IPPROTO_TCP);
 	if (conn->sd < 0) {
 		log_error("dyn: socket for peer '%.*s' failed: %s", server->pname.len,
 				server->pname.data, strerror(errno));
@@ -976,6 +1019,9 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 	ASSERT(!conn->connecting && !conn->connected);
 
 	status = connect(conn->sd, conn->addr, conn->addrlen);
+
+	//log_debug(LOG_VERB, "ssssssssssssssssssssstatus of connect on addr '%.*s'  %d", conn->addr->sa_data, status);
+
 	if (status != DN_OK) {
 		if (errno == EINPROGRESS) {
 			conn->connecting = 1;
@@ -994,6 +1040,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 	conn->connected = 1;
 	log_debug(LOG_INFO, "dyn: connected on s %d to peer '%.*s'", conn->sd,
 			server->pname.len, server->pname.data);
+
 
 	return DN_OK;
 
@@ -1017,8 +1064,12 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 	conn->connecting = 0;
 	conn->connected = 1;
 
-	log_debug(LOG_INFO, "dyn: peer connected on s %d to server '%.*s'", conn->sd,
-			server->pname.len, server->pname.data);
+	log_debug(LOG_INFO, "dyn: peer connected on s %d to server '%.*s' on port %d", conn->sd,
+			server->name.len, server->name.data, server->port);
+
+	loga("TLS IS GOOOOOOOOOOOOOOOOOODDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
+	if (server->is_secure)
+	    dyn_tls_connect(conn, conn->sd); //TODOs: check for status
 }
 
 void
