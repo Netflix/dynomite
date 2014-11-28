@@ -706,7 +706,7 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
-    ASSERT(msg->owner != conn);
+    //ASSERT(msg->owner == conn);
 
     log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
               "s %d", msg->id, msg->mlen, msg->type, conn->sd);

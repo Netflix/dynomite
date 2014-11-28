@@ -169,7 +169,8 @@ _conn_get(void)
     conn->dnode_client = 0;
     conn->dnode_server = 0;
     conn->dyn_mode = 0;
-
+    conn->dnode_secured = 0;
+    conn->dnode_crypto_state = 0;
     return conn;
 }
 

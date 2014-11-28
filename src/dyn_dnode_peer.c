@@ -17,41 +17,41 @@
 void
 dnode_peer_ref(struct conn *conn, void *owner)
 {
-	struct server *pn = owner;
+	struct server *peer = owner;
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 	ASSERT(conn->owner == NULL);
 
-	conn->family = pn->family;
-	conn->addrlen = pn->addrlen;
-	conn->addr = pn->addr;
+	conn->family = peer->family;
+	conn->addrlen = peer->addrlen;
+	conn->addr = peer->addr;
 
-	pn->ns_conn_q++;
-	TAILQ_INSERT_TAIL(&pn->s_conn_q, conn, conn_tqe);
+	peer->ns_conn_q++;
+	TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
 
 	conn->owner = owner;
 
-	log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, pn,
-			pn->pname.len, pn->pname.data);
+	log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
+			peer->pname.len, peer->pname.data);
 }
 
 void
 dnode_peer_unref(struct conn *conn)
 {
-	struct server *pn;
+	struct server *peer;
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 	ASSERT(conn->owner != NULL);
 
-	pn = conn->owner;
+	peer = conn->owner;
 	conn->owner = NULL;
 
-	ASSERT(pn->ns_conn_q != 0);
-	pn->ns_conn_q--;
-	TAILQ_REMOVE(&pn->s_conn_q, conn, conn_tqe);
+	ASSERT(peer->ns_conn_q != 0);
+	peer->ns_conn_q--;
+	TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
 
-	log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, pn,
-			pn->pname.len, pn->pname.data);
+	log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
+			peer->pname.len, peer->pname.data);
 }
 
 int
@@ -277,6 +277,35 @@ dnode_peer_deinit(struct array *nodes)
 }
 
 
+static bool is_conn_secured(struct server_pool *sp, struct node *peer_node)
+{
+	//ASSERT(peer_server != NULL);
+	//ASSERT(sp != NULL);
+
+    // if dc-secured mode then communication only between nodes in different dc is secured
+    if (dn_strcmp(sp->secure_server_option.data, CONF_STR_DC) == 0) {
+        if (string_compare(&sp->dc, &peer_node->dc) != 0) {
+            return true;
+        }
+    }
+    // if rack-secured mode then communication only between nodes in different rack is secured.
+    // communication secured between nodes if they are in rack with same name across dcs.
+    else if (dn_strcmp(sp->secure_server_option.data, CONF_STR_RACK) == 0) {
+        // if not same rack nor dc
+        if (string_compare(&sp->rack, &peer_node->rack) != 0
+                || string_compare(&sp->dc, &peer_node->dc) != 0) {
+            return true;
+        }
+    }
+    // if all then all communication between nodes will be secured.
+    else if (dn_strcmp(sp->secure_server_option.data, CONF_STR_ALL) == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+
 struct conn *
 dnode_peer_conn(struct server *server)
 {
@@ -285,10 +314,16 @@ dnode_peer_conn(struct server *server)
 
 	pool = server->owner;
 
-	if (server->ns_conn_q < pool->d_connections) {
-		return conn_get_peer(server, false, pool->redis);
+	//if (server->ns_conn_q < pool->d_connections) {
+	if (server->ns_conn_q < 1) {
+        conn = conn_get_peer(server, false, pool->redis);
+        if (is_conn_secured(pool, server)) {
+        	conn->dnode_secured = 1;
+        	conn->dnode_crypto_state = 0; //need to do a encryption handshake
+        }
+        return conn;
 	}
-	ASSERT(server->ns_conn_q == pool->d_connections);
+	//ASSERT(server->ns_conn_q == pool->d_connections);
 
 	/*
 	 * Pick a server connection from the head of the queue and insert
@@ -314,6 +349,9 @@ dnode_peer_each_preconnect(void *elem, void *data)
 
 	peer = elem;
 	sp = peer->owner;
+
+    if (peer->is_local)  //don't bother to connect if it is a self-connection
+        return DN_OK;
 
 	conn = dnode_peer_conn(peer);
 	if (conn == NULL) {
@@ -505,7 +543,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 			req_put(msg);
 		} else {
 			c_conn = msg->owner;
-			ASSERT(c_conn->dnode_client && !c_conn->dnode_server);
+			ASSERT(!c_conn->dnode_client && !c_conn->dnode_server);
 
 			msg->done = 1;
 			msg->error = 1;
@@ -990,7 +1028,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 
 	ASSERT(!conn->connecting);
 	conn->connected = 1;
-	log_debug(LOG_INFO, "dyn: connected on s %d to peer '%.*s'", conn->sd,
+	log_debug(LOG_INFO, "dddddddddyn: connected on s %d to peer '%.*s'", conn->sd,
 			server->pname.len, server->pname.data);
 
 	return DN_OK;

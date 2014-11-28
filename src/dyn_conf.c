@@ -186,6 +186,7 @@ conf_server_init(struct conf_server *cs)
     memset(&cs->info, 0, sizeof(cs->info));
 
     cs->valid = 0;
+    cs->is_secure = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
     return DN_OK;
@@ -399,7 +400,10 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->secure_server_option);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
-    array_deinit(&cp->dyn_seeds);
+
+    if (array_n(&cp->dyn_seeds) != 0)
+       array_deinit(&cp->dyn_seeds);
+
     array_deinit(&cp->tokens);
 
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
@@ -475,6 +479,8 @@ conf_pool_each_transform(void *elem, void *data)
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
+
+    sp->secure_server_option = cp->secure_server_option;
 
     array_null(&sp->seeds);
     array_null(&sp->peers);

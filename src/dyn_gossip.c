@@ -108,6 +108,7 @@ static void dict_node_destructor(void *privdata, void *val)
 
     struct node *node = val;
     node_deinit(node);
+    dn_free(node);
 }
 
 

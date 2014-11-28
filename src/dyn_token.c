@@ -42,7 +42,9 @@ init_dyn_token(struct dyn_token *token)
 void 
 deinit_dyn_token(struct dyn_token *token)
 {
-	dn_free(token->mag);
+	if (token->mag != NULL)
+	   dn_free(token->mag);
+
 	token->signum = 0;
 	token->len = 0;
 }

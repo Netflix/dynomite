@@ -582,6 +582,9 @@ main(int argc, char **argv)
         exit(1);
     }
 
+    //init_crypto();
+    //test_crypto();
+
     dn_run(&nci);
 
     dn_post_run(&nci);

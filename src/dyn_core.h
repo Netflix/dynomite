@@ -119,6 +119,7 @@ struct dyn_ring;
 #include "dyn_connection.h"
 #include "dyn_cbuf.h"
 #include "dyn_ring_queue.h"
+#include "dyn_crypto.h"
 
 #include "event/dyn_event.h"
 

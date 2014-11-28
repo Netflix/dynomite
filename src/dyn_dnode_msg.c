@@ -137,8 +137,8 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_TYPE_ID:
-			//log_debug(LOG_DEBUG, "DYN_TYPE_ID");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
@@ -316,7 +316,13 @@ dyn_parse_req(struct msg *r)
 			return;
 		}
 
-
+        if (dmsg->type == CRYPTO_HANDSHAKE) {
+			log_debug(LOG_DEBUG, "Req parser: I got a crypto handshake msg");
+			r->state = 0;
+			r->result = MSG_PARSE_OK;
+			r->dyn_state = DYN_DONE;
+			return;
+        }
 
 		if (r->redis)
 			return redis_parse_req(r);
@@ -472,7 +478,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
     mbuf_write_string(mbuf, data);
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message (writer): ");
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
      
     return DN_OK;
 }
@@ -719,6 +725,12 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
            //dnode_rsp_gos_syn(ctx, conn, dmsg->owner);
            dmsg_parse(dmsg);
            return true;
+
+        case CRYPTO_HANDSHAKE:
+        	log_debug(LOG_DEBUG, "I have a crypto handshake msg and processing it now");
+            //TODOs: will work on this to optimize the performance
+        	return true;
+
         case GOSSIP_SYN_REPLY:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN_REPLY!!!!!!");
 

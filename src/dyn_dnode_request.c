@@ -37,7 +37,7 @@ dnode_req_put(struct msg *msg)
 bool
 dnode_req_done(struct conn *conn, struct msg *msg)
 {
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	return req_done(conn, msg);
 }
 
@@ -150,15 +150,13 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 		return true;
 	}
 
-
 	/* dynomite hanlder */
 	if (msg->dmsg != NULL) {
 		if (dmsg_process(ctx, conn, msg->dmsg)) {
-                    dnode_req_put(msg);
-                    return true;
-                }
+			dnode_req_put(msg);
+			return true;
+		}
 	}
-
 
 	return false;
 }

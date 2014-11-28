@@ -105,12 +105,13 @@ ring_msg_deinit(struct ring_msg *msg)
 		struct node *node = array_get(&msg->nodes, i);
 		node_deinit(node);
 	}
+	array_deinit(&msg->nodes);
 
 	if (msg->data != NULL) {
 		dn_free(msg->data);
 	}
 
-	array_deinit(&msg->nodes);
+
 	dn_free(msg);
 
 	return DN_OK;
@@ -161,11 +162,11 @@ node_deinit(struct node *node)
 		return DN_ERROR;
 
 	//array_deinit(&node->tokens);
-	deinit_dyn_token(&node->token);
 	string_deinit(&node->dc);
 	string_deinit(&node->rack);
 	string_deinit(&node->name);
 	string_deinit(&node->pname);
+	deinit_dyn_token(&node->token);
 
 	//dn_free(node);
 
@@ -186,7 +187,7 @@ node_copy(const struct node *src, struct node *dst)
 	dst->last_retry = src->last_retry;
 	dst->next_retry = src->next_retry;
 	dst->port = src->port;
-
+	dst->is_secure = src->is_secure;
 
 	string_copy(&dst->pname, src->pname.data, src->pname.len);
 	string_copy(&dst->name, src->name.data, src->name.len);

@@ -76,7 +76,7 @@ array_init(struct array *a, uint32_t n, size_t size)
 void
 array_deinit(struct array *a)
 {
-    ASSERT(a->nelem == 0);
+    //ASSERT(a->nelem == 0);
 
     if (a->elem != NULL) {
         dn_free(a->elem);
