@@ -41,15 +41,17 @@
 #define PUB_KEY_FILE  "conf/dynomite_pub.key"
 #define PRI_KEY_FILE  "conf/dynomite_pri.key"
 
-rstatus_t init_crypto();
-rstatus_t deinit_crypto();
+rstatus_t crypto_init(void);
+rstatus_t crypto_deinit(void);
 
-char* base64Encode(const unsigned char *message, const size_t length);
-int base64Decode(const char *b64message, const size_t length, unsigned char **buffer);
-int calcDecodeLength(const char *b64input, const size_t length);
+char* base64_encode(const unsigned char *message, const size_t length);
+int base64_decode(const char *b64message, const size_t length, unsigned char **buffer);
+int calc_decode_length(const char *b64input, const size_t length);
 
-int aesEncrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg);
-int aesDecrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg);
+int aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg);
+int aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg);
+
+unsigned char* generate_aes_key(void);
 
 int rsa_pub_encrypt(unsigned char *data, int data_len,
 		          unsigned char *key, unsigned char *encrypted);
@@ -64,6 +66,6 @@ int rsa_priv_decrypt(unsigned char *enc_data, int data_len,
 int rsa_priv_encrypt(unsigned char *data, int data_len,
 		            unsigned char *key, unsigned char *encrypted);
 
-int test_crypto();
+int crypto_test(void);
 
 #endif /* DYN_CRYPTO_H_ */

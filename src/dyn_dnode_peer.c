@@ -638,7 +638,7 @@ dnode_peer_forward_state(void *rmsg)
 	dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
 
 	//free this as nobody else will do
-	mbuf_put(mbuf);
+	//mbuf_put(mbuf);
 
 	return status;
 }
@@ -712,7 +712,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 	}
 
 	//free this as nobody else will do
-	mbuf_put(mbuf);
+	//mbuf_put(mbuf);
 
 	return DN_OK;
 }

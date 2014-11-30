@@ -128,7 +128,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 
 
 
-
+//TODOs: fix this in using dmsg_write with encrypted msgs
 void
 dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 {
@@ -166,8 +166,11 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	uint8_t version = VERSION_10;
 	struct string data = string("SYN_REPLY_OK");
 
-	dmsg_write(nbuf, msg_id, type, version, &data);
+	dmsg_write(nbuf, msg_id, type, version, p_conn);
 	mbuf_insert(&pmsg->mhdr, nbuf);
+
+	//dmsg_write(nbuf, msg_id, type, version, &data);
+	//mbuf_insert(&pmsg->mhdr, nbuf);
 
 	//dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
 	//should we do this?

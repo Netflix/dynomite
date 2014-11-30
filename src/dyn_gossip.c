@@ -735,7 +735,12 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 static void *
 gossip_loop(void *arg)
 {
+
 	struct server_pool *sp = arg;
+
+	if (!sp->ctx->enable_gossip)
+		return NULL;  //no gossiping
+
 	struct string seeds;
 	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
@@ -745,6 +750,7 @@ gossip_loop(void *arg)
 	for(;;) {
 		usleep(gossip_interval);
 		log_debug(LOG_VERB, "Gossip is running ...");
+
 		current_node->ts = (uint64_t) time(NULL);
                 gossip_process_msgs();
 

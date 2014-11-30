@@ -54,6 +54,7 @@ static int show_help;
 static int show_version;
 static int test_conf;
 static int daemonize;
+static int enable_gossip = 1;
 static int describe_stats;
 
 static struct option long_options[] = {
@@ -62,6 +63,7 @@ static struct option long_options[] = {
     { "test-conf",      no_argument,        NULL,   't' },
     { "daemonize",      no_argument,        NULL,   'd' },
     { "describe-stats", no_argument,        NULL,   'D' },
+    { "disable-gossip", no_argument,        NULL,   'g' },
     { "verbose",        required_argument,  NULL,   'v' },
     { "output",         required_argument,  NULL,   'o' },
     { "conf-file",      required_argument,  NULL,   'c' },
@@ -73,7 +75,7 @@ static struct option long_options[] = {
     { NULL,             0,                  NULL,    0  }
 };
 
-static char short_options[] = "hVtdDv:o:c:s:i:a:p:m:";
+static char short_options[] = "hVtdDgv:o:c:s:i:a:p:m:";
 
 static rstatus_t
 dn_daemonize(int dump_core)
@@ -345,6 +347,10 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             show_version = 1;
             break;
 
+        case 'g':
+            enable_gossip = 0;
+            break;
+
         case 'v':
             value = dn_atoi(optarg, strlen(optarg));
             if (value < 0) {
@@ -530,6 +536,10 @@ dn_run(struct instance *nci)
     if (ctx == NULL) {
         return;
     }
+
+    ctx->enable_gossip = enable_gossip;
+    if (!ctx->enable_gossip)
+    	ctx->dyn_state = NORMAL;
 
     /* run rabbit run */
     for (;;) {

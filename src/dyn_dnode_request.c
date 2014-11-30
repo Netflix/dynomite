@@ -4,10 +4,12 @@
  */ 
 
 #include "dyn_core.h"
-#include "dyn_server.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_mbuf.h"
+#include "dyn_server.h"
 
-static struct string client_request_dyn_msg = string("Client_request");
+
+//static struct string client_request_dyn_msg = string("Client_request");
 static uint64_t peer_msg_id = 0;
 
 static uint8_t version = VERSION_10;
@@ -228,8 +230,8 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 void
-dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
-		struct msg *nmsg)
+dnode_req_recv_done(struct context *ctx, struct conn *conn,
+		            struct msg *msg, struct msg *nmsg)
 {
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	ASSERT(msg->request);
@@ -309,8 +311,13 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	//dyn message's meta data
 	uint64_t msg_id = peer_msg_id++;
 
-	dmsg_write(nbuf, msg_id, DMSG_REQ, version, &client_request_dyn_msg);
+	//dmsg_write(nbuf, msg_id, DMSG_REQ, version, &client_request_dyn_msg);
+	dmsg_write(nbuf, msg_id, DMSG_REQ, version, p_conn);
 	mbuf_insert_head(&msg->mhdr, nbuf);
+
+	log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message header: ");
+	struct mbuf *b = STAILQ_LAST(&msg->mhdr, mbuf, next);
+	log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn message payload: ");
 
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
@@ -388,8 +395,9 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 
 	uint64_t msg_id = peer_msg_id++;
 
-	dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, version, mbuf);
+	dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, version, conn, mbuf_length(mbuf));
 	mbuf_insert_head(&msg->mhdr, nbuf);
+	mbuf_insert(&msg->mhdr, mbuf);
 
 	/* enqueue the message (request) into peer inq */
 	if (TAILQ_EMPTY(&conn->imsg_q)) {

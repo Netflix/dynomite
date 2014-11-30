@@ -3,20 +3,23 @@ Dyn message Protocol:
 I. Specification:
 
 1. Structure format
-  <MagicNumber> <space>
-  <MessageId> <space>
-  <TypeId> <space>
-  <Format> <space>
-  <Version> <CR LF>
-  *<number bytes> <space>
-  <data> <CR LF>
+  <MagicNumber> <Space>
+  <MessageId> <Space>
+  <TypeId> <Space>
+  <BitField> <Space>
+  <Version> <Space>
+  //<Version> <CR LF>
+  *<Number of data bytes> <Space>
+  <Data> <space>
+  //<Data> <CR LF>
+  *<Number of payload bytes> <CR LF>
   <Memcache or Redis payload>
 
 2. Field descriptions
   a. MagicNumber: it is always 2014
   b. MessageId: sequence id of a message
   c. TypeId: please see the code for the list.  
-  d. Format: indicate whether compression and/or encryption. Right most bit indicates encryption.
+  d. BitField: indicate whether compression and/or encryption. Right most bit indicates encryption.
      The 2nd bit from the right indicates a compressed message.
   e. Version: version of the msg.  This usually depends on the version of the dynomite.
      This is needed during upgrading a live cluster with mixed versions.
@@ -30,7 +33,7 @@ I. Specification:
      where "*2\r\n$3\r\nget\r\n$3\r\nfoo\r\n" is Redis' payload for "get foo" cmd.
      
      
-II. Encryption/Decryption
+II. Bit field for encryption/decryption
     
 
 III. Compression

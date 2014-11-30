@@ -44,11 +44,16 @@ struct dmsg {
 
     uint64_t             id;              /* message id */
     dmsg_type_t          type;            /* message type */
+    uint8_t              bit_field;       /* bits to indicate encryption or decryption. Right most bit indicates encryption.
+                                             2nd right most bit indicates compression */
     dmsg_version_t       version;         /* version of the message sender */
 
     struct sockaddr      *source_address; /* source ip */
     uint32_t mlen;                        /*  length */
     uint8_t  *data;                       /*  data */ 
+
+    uint32_t plen;                        /* payload length */
+    uint8_t  *payload;                    /* pointer to payload */
 };
 
 
@@ -65,8 +70,10 @@ void dmsg_init(void);
 void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
-rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data);
-rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct mbuf *data);
+rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
+		             uint8_t version, struct conn *conn);
+rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
+		                  uint8_t version, struct conn *conn, uint32_t plen);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 #endif

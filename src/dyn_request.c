@@ -635,8 +635,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
 
 void
-req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
-              struct msg *nmsg)
+req_recv_done(struct context *ctx, struct conn *conn,
+		      struct msg *msg, struct msg *nmsg)
 {
     ASSERT(conn->client && !conn->proxy);
     ASSERT(msg->request);
