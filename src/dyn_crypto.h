@@ -48,8 +48,14 @@ char* base64_encode(const unsigned char *message, const size_t length);
 int base64_decode(const char *b64message, const size_t length, unsigned char **buffer);
 int calc_decode_length(const char *b64input, const size_t length);
 
-int aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg);
-int aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg);
+rstatus_t aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg);
+rstatus_t aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg);
+
+rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msgLen,
+		                  struct mbuf *mbuf, unsigned char *aes_key);
+
+rstatus_t dyn_aes_decrypt(unsigned char *encMsg, size_t encMsgLen,
+		                  struct mbuf *mbuf, unsigned char *aes_key);
 
 unsigned char* generate_aes_key(void);
 

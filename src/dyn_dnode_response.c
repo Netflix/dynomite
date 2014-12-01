@@ -99,7 +99,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 	struct msg *pmsg;
 	struct conn *c_conn;
 
-	loga("dnode_rsp_forward 22222222222222222222222222222222222222222222");
+	log_debug(LOG_VERB, "dnode_rsp_forward entering ...");
 	ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
 
 	/* response from a peer implies that peer is ok and heartbeating */
@@ -125,20 +125,6 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 	msg->peer = pmsg;
 
 	msg->pre_coalesce(msg);
-
-	//add messsage
-	//struct mbuf *nbuf = mbuf_get();
-	//if (nbuf == NULL) {
-	//	log_debug(LOG_ERR, "Error happened in calling mbuf_get");
-	//	return;  //TODOs: need to address this further
-	//}
-
-	//uint64_t msg_id = pmsg->dmsg->id;
-	//uint8_t type = DMSG_RES;
-	//uint8_t version = VERSION_10;
-
-	//dmsg_write(nbuf, msg_id, type, version, peer_conn);
-	//mbuf_insert_head(&pmsg->mhdr, nbuf);
 
 
 	c_conn = pmsg->owner;
@@ -194,7 +180,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	uint8_t type = GOSSIP_SYN_REPLY;
 	struct string data = string("SYN_REPLY_OK");
 
-	dmsg_write(nbuf, msg_id, type, p_conn);
+	dmsg_write(nbuf, msg_id, type, p_conn, 0);
 	mbuf_insert(&pmsg->mhdr, nbuf);
 
 	//dmsg_write(nbuf, msg_id, type, version, &data);
@@ -231,7 +217,7 @@ void
 dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 		            struct msg *msg, struct msg *nmsg)
 {
-	loga("dnode_rsp_recv_done 5555555555555555555555555555555555555555555555");
+	log_debug(LOG_VERB, "dnode_rsp_recv_done entering ...");
 
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	ASSERT(msg != NULL && conn->rmsg == msg);
@@ -260,38 +246,67 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
-	loga("dnode_rsp_send_next 333333333333333333333333333333333333333333333333");
+	log_debug(LOG_VERB, "dnode_rsp_send_next entering");
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	struct msg *msg = rsp_send_next(ctx, conn);
 
 	if (msg != NULL && conn->dyn_mode) {
-		loga("dnode_rsp_send_next 444444444444444444444444444444444444444444");
+		log_debug(LOG_VERB, "Encrypting response ...");
+
 		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
 
-		//add dnode header
-		struct mbuf *nbuf = mbuf_get();
-		if (nbuf == NULL) {
+		//need to deal with multi-block later
+		uint64_t msg_id = pmsg->dmsg->id;
+
+		struct mbuf *header_buf = mbuf_get();
+		if (header_buf == NULL) {
+			loga("Unable to obtain an mbuf for header!");
 			return NULL; //need to address error here properly
 		}
 
-		//dyn message's meta data
-		//uint64_t msg_id = pmsg->dmsg->id;
-		uint64_t msg_id = 0;
+		//TODOs: need to set the outcoming conn to be secured too if the incoming conn is secured
+		if (pmsg->owner->dnode_secured) {
+			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
-		dmsg_write(nbuf, msg_id, DMSG_RES, conn);
-		mbuf_insert_head(&msg->mhdr, nbuf);
+			loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN/8));
 
-		log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message 222 header: ");
-		struct mbuf *b = STAILQ_LAST(&msg->mhdr, mbuf, next);
-		log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn message 222 payload: ");
+			struct mbuf *encrypted_buf = mbuf_get();
+			if (encrypted_buf == NULL) {
+				loga("Unable to obtain an mbuf for encryption!");
+				return NULL; //TODOs: need to clean up
+			}
+
+			rstatus_t status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf),
+					encrypted_buf, conn->aes_key);
+			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+
+			dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(encrypted_buf));
+			mbuf_insert_head(&msg->mhdr, header_buf);
+
+			log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "resp dyn message - original payload: ");
+			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+
+			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
+			mbuf_remove(&msg->mhdr, data_buf);
+			mbuf_put(data_buf);
+			mbuf_insert(&msg->mhdr, encrypted_buf);
+
+		} else {
+			dmsg_write(header_buf, msg_id, DMSG_RES, conn, 0);
+			mbuf_insert_head(&msg->mhdr, header_buf);
+		}
+
+		log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
+		msg_dump(msg);
 	}
+
 	return msg;
 }
 
 void
 dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	loga("dnode_rsp_send_done 2222222222222222222222222222222222222222222222");
+	log_debug(LOG_VERB, "dnode_rsp_send_done entering");
 	struct msg *pmsg; /* peer message (request) */
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);

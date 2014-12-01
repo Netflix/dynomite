@@ -71,7 +71,8 @@ void dmsg_init(void);
 void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
-rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn);
+rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
+		             struct conn *conn, uint32_t payload_len);
 
 rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 		                  struct conn *conn, uint32_t plen);

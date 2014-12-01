@@ -6,6 +6,7 @@
 #include <ctype.h>
 
 #include "dyn_core.h"
+#include "dyn_crypto.h"
 #include "dyn_dnode_msg.h"
 #include "dyn_server.h"
 #include "proto/dyn_proto.h"
@@ -146,13 +147,13 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_TYPE_ID:
-			log_debug(LOG_DEBUG, "DYN_TYPE_ID");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (num > 0)  {
-					log_debug(LOG_DEBUG, "Type Id: %d", num);
+					//log_debug(LOG_DEBUG, "Type Id: %d", num);
 					dmsg->type = num;
 					//state = DYN_SPACES_BEFORE_VERSION;
 					state = DYN_SPACES_BEFORE_BIT_FIELD;
@@ -175,13 +176,13 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_BIT_FIELD:
-			log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == ' ')  {
-					log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
+					//log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
 					dmsg->bit_field = num & 0xF;
 					state = DYN_SPACES_BEFORE_VERSION;
 				} else {
@@ -189,8 +190,8 @@ dyn_parse_core(struct msg *r)
 				}
 			}
 
-			log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 
 			break;
 
@@ -259,7 +260,7 @@ dyn_parse_core(struct msg *r)
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == ' ')  {
-					log_debug(LOG_DEBUG, "Data len: %d", num);
+					//log_debug(LOG_DEBUG, "Data len: %d", num);
 					dmsg->mlen = num;
 					state = DYN_SPACE_BEFORE_DATA;
 					num = 0;
@@ -275,7 +276,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_DATA:
-			log_debug(LOG_DEBUG, "DYN_DATA");
+			//log_debug(LOG_DEBUG, "DYN_DATA");
 			p -= 1;
 			if (dmsg->mlen > 0)  {
 				dmsg->data = p;
@@ -288,7 +289,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACES_BEFORE_PAYLOAD_LEN: //this only need in dynomite's custome msg
-			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
 			if (ch == ' ') {
 				break;
 			} else if (ch == '*') {
@@ -305,7 +306,7 @@ dyn_parse_core(struct msg *r)
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == CR)  {
-					log_debug(LOG_DEBUG, "Data len: %d", num);
+					//log_debug(LOG_DEBUG, "Payload len: %d", num);
 					dmsg->plen = num;
 					state = DYN_CRLF_BEFORE_DONE;
 					num = 0;
@@ -383,8 +384,14 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
+	log_debug(LOG_VERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+	msg_dump(r);
+
 	if (dyn_parse_core(r)) {
+
 		struct dmsg *dmsg = r->dmsg;
+		//loga("data or aes key length 111 : %d", dmsg->plen);
+		//dmsg_dump(dmsg);
 
         if (dmsg->type == GOSSIP_SYN) {
 			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
@@ -394,13 +401,9 @@ dyn_parse_req(struct msg *r)
 
 			//TODOs: need to address multi-buffer msg later
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
-			//dmsg->plen = mbuf_length(b);
 			dmsg->payload = b->pos;
             b->pos = b->pos + dmsg->plen;
             r->pos = b->pos;
-			//if (b->last < b->end) {  //still other data there for subsequence msg.
-			//	r->result = MSG_PARSE_REPAIR;
-			//}
 
 			return;
         }
@@ -413,12 +416,26 @@ dyn_parse_req(struct msg *r)
 			return;
 		}
 
-        if (dmsg->type == CRYPTO_HANDSHAKE) {
-			log_debug(LOG_DEBUG, "Req parser: I got a crypto handshake msg");
-			r->state = 0;
-			r->result = MSG_PARSE_OK;
-			r->dyn_state = DYN_DONE;
-			return;
+		//check whether we need to decrypt the payload
+        if (dmsg->bit_field == 1) {
+        	dmsg->owner->owner->dnode_secured = 1;
+        	struct mbuf *decrypted_buf = mbuf_get();
+        	if (decrypted_buf == NULL) {
+        		loga("Unable to obtain an mbuf for dnode msg's header!");
+        		return;
+        	}
+
+        	loga("AES encryption key: %s\n", base64_encode(dmsg->data, AES_KEYLEN/8));
+        	loga("data or aes key length : %d", dmsg->plen);
+        	dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
+
+        	log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+
+        	struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+        	b->last = b->pos;
+            r->pos = decrypted_buf->start;
+            mbuf_insert(&r->mhdr, decrypted_buf);
+
         }
 
 		if (r->redis)
@@ -435,7 +452,7 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
-	loga("In dyn_parse_rsp, start to process response: ");
+	log_debug(LOG_VERB, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
 	msg_dump(r);
 
 	if (dyn_parse_core(r)) {
@@ -447,6 +464,27 @@ void dyn_parse_rsp(struct msg *r)
 			r->result = MSG_PARSE_OK;
 			r->dyn_state = DYN_DONE;
 			return;
+		}
+
+		//check whether we need to decrypt the payload
+		if (dmsg->bit_field == 1) {
+			dmsg->owner->owner->dnode_secured = 1;
+			struct mbuf *decrypted_buf = mbuf_get();
+			if (decrypted_buf == NULL) {
+				loga("Unable to obtain an mbuf for dnode msg's header!");
+				return;
+			}
+
+			loga("AES Encrypted message: %s\n", base64_encode(dmsg->data, AES_KEYLEN/8));
+			loga("data or aes key length : %d", dmsg->plen);
+			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
+
+			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+
+			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+			b->last = b->pos;
+			r->pos = decrypted_buf->start;
+			mbuf_insert(&r->mhdr, decrypted_buf);
 		}
 
 		if (r->redis)
@@ -486,7 +524,9 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-    log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
+    log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
+    		  dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
+
     //loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
 }
 
@@ -563,7 +603,8 @@ done:
 
 
 rstatus_t 
-dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn)
+dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
+		   struct conn *conn, uint32_t payload_len)
 {
 
     mbuf_write_string(mbuf, &MAGIC_STR);
@@ -588,9 +629,8 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn)
     mbuf_write_char(mbuf, '*');
 
     //write aes key
-    unsigned char *aes_key = NULL;
+    unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured) {
-        aes_key = generate_aes_key();
         mbuf_write_uint32(mbuf, AES_KEYLEN/8);
     } else {
         mbuf_write_uint32(mbuf, 1);
@@ -607,7 +647,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn)
     //mbuf_write_string(mbuf, &CRLF_STR);
     mbuf_write_char(mbuf, ' ');
     mbuf_write_char(mbuf, '*');
-    mbuf_write_uint32(mbuf, 0);
+    mbuf_write_uint32(mbuf, payload_len);
     mbuf_write_string(mbuf, &CRLF_STR);
 
     log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
@@ -615,6 +655,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn)
     return DN_OK;
 }
 
+//Used in gossip forwarding msg only for now
 rstatus_t
 dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn, uint32_t plen)
 {
@@ -638,9 +679,8 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     mbuf_write_char(mbuf, '*');
 
     //write aes key
-    unsigned char *aes_key = NULL;
+    unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured) {
-    	aes_key = generate_aes_key();
     	mbuf_write_uint32(mbuf, strlen(aes_key));
     } else {
         mbuf_write_uint32(mbuf, 1);

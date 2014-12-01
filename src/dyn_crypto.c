@@ -225,12 +225,12 @@ calc_decode_length(const char *b64input, const size_t length) {
 }
 
 rstatus_t
-aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg) {
-	size_t blockLen  = 0;
-	size_t encMsgLen = 0;
+aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg) {
+	size_t block_len  = 0;
+	size_t enc_msg_len = 0;
 
-	*encMsg = (unsigned char*)malloc(msgLen + AES_BLOCK_SIZE);
-	if(encMsg == NULL)
+	*enc_msg = (unsigned char*)malloc(msg_len + AES_BLOCK_SIZE);
+	if(enc_msg == NULL)
 		return DN_ERROR;
 
 	//if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
@@ -238,28 +238,82 @@ aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg) {
 		return DN_ERROR;
 	}
 
-	if(!EVP_EncryptUpdate(aes_encrypt_ctx, *encMsg, (int*)&blockLen, (unsigned char*)msg, msgLen)) {
+	if(!EVP_EncryptUpdate(aes_encrypt_ctx, *enc_msg, (int*)&block_len, (unsigned char*)msg, msg_len)) {
 		return DN_ERROR;
 	}
-	encMsgLen += blockLen;
+	enc_msg_len += block_len;
 
-	if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, *encMsg + encMsgLen, (int*)&blockLen)) {
+	if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, *enc_msg + enc_msg_len, (int*) &block_len)) {
 		return DN_ERROR;
 	}
 
 	//EVP_CIPHER_CTX_cleanup(aesEncryptCtx);
 
-	return encMsgLen + blockLen;
+	return enc_msg_len + block_len;
 }
 
 
-rstatus_t
-aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg) {
-	size_t decLen   = 0;
-	size_t blockLen = 0;
+rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, unsigned char *aes_key) {
+	size_t block_len  = 0;
+	size_t enc_msg_len = 0;
 
-	*decMsg = (unsigned char*)malloc(encMsgLen);
-	if(*decMsg == NULL)
+	ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
+
+	//if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
+	if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+		return DN_ERROR;
+	}
+
+	if(!EVP_EncryptUpdate(aes_encrypt_ctx, mbuf->start, (int*)&block_len, (unsigned char*) msg, msg_len)) {
+		return DN_ERROR;
+	}
+	enc_msg_len += block_len;
+
+	if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
+		return DN_ERROR;
+	}
+
+	//EVP_CIPHER_CTX_cleanup(aesEncryptCtx);
+    mbuf->last = mbuf->pos + enc_msg_len + block_len;
+
+	return enc_msg_len + block_len;
+}
+
+
+rstatus_t dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, unsigned char *aes_key) {
+	size_t dec_len   = 0;
+	size_t block_len = 0;
+
+	ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
+
+	//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
+	if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+		return DN_ERROR;
+	}
+
+	if(!EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->pos, (int*) &block_len, enc_msg, (int)enc_msg_len)) {
+		return DN_ERROR;
+	}
+	dec_len += block_len;
+
+	if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->pos + dec_len, (int*) &block_len)) {
+		return DN_ERROR;
+	}
+	dec_len += block_len;
+    mbuf->last = mbuf->pos + dec_len;
+
+	//EVP_CIPHER_CTX_cleanup(aesDecryptCtx);
+
+	return (int) dec_len;
+}
+
+rstatus_t
+aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg) {
+	size_t dec_len   = 0;
+	size_t block_len = 0;
+
+	*dec_msg = (unsigned char*) malloc(enc_msg_len);
+	if(*dec_msg == NULL)
 		return DN_ERROR;
 
 	//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
@@ -267,19 +321,19 @@ aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg) {
 		return DN_ERROR;
 	}
 
-	if(!EVP_DecryptUpdate(aes_decrypt_ctx, (unsigned char*)*decMsg, (int*)&blockLen, encMsg, (int)encMsgLen)) {
+	if(!EVP_DecryptUpdate(aes_decrypt_ctx, (unsigned char*) *dec_msg, (int*) &block_len, enc_msg, (int) enc_msg_len)) {
 		return DN_ERROR;
 	}
-	decLen += blockLen;
+	dec_len += block_len;
 
-	if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, (unsigned char*)*decMsg + decLen, (int*)&blockLen)) {
+	if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, (unsigned char*) *dec_msg + dec_len, (int*) &block_len)) {
 		return DN_ERROR;
 	}
-	decLen += blockLen;
+	dec_len += block_len;
 
 	//EVP_CIPHER_CTX_cleanup(aesDecryptCtx);
 
-	return (int)decLen;
+	return (int)dec_len;
 }
 
 
@@ -328,36 +382,35 @@ int crypto_test()
 	loga("aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
 	loga("aesIV is %s\n", base64_encode(aes_iv, strlen(aes_iv)));
 
-	unsigned char *msg = "Hi my name is Justin";
-	unsigned char *encMsg = NULL;
-	char *decMsg          = NULL;
-	int encMsgLen;
-	int decMsgLen;
+	unsigned char *msg = "Hi my name is Dynomite";
+	unsigned char *enc_msg = NULL;
+	char *dec_msg          = NULL;
+	int enc_msg_len;
+	int dec_msg_len;
 
 	loga("Message to AES encrypt: %s \n", msg);
 
 	// Encrypt the message with AES
-	if((encMsgLen = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &encMsg)) == -1) {
-		fprintf(stderr, "Encryption failed\n");
+	if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg)) == -1) {
+		loga("Encryption failed\n");
 		return 1;
 	}
 
 	// Print the encrypted message as a base64 string
-	char *b64String = base64_encode(encMsg, encMsgLen);
-	printf("AES Encrypted message: %s\n", b64String);
+	char *b64_string = base64_encode(enc_msg, enc_msg_len);
+	loga("AES Encrypted message: %s\n", b64_string);
 
 	// Decrypt the message
-	if((decMsgLen = aes_decrypt(encMsg, (size_t)encMsgLen, (unsigned char**)&decMsg)) == -1) {
-		fprintf(stderr, "Decryption failed\n");
+	if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg)) == -1) {
+		loga("Decryption failed\n");
 		return 1;
 	}
-	printf("%d bytes decrypted\n", decMsgLen);
-	printf("AES Decrypted message: %s\n", decMsg);
+	loga("%d bytes decrypted\n", dec_msg_len);
+	loga("AES Decrypted message: %s\n", dec_msg);
 
 	// Memory leaks... yadda yadda yadda...
-	free(encMsg);
-	free(decMsg);
-	free(b64String);
-
+	free(enc_msg);
+	free(dec_msg);
+	free(b64_string);
 
 }
