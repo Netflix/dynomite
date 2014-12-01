@@ -320,9 +320,9 @@ void mbuf_write_mbuf(struct mbuf *mbuf, struct mbuf *data)
 	mbuf_copy(mbuf, data->pos, data->last - data->pos);
 }
 
-void mbuf_write_bytes(struct mbuf *mbuf, char *data)
+void mbuf_write_bytes(struct mbuf *mbuf, char *data, int len)
 {
-	mbuf_copy(mbuf, data, dn_strlen(data));
+	mbuf_copy(mbuf, data, len);
 }
 
 void

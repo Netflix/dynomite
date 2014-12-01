@@ -683,7 +683,8 @@ dnode_peer_handshake_announcing(void *rmsg)
 	mbuf_write_uint8(mbuf, sp->ctx->dyn_state);
 	mbuf_write_char(mbuf, ',');
 
-	mbuf_write_bytes(mbuf, get_broadcast_address(sp));
+	char *broadcast_addr = get_broadcast_address(sp);
+	mbuf_write_bytes(mbuf, broadcast_addr, dn_strlen(broadcast_addr));
 
 	//for each peer, send a registered msg
 	for (i = 0; i < nelem; i++) {

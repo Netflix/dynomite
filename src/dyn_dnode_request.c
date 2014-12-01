@@ -12,7 +12,6 @@
 //static struct string client_request_dyn_msg = string("Client_request");
 static uint64_t peer_msg_id = 0;
 
-static uint8_t version = VERSION_10;
 
 struct msg *
 dnode_req_get(struct conn *conn)
@@ -194,11 +193,12 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 static void
-dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_req_local_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	struct server_pool *pool;
 	uint8_t *key;
 	uint32_t keylen;
+    loga("dnode_req_local_forward 1111111111111111111111111111111111111");
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
@@ -246,7 +246,7 @@ dnode_req_recv_done(struct context *ctx, struct conn *conn,
 		return;
 	}
 
-	dnode_req_forward(ctx, conn, msg);
+	dnode_req_local_forward(ctx, conn, msg);
 }
 
 struct msg *
@@ -263,6 +263,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 void
 dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+	loga("dnode_req_send_done 1111111111111111111111111111111111111");
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	req_send_done(ctx, conn, msg);
 }
@@ -279,11 +280,13 @@ dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct 
         stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
 }
 
-void
-dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
-		struct rack *rack, uint8_t *key, uint32_t keylen)
-{
 
+/* Forward a client request over to a peer */
+void
+dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
+		               struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen)
+{
+	loga("dnode_peer_req_forward 222222222222222222222222222222222222222222");
 	rstatus_t status;
 	/* enqueue message (request) into client outq, if response is expected */
 	if (!msg->noreply) {
@@ -312,7 +315,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	uint64_t msg_id = peer_msg_id++;
 
 	//dmsg_write(nbuf, msg_id, DMSG_REQ, version, &client_request_dyn_msg);
-	dmsg_write(nbuf, msg_id, DMSG_REQ, version, p_conn);
+	dmsg_write(nbuf, msg_id, DMSG_REQ, p_conn);
 	mbuf_insert_head(&msg->mhdr, nbuf);
 
 	log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message header: ");
@@ -373,7 +376,7 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
  */
 
 /*
- * Sending a mbuf of gossip data over the wire for a peer
+ * Sending a mbuf of gossip data over the wire to a peer
  */
 void
 dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *mbuf)
@@ -395,7 +398,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 
 	uint64_t msg_id = peer_msg_id++;
 
-	dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, version, conn, mbuf_length(mbuf));
+	dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, conn, mbuf_length(mbuf));
 	mbuf_insert_head(&msg->mhdr, nbuf);
 	mbuf_insert(&msg->mhdr, mbuf);
 

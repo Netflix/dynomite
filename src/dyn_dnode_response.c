@@ -87,24 +87,37 @@ dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *
 	stats_pool_incr_by(ctx, server->owner, peer_response_bytes, msg->mlen);
 }
 
+
+/* Description: link data from a peer connection to a client-facing connection
+ * peer_conn: a peer connection
+ * msg      : msg with data from the peer connection after parsing
+ */
 static void
-dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
+dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 {
 	rstatus_t status;
 	struct msg *pmsg;
 	struct conn *c_conn;
 
-	ASSERT(!s_conn->dnode_client && !s_conn->dnode_server);
+	loga("dnode_rsp_forward 22222222222222222222222222222222222222222222");
+	ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
 
-	/* response from server implies that server is ok and heartbeating */
-	dnode_peer_ok(ctx, s_conn);
+	/* response from a peer implies that peer is ok and heartbeating */
+	dnode_peer_ok(ctx, peer_conn);
 
-	/* dequeue peer message (request) from server */
-	pmsg = TAILQ_FIRST(&s_conn->omsg_q);
+	/* dequeue peer message (request) from peer conn */
+	pmsg = TAILQ_FIRST(&peer_conn->omsg_q);
 	ASSERT(pmsg != NULL && pmsg->peer == NULL);
 	ASSERT(pmsg->request && !pmsg->done);
 
-	s_conn->dequeue_outq(ctx, s_conn, pmsg);
+	loga("Dumping content 2 for msg:   ");
+	msg_dump(msg);
+
+	loga("Dumping content 2 for pmsg :");
+	msg_dump(pmsg);
+
+
+	peer_conn->dequeue_outq(ctx, peer_conn, pmsg);
 	pmsg->done = 1;
 
 	/* establish msg <-> pmsg (response <-> request) link */
@@ -112,6 +125,21 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 	msg->peer = pmsg;
 
 	msg->pre_coalesce(msg);
+
+	//add messsage
+	//struct mbuf *nbuf = mbuf_get();
+	//if (nbuf == NULL) {
+	//	log_debug(LOG_ERR, "Error happened in calling mbuf_get");
+	//	return;  //TODOs: need to address this further
+	//}
+
+	//uint64_t msg_id = pmsg->dmsg->id;
+	//uint8_t type = DMSG_RES;
+	//uint8_t version = VERSION_10;
+
+	//dmsg_write(nbuf, msg_id, type, version, peer_conn);
+	//mbuf_insert_head(&pmsg->mhdr, nbuf);
+
 
 	c_conn = pmsg->owner;
 	ASSERT(c_conn->client && !c_conn->proxy);
@@ -123,12 +151,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 		}
 	}
 
-	dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
+	dnode_rsp_forward_stats(ctx, peer_conn->owner, msg);
 }
 
 
 
 //TODOs: fix this in using dmsg_write with encrypted msgs
+//         It is not in use now.
 void
 dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 {
@@ -163,10 +192,9 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	//dyn message's meta data
 	uint64_t msg_id = msg->dmsg->id;
 	uint8_t type = GOSSIP_SYN_REPLY;
-	uint8_t version = VERSION_10;
 	struct string data = string("SYN_REPLY_OK");
 
-	dmsg_write(nbuf, msg_id, type, version, p_conn);
+	dmsg_write(nbuf, msg_id, type, p_conn);
 	mbuf_insert(&pmsg->mhdr, nbuf);
 
 	//dmsg_write(nbuf, msg_id, type, version, &data);
@@ -200,14 +228,24 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 
 
 void
-dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
-		struct msg *nmsg)
+dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
+		            struct msg *msg, struct msg *nmsg)
 {
+	loga("dnode_rsp_recv_done 5555555555555555555555555555555555555555555555");
+
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	ASSERT(msg != NULL && conn->rmsg == msg);
 	ASSERT(!msg->request);
 	ASSERT(msg->owner == conn);
 	ASSERT(nmsg == NULL || !nmsg->request);
+
+	loga("Dumping content for msg:   ");
+	msg_dump(msg);
+
+	if (nmsg != NULL) {
+	   loga("Dumping content for nmsg :");
+	   msg_dump(nmsg);
+	}
 
 	/* enqueue next message (response), if any */
 	conn->rmsg = nmsg;
@@ -222,13 +260,38 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
+	loga("dnode_rsp_send_next 333333333333333333333333333333333333333333333333");
 	ASSERT(conn->dnode_client && !conn->dnode_server);
-	return rsp_send_next(ctx, conn);
+	struct msg *msg = rsp_send_next(ctx, conn);
+
+	if (msg != NULL && conn->dyn_mode) {
+		loga("dnode_rsp_send_next 444444444444444444444444444444444444444444");
+		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
+
+		//add dnode header
+		struct mbuf *nbuf = mbuf_get();
+		if (nbuf == NULL) {
+			return NULL; //need to address error here properly
+		}
+
+		//dyn message's meta data
+		//uint64_t msg_id = pmsg->dmsg->id;
+		uint64_t msg_id = 0;
+
+		dmsg_write(nbuf, msg_id, DMSG_RES, conn);
+		mbuf_insert_head(&msg->mhdr, nbuf);
+
+		log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message 222 header: ");
+		struct mbuf *b = STAILQ_LAST(&msg->mhdr, mbuf, next);
+		log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn message 222 payload: ");
+	}
+	return msg;
 }
 
 void
 dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+	loga("dnode_rsp_send_done 2222222222222222222222222222222222222222222222");
 	struct msg *pmsg; /* peer message (request) */
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);

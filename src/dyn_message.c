@@ -448,6 +448,11 @@ msg_dump(struct msg *msg)
 {
     struct mbuf *mbuf;
 
+    if (msg == NULL) {
+    	loga("msg is NULL - cannot display its info");
+    	return;
+    }
+
     loga("msg dump id %"PRIu64" request %d len %"PRIu32" type %d done %d "
          "error %d (err %d)", msg->id, msg->request, msg->mlen, msg->type,
          msg->done, msg->error, msg->err);

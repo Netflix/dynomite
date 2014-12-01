@@ -20,6 +20,7 @@ typedef enum dmsg_type {
     DMSG_DEBUG,
     DMSG_PARSE_ERROR,
     DMSG_REQ,
+    DMSG_RES,
     CRYPTO_HANDSHAKE,
     GOSSIP_SYN,
     GOSSIP_SYN_REPLY,
@@ -70,10 +71,10 @@ void dmsg_init(void);
 void dmsg_deinit(void);
 bool dmsg_empty(struct dmsg *msg);
 struct dmsg *dmsg_get(void);
-rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
-		             uint8_t version, struct conn *conn);
+rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn);
+
 rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
-		                  uint8_t version, struct conn *conn, uint32_t plen);
+		                  struct conn *conn, uint32_t plen);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 #endif

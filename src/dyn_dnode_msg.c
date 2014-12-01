@@ -10,6 +10,7 @@
 #include "dyn_server.h"
 #include "proto/dyn_proto.h"
 
+static uint8_t version = VERSION_10;
 
 static uint64_t dmsg_id;          /* message id counter */
 static uint32_t nfree_dmsgq;      /* # free msg q */
@@ -434,10 +435,13 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
+	loga("In dyn_parse_rsp, start to process response: ");
+	msg_dump(r);
+
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 
-		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
 			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
@@ -559,7 +563,7 @@ done:
 
 
 rstatus_t 
-dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct conn *conn)
+dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn)
 {
 
     mbuf_write_string(mbuf, &MAGIC_STR);
@@ -587,7 +591,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
     unsigned char *aes_key = NULL;
     if (conn->dnode_secured) {
         aes_key = generate_aes_key();
-        mbuf_write_uint32(mbuf, strlen(aes_key));
+        mbuf_write_uint32(mbuf, AES_KEYLEN/8);
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -595,9 +599,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured) {
-       mbuf_write_bytes(mbuf, aes_key);
+       mbuf_write_bytes(mbuf, aes_key, AES_KEYLEN/8);
     } else {
-       mbuf_write_char(mbuf, 'a'); //TODOs: replace with another string
+       mbuf_write_char(mbuf, 'd'); //TODOs: replace with another string
     }
 
     //mbuf_write_string(mbuf, &CRLF_STR);
@@ -612,7 +616,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, st
 }
 
 rstatus_t
-dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct conn *conn, uint32_t plen)
+dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn, uint32_t plen)
 {
     mbuf_write_string(mbuf, &MAGIC_STR);
     mbuf_write_uint64(mbuf, msg_id);
@@ -645,7 +649,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t versio
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_mbuf(mbuf, data);
     if (conn->dnode_secured) {
-       mbuf_write_bytes(mbuf, aes_key);
+       mbuf_write_bytes(mbuf, aes_key, AES_KEYLEN/8);
     } else {
        mbuf_write_char(mbuf, 'a'); //TODOs: replace with another string
     }

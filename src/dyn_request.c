@@ -457,6 +457,21 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
+    	//struct mbuf *nbuf = mbuf_get();
+    	//if (nbuf == NULL) {
+    	//	return;
+    	//}
+
+    	//dyn message's meta data
+    	//dmsg_write(nbuf, msg->dmsg->id, DMSG_RES, msg->dmsg->version, p_conn);
+    	//mbuf_insert_head(&msg->mhdr, nbuf);
+
+    	//log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message header: ");
+    	//struct mbuf *b = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn message payload: ");
+
+    	//p_conn->enqueue_inq(ctx, p_conn, msg);
+
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -503,6 +518,10 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     	    return;
     	}
     }
+
+
+    //hereeeeeeeeeeeeeeeeeeeeeeeee
+
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);

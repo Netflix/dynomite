@@ -286,10 +286,10 @@ aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg) {
 unsigned char* generate_aes_key(void) {
 
 	if(RAND_bytes(aes_key, AES_KEYLEN/8) == 0) {
-		return aes_key;
+		return NULL;
 	}
 
-	return NULL;
+	return aes_key;
 }
 
 
