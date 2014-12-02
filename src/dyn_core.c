@@ -213,7 +213,9 @@ core_start(struct instance *nci)
 	ctx = core_ctx_create(nci);
 	if (ctx != NULL) {
 		nci->ctx = ctx;
+#ifdef DN_DEBUG_LOG
 		crypto_test();
+#endif
 		return ctx;
 	}
 
@@ -481,7 +483,8 @@ core_debug(struct context *ctx)
 static rstatus_t
 core_process_messages(void)
 {
-	//loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+	log_debug(LOG_VERB, "Length of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
@@ -500,10 +503,8 @@ core_loop(struct context *ctx)
 {
 	int nsd;
 
-
 	//log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
-	//crypto_test();
     core_process_messages();
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {

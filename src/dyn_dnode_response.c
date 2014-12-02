@@ -110,12 +110,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 	ASSERT(pmsg != NULL && pmsg->peer == NULL);
 	ASSERT(pmsg->request && !pmsg->done);
 
+#ifdef DN_DEBUG_LOG
 	loga("Dumping content 2 for msg:   ");
 	msg_dump(msg);
 
 	loga("Dumping content 2 for pmsg :");
 	msg_dump(pmsg);
-
+#endif
 
 	peer_conn->dequeue_outq(ctx, peer_conn, pmsg);
 	pmsg->done = 1;
@@ -183,9 +184,6 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	dmsg_write(nbuf, msg_id, type, p_conn, 0);
 	mbuf_insert(&pmsg->mhdr, nbuf);
 
-	//dmsg_write(nbuf, msg_id, type, version, &data);
-	//mbuf_insert(&pmsg->mhdr, nbuf);
-
 	//dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
 	//should we do this?
 	//s_conn->dequeue_outq(ctx, s_conn, pmsg);
@@ -225,6 +223,7 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 	ASSERT(msg->owner == conn);
 	ASSERT(nmsg == NULL || !nmsg->request);
 
+#ifdef DN_DEBUG_LOG
 	loga("Dumping content for msg:   ");
 	msg_dump(msg);
 
@@ -232,6 +231,7 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 	   loga("Dumping content for nmsg :");
 	   msg_dump(nmsg);
 	}
+#endif
 
 	/* enqueue next message (response), if any */
 	conn->rmsg = nmsg;
@@ -248,13 +248,17 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
+#ifdef DN_DEBUG_LOG
 	log_debug(LOG_VERB, "dnode_rsp_send_next entering");
+#endif
+
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	struct msg *msg = rsp_send_next(ctx, conn);
 
 	if (msg != NULL && conn->dyn_mode) {
+#ifdef DN_DEBUG_LOG
 		log_debug(LOG_VERB, "Encrypting response ...");
-
+#endif
 		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
 
 		//need to deal with multi-block later
@@ -270,7 +274,9 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 		if (pmsg->owner->dnode_secured) {
 			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
+#ifdef DN_DEBUG_LOG
 			loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+#endif
 
 			struct mbuf *encrypted_buf = mbuf_get();
 			if (encrypted_buf == NULL) {
@@ -280,13 +286,18 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
 			rstatus_t status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf),
 					encrypted_buf, conn->aes_key);
+
+#ifdef DN_DEBUG_LOG
 			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+#endif
 
 			dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(encrypted_buf));
 			mbuf_insert_head(&msg->mhdr, header_buf);
 
+#ifdef DN_DEBUG_LOG
 			log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "resp dyn message - original payload: ");
 			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+#endif
 
 			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
 			mbuf_remove(&msg->mhdr, data_buf);
@@ -298,8 +309,11 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 			mbuf_insert_head(&msg->mhdr, header_buf);
 		}
 
+#ifdef DN_DEBUG_LOG
 		log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
 		msg_dump(msg);
+#endif
+
 	}
 
 	return msg;
@@ -308,7 +322,10 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 void
 dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+#ifdef DN_DEBUG_LOG
 	log_debug(LOG_VERB, "dnode_rsp_send_done entering");
+#endif
+
 	struct msg *pmsg; /* peer message (request) */
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);

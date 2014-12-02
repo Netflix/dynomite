@@ -446,6 +446,7 @@ msg_put(struct msg *msg)
 void
 msg_dump(struct msg *msg)
 {
+
     struct mbuf *mbuf;
 
     if (msg == NULL) {
@@ -467,6 +468,7 @@ msg_dump(struct msg *msg)
 
         loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
     }
+
 }
 
 void
@@ -783,6 +785,11 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t nsend, nsent;                 /* bytes to send; bytes sent */
     size_t limit;                        /* bytes to send limit */
     ssize_t n;                           /* bytes sent by sendv */
+
+#ifdef DN_DEBUG_LOG
+    loga("About to dump out the content of msg");
+    msg_dump(msg);
+#endif
 
     TAILQ_INIT(&send_msgq);
 

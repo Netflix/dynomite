@@ -43,7 +43,7 @@ load_private_rsa_key(void)
 
 	}
 
-	loga("Private RSA structure filled");
+	log_debug(LOG_INFO, "Private RSA structure filled");
 	/*
 	char   *pri_key;           // Private key
 	char   *pub_key;           // Public key
@@ -69,8 +69,8 @@ load_private_rsa_key(void)
 	pri_key[pri_len] = '\0';
 	pub_key[pub_len] = '\0';
 
-	//loga("pri_key %s", pri_key);
-	//loga("pub_key %s", pub_key);
+	//log_debug(LOG_VERB, ("pri_key %s", pri_key);
+	//log_debug(LOG_VERB, "pub_key %s", pub_key);
 
 	BIO_free_all(pub);
 	BIO_free_all(pri);
@@ -89,7 +89,6 @@ aes_init(void)
 	aes_cipher =  EVP_aes_128_cbc();
 	aes_key = (unsigned char*) malloc(aes_key_size);
 
-	//loga("AES_KEYLEN/8 : %d", AES_KEYLEN/8);
 
 	if(RAND_bytes(aes_key, aes_key_size) == 0) {
 		return DN_ERROR;
@@ -336,7 +335,7 @@ unsigned char* generate_aes_key(void) {
 
 static int aes_test()
 {
-	loga("aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
+	log_debug(LOG_VERB, "aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
 
 	unsigned char *msg = "Hi my name is Dynomite";
 	unsigned char *enc_msg = NULL;
@@ -344,25 +343,26 @@ static int aes_test()
 	int enc_msg_len;
 	int dec_msg_len;
 
-	loga("Message to AES encrypt: %s \n", msg);
+	log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
 
 	// Encrypt the message with AES
 	if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key)) == -1) {
-		loga("AES encryption failed\n");
+		log_debug(LOG_VERB, "AES encryption failed\n");
 		return -1;
 	}
 
 	// Print the encrypted message as a base64 string
 	char *b64_string = base64_encode(enc_msg, enc_msg_len);
-	loga("AES Encrypted message: %s\n", b64_string);
+	log_debug(LOG_VERB, "AES Encrypted message: %s\n", b64_string);
 
 	// Decrypt the message
 	if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg, aes_key)) == -1) {
-		loga("AES decryption failed\n");
+		log_debug(LOG_VERB, "AES decryption failed\n");
 		return -1;
 	}
-	loga("%d bytes decrypted\n", dec_msg_len);
-	loga("AES Decrypted message: %s\n", dec_msg);
+
+	log_debug(LOG_VERB, "%d bytes decrypted\n", dec_msg_len);
+	log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
 
 	free(enc_msg);
 	free(dec_msg);
@@ -380,7 +380,7 @@ dyn_rsa_encrypt(unsigned char *plain_msg, unsigned char *encrypted_buf)
 		ERR_load_crypto_strings();
 		char  err[130];
 		ERR_error_string(ERR_get_error(), err);
-		loga("Error in encrypting message: %s\n", err);
+		log_debug(LOG_VERB, "Error in encrypting message: %s\n", err);
 		return DN_ERROR;
 	}
 	return 128;
@@ -396,7 +396,7 @@ dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
 				ERR_load_crypto_strings();
 				char  err[130];
 				ERR_error_string(ERR_get_error(), err);
-				loga("Error in decrypting message: %s\n", err);
+				log_debug(LOG_VERB, "Error in decrypting message: %s\n", err);
 				return DN_ERROR;
 	}
 
@@ -414,15 +414,15 @@ static int rsa_test()
 	for(; i<10; i++) {
 		msg = generate_aes_key();
 
-		loga("i = %d", i);
-		loga("AES key           : %s \n", base64_encode(msg, 32));
+		log_debug(LOG_VERB, "i = %d", i);
+		log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, 32));
 
 
 		dyn_rsa_encrypt(msg, encrypted_buf);
 
 		dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
 
-		loga("Decrypted message : %s \n", base64_encode(decrypted_buf, 32));
+		log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, 32));
 	}
 
 	return 0;

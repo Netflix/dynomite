@@ -32,7 +32,6 @@
 #define _DYN_CONF_H_
 
 
-
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
 

@@ -387,33 +387,18 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-	log_debug(LOG_VERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+
+
+#ifdef DN_DEBUG_LOG
+	log_debug(LOG_VVERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
 	msg_dump(r);
+#endif
 
 	bool done_parsing = false;
 
 	if (dyn_parse_core(r)) {
 
 		struct dmsg *dmsg = r->dmsg;
-		//loga("data or aes key length 111 : %d", dmsg->plen);
-		//dmsg_dump(dmsg);
-
-       /*
-		if (dmsg->type == GOSSIP_SYN) {
-			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
-			r->state = 0;
-			r->result = MSG_PARSE_OK;
-			r->dyn_state = DYN_DONE;
-
-			//TODOs: need to address multi-buffer msg later
-			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
-			dmsg->payload = b->pos;
-            b->pos = b->pos + dmsg->plen;
-            r->pos = b->pos;
-
-			return;
-        }
-        */
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ && dmsg->type != GOSSIP_SYN) {
 			log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
@@ -424,7 +409,9 @@ dyn_parse_req(struct msg *r)
 		}
 
 		if (dmsg->type == GOSSIP_SYN) {
+#ifdef DN_DEBUG_LOG
 			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
+#endif
 
 			//TODOs: need to address multi-buffer msg later
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -445,16 +432,18 @@ dyn_parse_req(struct msg *r)
         		return;
         	}
 
+#ifdef DN_DEBUG_LOG
 			loga("data or encrypted aes key length : %d", dmsg->plen);
+#endif
+
         	dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-
-        	//loga("AES encryption key: %s\n", base64_encode(dmsg->data, AES_KEYLEN));
-        	loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
-
-        	//dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
         	dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
 
+#ifdef DN_DEBUG_LOG
+        	//loga("AES encryption key: %s\n", base64_encode(dmsg->data, AES_KEYLEN));
+        	loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
         	log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+#endif
 
         	struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
         	b->last = b->pos;
@@ -483,8 +472,11 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
+
+#ifdef DN_DEBUG_LOG
 	log_debug(LOG_VERB, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
 	msg_dump(r);
+#endif
 
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
@@ -502,23 +494,23 @@ void dyn_parse_rsp(struct msg *r)
 			dmsg->owner->owner->dnode_secured = 1;
 			struct mbuf *decrypted_buf = mbuf_get();
 			if (decrypted_buf == NULL) {
-				loga("Unable to obtain an mbuf for dnode msg's header!");
+				log_debug(LOG_INFO, "Unable to obtain an mbuf for dnode msg's header!");
 				return;
 			}
 
-			loga("data or encrypted aes key length : %d", dmsg->plen);
+#ifdef DN_DEBUG_LOG
+			log_debug(LOG_VERB, "data or encrypted aes key length : %d", dmsg->plen);
+#endif
 
 			//Decrypt AES key
         	dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-
-        	loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
-			//loga("AES Encrypted message: %s\n", base64_encode(dmsg->data, AES_KEYLEN));
-
             //Decrypt payload
-			//dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
         	dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
 
+#ifdef DN_DEBUG_LOG
+        	log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
 			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+#endif
 
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 			b->last = b->pos;
@@ -532,9 +524,11 @@ void dyn_parse_rsp(struct msg *r)
 		return memcache_parse_rsp(r);
 	}
 
+#ifdef DN_DEBUG_LOG
 	//bad case
 	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
 	msg_dump(r);
+#endif
 
 	//r->state = 0;
 	//r->result = MSG_PARSE_OK;
@@ -544,7 +538,10 @@ void dyn_parse_rsp(struct msg *r)
 void
 dmsg_free(struct dmsg *dmsg)
 {
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+#endif
+
     dn_free(dmsg);
 }
 
@@ -552,7 +549,9 @@ dmsg_free(struct dmsg *dmsg)
 void
 dmsg_put(struct dmsg *dmsg)
 {
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+#endif
 
     nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
@@ -563,9 +562,10 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
     		  dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
-
+#endif
     //loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
 }
 
@@ -573,7 +573,10 @@ dmsg_dump(struct dmsg *dmsg)
 void
 dmsg_init(void)
 {
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_DEBUG, "dmsg size %d", sizeof(struct dmsg));
+#endif
+
     dmsg_id = 0;
     nfree_dmsgq = 0;
     TAILQ_INIT(&free_dmsgq);
@@ -678,7 +681,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured) {
+#ifdef DN_DEBUG_LOG
        loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+#endif
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
        mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
     } else {
@@ -691,7 +696,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_uint32(mbuf, payload_len);
     mbuf_write_string(mbuf, &CRLF_STR);
 
+#ifdef DN_DEBUG_LOG
     log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
+#endif
      
     return DN_OK;
 }
@@ -730,7 +737,9 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_mbuf(mbuf, data);
     if (conn->dnode_secured) {
+#ifdef DN_DEBUG_LOG
        loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+#endif
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
        mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
     } else {
@@ -744,7 +753,9 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
 
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message (writer):  ");
+#ifdef DN_DEBUG_LOG
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer:  ");
+#endif
 
     return DN_OK;
 }
@@ -917,6 +928,7 @@ dmsg_parse(struct dmsg *dmsg)
 
 		end = p;
 
+#ifdef DN_DEBUG_LOG
 		log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
 		log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
 		log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
@@ -926,11 +938,14 @@ dmsg_parse(struct dmsg *dmsg)
 		log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
 		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
 		log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+#endif
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
 		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
+#ifdef DN_DEBUG_LOG
 		print_dyn_token(&rnode->token, 5);
+#endif
 
 		string_copy(&rnode->name, host_addr, host_addr_len);
 		string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
