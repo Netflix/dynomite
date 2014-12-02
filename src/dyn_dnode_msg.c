@@ -22,6 +22,9 @@ static uint32_t MAGIC_NUMBER = 2014;
 static const struct string MAGIC_STR = string("2014 ");
 static const struct string CRLF_STR = string(CRLF);
 
+static unsigned char aes_encrypted_buf[130];
+static unsigned char aes_decrypted_buf[34];
+
 static rstatus_t dmsg_to_gossip(struct ring_msg *rmsg);
 
 enum {
@@ -115,8 +118,8 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_MSG_ID:
-			//log_debug(LOG_DEBUG, "DYN_MSG_ID");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_MSG_ID");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else if (ch != ' ') {
@@ -134,7 +137,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACES_BEFORE_TYPE_ID:
-			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
+			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
 			if (ch == ' ') {
 				break;
 			} else if (isdigit(ch)) {
@@ -147,13 +150,13 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_TYPE_ID:
-			//log_debug(LOG_DEBUG, "DYN_TYPE_ID");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (num > 0)  {
-					//log_debug(LOG_DEBUG, "Type Id: %d", num);
+					log_debug(LOG_DEBUG, "Type Id: %d", num);
 					dmsg->type = num;
 					//state = DYN_SPACES_BEFORE_VERSION;
 					state = DYN_SPACES_BEFORE_BIT_FIELD;
@@ -176,13 +179,13 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_BIT_FIELD:
-			//log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == ' ')  {
-					//log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
+					log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
 					dmsg->bit_field = num & 0xF;
 					state = DYN_SPACES_BEFORE_VERSION;
 				} else {
@@ -190,13 +193,13 @@ dyn_parse_core(struct msg *r)
 				}
 			}
 
-			//log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
+			log_debug(LOG_DEBUG, "num = %d", num);
 
 			break;
 
 		case DYN_SPACES_BEFORE_VERSION:
-			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
+			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
 			if (ch == ' ') {
 				break;
 			} else if (isdigit(ch)) {
@@ -209,8 +212,8 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_VERSION:
-			//log_debug(LOG_DEBUG, "DYN_VERSION");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_VERSION");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
@@ -254,13 +257,13 @@ dyn_parse_core(struct msg *r)
 		//	break;
 
 		case DYN_DATA_LEN:
-			//log_debug(LOG_DEBUG, "DYN_DATA_LEN");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_DATA_LEN");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == ' ')  {
-					//log_debug(LOG_DEBUG, "Data len: %d", num);
+					log_debug(LOG_DEBUG, "Data len: %d", num);
 					dmsg->mlen = num;
 					state = DYN_SPACE_BEFORE_DATA;
 					num = 0;
@@ -271,12 +274,12 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACE_BEFORE_DATA:
-			//log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
+			log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
 			state = DYN_DATA;
 			break;
 
 		case DYN_DATA:
-			//log_debug(LOG_DEBUG, "DYN_DATA");
+			log_debug(LOG_DEBUG, "DYN_DATA");
 			p -= 1;
 			if (dmsg->mlen > 0)  {
 				dmsg->data = p;
@@ -289,7 +292,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACES_BEFORE_PAYLOAD_LEN: //this only need in dynomite's custome msg
-			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
+			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
 			if (ch == ' ') {
 				break;
 			} else if (ch == '*') {
@@ -306,7 +309,7 @@ dyn_parse_core(struct msg *r)
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == CR)  {
-					//log_debug(LOG_DEBUG, "Payload len: %d", num);
+					log_debug(LOG_DEBUG, "Payload len: %d", num);
 					dmsg->plen = num;
 					state = DYN_CRLF_BEFORE_DONE;
 					num = 0;
@@ -387,13 +390,16 @@ dyn_parse_req(struct msg *r)
 	log_debug(LOG_VERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
 	msg_dump(r);
 
+	bool done_parsing = false;
+
 	if (dyn_parse_core(r)) {
 
 		struct dmsg *dmsg = r->dmsg;
 		//loga("data or aes key length 111 : %d", dmsg->plen);
 		//dmsg_dump(dmsg);
 
-        if (dmsg->type == GOSSIP_SYN) {
+       /*
+		if (dmsg->type == GOSSIP_SYN) {
 			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
@@ -407,14 +413,28 @@ dyn_parse_req(struct msg *r)
 
 			return;
         }
+        */
 
-		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ && dmsg->type != GOSSIP_SYN) {
 			log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
 			r->dyn_state = DYN_DONE;
 			return;
 		}
+
+		if (dmsg->type == GOSSIP_SYN) {
+			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
+
+			//TODOs: need to address multi-buffer msg later
+			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+			dmsg->payload = b->pos;
+            b->pos = b->pos + dmsg->plen;
+
+            r->pos = b->pos;
+
+            done_parsing = true;
+        }
 
 		//check whether we need to decrypt the payload
         if (dmsg->bit_field == 1) {
@@ -425,9 +445,14 @@ dyn_parse_req(struct msg *r)
         		return;
         	}
 
-        	loga("AES encryption key: %s\n", base64_encode(dmsg->data, AES_KEYLEN/8));
-        	loga("data or aes key length : %d", dmsg->plen);
-        	dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
+			loga("data or encrypted aes key length : %d", dmsg->plen);
+        	dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
+
+        	//loga("AES encryption key: %s\n", base64_encode(dmsg->data, AES_KEYLEN));
+        	loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
+
+        	//dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
+        	dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
 
         	log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
 
@@ -436,7 +461,13 @@ dyn_parse_req(struct msg *r)
             r->pos = decrypted_buf->start;
             mbuf_insert(&r->mhdr, decrypted_buf);
 
+            //reset these variables
+            dmsg->payload = decrypted_buf->start;
+            dmsg->plen = mbuf_length(decrypted_buf);
         }
+
+        if (done_parsing)
+        	return;
 
 		if (r->redis)
 			return redis_parse_req(r);
@@ -475,9 +506,17 @@ void dyn_parse_rsp(struct msg *r)
 				return;
 			}
 
-			loga("AES Encrypted message: %s\n", base64_encode(dmsg->data, AES_KEYLEN/8));
-			loga("data or aes key length : %d", dmsg->plen);
-			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
+			loga("data or encrypted aes key length : %d", dmsg->plen);
+
+			//Decrypt AES key
+        	dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
+
+        	loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
+			//loga("AES Encrypted message: %s\n", base64_encode(dmsg->data, AES_KEYLEN));
+
+            //Decrypt payload
+			//dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, dmsg->data);
+        	dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
 
 			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
 
@@ -631,7 +670,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     //write aes key
     unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured) {
-        mbuf_write_uint32(mbuf, AES_KEYLEN/8);
+        mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -639,7 +678,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured) {
-       mbuf_write_bytes(mbuf, aes_key, AES_KEYLEN/8);
+       loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+       dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
+       mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
     } else {
        mbuf_write_char(mbuf, 'd'); //TODOs: replace with another string
     }
@@ -681,7 +722,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     //write aes key
     unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured) {
-    	mbuf_write_uint32(mbuf, strlen(aes_key));
+    	mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -689,7 +730,9 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_mbuf(mbuf, data);
     if (conn->dnode_secured) {
-       mbuf_write_bytes(mbuf, aes_key, AES_KEYLEN/8);
+       loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+       dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
+       mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
     } else {
        mbuf_write_char(mbuf, 'a'); //TODOs: replace with another string
     }
@@ -791,7 +834,7 @@ dmsg_parse(struct dmsg *dmsg)
 	//start = dmsg->owner->pos;
 	start = dmsg->payload;
 
-	log_debug(LOG_VERB, "\tparsing msggggggggggggggggg '%.*s'", dmsg->plen, start);
+	log_debug(LOG_VERB, "parsing msg '%.*s'", dmsg->plen, start);
 	host_id = NULL;
 	host_addr = NULL;
 	ts = NULL;
@@ -874,20 +917,21 @@ dmsg_parse(struct dmsg *dmsg)
 
 		end = p;
 
-		//log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
-		//log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
-		//log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
-		//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
+		log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
+		log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
+		log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
+		log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 
-		//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
-		//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
-		//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+		log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+		log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
+		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
 		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
-		//print_dyn_token(&rnode->token, 5);
+		print_dyn_token(&rnode->token, 5);
+
 		string_copy(&rnode->name, host_addr, host_addr_len);
 		string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 

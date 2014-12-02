@@ -277,7 +277,7 @@ dnode_peer_deinit(struct array *nodes)
 }
 
 
-static bool is_conn_secured(struct server_pool *sp, struct node *peer_node)
+static bool is_conn_secured(struct server_pool *sp, struct server *peer_node)
 {
 	//ASSERT(peer_server != NULL);
 	//ASSERT(sp != NULL);
@@ -701,12 +701,15 @@ dnode_peer_handshake_announcing(void *rmsg)
 			return DN_ERROR;
 		}
 
+
 		status = dnode_peer_connect(sp->ctx, peer, conn);
 		if (status != DN_OK ) {
 			dnode_peer_close(sp->ctx, conn);
 			log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
 			return DN_ERROR;
 		}
+
+		//conn->
 
 		dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
 		//peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);

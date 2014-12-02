@@ -243,6 +243,8 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 	dnode_rsp_forward(ctx, conn, msg);
 }
 
+
+/* dnode sends a response back to a peer  */
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
@@ -268,7 +270,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 		if (pmsg->owner->dnode_secured) {
 			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
-			loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN/8));
+			loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 
 			struct mbuf *encrypted_buf = mbuf_get();
 			if (encrypted_buf == NULL) {
@@ -288,8 +290,8 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
 			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
 			mbuf_remove(&msg->mhdr, data_buf);
-			mbuf_put(data_buf);
 			mbuf_insert(&msg->mhdr, encrypted_buf);
+			mbuf_put(data_buf);
 
 		} else {
 			dmsg_write(header_buf, msg_id, DMSG_RES, conn, 0);

@@ -213,6 +213,7 @@ core_start(struct instance *nci)
 	ctx = core_ctx_create(nci);
 	if (ctx != NULL) {
 		nci->ctx = ctx;
+		crypto_test();
 		return ctx;
 	}
 
@@ -498,6 +499,7 @@ rstatus_t
 core_loop(struct context *ctx)
 {
 	int nsd;
+
 
 	//log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 

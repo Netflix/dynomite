@@ -538,6 +538,7 @@ dn_run(struct instance *nci)
     }
 
     ctx->enable_gossip = enable_gossip;
+
     if (!ctx->enable_gossip)
     	ctx->dyn_state = NORMAL;
 
@@ -592,8 +593,6 @@ main(int argc, char **argv)
         exit(1);
     }
 
-    //init_crypto();
-    //test_crypto();
 
     dn_run(&nci);
 

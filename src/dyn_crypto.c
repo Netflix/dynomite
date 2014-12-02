@@ -14,17 +14,12 @@
 #include "dyn_crypto.h"
 
 static EVP_CIPHER *aes_cipher;
-static RSA *public_rsa;
-static RSA *private_rsa;
+static RSA *rsa;
 
+static int aes_key_size = AES_KEYLEN;
 static unsigned char *aes_key;
-static unsigned char *aes_iv;
 
-
-static EVP_CIPHER_CTX *rsa_encrypt_ctx;
 static EVP_CIPHER_CTX *aes_encrypt_ctx;
-
-static EVP_CIPHER_CTX *rsa_decrypt_ctx;
 static EVP_CIPHER_CTX *aes_decrypt_ctx;
 
 
@@ -35,8 +30,8 @@ load_private_rsa_key(void)
 
 	if(NULL != (fp= fopen(PRI_KEY_FILE, "r")) )
 	{
-		private_rsa = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
-		if(private_rsa == NULL)
+		rsa = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
+		if(rsa == NULL)
 		{
 			log_error("Could NOT read RSA private key file");
 			return DN_ERROR;
@@ -49,47 +44,54 @@ load_private_rsa_key(void)
 	}
 
 	loga("Private RSA structure filled");
+	/*
+	char   *pri_key;           // Private key
+	char   *pub_key;           // Public key
+	size_t pri_len;            // Length of private key
+	size_t pub_len;            // Length of public key
+
+	// To get the C-string PEM form:
+	BIO *pri = BIO_new(BIO_s_mem());
+	BIO *pub = BIO_new(BIO_s_mem());
+
+	PEM_write_bio_RSAPrivateKey(pri, rsa, NULL, NULL, 0, NULL, NULL);
+	PEM_write_bio_RSAPublicKey(pub, rsa);
+
+	pri_len = BIO_pending(pri);
+	pub_len = BIO_pending(pub);
+
+	pri_key = malloc(pri_len + 1);
+	pub_key = malloc(pub_len + 1);
+
+	BIO_read(pri, pri_key, pri_len);
+	BIO_read(pub, pub_key, pub_len);
+
+	pri_key[pri_len] = '\0';
+	pub_key[pub_len] = '\0';
+
+	//loga("pri_key %s", pri_key);
+	//loga("pub_key %s", pub_key);
+
+	BIO_free_all(pub);
+	BIO_free_all(pri);
+
+    */
+
 	return DN_OK;
 }
 
 
-static rstatus_t
-load_public_rsa_key(void)
-{
-	FILE * fp;
-
-	if(NULL != (fp= fopen(PUB_KEY_FILE, "r")) )
-	{
-		public_rsa = PEM_read_RSA_PUBKEY(fp, NULL, NULL, NULL);
-		if (public_rsa == NULL)
-		{
-			log_error("Could NOT read RSA public key file");
-			return DN_ERROR;
-		}
-
-	} else {
-		log_error("Could NOT locate RSA public key file");
-		return DN_ERROR;
-
-	}
-
-	loga("Public RSA structure filled");
-	return DN_OK;
-}
 
 static rstatus_t
 aes_init(void)
 {
 	// Init AES
-	aes_cipher =  EVP_aes_256_cbc();
-	aes_key = (unsigned char*) malloc(AES_KEYLEN/8);
-	aes_iv = (unsigned char*) malloc(AES_KEYLEN/8);
+	aes_cipher =  EVP_aes_128_cbc();
+	aes_key = (unsigned char*) malloc(aes_key_size);
 
-	if(RAND_bytes(aes_key, AES_KEYLEN/8) == 0) {
-		return DN_ERROR;
-	}
+	//loga("AES_KEYLEN/8 : %d", AES_KEYLEN/8);
 
-	if(RAND_bytes(aes_iv, AES_KEYLEN/8) == 0) {
+	if(RAND_bytes(aes_key, aes_key_size) == 0) {
 		return DN_ERROR;
 	}
 
@@ -100,38 +102,25 @@ rstatus_t
 crypto_init(void)
 {
 	//TODOs: check returned statuses
-
 	// Initalize contexts
-	rsa_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 	aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
-
-	rsa_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 	aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 
-	// Always a good idea to check if malloc failed
-	if(rsa_encrypt_ctx == NULL || aes_encrypt_ctx == NULL ||
-			rsa_decrypt_ctx == NULL || aes_decrypt_ctx == NULL) {
-		return DN_ERROR;
-	}
-
-	EVP_CIPHER_CTX_init(rsa_encrypt_ctx);
-	EVP_CIPHER_CTX_set_padding(rsa_encrypt_ctx, RSA_PKCS1_PADDING);
-
-	EVP_CIPHER_CTX_init(rsa_decrypt_ctx);
-	EVP_CIPHER_CTX_set_padding(rsa_decrypt_ctx, RSA_PKCS1_PADDING);
-
 	EVP_CIPHER_CTX_init(aes_encrypt_ctx);
-	EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_PKCS1_PADDING);
+
+	//EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_PKCS1_PADDING);
+	EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING);
 
 	EVP_CIPHER_CTX_init(aes_decrypt_ctx);
-	EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_PKCS1_PADDING);
 
-	//init RSA
-	load_public_rsa_key();
-	load_private_rsa_key();
+	//EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_PKCS1_PADDING);
+	EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING);
 
 	//init AES
 	aes_init();
+
+	//init RSA
+	load_private_rsa_key();
 
 	return DN_OK;
 }
@@ -139,20 +128,16 @@ crypto_init(void)
 rstatus_t
 crypto_deinit(void)
 {
-	EVP_CIPHER_CTX_cleanup(rsa_encrypt_ctx);
 	EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
 
-	EVP_CIPHER_CTX_cleanup(rsa_decrypt_ctx);
+
 	EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
 
-	free(rsa_encrypt_ctx);
-	free(aes_encrypt_ctx);
 
-	free(rsa_decrypt_ctx);
+	free(aes_encrypt_ctx);
 	free(aes_decrypt_ctx);
 
 	free(aes_key);
-	free(aes_iv);
 
 	return DN_OK;
 }
@@ -225,7 +210,7 @@ calc_decode_length(const char *b64input, const size_t length) {
 }
 
 rstatus_t
-aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg) {
+aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, unsigned char *aes_key) {
 	size_t block_len  = 0;
 	size_t enc_msg_len = 0;
 
@@ -273,8 +258,8 @@ rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf 
 		return DN_ERROR;
 	}
 
-	//EVP_CIPHER_CTX_cleanup(aesEncryptCtx);
-    mbuf->last = mbuf->pos + enc_msg_len + block_len;
+	EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+	mbuf->last = mbuf->pos + enc_msg_len + block_len;
 
 	return enc_msg_len + block_len;
 }
@@ -300,15 +285,15 @@ rstatus_t dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbu
 		return DN_ERROR;
 	}
 	dec_len += block_len;
-    mbuf->last = mbuf->pos + dec_len;
+	mbuf->last = mbuf->pos + dec_len;
 
-	//EVP_CIPHER_CTX_cleanup(aesDecryptCtx);
+	EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
 
 	return (int) dec_len;
 }
 
 rstatus_t
-aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg) {
+aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg, unsigned char *aes_key) {
 	size_t dec_len   = 0;
 	size_t block_len = 0;
 
@@ -339,7 +324,8 @@ aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg)
 
 unsigned char* generate_aes_key(void) {
 
-	if(RAND_bytes(aes_key, AES_KEYLEN/8) == 0) {
+	//if(RAND_bytes(aes_key, AES_KEYLEN/8) == 0) {
+	if(RAND_bytes(aes_key, aes_key_size) == 0) {
 		return NULL;
 	}
 
@@ -347,40 +333,10 @@ unsigned char* generate_aes_key(void) {
 }
 
 
-int rsa_pub_encrypt(unsigned char *data, int data_len,
-		unsigned char *key, unsigned char *encrypted)
-{
-	return RSA_public_encrypt(data_len, data, encrypted, public_rsa, RSA_PKCS1_PADDING);
-}
 
-
-int rsa_pub_decrypt(unsigned char *enc_data, int data_len,
-		unsigned char *key, unsigned char *decrypted)
-{
-	return RSA_public_decrypt(data_len,enc_data, decrypted, public_rsa, RSA_PKCS1_PADDING);
-}
-
-
-int rsa_priv_decrypt(unsigned char *enc_data, int data_len,
-		unsigned char *key, unsigned char *decrypted)
-{
-	return RSA_private_decrypt(data_len, enc_data, decrypted, private_rsa, RSA_PKCS1_PADDING);
-}
-
-
-int rsa_priv_encrypt(unsigned char *data, int data_len,
-		unsigned char *key, unsigned char *encrypted)
-{
-	return RSA_private_encrypt(data_len,data, encrypted, private_rsa, RSA_PKCS1_PADDING);
-}
-
-
-
-
-int crypto_test()
+static int aes_test()
 {
 	loga("aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
-	loga("aesIV is %s\n", base64_encode(aes_iv, strlen(aes_iv)));
 
 	unsigned char *msg = "Hi my name is Dynomite";
 	unsigned char *enc_msg = NULL;
@@ -391,9 +347,9 @@ int crypto_test()
 	loga("Message to AES encrypt: %s \n", msg);
 
 	// Encrypt the message with AES
-	if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg)) == -1) {
-		loga("Encryption failed\n");
-		return 1;
+	if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key)) == -1) {
+		loga("AES encryption failed\n");
+		return -1;
 	}
 
 	// Print the encrypted message as a base64 string
@@ -401,16 +357,79 @@ int crypto_test()
 	loga("AES Encrypted message: %s\n", b64_string);
 
 	// Decrypt the message
-	if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg)) == -1) {
-		loga("Decryption failed\n");
-		return 1;
+	if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg, aes_key)) == -1) {
+		loga("AES decryption failed\n");
+		return -1;
 	}
 	loga("%d bytes decrypted\n", dec_msg_len);
 	loga("AES Decrypted message: %s\n", dec_msg);
 
-	// Memory leaks... yadda yadda yadda...
 	free(enc_msg);
 	free(dec_msg);
 	free(b64_string);
 
+	return 0;
+}
+
+
+
+rstatus_t
+dyn_rsa_encrypt(unsigned char *plain_msg, unsigned char *encrypted_buf)
+{
+	if(RSA_public_encrypt(32, plain_msg, encrypted_buf, rsa, RSA_PKCS1_OAEP_PADDING) != 128) {
+		ERR_load_crypto_strings();
+		char  err[130];
+		ERR_error_string(ERR_get_error(), err);
+		loga("Error in encrypting message: %s\n", err);
+		return DN_ERROR;
+	}
+	return 128;
+}
+
+rstatus_t
+dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
+{
+	if(RSA_private_decrypt(128,
+			               encrypted_msg,
+					       decrypted_buf,
+					       rsa, RSA_PKCS1_OAEP_PADDING) != 32) {
+				ERR_load_crypto_strings();
+				char  err[130];
+				ERR_error_string(ERR_get_error(), err);
+				loga("Error in decrypting message: %s\n", err);
+				return DN_ERROR;
+	}
+
+	return 32;
+}
+
+
+static int rsa_test()
+{
+	static unsigned char encrypted_buf[130];
+	static unsigned char decrypted_buf[34];
+	static unsigned char *msg;
+
+	int i=0;
+	for(; i<10; i++) {
+		msg = generate_aes_key();
+
+		loga("i = %d", i);
+		loga("AES key           : %s \n", base64_encode(msg, 32));
+
+
+		dyn_rsa_encrypt(msg, encrypted_buf);
+
+		dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
+
+		loga("Decrypted message : %s \n", base64_encode(decrypted_buf, 32));
+	}
+
+	return 0;
+}
+
+void crypto_test(void)
+{
+	aes_test();
+	rsa_test();
 }

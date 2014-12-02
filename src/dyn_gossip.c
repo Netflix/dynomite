@@ -731,16 +731,13 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 	return DN_OK;
 }
 
+static uint64_t max_loop = 10000;
 
 static void *
 gossip_loop(void *arg)
 {
-
 	struct server_pool *sp = arg;
-
-	if (!sp->ctx->enable_gossip)
-		return NULL;  //no gossiping
-
+    uint64_t counter = 0;
 	struct string seeds;
 	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
@@ -749,14 +746,18 @@ gossip_loop(void *arg)
 	log_debug(LOG_VVERB, "gossip_interval : %d msecs", gn_pool.g_interval);
 	for(;;) {
 		usleep(gossip_interval);
+
+		if (!sp->ctx->enable_gossip)
+			continue;  //no gossiping
+
 		log_debug(LOG_VERB, "Gossip is running ...");
 
 		current_node->ts = (uint64_t) time(NULL);
-                gossip_process_msgs();
+		gossip_process_msgs();
 
-                if (current_node->state == NORMAL) {
-                        gn_pool.ctx->dyn_state = NORMAL;
-                }
+		if (current_node->state == NORMAL) {
+			gn_pool.ctx->dyn_state = NORMAL;
+		}
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
 			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
@@ -764,12 +765,12 @@ gossip_loop(void *arg)
 			string_deinit(&seeds);
 		}
 
-                if (node_count == 1) { //single node deployment
+		if (node_count == 1) { //single node deployment
 			gn_pool.ctx->dyn_state = NORMAL;
 			continue;
 		}
 
-                //STANDBY state for warm bootstrap
+		//STANDBY state for warm bootstrap
 		if (gn_pool.ctx->dyn_state == STANDBY)
 			continue;
 
@@ -784,6 +785,9 @@ gossip_loop(void *arg)
 
 
 		gossip_debug();
+
+		if (counter++ > max_loop)
+			return NULL;
 	}
 
 	return NULL;

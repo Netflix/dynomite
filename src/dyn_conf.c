@@ -268,6 +268,10 @@ conf_seed_each_transform(void *elem, void *data)
     s->weight = (uint32_t)cseed->weight;
     s->rack = cseed->rack;
     s->dc = cseed->dc;
+    //string_init(&s->dc);
+    string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
+    log_debug(LOG_VERB, "DDDDCCCCCCCCCCCCC 1111111111111111111         : '%.*s'", s->dc.len, s->dc.data);
+
     s->is_local = false;
     //TODO-jeb need to copy over tokens, not sure if this is good enough
     s->tokens = cseed->tokens;
