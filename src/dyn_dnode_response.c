@@ -256,9 +256,6 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 	struct msg *msg = rsp_send_next(ctx, conn);
 
 	if (msg != NULL && conn->dyn_mode) {
-#ifdef DN_DEBUG_LOG
-		log_debug(LOG_VERB, "Encrypting response ...");
-#endif
 		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
 
 		//need to deal with multi-block later
@@ -271,12 +268,12 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 		}
 
 		//TODOs: need to set the outcoming conn to be secured too if the incoming conn is secured
-		if (pmsg->owner->dnode_secured) {
-			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-
+		if (pmsg->owner->dnode_secured || conn->dnode_secured) {
 #ifdef DN_DEBUG_LOG
+		    log_debug(LOG_VERB, "Encrypting response ...");
 			loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 #endif
+			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
 			struct mbuf *encrypted_buf = mbuf_get();
 			if (encrypted_buf == NULL) {
