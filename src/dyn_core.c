@@ -62,18 +62,30 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
+
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
 	if (status != DN_OK) {
+		crypto_deinit();
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
 		return NULL;
 	}
 
+
+	/* crypto init */
+    status = crypto_init(ctx);
+    if (status != DN_OK) {
+    	dn_free(ctx);
+    	return NULL;
+    }
+
+
 	/* create stats per server pool */
 	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
-			nci->hostname, &ctx->pool, ctx);
+			                  nci->hostname, &ctx->pool, ctx);
 	if (ctx->stats == NULL) {
+		crypto_deinit();
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
@@ -83,6 +95,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize event handling for client, proxy and server */
 	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
 	if (ctx->evb == NULL) {
+		crypto_deinit();
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
@@ -93,6 +106,7 @@ core_ctx_create(struct instance *nci)
 	/* preconnect? servers in server pool */
 	status = server_pool_preconnect(ctx);
 	if (status != DN_OK) {
+		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
@@ -105,6 +119,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize proxy per server pool */
 	status = proxy_init(ctx);
 	if (status != DN_OK) {
+		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
@@ -117,6 +132,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize dnode listener per server pool */
 	status = dnode_init(ctx);
 	if (status != DN_OK) {
+		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
 		stats_destroy(ctx->stats);
@@ -131,6 +147,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize peers */
 	status = dnode_peer_init(&ctx->pool, ctx);
 	if (status != DN_OK) {
+		crypto_deinit();
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -146,6 +163,7 @@ core_ctx_create(struct instance *nci)
 	/* preconntect peers - probably start gossip here */
 	status = dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK) {
+		crypto_deinit();
 		dnode_peer_deinit(&ctx->pool);
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
@@ -198,6 +216,9 @@ core_start(struct instance *nci)
 	ctx = core_ctx_create(nci);
 	if (ctx != NULL) {
 		nci->ctx = ctx;
+#ifdef DN_DEBUG_LOG
+		crypto_test();
+#endif
 		return ctx;
 	}
 
@@ -465,7 +486,8 @@ core_debug(struct context *ctx)
 static rstatus_t
 core_process_messages(void)
 {
-	//loga("Leng of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+	log_debug(LOG_VERB, "Length of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
@@ -486,7 +508,7 @@ core_loop(struct context *ctx)
 
 	//log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
-        core_process_messages();
+    core_process_messages();
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;

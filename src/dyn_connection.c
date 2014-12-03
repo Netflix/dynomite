@@ -169,6 +169,11 @@ _conn_get(void)
     conn->dnode_client = 0;
     conn->dnode_server = 0;
     conn->dyn_mode = 0;
+    conn->dnode_secured = 0;
+    conn->dnode_crypto_state = 0;
+
+    unsigned char *ase_key = generate_aes_key();
+    strncpy(conn->aes_key, ase_key, strlen(ase_key)); //generate a new key for each connection
 
     return conn;
 }

@@ -4,13 +4,14 @@
  */ 
 
 #include "dyn_core.h"
-#include "dyn_server.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_mbuf.h"
+#include "dyn_server.h"
 
-static struct string client_request_dyn_msg = string("Client_request");
+
+//static struct string client_request_dyn_msg = string("Client_request");
 static uint64_t peer_msg_id = 0;
 
-static uint8_t version = VERSION_10;
 
 struct msg *
 dnode_req_get(struct conn *conn)
@@ -37,7 +38,7 @@ dnode_req_put(struct msg *msg)
 bool
 dnode_req_done(struct conn *conn, struct msg *msg)
 {
-	ASSERT(conn->dnode_client && !conn->dnode_server);
+	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	return req_done(conn, msg);
 }
 
@@ -150,15 +151,13 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 		return true;
 	}
 
-
 	/* dynomite hanlder */
 	if (msg->dmsg != NULL) {
 		if (dmsg_process(ctx, conn, msg->dmsg)) {
-                    dnode_req_put(msg);
-                    return true;
-                }
+			dnode_req_put(msg);
+			return true;
+		}
 	}
-
 
 	return false;
 }
@@ -194,11 +193,12 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 static void
-dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_req_local_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	struct server_pool *pool;
 	uint8_t *key;
 	uint32_t keylen;
+	log_debug(LOG_VERB, "dnode_req_local_forward entering ");
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
@@ -230,8 +230,8 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 void
-dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
-		struct msg *nmsg)
+dnode_req_recv_done(struct context *ctx, struct conn *conn,
+		            struct msg *msg, struct msg *nmsg)
 {
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	ASSERT(msg->request);
@@ -246,7 +246,7 @@ dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
 		return;
 	}
 
-	dnode_req_forward(ctx, conn, msg);
+	dnode_req_local_forward(ctx, conn, msg);
 }
 
 struct msg *
@@ -263,6 +263,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 void
 dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+	log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	req_send_done(ctx, conn, msg);
 }
@@ -279,10 +280,16 @@ dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct 
         stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
 }
 
+
+/* Forward a client request over to a peer */
 void
-dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn, struct msg *msg,
-		struct rack *rack, uint8_t *key, uint32_t keylen)
+dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
+		struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
+
+#ifdef DN_DEBUG_LOG
+	log_debug(LOG_VERB, "dnode_peer_req_forward entering");
+#endif
 
 	rstatus_t status;
 	/* enqueue message (request) into client outq, if response is expected */
@@ -303,24 +310,62 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		}
 	}
 
-	struct mbuf *nbuf = mbuf_get();
-	if (nbuf == NULL) {
+	uint64_t msg_id = peer_msg_id++;
+
+	struct mbuf *header_buf = mbuf_get();
+	if (header_buf == NULL) {
+		loga("Unable to obtain an mbuf for dnode msg's header!");
 		return;
 	}
 
-	//dyn message's meta data
-	uint64_t msg_id = peer_msg_id++;
+	if (p_conn->dnode_secured) {
+		//Encrypting and adding header for a request
+		struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
-	dmsg_write(nbuf, msg_id, DMSG_REQ, version, &client_request_dyn_msg);
-	mbuf_insert_head(&msg->mhdr, nbuf);
+		//TODOs: need to deal with multi-block later
+		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
+
+		struct mbuf *encrypted_buf = mbuf_get();
+		if (encrypted_buf == NULL) {
+			loga("Unable to obtain an mbuf for encryption!");
+			return; //TODOs: need to clean up
+		}
+
+		status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, p_conn->aes_key);
+		log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+
+		//write dnode header
+		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(encrypted_buf));
+		mbuf_insert_head(&msg->mhdr, header_buf);
+
+		log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+		log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+
+		//remove the original dbuf out of the queue and insert encrypted mbuf to replace
+		mbuf_remove(&msg->mhdr, data_buf);
+		mbuf_insert(&msg->mhdr, encrypted_buf);
+		//free it as no one will need it again
+		mbuf_put(data_buf);
+	} else {
+		//write dnode header
+		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, 0);
+		mbuf_insert_head(&msg->mhdr, header_buf);
+	}
+
+#ifdef DN_DEBUG_LOG
+	log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
+	msg_dump(msg);
+#endif
 
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
+
 	log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
 			" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
 			msg->mlen, msg->type, keylen, key);
+
 }
 
 
@@ -368,10 +413,10 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
  */
 
 /*
- * Sending a mbuf of gossip data over the wire for a peer
+ * Sending a mbuf of gossip data over the wire to a peer
  */
 void
-dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *mbuf)
+dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *data_buf)
 {
 	rstatus_t status;
 	struct msg *msg = msg_get(conn, 1, redis);
@@ -381,17 +426,48 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		return;
 	}
 
-	struct mbuf *nbuf = mbuf_get();
-	if (nbuf == NULL) {
-		log_debug(LOG_DEBUG, "Unable to obtain a mbuf");
+	struct mbuf *header_buf = mbuf_get();
+	if (header_buf == NULL) {
+		log_debug(LOG_DEBUG, "Unable to obtain a data_buf");
 		msg_put(msg);
 		return;
 	}
 
 	uint64_t msg_id = peer_msg_id++;
 
-	dmsg_write_mbuf(nbuf, msg_id, GOSSIP_SYN, version, mbuf);
-	mbuf_insert_head(&msg->mhdr, nbuf);
+	if (conn->dnode_secured) {
+		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+
+		struct mbuf *encrypted_buf = mbuf_get();
+		if (encrypted_buf == NULL) {
+			loga("Unable to obtain an data_buf for encryption!");
+			return; //TODOs: need to clean up
+		}
+
+		status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
+		log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+
+		//write dnode header
+		dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
+		mbuf_insert_head(&msg->mhdr, header_buf);
+
+		log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+		log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+
+		mbuf_insert(&msg->mhdr, encrypted_buf);
+
+		//free data_buf as no one will need it again
+		mbuf_put(data_buf);
+	} else {
+	   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
+	   mbuf_insert_head(&msg->mhdr, header_buf);
+	   mbuf_insert(&msg->mhdr, data_buf);
+	}
+
+#ifdef DN_DEBUG_LOG
+	log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
+	msg_dump(msg);
+#endif
 
 	/* enqueue the message (request) into peer inq */
 	if (TAILQ_EMPTY(&conn->imsg_q)) {

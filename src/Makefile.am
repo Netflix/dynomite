@@ -21,6 +21,8 @@ AM_CFLAGS += -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wmissin
 
 AM_LDFLAGS =
 AM_LDFLAGS += -lm -lpthread -rdynamic
+AM_LDFLAGS += -lssl -lcrypto
+
 if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
@@ -32,6 +34,7 @@ sbin_PROGRAMS = dynomite
 dynomite_SOURCES =			                          \
         dyn_dnode_server.c dyn_dnode_server.h                     \
         dyn_cbuf.h                                                \
+        dyn_crypto.c dyn_crypto.h                                 \
         dyn_ring_queue.h dyn_ring_queue.c                         \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
         dyn_dnode_client.h dyn_dnode_client.c                     \

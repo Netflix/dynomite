@@ -91,8 +91,11 @@ struct conn {
     unsigned           done:1;        /* done? aka close? */
     unsigned           redis:1;       /* redis? */
     unsigned           dnode_server:1;       /* dndoe server connection? */
-    unsigned           dnode_client:1;  /* dnode client? */
-    unsigned           dyn_mode:1;      /* is a dyn connection? */
+    unsigned           dnode_client:1;       /* dnode client? */
+    unsigned           dyn_mode:1;           /* is a dyn connection? */
+    unsigned           dnode_secured:1;      /* is a secured connection? */
+    unsigned           dnode_crypto_state:1; /* crypto state */
+    unsigned char      aes_key[34];              /* a place holder for AES key */
 };
 
 TAILQ_HEAD(conn_tqh, conn);

@@ -6,10 +6,12 @@
 #include <ctype.h>
 
 #include "dyn_core.h"
+#include "dyn_crypto.h"
 #include "dyn_dnode_msg.h"
 #include "dyn_server.h"
 #include "proto/dyn_proto.h"
 
+static uint8_t version = VERSION_10;
 
 static uint64_t dmsg_id;          /* message id counter */
 static uint32_t nfree_dmsgq;      /* # free msg q */
@@ -20,22 +22,29 @@ static uint32_t MAGIC_NUMBER = 2014;
 static const struct string MAGIC_STR = string("2014 ");
 static const struct string CRLF_STR = string(CRLF);
 
+static unsigned char aes_encrypted_buf[130];
+static unsigned char aes_decrypted_buf[34];
+
 static rstatus_t dmsg_to_gossip(struct ring_msg *rmsg);
 
 enum {
-        DYN_START,
+        DYN_START = 0,
         DYN_MAGIC_NUMBER = 1000,
         DYN_SPACES_BEFORE_MSG_ID,
         DYN_MSG_ID,
         DYN_SPACES_BEFORE_TYPE_ID,
         DYN_TYPE_ID,
+        DYN_SPACES_BEFORE_BIT_FIELD,
+        DYN_BIT_FIELD,
         DYN_SPACES_BEFORE_VERSION,
         DYN_VERSION,
-        DYN_CRLF_BEFORE_STAR,
+        DYN_SPACES_BEFORE_STAR,
         DYN_STAR,
         DYN_DATA_LEN,
         DYN_SPACE_BEFORE_DATA,
         DYN_DATA,
+        DYN_SPACES_BEFORE_PAYLOAD_LEN,
+        DYN_PAYLOAD_LEN,
         DYN_CRLF_BEFORE_DONE,
         DYN_DONE
 } state;
@@ -102,13 +111,15 @@ dyn_parse_core(struct msg *r)
 			} else if (isdigit(ch)) {
 				num = ch - '0';
 				state = DYN_MSG_ID;
+			}  else {
+				goto error;
 			}
 
 			break;
 
 		case DYN_MSG_ID:
-			//log_debug(LOG_DEBUG, "DYN_MSG_ID");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_MSG_ID");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else if (ch != ' ') {
@@ -126,53 +137,90 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACES_BEFORE_TYPE_ID:
-			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
+			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
 			if (ch == ' ') {
 				break;
 			} else if (isdigit(ch)) {
 				num = ch - '0';
 				state = DYN_TYPE_ID;
+			}  else {
+				goto error;
 			}
 
 			break;
 
 		case DYN_TYPE_ID:
-			//log_debug(LOG_DEBUG, "DYN_TYPE_ID");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (num > 0)  {
-					log_debug(LOG_DEBUG, "VERB ID: %d", num);
+					log_debug(LOG_DEBUG, "Type Id: %d", num);
 					dmsg->type = num;
+					//state = DYN_SPACES_BEFORE_VERSION;
+					state = DYN_SPACES_BEFORE_BIT_FIELD;
+				} else {
+					goto error;
+				}
+			}
+
+			break;
+
+		case DYN_SPACES_BEFORE_BIT_FIELD:
+			if (ch == ' ') {
+				break;
+			} else if (isdigit(ch)) {
+				num = ch - '0';
+				state = DYN_BIT_FIELD;
+			} else {
+				goto error;
+			}
+			break;
+
+		case DYN_BIT_FIELD:
+			log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
+			log_debug(LOG_DEBUG, "num = %d", num);
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else {
+				if (ch == ' ')  {
+					log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
+					dmsg->bit_field = num & 0xF;
 					state = DYN_SPACES_BEFORE_VERSION;
 				} else {
 					goto error;
 				}
 			}
 
+			log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
+			log_debug(LOG_DEBUG, "num = %d", num);
+
 			break;
 
 		case DYN_SPACES_BEFORE_VERSION:
-			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
+			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
 			if (ch == ' ') {
 				break;
 			} else if (isdigit(ch)) {
 				num = ch - '0';
 				state = DYN_VERSION;
+			}  else {
+				goto error;
 			}
+
 			break;
 
 		case DYN_VERSION:
-			//log_debug(LOG_DEBUG, "DYN_VERSION");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_VERSION");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
-				if (ch == CR)  {
-					log_debug(LOG_DEBUG, "VERSION : %d", num);
+				if (ch == ' ')  {
+					//log_debug(LOG_DEBUG, "VERSION : %d", num);
 					dmsg->version = num;
-					state = DYN_CRLF_BEFORE_STAR;
+					state = DYN_SPACES_BEFORE_STAR;
 				} else {
 					goto error;
 				}
@@ -180,30 +228,37 @@ dyn_parse_core(struct msg *r)
 
 			break;
 
-		case DYN_CRLF_BEFORE_STAR:
+		case DYN_SPACES_BEFORE_STAR:
 			//log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_STAR");
-			if (ch == LF)  {
-				state = DYN_STAR;
-			} else {
-				goto error;
-			}
-
-			break;
-
-		case DYN_STAR:
-			//log_debug(LOG_DEBUG, "DYN_STAR");
-			if (ch == '*') {
+			if (ch == ' ')  {
+				break;
+			} else if (ch == '*') {
 				state = DYN_DATA_LEN;
 				num = 0;
 			} else {
 				goto error;
 			}
 
+			//else {
+			//	state = DYN_STAR;
+			//}
+
 			break;
 
+		//case DYN_STAR:
+			//log_debug(LOG_DEBUG, "DYN_STAR");
+		//	if (ch == '*') {
+		//		state = DYN_DATA_LEN;
+		//		num = 0;
+		//	} else {
+		//		goto error;
+		//	}
+
+		//	break;
+
 		case DYN_DATA_LEN:
-			//log_debug(LOG_DEBUG, "DYN_DATA_LEN");
-			//log_debug(LOG_DEBUG, "num = %d", num);
+			log_debug(LOG_DEBUG, "DYN_DATA_LEN");
+			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
@@ -219,7 +274,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACE_BEFORE_DATA:
-			//log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
+			log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
 			state = DYN_DATA;
 			break;
 
@@ -229,21 +284,45 @@ dyn_parse_core(struct msg *r)
 			if (dmsg->mlen > 0)  {
 				dmsg->data = p;
 				p += dmsg->mlen - 1;
-				state = DYN_CRLF_BEFORE_DONE;
+				state = DYN_SPACES_BEFORE_PAYLOAD_LEN;
 			} else {
 				goto error;
 			}
 
 			break;
 
-		case DYN_CRLF_BEFORE_DONE:
-			//log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
-			if (ch == CR)  {
-				if (*(p+1) == LF) {
-					state = DYN_DONE;
+		case DYN_SPACES_BEFORE_PAYLOAD_LEN: //this only need in dynomite's custome msg
+			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
+			if (ch == ' ') {
+				break;
+			} else if (ch == '*') {
+				state = DYN_PAYLOAD_LEN;
+				num = 0;
+			} else {
+				goto error;
+			}
+
+			break;
+
+		case DYN_PAYLOAD_LEN:
+			if (isdigit(ch))  {
+				num = num*10 + (ch - '0');
+			} else {
+				if (ch == CR)  {
+					log_debug(LOG_DEBUG, "Payload len: %d", num);
+					dmsg->plen = num;
+					state = DYN_CRLF_BEFORE_DONE;
+					num = 0;
 				} else {
 					goto error;
 				}
+			}
+			break;
+
+		case DYN_CRLF_BEFORE_DONE:
+			//log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
+			if (*p == LF) {
+				state = DYN_DONE;
 			} else {
 				goto error;
 			}
@@ -252,9 +331,10 @@ dyn_parse_core(struct msg *r)
 
 		case DYN_DONE:
 			//log_debug(LOG_DEBUG, "DYN_DONE");
-			r->pos = p+1;
+			r->pos = p;
+			dmsg->payload = p;
 			r->dyn_state = DYN_DONE;
-			b->pos = p+1;
+			b->pos = p;
 			goto done;
 			break;
 
@@ -267,13 +347,15 @@ dyn_parse_core(struct msg *r)
 	}
 
 	done:
+
 	dmsg->owner = r;
 	dmsg->source_address = r->owner->addr;
+    //r->mlen = mbuf_length(b);
 	//log_debug(LOG_DEBUG, "at done with p at %d", p);
-	//dmsg_dump(r->dmsg);
-	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
-	//		"type %d state %d rpos %d of %d", r->id, r->result, r->type,
-	//		r->dyn_state, r->pos - b->pos, b->last - b->pos);
+	dmsg_dump(r->dmsg);
+	log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn: parsed req %"PRIu64" res %d "
+			"type %d state %d rpos %d of %d", r->id, r->result, r->type,
+			r->dyn_state, r->pos - b->pos, b->last - b->pos);
 
 
 	return true;
@@ -305,10 +387,20 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
+
+
+#ifdef DN_DEBUG_LOG
+	log_debug(LOG_VVERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+	msg_dump(r);
+#endif
+
+	bool done_parsing = false;
+
 	if (dyn_parse_core(r)) {
+
 		struct dmsg *dmsg = r->dmsg;
 
-		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ && dmsg->type != GOSSIP_SYN) {
 			log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
@@ -316,7 +408,70 @@ dyn_parse_req(struct msg *r)
 			return;
 		}
 
+		if (dmsg->type == GOSSIP_SYN) {
+#ifdef DN_DEBUG_LOG
+			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
+#endif
 
+			//TODOs: need to address multi-buffer msg later
+			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+			dmsg->payload = b->pos;
+
+                        b->pos = b->pos + dmsg->plen;
+                        r->pos = b->pos;
+
+                        done_parsing = true;
+                }
+
+		//check whether we need to decrypt the payload
+                if (dmsg->bit_field == 1) {
+        	       dmsg->owner->owner->dnode_secured = 1;
+                       r->owner->dnode_crypto_state = 1;
+                       struct mbuf *decrypted_buf = mbuf_get();
+                       if (decrypted_buf == NULL) {
+                           loga("Unable to obtain an mbuf for dnode msg's header!");
+                           return;
+                       }
+
+#ifdef DN_DEBUG_LOG
+                       log_debug(LOG_DEBUG, "data or encrypted aes key length : %d", dmsg->plen);
+#endif
+
+
+                       if (dmsg->mlen > 1) {
+#ifdef DN_DEBUG_LOG
+                           log_debug(LOG_DEBUG, "dmsg->mlen is something: %d, need to process it", dmsg->plen);
+#endif
+			   //Decrypt AES key
+                           dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
+                           strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
+                           //Decrypt payload
+                           dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
+			} else {
+#ifdef DN_DEBUG_LOG
+                           log_debug(LOG_DEBUG, "dmsg->mlen is a dummy: %d, NO need to process it", dmsg->plen);
+#endif
+			   dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
+			}
+
+
+#ifdef DN_DEBUG_LOG
+                        loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
+                        log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+#endif
+
+                        struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+                        b->last = b->pos;
+                        r->pos = decrypted_buf->start;
+                        mbuf_insert(&r->mhdr, decrypted_buf);
+
+                        //reset these variables
+                        dmsg->payload = decrypted_buf->start;
+                        dmsg->plen = mbuf_length(decrypted_buf);
+                }
+
+                if (done_parsing)
+        	        return;
 
 		if (r->redis)
 			return redis_parse_req(r);
@@ -332,10 +487,16 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
+
+#ifdef DN_DEBUG_LOG
+	log_debug(LOG_VERB, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
+	msg_dump(r);
+#endif
+
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 
-		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ) {
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
 			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
@@ -343,7 +504,32 @@ void dyn_parse_rsp(struct msg *r)
 			return;
 		}
 
+		//check whether we need to decrypt the payload
+		if (dmsg->bit_field == 1) {
+			//dmsg->owner->owner->dnode_secured = 1;
+			struct mbuf *decrypted_buf = mbuf_get();
+			if (decrypted_buf == NULL) {
+				log_debug(LOG_INFO, "Unable to obtain an mbuf for dnode msg's header!");
+				return;
+			}
 
+#ifdef DN_DEBUG_LOG
+			log_debug(LOG_VERB, "encrypted aes key length : %d", dmsg->mlen);
+			loga("AES encryption key from conn: %s\n", base64_encode(r->owner->aes_key, AES_KEYLEN));
+#endif
+
+                        //Dont need to decrypt AES key - pull it out from the conn
+			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
+
+#ifdef DN_DEBUG_LOG
+			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+#endif
+
+			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+			b->last = b->pos;
+			r->pos = decrypted_buf->start;
+			mbuf_insert(&r->mhdr, decrypted_buf);
+		}
 
 		if (r->redis)
 			return redis_parse_rsp(r);
@@ -351,9 +537,11 @@ void dyn_parse_rsp(struct msg *r)
 		return memcache_parse_rsp(r);
 	}
 
+#ifdef DN_DEBUG_LOG
 	//bad case
 	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
 	msg_dump(r);
+#endif
 
 	//r->state = 0;
 	//r->result = MSG_PARSE_OK;
@@ -363,7 +551,10 @@ void dyn_parse_rsp(struct msg *r)
 void
 dmsg_free(struct dmsg *dmsg)
 {
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+#endif
+
     dn_free(dmsg);
 }
 
@@ -371,7 +562,9 @@ dmsg_free(struct dmsg *dmsg)
 void
 dmsg_put(struct dmsg *dmsg)
 {
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+#endif
 
     nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
@@ -382,7 +575,10 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-    log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d type %d len %"PRIu32"  ", dmsg->id, dmsg->version, dmsg->type, dmsg->mlen);
+#ifdef DN_DEBUG_LOG
+    log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
+    		  dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
+#endif
     //loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
 }
 
@@ -390,7 +586,10 @@ dmsg_dump(struct dmsg *dmsg)
 void
 dmsg_init(void)
 {
+#ifdef DN_DEBUG_LOG
     log_debug(LOG_DEBUG, "dmsg size %d", sizeof(struct dmsg));
+#endif
+
     dmsg_id = 0;
     nfree_dmsgq = 0;
     TAILQ_INIT(&free_dmsgq);
@@ -445,6 +644,9 @@ done:
     dmsg->mlen = 0;
     dmsg->data = NULL;
 
+    dmsg->plen = 0;
+    dmsg->payload = NULL;
+
     dmsg->type = DMSG_UNKNOWN;
     dmsg->version = VERSION_10;
     dmsg->id = 0;
@@ -456,44 +658,118 @@ done:
 
 
 rstatus_t 
-dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct string *data)
+dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
+		   struct conn *conn, uint32_t payload_len)
 {
 
     mbuf_write_string(mbuf, &MAGIC_STR);
     mbuf_write_uint64(mbuf, msg_id);
+
     mbuf_write_char(mbuf, ' ');
     mbuf_write_uint8(mbuf, type);
+
+    mbuf_write_char(mbuf, ' ');
+    //encryption bit
+    if (conn->dnode_secured) {
+    	mbuf_write_uint8(mbuf, 1);
+    } else {
+    	mbuf_write_uint8(mbuf, 0);
+    }
+
     mbuf_write_char(mbuf, ' ');
     mbuf_write_uint8(mbuf, version);
-    mbuf_write_string(mbuf, &CRLF_STR);
-    mbuf_write_char(mbuf, '*');
-    mbuf_write_uint32(mbuf, data->len);
+
+    //mbuf_write_string(mbuf, &CRLF_STR);
     mbuf_write_char(mbuf, ' ');
-    mbuf_write_string(mbuf, data);
+    mbuf_write_char(mbuf, '*');
+
+    //write aes key
+    unsigned char *aes_key = conn->aes_key;
+    if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
+           mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
+    } else {
+        mbuf_write_uint32(mbuf, 1);
+    }
+
+    mbuf_write_char(mbuf, ' ');
+    //mbuf_write_string(mbuf, data);
+    if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
+#ifdef DN_DEBUG_LOG
+       loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+#endif
+       dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
+       mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
+       conn->dnode_crypto_state = 1;
+    } else {
+       mbuf_write_char(mbuf, 'd'); //TODOs: replace with another string
+    }
+
+    //mbuf_write_string(mbuf, &CRLF_STR);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_char(mbuf, '*');
+    mbuf_write_uint32(mbuf, payload_len);
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message (writer): ");
+#ifdef DN_DEBUG_LOG
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
+#endif
      
     return DN_OK;
 }
 
+//Used in gossip forwarding msg only for now
 rstatus_t
-dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, uint8_t version, struct mbuf *data)
+dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn, uint32_t plen)
 {
     mbuf_write_string(mbuf, &MAGIC_STR);
     mbuf_write_uint64(mbuf, msg_id);
     mbuf_write_char(mbuf, ' ');
     mbuf_write_uint8(mbuf, type);
     mbuf_write_char(mbuf, ' ');
-    mbuf_write_uint8(mbuf, version);
-    mbuf_write_string(mbuf, &CRLF_STR);
-    mbuf_write_char(mbuf, '*');
-    mbuf_write_uint32(mbuf, (data->last - data->pos));
+
+    //encryption bit
+    if (conn->dnode_secured) {
+    	mbuf_write_uint8(mbuf, 1);
+    } else {
+    	mbuf_write_uint8(mbuf, 0);
+    }
+
     mbuf_write_char(mbuf, ' ');
-    mbuf_write_mbuf(mbuf, data);
+    mbuf_write_uint8(mbuf, version);
+    //mbuf_write_string(mbuf, &CRLF_STR);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_char(mbuf, '*');
+
+    //write aes key
+    unsigned char *aes_key = conn->aes_key;
+    if (conn->dnode_secured) {
+    	mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
+    } else {
+        mbuf_write_uint32(mbuf, 1);
+    }
+
+    mbuf_write_char(mbuf, ' ');
+    //mbuf_write_mbuf(mbuf, data);
+    if (conn->dnode_secured) {
+#ifdef DN_DEBUG_LOG
+       loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+#endif
+       dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
+       mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
+    } else {
+       mbuf_write_char(mbuf, 'a'); //TODOs: replace with another string
+    }
+
+    //mbuf_write_string(mbuf, &CRLF_STR);
+    mbuf_write_char(mbuf, ' ');
+    mbuf_write_char(mbuf, '*');
+    mbuf_write_uint32(mbuf, plen);
+
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message (writer):  ");
+#ifdef DN_DEBUG_LOG
+    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer:  ");
+#endif
 
     return DN_OK;
 }
@@ -574,9 +850,16 @@ dmsg_parse(struct dmsg *dmsg)
 
 	/* parse "host_id1,generation_ts1,host_state1,host_broadcast_address1|host_id2,generation_ts2,host_state2,host_broadcast_address2" */
 	/* host_id = dc-rack-token */
-	p = dmsg->data + dmsg->mlen - 1;
+	//p = dmsg->data + dmsg->mlen - 1;
+	//p = dmsg->owner->pos + dmsg->owner->mlen - 1;
+	p = dmsg->payload + dmsg->plen - 1;
 	end = p;
-	start = dmsg->data;
+
+	//start = dmsg->data;
+	//start = dmsg->owner->pos;
+	start = dmsg->payload;
+
+	log_debug(LOG_VERB, "parsing msg '%.*s'", dmsg->plen, start);
 	host_id = NULL;
 	host_addr = NULL;
 	ts = NULL;
@@ -607,8 +890,8 @@ dmsg_parse(struct dmsg *dmsg)
 	ring_msg->cb = gossip_msg_peer_update;
 
 	count = 0;
-	p = dmsg->data + dmsg->mlen - 1;
-
+	//p = dmsg->data + dmsg->mlen - 1;
+    p = dmsg->payload + dmsg->plen - 1;
 
 	do {
 
@@ -659,20 +942,25 @@ dmsg_parse(struct dmsg *dmsg)
 
 		end = p;
 
-		//log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
-		//log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
-		//log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
-		//log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
+#ifdef DN_DEBUG_LOG
+		log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
+		log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
+		log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
+		log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
 
-		//log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
-		//log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		//log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
-		//log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+		log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+		log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
+		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+#endif
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
 		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
-		//print_dyn_token(&rnode->token, 5);
+#ifdef DN_DEBUG_LOG
+		print_dyn_token(&rnode->token, 5);
+#endif
+
 		string_copy(&rnode->name, host_addr, host_addr_len);
 		string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 
@@ -696,7 +984,10 @@ dmsg_parse(struct dmsg *dmsg)
 }
 
 
-
+/*
+ * return : true to bypass all processing from the stack
+ *          false to go through the whole stack to process a given msg
+ */
 bool
 dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 {
@@ -716,9 +1007,16 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
         case GOSSIP_SYN:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN!!!!!!");
            dmsg_dump(dmsg);
+           //TODOs: fix this to reply the 1st time sender
            //dnode_rsp_gos_syn(ctx, conn, dmsg->owner);
            dmsg_parse(dmsg);
            return true;
+
+        case CRYPTO_HANDSHAKE:
+        	log_debug(LOG_DEBUG, "I have a crypto handshake msg and processing it now");
+            //TODOs: will work on this to optimize the performance
+        	return true;
+
         case GOSSIP_SYN_REPLY:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN_REPLY!!!!!!");
 

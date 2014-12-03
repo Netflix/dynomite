@@ -119,6 +119,7 @@ struct dyn_ring;
 #include "dyn_connection.h"
 #include "dyn_cbuf.h"
 #include "dyn_ring_queue.h"
+#include "dyn_crypto.h"
 
 #include "event/dyn_event.h"
 
@@ -150,6 +151,7 @@ struct context {
     int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
+    unsigned           enable_gossip:1;   /* enable/disable gossip */
 };
 
 

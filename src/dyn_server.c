@@ -824,7 +824,10 @@ server_pool_deinit(struct array *server_pool)
 		ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
 
 		server_deinit(&sp->server);
-		array_each(&sp->racks, rack_deinit, NULL);
+		if (array_n(&sp->racks) != 0)
+		  array_each(&sp->racks, rack_deinit, NULL);
+		array_deinit(&sp->racks);
+
 		sp->nlive_server = 0;
 
 		log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,

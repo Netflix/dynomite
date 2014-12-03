@@ -32,7 +32,6 @@
 #define _DYN_CONF_H_
 
 
-
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
 
@@ -66,7 +65,7 @@
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       10000
 #define CONF_DEFAULT_DYN_CONNECTIONS         10
 #define CONF_DEFAULT_VNODE_TOKENS            1
-#define CONF_DEFAULT_GOS_INTERVAL            5000  //in millisec
+#define CONF_DEFAULT_GOS_INTERVAL            30000  //5000  //in millisec
 #define CONF_DEFAULT_PEERS                   200
 
 #define CONF_STR_NONE                        "none"
@@ -82,6 +81,8 @@
 
 #define CONF_DEFAUTL_SEED_PROVIDER           "simple_provider"
 
+
+#define PEM_KEY_FILE  "conf/dynomite.pem"
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -135,6 +136,7 @@ struct conf_pool {
 
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
+    struct string      pem_key_file;
     struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
 };

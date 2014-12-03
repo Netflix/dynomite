@@ -457,6 +457,21 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
+    	//struct mbuf *nbuf = mbuf_get();
+    	//if (nbuf == NULL) {
+    	//	return;
+    	//}
+
+    	//dyn message's meta data
+    	//dmsg_write(nbuf, msg->dmsg->id, DMSG_RES, msg->dmsg->version, p_conn);
+    	//mbuf_insert_head(&msg->mhdr, nbuf);
+
+    	//log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message header: ");
+    	//struct mbuf *b = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn message payload: ");
+
+    	//p_conn->enqueue_inq(ctx, p_conn, msg);
+
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -503,6 +518,10 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     	    return;
     	}
     }
+
+
+    //hereeeeeeeeeeeeeeeeeeeeeeeee
+
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
@@ -635,8 +654,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
 
 void
-req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
-              struct msg *nmsg)
+req_recv_done(struct context *ctx, struct conn *conn,
+		      struct msg *msg, struct msg *nmsg)
 {
     ASSERT(conn->client && !conn->proxy);
     ASSERT(msg->request);
@@ -706,7 +725,7 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
-    ASSERT(msg->owner != conn);
+    //ASSERT(msg->owner == conn);
 
     log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
               "s %d", msg->id, msg->mlen, msg->type, conn->sd);
