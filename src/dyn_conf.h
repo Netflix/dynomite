@@ -82,6 +82,8 @@
 #define CONF_DEFAUTL_SEED_PROVIDER           "simple_provider"
 
 
+#define PEM_KEY_FILE  "conf/dynomite.pem"
+
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
     struct string   name;    /* name */
@@ -134,6 +136,7 @@ struct conf_pool {
 
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
+    struct string      pem_key_file;
     struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
 };

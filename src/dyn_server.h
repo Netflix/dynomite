@@ -170,6 +170,7 @@ struct server_pool {
     struct string      env;                  /* aws, network, ect */
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
+    struct string      pem_key_file;
 
 };
 

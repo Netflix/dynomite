@@ -62,12 +62,6 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
-	/* crypto init */
-    status = crypto_init();
-    if (status != DN_OK) {
-    	dn_free(ctx);
-    	return NULL;
-    }
 
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
@@ -77,6 +71,15 @@ core_ctx_create(struct instance *nci)
 		dn_free(ctx);
 		return NULL;
 	}
+
+
+	/* crypto init */
+    status = crypto_init(ctx);
+    if (status != DN_OK) {
+    	dn_free(ctx);
+    	return NULL;
+    }
+
 
 	/* create stats per server pool */
 	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,

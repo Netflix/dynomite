@@ -11,7 +11,10 @@
 #include <openssl/err.h>
 #include <stdio.h>
 
+
+#include "dyn_core.h"
 #include "dyn_crypto.h"
+#include "dyn_server.h"
 
 static EVP_CIPHER *aes_cipher;
 static RSA *rsa;
@@ -24,21 +27,31 @@ static EVP_CIPHER_CTX *aes_decrypt_ctx;
 
 
 static rstatus_t
-load_private_rsa_key(void)
+load_private_rsa_key(struct server_pool *sp)
 {
 	FILE * fp;
 
-	if(NULL != (fp= fopen(PRI_KEY_FILE, "r")) )
+    if (sp == NULL || string_empty(&sp->pem_key_file)) {
+    	log_error("Could NOT read RSA pem key file due to bad context or configuration");
+    	return DN_ERROR;
+    }
+
+    unsigned char file_name[sp->pem_key_file.len + 1];
+    memcpy(file_name, sp->pem_key_file.data, sp->pem_key_file.len);
+    file_name[sp->pem_key_file.len + 1] = '\0';
+
+
+	if(NULL != (fp= fopen(file_name, "r")) )
 	{
 		rsa = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
 		if(rsa == NULL)
 		{
-			log_error("Could NOT read RSA private key file");
+			log_error("Could NOT read RSA pem key file at %s", file_name);
 			return DN_ERROR;
 		}
 
 	} else {
-		log_error("Could NOT locate RSA private key file");
+		log_error("Could NOT locate RSA pem key file at %s", file_name);
 		return DN_ERROR;
 
 	}
@@ -85,22 +98,7 @@ load_private_rsa_key(void)
 static rstatus_t
 aes_init(void)
 {
-	// Init AES
-	aes_cipher =  EVP_aes_128_cbc();
-	aes_key = (unsigned char*) malloc(aes_key_size);
 
-
-	if(RAND_bytes(aes_key, aes_key_size) == 0) {
-		return DN_ERROR;
-	}
-
-	return DN_OK;
-}
-
-rstatus_t
-crypto_init(void)
-{
-	//TODOs: check returned statuses
 	// Initalize contexts
 	aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 	aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
@@ -115,14 +113,50 @@ crypto_init(void)
 	//EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_PKCS1_PADDING);
 	EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING);
 
+	// Init AES
+	aes_cipher =  EVP_aes_128_cbc();
+	aes_key = (unsigned char*) malloc(aes_key_size);
+
+
+	if(RAND_bytes(aes_key, aes_key_size) == 0) {
+		return DN_ERROR;
+	}
+
+	return DN_OK;
+}
+
+
+//only support loading one file at this time
+static rstatus_t
+crypto_pool_each_init(void *elem, void *data)
+{
+	rstatus_t status;
+    struct server_pool *sp = elem;
+
+	//TODOs: check returned statuses
 	//init AES
 	aes_init();
 
 	//init RSA
-	load_private_rsa_key();
+	load_private_rsa_key(sp);
 
 	return DN_OK;
 }
+
+
+rstatus_t
+crypto_init(struct context *ctx)
+{
+	rstatus_t status;
+
+	status = array_each(&ctx->pool, crypto_pool_each_init, NULL);
+	if (status != DN_OK) {
+		return status;
+	}
+
+	return DN_OK;
+}
+
 
 rstatus_t
 crypto_deinit(void)
@@ -140,6 +174,7 @@ crypto_deinit(void)
 
 	return DN_OK;
 }
+
 
 char*
 base64_encode(const unsigned char *message, const size_t length) {

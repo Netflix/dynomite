@@ -118,14 +118,14 @@ static struct command conf_commands[] = {
     { string("dyn_listen"),
       conf_set_listen,
       offsetof(struct conf_pool, dyn_listen) },
-    
+
     { string("dyn_seed_provider"),
       conf_set_string,
       offsetof(struct conf_pool, dyn_seed_provider) },
 
     { string("dyn_seeds"),
       conf_add_dyn_server,
-      offsetof(struct conf_pool, dyn_seeds) }, 
+      offsetof(struct conf_pool, dyn_seeds) },
 
     { string("dyn_port"),
       conf_set_num,
@@ -145,11 +145,15 @@ static struct command conf_commands[] = {
 
     { string("gos_interval"),
       conf_set_num,
-      offsetof(struct conf_pool, gos_interval) }, 
+      offsetof(struct conf_pool, gos_interval) },
 
     { string("secure_server_option"),
       conf_set_string,
       offsetof(struct conf_pool, secure_server_option) },
+
+    { string("pem_key_file"),
+        conf_set_string,
+        offsetof(struct conf_pool, pem_key_file) },
 
     { string("datacenter"),
       conf_set_string,
@@ -169,7 +173,7 @@ conf_server_init(struct conf_server *cs)
     string_init(&cs->name);
     string_init(&cs->rack);
     string_init(&cs->dc);
-    
+
     rstatus_t status = array_init(&cs->tokens, CONF_DEFAULT_VNODE_TOKENS,
                         sizeof(struct dyn_token));
     if (status != DN_OK) {
@@ -268,9 +272,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->weight = (uint32_t)cseed->weight;
     s->rack = cseed->rack;
     s->dc = cseed->dc;
-    //string_init(&s->dc);
-    string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
-    log_debug(LOG_VERB, "DDDDCCCCCCCCCCCCC 1111111111111111111         : '%.*s'", s->dc.len, s->dc.data);
+    //string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
 
     s->is_local = false;
     //TODO-jeb need to copy over tokens, not sure if this is good enough
@@ -332,6 +334,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->dyn_listen.pname);
     string_init(&cp->dyn_listen.name);
     string_init(&cp->secure_server_option);
+    string_init(&cp->pem_key_file);
     string_init(&cp->dc);
     string_init(&cp->env);
     cp->dyn_listen.port = 0;
@@ -402,6 +405,7 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->dyn_listen.pname);
     string_deinit(&cp->dyn_listen.name);
     string_deinit(&cp->secure_server_option);
+    string_deinit(&cp->pem_key_file);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
 
@@ -478,13 +482,14 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_family = cp->dyn_listen.info.family;
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
-    sp->d_connections = (uint32_t)cp->dyn_connections;   
+    sp->d_connections = (uint32_t)cp->dyn_connections;
     sp->rack = cp->rack;
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
 
     sp->secure_server_option = cp->secure_server_option;
+    sp->pem_key_file = cp->pem_key_file;
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
@@ -545,9 +550,9 @@ conf_dump(struct conf *cf)
             s = array_get(&cp->server, j);
             log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
         }
- 
+
         log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
-        
+
         uint32_t nseeds = array_n(&cp->dyn_seeds);
         log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
         for (j = 0; j < nseeds; j++) {
@@ -1398,7 +1403,7 @@ conf_validate_server(struct conf *cf, struct conf_pool *cp)
 
         if (string_compare(&cs1->name, &cs2->name) == 0) {
             log_error("conf: pool '%.*s' has servers with same name '%.*s'",
-                      cp->name.len, cp->name.data, cs1->name.len, 
+                      cp->name.len, cp->name.data, cs1->name.len,
                       cs1->name.data);
             valid = false;
             break;
@@ -1523,6 +1528,11 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     if (string_empty(&cp->env)) {
         string_copy_c(&cp->env, &CONF_DEFAULT_ENV);
         log_debug(LOG_INFO, "setting env to default value:%s", CONF_DEFAULT_ENV);
+    }
+
+    if (string_empty(&cp->pem_key_file)) {
+        string_copy_c(&cp->pem_key_file, &PEM_KEY_FILE);
+        log_debug(LOG_INFO, "setting pem key file to default value:%s", PEM_KEY_FILE);
     }
 
     status = conf_validate_server(cf, cp);

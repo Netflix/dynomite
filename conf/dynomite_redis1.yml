@@ -19,4 +19,4 @@ dyn_o_mite:
   - 127.0.0.1:22122:1
   timeout: 10000
   tokens: 3101134286
-  secure_server_option: all
+  secure_server_option: none

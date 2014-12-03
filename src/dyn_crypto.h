@@ -28,11 +28,7 @@
 #define AES_KEYLEN 32
 #define AES_ENCRYPTED_KEYLEN 128
 
-
-//TODOs: will make this location configurable
-#define PRI_KEY_FILE  "conf/dynomite_pri.key"
-
-rstatus_t crypto_init(void);
+rstatus_t crypto_init(struct context *ctx);
 rstatus_t crypto_deinit(void);
 
 char* base64_encode(const unsigned char *message, const size_t length);
