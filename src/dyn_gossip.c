@@ -347,7 +347,7 @@ gossip_forward_state(struct server_pool *sp)
 
 	msg->len = pos-data;
 
-	log_debug(LOG_VERB, "\tData           : '%.*s'", (pos-data), data);
+	log_debug(LOG_VERB, "\tForwarding my current gossip states           : '%.*s'", (pos-data), data);
 
 	dictReleaseIterator(dc_it);
 
@@ -747,9 +747,6 @@ gossip_loop(void *arg)
 	for(;;) {
 		usleep(gossip_interval);
 
-		if (!sp->ctx->enable_gossip)
-			continue;  //no gossiping
-
 		log_debug(LOG_VERB, "Gossip is running ...");
 
 		current_node->ts = (uint64_t) time(NULL);
@@ -757,6 +754,11 @@ gossip_loop(void *arg)
 
 		if (current_node->state == NORMAL) {
 			gn_pool.ctx->dyn_state = NORMAL;
+		}
+
+		if (!sp->ctx->enable_gossip) {
+			gossip_debug();
+			continue;  //no gossiping
 		}
 
 		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {

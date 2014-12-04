@@ -436,6 +436,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	uint64_t msg_id = peer_msg_id++;
 
 	if (conn->dnode_secured) {
+		log_debug(LOG_VERB, "Assemble a secured msg to send");
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 
 		struct mbuf *encrypted_buf = mbuf_get();
@@ -451,14 +452,17 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
 		mbuf_insert_head(&msg->mhdr, header_buf);
 
+#ifdef DN_DEBUG_LOG
 		log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
 		log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+#endif
 
 		mbuf_insert(&msg->mhdr, encrypted_buf);
 
 		//free data_buf as no one will need it again
 		mbuf_put(data_buf);
 	} else {
+       log_debug(LOG_VERB, "Assemble a non-secured msg to send");
 	   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
 	   mbuf_insert_head(&msg->mhdr, header_buf);
 	   mbuf_insert(&msg->mhdr, data_buf);

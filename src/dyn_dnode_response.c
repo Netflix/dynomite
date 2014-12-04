@@ -145,6 +145,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 
 //TODOs: fix this in using dmsg_write with encrypted msgs
 //         It is not in use now.
+/*
 void
 dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 {
@@ -170,7 +171,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	}
 
 	pmsg->done = 1;
-	/* establish msg <-> pmsg (response <-> request) link */
+	// establish msg <-> pmsg (response <-> request) link
 	msg->peer = pmsg;
 	pmsg->peer = msg;
 	pmsg->pre_coalesce(pmsg);
@@ -189,15 +190,15 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	//s_conn->dequeue_outq(ctx, s_conn, pmsg);
 
 
-	/*
-     p_conn->enqueue_outq(ctx, p_conn, pmsg);
-     if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-        status = event_add_out(ctx->evb, p_conn);
-        if (status != DN_OK) {
-           p_conn->err = errno;
-        }
-     }
-	 */
+
+     //p_conn->enqueue_outq(ctx, p_conn, pmsg);
+     //if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+     //   status = event_add_out(ctx->evb, p_conn);
+     //   if (status != DN_OK) {
+     //      p_conn->err = errno;
+     //   }
+     //}
+
 
 	if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
 		status = event_add_out(ctx->evb, p_conn);
@@ -209,7 +210,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 	//dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
 
-
+*/
 
 void
 dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
