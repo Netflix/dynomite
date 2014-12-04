@@ -446,7 +446,7 @@ static int rsa_test()
 	static unsigned char *msg;
 
 	int i=0;
-	for(; i<10; i++) {
+	for(; i<3; i++) {
 		msg = generate_aes_key();
 
 		log_debug(LOG_VERB, "i = %d", i);

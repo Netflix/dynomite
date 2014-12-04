@@ -388,7 +388,6 @@ void
 dyn_parse_req(struct msg *r)
 {
 
-
 #ifdef DN_DEBUG_LOG
 	log_debug(LOG_VVERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
 	msg_dump(r);
@@ -417,61 +416,61 @@ dyn_parse_req(struct msg *r)
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 			dmsg->payload = b->pos;
 
-                        b->pos = b->pos + dmsg->plen;
-                        r->pos = b->pos;
+			b->pos = b->pos + dmsg->plen;
+			r->pos = b->pos;
 
-                        done_parsing = true;
-                }
+			done_parsing = true;
+		}
 
 		//check whether we need to decrypt the payload
-                if (dmsg->bit_field == 1) {
-        	       dmsg->owner->owner->dnode_secured = 1;
-                       r->owner->dnode_crypto_state = 1;
-                       struct mbuf *decrypted_buf = mbuf_get();
-                       if (decrypted_buf == NULL) {
-                           loga("Unable to obtain an mbuf for dnode msg's header!");
-                           return;
-                       }
+		if (dmsg->bit_field == 1) {
+			dmsg->owner->owner->dnode_secured = 1;
+			r->owner->dnode_crypto_state = 1;
+			struct mbuf *decrypted_buf = mbuf_get();
+			if (decrypted_buf == NULL) {
+				loga("Unable to obtain an mbuf for dnode msg's header!");
+				return;
+			}
 
 #ifdef DN_DEBUG_LOG
-                       log_debug(LOG_DEBUG, "data or encrypted aes key length : %d", dmsg->plen);
+			log_debug(LOG_DEBUG, "data or encrypted aes key length : %d", dmsg->plen);
 #endif
 
 
-                       if (dmsg->mlen > 1) {
+			if (dmsg->mlen > 1) {
 #ifdef DN_DEBUG_LOG
-                           log_debug(LOG_DEBUG, "dmsg->mlen is something: %d, need to process it", dmsg->plen);
+				log_debug(LOG_DEBUG, "dmsg->mlen is something: %d, need to process it", dmsg->plen);
 #endif
-			   //Decrypt AES key
-                           dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-                           strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
-                           //Decrypt payload
-                           dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
+				//Decrypt AES key
+				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
+				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
+				//Decrypt payload
+				dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
 			} else {
 #ifdef DN_DEBUG_LOG
-                           log_debug(LOG_DEBUG, "dmsg->mlen is a dummy: %d, NO need to process it", dmsg->plen);
+				log_debug(LOG_DEBUG, "dmsg->mlen is a dummy: %d, NO need to process it", dmsg->plen);
 #endif
-			   dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
+				dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 			}
 
 
 #ifdef DN_DEBUG_LOG
-                        loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
-                        log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+			loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
+			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
 #endif
 
-                        struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
-                        b->last = b->pos;
-                        r->pos = decrypted_buf->start;
-                        mbuf_insert(&r->mhdr, decrypted_buf);
+			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+			b->last = b->pos;
+			r->pos = decrypted_buf->start;
+			mbuf_insert(&r->mhdr, decrypted_buf);
 
-                        //reset these variables
-                        dmsg->payload = decrypted_buf->start;
-                        dmsg->plen = mbuf_length(decrypted_buf);
-                }
+			//reset these variables
+			dmsg->payload = decrypted_buf->start;
+			dmsg->plen = mbuf_length(decrypted_buf);
+		}
 
-                if (done_parsing)
-        	        return;
+		if (done_parsing)
+			return;
 
 		if (r->redis)
 			return redis_parse_req(r);

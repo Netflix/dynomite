@@ -54,7 +54,7 @@ static int show_help;
 static int show_version;
 static int test_conf;
 static int daemonize;
-static int enable_gossip = 1;
+static int enable_gossip = 0;
 static int describe_stats;
 
 static struct option long_options[] = {
@@ -63,7 +63,7 @@ static struct option long_options[] = {
     { "test-conf",      no_argument,        NULL,   't' },
     { "daemonize",      no_argument,        NULL,   'd' },
     { "describe-stats", no_argument,        NULL,   'D' },
-    { "disable-gossip", no_argument,        NULL,   'g' },
+    { "gossip",         no_argument,        NULL,   'g' },
     { "verbose",        required_argument,  NULL,   'v' },
     { "output",         required_argument,  NULL,   'o' },
     { "conf-file",      required_argument,  NULL,   'c' },
@@ -218,6 +218,7 @@ dn_show_usage(void)
         "  -h, --help             : this help" CRLF
         "  -V, --version          : show version and exit" CRLF
         "  -t, --test-conf        : test configuration for syntax errors and exit" CRLF
+        "  -g, --gossip           : enable gossip (default: disable)" CRLF
         "  -d, --daemonize        : run as a daemon" CRLF
         "  -D, --describe-stats   : print stats description and exit");
     log_stderr(
@@ -348,7 +349,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             break;
 
         case 'g':
-            enable_gossip = 0;
+            enable_gossip = 1;
             break;
 
         case 'v':
