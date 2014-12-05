@@ -6,7 +6,7 @@ dyn_o_mite:
   dyn_read_timeout: 200000
   dyn_seed_provider: simple_provider
   dyn_seeds:
-  - 127.0.0.2:8101:RACK1:5622637,721812480,851406979,1036155118,2147653893,2233516174
+  - 127.0.0.2:8101:RACK1:DC1:5622637,721812480,851406979,1036155118,2147653893,2233516174
   dyn_write_timeout: 200000
   gos_interval: 10000
   hash: murmur
