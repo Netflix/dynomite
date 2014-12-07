@@ -315,7 +315,7 @@ dnode_peer_conn(struct server *server)
 	pool = server->owner;
 
 	//if (server->ns_conn_q < pool->d_connections) {
-	if (server->ns_conn_q < 1) {
+	if (server->ns_conn_q < 2) {
         conn = conn_get_peer(server, false, pool->redis);
         if (is_conn_secured(pool, server)) {
         	conn->dnode_secured = 1;
@@ -1057,7 +1057,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 	conn->connecting = 0;
 	conn->connected = 1;
 
-	log_debug(LOG_INFO, "dyn: peer connected on s %d to server '%.*s'", conn->sd,
+	log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->sd,
 			server->pname.len, server->pname.data);
 }
 
@@ -1084,6 +1084,10 @@ dnode_peer_pool_update(struct server_pool *pool)
 	rstatus_t status;
 	int64_t now;
 	uint32_t pnlive_server; /* prev # live server */
+
+#ifdef DN_DEBUG_LOG
+	loga("dnode_peer_pool_update  entering ........................");
+#endif
 
 	//fix me
 	if (!pool->auto_eject_hosts) {
@@ -1175,6 +1179,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key
 		token = dnode_peer_pool_hash(pool, key, keylen);
 		//print_dyn_token(token, 1);
 		idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
+		//loga("found idx %d for rack '%.*s' ", idx, rack->name->len, rack->name->data);
 		break;
 
 	case DIST_MODULA:
@@ -1218,6 +1223,11 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 	rstatus_t status;
 	struct server *server;
 	struct conn *conn;
+
+#ifdef DN_DEBUG_LOG
+	loga("dnode_peer_pool_conn  entering ........................");
+    loga("getting a conn for rack '%.*s'  ", rack->name->len, rack->name->data);
+#endif
 
 	//status = dnode_peer_pool_update(pool);
 	status = dnode_peer_pool_run(pool);
@@ -1316,26 +1326,7 @@ rstatus_t
 dnode_peer_pool_run(struct server_pool *pool)
 {
 	ASSERT(array_n(&pool->peers) != 0);
-
-	switch (pool->dist_type) {
-	case DIST_KETAMA:
-		return ketama_update(pool);
-
-	case DIST_VNODE:
-		return vnode_update(pool);
-
-	case DIST_MODULA:
-		return modula_update(pool);
-
-	case DIST_RANDOM:
-		return random_update(pool);
-
-	default:
-		NOT_REACHED();
-		return DN_ERROR;
-	}
-
-	return DN_OK;
+	return vnode_update(pool);
 }
 
 

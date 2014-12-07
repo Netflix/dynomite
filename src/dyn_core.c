@@ -66,7 +66,6 @@ core_ctx_create(struct instance *nci)
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
 	if (status != DN_OK) {
-		crypto_deinit();
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
 		return NULL;

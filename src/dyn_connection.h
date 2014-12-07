@@ -110,5 +110,6 @@ ssize_t conn_recv(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv(struct conn *conn, struct array *sendv, size_t nsend);
 void conn_init(void);
 void conn_deinit(void);
+void conn_print(struct conn *conn);
 
 #endif

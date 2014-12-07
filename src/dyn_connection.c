@@ -546,3 +546,39 @@ conn_sendv(struct conn *conn, struct array *sendv, size_t nsend)
 
     return DN_ERROR;
 }
+
+
+
+void conn_print(struct conn *conn) {
+	log_debug(LOG_VERB, "sd %d", conn->sd);
+	log_debug(LOG_VERB, "redis %d", conn->redis);
+
+	log_debug(LOG_VERB, "client %d", conn->client);
+	log_debug(LOG_VERB, "proxy %d", conn->proxy);
+
+	log_debug(LOG_VERB, "dyn_mode %d", conn->dyn_mode);
+
+	log_debug(LOG_VERB, "dnode_client %d", conn->dnode_client);
+	log_debug(LOG_VERB, "dnode_server %d", conn->dnode_server);
+
+
+	log_debug(LOG_VERB, "dnode_crypto_state %d", conn->dnode_crypto_state);
+	log_debug(LOG_VERB, "dnode_secured %d", conn->dnode_secured);
+
+	log_debug(LOG_VERB, "connected %d", conn->connected);
+	log_debug(LOG_VERB, "dnode_client %d", conn->connecting);
+	log_debug(LOG_VERB, "done %d", conn->done);
+
+
+	log_debug(LOG_VERB, "send_active %d", conn->send_active);
+	log_debug(LOG_VERB, "send_bytes %d", conn->send_bytes);
+	log_debug(LOG_VERB, "send_ready %d", conn->send_ready);
+
+	log_debug(LOG_VERB, "recv_active %d", conn->recv_active);
+	log_debug(LOG_VERB, "recv_bytes %d", conn->recv_bytes);
+	log_debug(LOG_VERB, "recv_ready %d", conn->recv_ready);
+
+	log_debug(LOG_VERB, "events %d", conn->events);
+	log_debug(LOG_VERB, "eof %d", conn->eof);
+	log_debug(LOG_VERB, "err %d", conn->err);
+}

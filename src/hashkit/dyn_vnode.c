@@ -68,10 +68,13 @@ vnode_update(struct server_pool *sp)
     int i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
         struct server *peer = array_get(&sp->peers, i);
-        struct rack *rack = server_get_rack(sp, &peer->rack, &peer->dc);
 
-        //log_debug(LOG_VERB, "peer        : '%.*s'", peer->name.len, peer->name.data);
-        //log_debug(LOG_VERB, "peer->processed = %d", peer->processed);
+        log_debug(LOG_VERB, "peer name       : '%.*s'", peer->name.len, peer->name.data);
+        log_debug(LOG_VERB, "peer rack       : '%.*s'", peer->rack.len, peer->rack.data);
+        log_debug(LOG_VERB, "peer dc       : '%.*s'", peer->dc.len, peer->dc.data);
+        log_debug(LOG_VERB, "peer->processed = %d", peer->processed);
+
+        struct rack *rack = server_get_rack(sp, &peer->rack, &peer->dc);
 
         //update its own state
         if (i == 0) {
@@ -80,18 +83,21 @@ vnode_update(struct server_pool *sp)
 
         if (peer->processed) {
             continue;
-        } else {
-            peer->processed = 1;
         }
 
+        peer->processed = 1;
+
         if (rack == NULL) {
-        	log_debug(LOG_VERB, "Creating a new rack");
             rack = array_push(&sp->racks);
             rack_init(rack);
             string_copy(rack->name, peer->rack.data, peer->rack.len);
             string_copy(rack->dc, peer->dc.data, peer->dc.len);
             rack->continuum = dn_alloc(sizeof(struct continuum));
         }
+        //else {
+        //	log_debug(LOG_VERB, "Found rack's object: rack name       : '%.*s'", rack->name->len, rack->name->data);
+        //	log_debug(LOG_VERB, "Found rack's object: rack dc       : '%.*s'", rack->dc->len, rack->dc->data);
+        //}
 
         uint32_t token_cnt = array_n(&peer->tokens);
         uint32_t orig_cnt = rack->nserver_continuum;

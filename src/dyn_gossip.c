@@ -757,7 +757,7 @@ gossip_loop(void *arg)
 		}
 
 		if (!sp->ctx->enable_gossip) {
-			gossip_debug();
+			//gossip_debug();
 			continue;  //no gossiping
 		}
 

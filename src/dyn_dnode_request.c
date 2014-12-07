@@ -357,14 +357,17 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	msg_dump(msg);
 #endif
 
+
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
 
+#ifdef DN_DEBUG_LOG
 	log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
 			" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
 			msg->mlen, msg->type, keylen, key);
+#endif
 
 }
 
