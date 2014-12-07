@@ -721,6 +721,7 @@ server_pool_run(struct server_pool *pool)
 	case DIST_VNODE:
 		//return vnode_update(pool);
 		break;
+
 	case DIST_MODULA:
 		return modula_update(pool);
 
@@ -848,12 +849,21 @@ server_get_rack(struct server_pool *pool, struct string *rackname, struct string
 		ASSERT(rack != NULL);
 		ASSERT(rack->name != NULL);
 
-		//int cmp = string_compare(rack->name, rackname);
-		//if (cmp == 0) {
 		//TODOs: use dict for fast access/check-up
-		if (string_compare(rack->name, rackname) == 0 && string_compare(rack->dc, dcname) == 0)
+		if (string_compare(rack->name, rackname) == 0 && string_compare(rack->dc, dcname) == 0) {
+			//log_debug(LOG_VERB, "server_get_rack : Rack name          : '%.*s'", rack->name->len, rack->name->data);
+			//log_debug(LOG_VERB, "server_get_rack : Rack's DC name          : '%.*s'", rack->dc->len, rack->dc->data);
+
+			//log_debug(LOG_VERB, "server_get_rack : Input's Rack name          : '%.*s'", rackname->len, rackname->data);
+			//log_debug(LOG_VERB, "server_get_rack : Input's DC name          : '%.*s'", dcname->len, dcname->data);
+
+			//log_debug(LOG_VERB, "rack->ncontinuum  == %d  ", rack->ncontinuum);
+			//log_debug(LOG_VERB, "rack->nserver_continuum  == %d  ", rack->nserver_continuum);
 			return rack;
+		}
 	}
+
+    //log_debug(LOG_VERB, "There is no rack associated with the name '%.*s' ", rackname->len, rackname->data);
 
 	return NULL;
 }

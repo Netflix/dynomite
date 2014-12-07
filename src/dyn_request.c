@@ -453,25 +453,14 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     rstatus_t status;
     struct conn *s_conn;
 
+#ifdef DN_DEBUG_LOG
+    loga("local_req_forward entering...........................");
+#endif
+
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
-    	//struct mbuf *nbuf = mbuf_get();
-    	//if (nbuf == NULL) {
-    	//	return;
-    	//}
-
-    	//dyn message's meta data
-    	//dmsg_write(nbuf, msg->dmsg->id, DMSG_RES, msg->dmsg->version, p_conn);
-    	//mbuf_insert_head(&msg->mhdr, nbuf);
-
-    	//log_hexdump(LOG_VERB, nbuf->pos, mbuf_length(nbuf), "dyn message header: ");
-    	//struct mbuf *b = STAILQ_LAST(&msg->mhdr, mbuf, next);
-    	//log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "dyn message payload: ");
-
-    	//p_conn->enqueue_inq(ctx, p_conn, msg);
-
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -518,10 +507,6 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     	    return;
     	}
     }
-
-
-    //hereeeeeeeeeeeeeeeeeeeeeeeee
-
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
@@ -574,9 +559,13 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     struct server *peer = s_conn->owner;
 
     if (peer->is_local) {
+    	//conn_print(c_conn);
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
+    	//conn_print(c_conn);
+    	//loga("-------------------------------------------------------------");
+    	//conn_print(s_conn);
         dnode_peer_req_forward(ctx, c_conn, s_conn, msg, rack, key, keylen);
     }
 }
@@ -630,8 +619,9 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
             rack = array_get(&pool->racks, i);
             struct msg *rack_msg;
             
-            // clone the msg struct if not the current rack/dc
-            if (string_compare(rack->name, &pool->rack) != 0 && string_compare(rack->dc, &pool->dc)) {
+            // clone the msg struct if not the current rack/dc.  Fixed this to take DC into account too so that we can have
+            //same rack name in different DCs.
+            if (string_compare(rack->name, &pool->rack) != 0 ) {
                 rack_msg = msg_get(c_conn, msg->request, msg->redis);
                 if (rack_msg == NULL) {
                     log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
@@ -682,10 +672,11 @@ req_send_next(struct context *ctx, struct conn *conn)
     ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
     if (conn->connecting) {
-        if (!conn->dyn_mode && !conn->client)
+        if (!conn->dyn_mode && !conn->client) {
            server_connected(ctx, conn);
-        else if (conn->dyn_mode && !conn->dnode_client)
+        } else if (conn->dyn_mode && !conn->dnode_client) {
            dnode_peer_connected(ctx, conn);
+        }
     }
 
     nmsg = TAILQ_FIRST(&conn->imsg_q);

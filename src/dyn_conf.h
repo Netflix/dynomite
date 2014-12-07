@@ -54,7 +54,7 @@
 #define CONF_DEFAULT_CLIENT_CONNECTIONS      0
 #define CONF_DEFAULT_REDIS                   false
 #define CONF_DEFAULT_PRECONNECT              true
-#define CONF_DEFAULT_AUTO_EJECT_HOSTS        false
+#define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
 #define CONF_DEFAULT_SERVER_FAILURE_LIMIT    2
 #define CONF_DEFAULT_SERVER_CONNECTIONS      2
