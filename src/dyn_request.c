@@ -673,10 +673,8 @@ req_send_next(struct context *ctx, struct conn *conn)
 
     if (conn->connecting) {
         if (!conn->dyn_mode && !conn->client) {
-           loga("in 111111111111111111111111111111111111111111111");
            server_connected(ctx, conn);
         } else if (conn->dyn_mode && !conn->dnode_client) {
-           loga("in 222222222222222222222222222222222222222222222222222222");
            dnode_peer_connected(ctx, conn);
         }
     }
