@@ -38,7 +38,7 @@ load_private_rsa_key(struct server_pool *sp)
 
     unsigned char file_name[sp->pem_key_file.len + 1];
     memcpy(file_name, sp->pem_key_file.data, sp->pem_key_file.len);
-    file_name[sp->pem_key_file.len + 1] = '\0';
+    file_name[sp->pem_key_file.len] = '\0';
 
 
 	if(NULL != (fp= fopen(file_name, "r")) )

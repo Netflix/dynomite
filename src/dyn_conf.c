@@ -482,7 +482,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->d_family = cp->dyn_listen.info.family;
     sp->d_addrlen = cp->dyn_listen.info.addrlen;
     sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
-    sp->d_connections = (uint32_t)cp->dyn_connections;
+    sp->peer_connections = (uint32_t)cp->dyn_connections;
     sp->rack = cp->rack;
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;

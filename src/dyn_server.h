@@ -161,8 +161,8 @@ struct server_pool {
     int                d_backlog;            /* listen backlog */ 
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
-    uint32_t           d_connections;        /* maximum # dyn connections */
-    struct string      rack;                   /* the rack for this node */
+    uint32_t           peer_connections;     /* maximum # peer connections */
+    struct string      rack;                 /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 
     int                g_interval;           /* gossip interval */
