@@ -63,7 +63,7 @@
 #define CONF_DEFAULT_SEEDS                   5
 #define CONF_DEFAULT_DYN_READ_TIMEOUT        10000
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       10000
-#define CONF_DEFAULT_DYN_CONNECTIONS         10
+#define CONF_DEFAULT_DYN_CONNECTIONS         1000
 #define CONF_DEFAULT_VNODE_TOKENS            1
 #define CONF_DEFAULT_GOS_INTERVAL            30000  //5000  //in millisec
 #define CONF_DEFAULT_PEERS                   200
@@ -130,7 +130,7 @@ struct conf_pool {
     struct array       dyn_seeds;             /* seed nodes: conf_server array */
     int                dyn_port;
     int                dyn_connections;       /* dyn connections */  
-    struct string      rack;                    /* this node's logical rack */  
+    struct string      rack;                  /* this node's logical rack */
     struct array       tokens;                /* this node's token: dyn_token array */
     int                gos_interval;          /* wake up interval in ms */
 
