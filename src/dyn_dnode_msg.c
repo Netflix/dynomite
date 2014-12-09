@@ -388,10 +388,10 @@ void
 dyn_parse_req(struct msg *r)
 {
 
-#ifdef DN_DEBUG_LOG
-	log_debug(LOG_VVERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
-	msg_dump(r);
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_debug(LOG_VVERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+	   msg_dump(r);
+    }
 
 	bool done_parsing = false;
 
@@ -400,7 +400,9 @@ dyn_parse_req(struct msg *r)
 		struct dmsg *dmsg = r->dmsg;
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ && dmsg->type != GOSSIP_SYN) {
-			log_debug(LOG_DEBUG, "Req parser: I got a dnode msg of type %d", dmsg->type);
+			if (TRACING_LEVEL == LOG_VVERB) {
+			   log_debug(LOG_VVERB, "Req parser: I got a dnode msg of type %d", dmsg->type);
+			}
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
 			r->dyn_state = DYN_DONE;
@@ -408,9 +410,9 @@ dyn_parse_req(struct msg *r)
 		}
 
 		if (dmsg->type == GOSSIP_SYN) {
-#ifdef DN_DEBUG_LOG
-			log_debug(LOG_DEBUG, "Req parser: I got a GOSSIP_SYN msg");
-#endif
+		    if (TRACING_LEVEL == LOG_VVERB) {
+			   log_debug(LOG_VVERB, "Req parser: I got a GOSSIP_SYN msg");
+            }
 
 			//TODOs: need to address multi-buffer msg later
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -432,32 +434,32 @@ dyn_parse_req(struct msg *r)
 				return;
 			}
 
-#ifdef DN_DEBUG_LOG
-			log_debug(LOG_DEBUG, "data or encrypted aes key length : %d", dmsg->plen);
-#endif
+		    if (TRACING_LEVEL == LOG_VVERB) {
+			    log_debug(LOG_VVERB, "data or encrypted aes key length : %d", dmsg->plen);
+            }
 
 
 			if (dmsg->mlen > 1) {
-#ifdef DN_DEBUG_LOG
-				log_debug(LOG_DEBUG, "dmsg->mlen is something: %d, need to process it", dmsg->plen);
-#endif
+			    if (TRACING_LEVEL == LOG_VVERB) {
+				   log_debug(LOG_VVERB, "dmsg->mlen is something: %d, need to process it", dmsg->plen);
+                }
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
 				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
 				//Decrypt payload
 				dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
 			} else {
-#ifdef DN_DEBUG_LOG
-				log_debug(LOG_DEBUG, "dmsg->mlen is a dummy: %d, NO need to process it", dmsg->plen);
-#endif
+			    if (TRACING_LEVEL == LOG_VVERB) {
+				   log_debug(LOG_VVERB, "dmsg->mlen is a dummy: %d, NO need to process it", dmsg->plen);
+                }
 				dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 			}
 
 
-#ifdef DN_DEBUG_LOG
-			loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
-			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
-#endif
+		    if (TRACING_LEVEL == LOG_VVERB) {
+			   loga("AES encryption key: %s\n", base64_encode(aes_decrypted_buf, AES_KEYLEN));
+			   log_hexdump(LOG_VVERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+            }
 
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 			b->last = b->pos;
@@ -487,10 +489,11 @@ dyn_parse_req(struct msg *r)
 void dyn_parse_rsp(struct msg *r)
 {
 
-#ifdef DN_DEBUG_LOG
-	log_debug(LOG_VERB, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
-	msg_dump(r);
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_debug(LOG_VVERB, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
+	   msg_dump(r);
+    }
+
 
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
@@ -512,17 +515,17 @@ void dyn_parse_rsp(struct msg *r)
 				return;
 			}
 
-#ifdef DN_DEBUG_LOG
-			log_debug(LOG_VERB, "encrypted aes key length : %d", dmsg->mlen);
-			loga("AES encryption key from conn: %s\n", base64_encode(r->owner->aes_key, AES_KEYLEN));
-#endif
+			if (TRACING_LEVEL == LOG_VVERB) {
+			   log_debug(LOG_VVERB, "encrypted aes key length : %d", dmsg->mlen);
+			   loga("AES encryption key from conn: %s\n", base64_encode(r->owner->aes_key, AES_KEYLEN));
+            }
 
                         //Dont need to decrypt AES key - pull it out from the conn
 			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
-#ifdef DN_DEBUG_LOG
-			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
-#endif
+			if (TRACING_LEVEL == LOG_VVERB) {
+			   log_hexdump(LOG_VVERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+            }
 
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 			b->last = b->pos;
@@ -536,11 +539,11 @@ void dyn_parse_rsp(struct msg *r)
 		return memcache_parse_rsp(r);
 	}
 
-#ifdef DN_DEBUG_LOG
+
 	//bad case
 	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
 	msg_dump(r);
-#endif
+
 
 	//r->state = 0;
 	//r->result = MSG_PARSE_OK;
@@ -550,9 +553,9 @@ void dyn_parse_rsp(struct msg *r)
 void
 dmsg_free(struct dmsg *dmsg)
 {
-#ifdef DN_DEBUG_LOG
-    log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
-#endif
+	if (TRACING_LEVEL == LOG_VVERB) {
+       log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+    }
 
     dn_free(dmsg);
 }
@@ -561,9 +564,9 @@ dmsg_free(struct dmsg *dmsg)
 void
 dmsg_put(struct dmsg *dmsg)
 {
-#ifdef DN_DEBUG_LOG
-    log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
-#endif
+	if (TRACING_LEVEL == LOG_VVERB) {
+       log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+    }
 
     nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
@@ -574,10 +577,10 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-#ifdef DN_DEBUG_LOG
-    log_debug(LOG_DEBUG, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
-    		  dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+       log_debug(LOG_VVERB, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
+    	   	    dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
+    }
     //loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
 }
 
@@ -585,9 +588,9 @@ dmsg_dump(struct dmsg *dmsg)
 void
 dmsg_init(void)
 {
-#ifdef DN_DEBUG_LOG
-    log_debug(LOG_DEBUG, "dmsg size %d", sizeof(struct dmsg));
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+       log_debug(LOG_VVERB, "dmsg size %d", sizeof(struct dmsg));
+    }
 
     dmsg_id = 0;
     nfree_dmsgq = 0;
@@ -693,9 +696,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
-#ifdef DN_DEBUG_LOG
-       loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
-#endif
+       if (TRACING_LEVEL == LOG_VVERB) {
+          loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+       }
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
        mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
        conn->dnode_crypto_state = 1;
@@ -709,9 +712,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_uint32(mbuf, payload_len);
     mbuf_write_string(mbuf, &CRLF_STR);
 
-#ifdef DN_DEBUG_LOG
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+       log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
+    }
      
     return DN_OK;
 }
@@ -750,9 +753,9 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_mbuf(mbuf, data);
     if (conn->dnode_secured) {
-#ifdef DN_DEBUG_LOG
-       loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
-#endif
+       if (TRACING_LEVEL == LOG_VVERB) {
+          loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
+       }
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
        mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
     } else {
@@ -766,9 +769,9 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
 
     mbuf_write_string(mbuf, &CRLF_STR);
 
-#ifdef DN_DEBUG_LOG
-    log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer:  ");
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+       log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer:  ");
+    }
 
     return DN_OK;
 }
@@ -941,24 +944,24 @@ dmsg_parse(struct dmsg *dmsg)
 
 		end = p;
 
-#ifdef DN_DEBUG_LOG
-		log_hexdump(LOG_VERB, host_id, host_id_len, "host_id: ");
-		log_hexdump(LOG_VERB, ts, ts_len, "ts: ");
-		log_hexdump(LOG_VERB, node_state, node_state_len, "state: ");
-		log_hexdump(LOG_VERB, host_addr, host_addr_len, "host_addr: ");
+	    if (TRACING_LEVEL == LOG_VVERB) {
+		   log_hexdump(LOG_VVERB, host_id, host_id_len, "host_id: ");
+		   log_hexdump(LOG_VVERB, ts, ts_len, "ts: ");
+		   log_hexdump(LOG_VVERB, node_state, node_state_len, "state: ");
+		   log_hexdump(LOG_VVERB, host_addr, host_addr_len, "host_addr: ");
 
-		log_debug(LOG_VERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
-		log_debug(LOG_VERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		log_debug(LOG_VERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
-		log_debug(LOG_VERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
-#endif
+		   log_debug(LOG_VVERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+		   log_debug(LOG_VVERB, "\t\t ts               : '%.*s'", ts_len, ts);
+		   log_debug(LOG_VVERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		   log_debug(LOG_VVERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+        }
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
 		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
-#ifdef DN_DEBUG_LOG
-		print_dyn_token(&rnode->token, 5);
-#endif
+	    if (TRACING_LEVEL == LOG_VVERB) {
+		   print_dyn_token(&rnode->token, 5);
+        }
 
 		string_copy(&rnode->name, host_addr, host_addr_len);
 		string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
@@ -995,7 +998,10 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 
     struct string s;
 
-    log_debug(LOG_DEBUG, "dmsg process: type %d", dmsg->type);
+    if (TRACING_LEVEL == LOG_VVERB) {
+       log_debug(LOG_VVERB, "dmsg process: type %d", dmsg->type);
+    }
+
     switch(dmsg->type) {
         case DMSG_DEBUG:
            s.len = dmsg->mlen;

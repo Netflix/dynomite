@@ -51,6 +51,6 @@ rstatus_t dyn_rsa_encrypt(unsigned char *plain_msg, unsigned char *encrypted_buf
 rstatus_t dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf);
 
 
-void crypto_test(void);
+void crypto_check(void);
 
 #endif /* DYN_CRYPTO_H_ */

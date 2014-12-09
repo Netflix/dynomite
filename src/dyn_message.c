@@ -786,10 +786,10 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t limit;                        /* bytes to send limit */
     ssize_t n;                           /* bytes sent by sendv */
 
-#ifdef DN_DEBUG_LOG
-    loga("About to dump out the content of msg");
-    msg_dump(msg);
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+       loga("About to dump out the content of msg");
+       msg_dump(msg);
+    }
 
     TAILQ_INIT(&send_msgq);
 

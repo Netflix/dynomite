@@ -69,6 +69,7 @@
 #define DN_EAGAIN   -2
 #define DN_ENOMEM   -3
 
+
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
 
@@ -122,6 +123,8 @@ struct dyn_ring;
 #include "dyn_crypto.h"
 
 #include "event/dyn_event.h"
+
+#define TRACING_LEVEL 0
 
 
 typedef enum dyn_state {

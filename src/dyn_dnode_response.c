@@ -110,13 +110,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 	ASSERT(pmsg != NULL && pmsg->peer == NULL);
 	ASSERT(pmsg->request && !pmsg->done);
 
-#ifdef DN_DEBUG_LOG
-	loga("Dumping content 2 for msg:   ");
-	msg_dump(msg);
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   loga("Dumping content for msg:   ");
+	   msg_dump(msg);
 
-	loga("Dumping content 2 for pmsg :");
-	msg_dump(pmsg);
-#endif
+	   loga("Dumping content for pmsg :");
+	   msg_dump(pmsg);
+    }
 
 	peer_conn->dequeue_outq(ctx, peer_conn, pmsg);
 	pmsg->done = 1;
@@ -224,15 +224,15 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 	ASSERT(msg->owner == conn);
 	ASSERT(nmsg == NULL || !nmsg->request);
 
-#ifdef DN_DEBUG_LOG
-	loga("Dumping content for msg:   ");
-	msg_dump(msg);
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   loga("Dumping content for msg:   ");
+	   msg_dump(msg);
 
-	if (nmsg != NULL) {
-	   loga("Dumping content for nmsg :");
-	   msg_dump(nmsg);
-	}
-#endif
+	   if (nmsg != NULL) {
+	      loga("Dumping content for nmsg :");
+	      msg_dump(nmsg);
+	   }
+    }
 
 	/* enqueue next message (response), if any */
 	conn->rmsg = nmsg;
@@ -249,9 +249,9 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
-#ifdef DN_DEBUG_LOG
-	log_debug(LOG_VERB, "dnode_rsp_send_next entering");
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_debug(LOG_VVERB, "dnode_rsp_send_next entering");
+    }
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	struct msg *msg = rsp_send_next(ctx, conn);
@@ -270,10 +270,10 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
 		//TODOs: need to set the outcoming conn to be secured too if the incoming conn is secured
 		if (pmsg->owner->dnode_secured || conn->dnode_secured) {
-#ifdef DN_DEBUG_LOG
-		    log_debug(LOG_VERB, "Encrypting response ...");
-			loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
-#endif
+		    if (TRACING_LEVEL == LOG_VVERB) {
+		       log_debug(LOG_VVERB, "Encrypting response ...");
+			   loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+            }
 			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
 			struct mbuf *encrypted_buf = mbuf_get();
@@ -285,17 +285,17 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 			rstatus_t status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf),
 					encrypted_buf, conn->aes_key);
 
-#ifdef DN_DEBUG_LOG
-			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
-#endif
+		    if (TRACING_LEVEL == LOG_VVERB) {
+			   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+            }
 
 			dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(encrypted_buf));
 			mbuf_insert_head(&msg->mhdr, header_buf);
 
-#ifdef DN_DEBUG_LOG
-			log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "resp dyn message - original payload: ");
-			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-#endif
+		    if (TRACING_LEVEL == LOG_VVERB) {
+			   log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "resp dyn message - original payload: ");
+			   log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+            }
 
 			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
 			mbuf_remove(&msg->mhdr, data_buf);
@@ -307,10 +307,10 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 			mbuf_insert_head(&msg->mhdr, header_buf);
 		}
 
-#ifdef DN_DEBUG_LOG
-		log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
-		msg_dump(msg);
-#endif
+	    if (TRACING_LEVEL == LOG_VVERB) {
+		   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
+		   msg_dump(msg);
+        }
 
 	}
 
@@ -320,9 +320,9 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 void
 dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-#ifdef DN_DEBUG_LOG
-	log_debug(LOG_VERB, "dnode_rsp_send_done entering");
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_debug(LOG_VVERB, "dnode_rsp_send_done entering");
+    }
 
 	struct msg *pmsg; /* peer message (request) */
 

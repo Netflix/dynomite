@@ -469,7 +469,7 @@ static int rsa_test()
 	return 0;
 }
 
-void crypto_test(void)
+void crypto_check(void)
 {
 	aes_test();
 	rsa_test();
