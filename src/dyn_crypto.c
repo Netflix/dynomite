@@ -40,18 +40,22 @@ load_private_rsa_key(struct server_pool *sp)
     memcpy(file_name, sp->pem_key_file.data, sp->pem_key_file.len);
     file_name[sp->pem_key_file.len] = '\0';
 
+    if( access( file_name, F_OK ) < 0 ) {
+    	log_error("Error: file %s not exists", file_name);
+        return DN_ERROR;
+    }
 
 	if(NULL != (fp= fopen(file_name, "r")) )
 	{
 		rsa = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
 		if(rsa == NULL)
 		{
-			log_error("Could NOT read RSA pem key file at %s", file_name);
+			log_error("Error: could NOT read RSA pem key file at %s", file_name);
 			return DN_ERROR;
 		}
 
 	} else {
-		log_error("Could NOT locate RSA pem key file at %s", file_name);
+		log_error("Error: could NOT locate RSA pem key file at %s", file_name);
 		return DN_ERROR;
 
 	}
@@ -135,10 +139,12 @@ crypto_pool_each_init(void *elem, void *data)
 
 	//TODOs: check returned statuses
 	//init AES
-	aes_init();
+	if (aes_init() < 0)
+		return DN_ERROR;
 
 	//init RSA
-	load_private_rsa_key(sp);
+	if (load_private_rsa_key(sp) < 0)
+		return DN_ERROR;
 
 	return DN_OK;
 }
