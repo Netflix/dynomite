@@ -1243,6 +1243,9 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 		return NULL;
 	}
 
+	if (server->is_local)
+		return conn; //Don't bother to connect
+
 	status = dnode_peer_connect(ctx, server, conn);
 	if (status != DN_OK) {
 		dnode_peer_close(ctx, conn);
