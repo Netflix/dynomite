@@ -81,8 +81,8 @@
 
 #define CONF_DEFAUTL_SEED_PROVIDER           "simple_provider"
 
-
 #define PEM_KEY_FILE  "conf/dynomite.pem"
+
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */

@@ -215,9 +215,10 @@ core_start(struct instance *nci)
 	ctx = core_ctx_create(nci);
 	if (ctx != NULL) {
 		nci->ctx = ctx;
-#ifdef DN_DEBUG_LOG
-		crypto_test();
-#endif
+
+	    if (TRACING_LEVEL == LOG_VVERB) {
+		   crypto_check();
+        }
 		return ctx;
 	}
 

@@ -124,9 +124,11 @@ vnode_update(struct server_pool *sp)
         }
     }
 
-    rstatus_t status = array_each(&sp->racks, vnode_rack_verify_continuum, NULL);
-    if (status != DN_OK) {
-        return status;
+    if (array_n(&sp->racks) != 0) {
+       rstatus_t status = array_each(&sp->racks, vnode_rack_verify_continuum, NULL);
+       if (status != DN_OK) {
+          return status;
+       }
     }
 
     return DN_OK;

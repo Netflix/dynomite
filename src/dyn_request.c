@@ -453,9 +453,9 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     rstatus_t status;
     struct conn *s_conn;
 
-#ifdef DN_DEBUG_LOG
-    loga("local_req_forward entering...........................");
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+       loga("local_req_forward entering ............");
+    }
 
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 

@@ -844,11 +844,14 @@ gossip_pool_each_init(void *elem, void *data)
 	gossip_set_seeds_provider(&sp->seed_provider);
 
 	uint32_t n_rack = array_n(&sp->racks);
-	ASSERT(n_rack != 0);
+	if (n_rack == 0)
+		return DN_OK;
 
-	status = array_init(&gn_pool.datacenters, n_rack, sizeof(struct gossip_dc));
-	if (status != DN_OK) {
-		return status;
+	if (n_rack > 0) {
+	   status = array_init(&gn_pool.datacenters, n_rack, sizeof(struct gossip_dc));
+	   if (status != DN_OK) {
+         return status;
+	   }
 	}
 
 	//add racks and datacenters

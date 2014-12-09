@@ -287,9 +287,9 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
 
-#ifdef DN_DEBUG_LOG
-	log_debug(LOG_VERB, "dnode_peer_req_forward entering");
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_debug(LOG_VVERB, "dnode_peer_req_forward entering");
+    }
 
 	rstatus_t status;
 	/* enqueue message (request) into client outq, if response is expected */
@@ -352,22 +352,21 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		mbuf_insert_head(&msg->mhdr, header_buf);
 	}
 
-#ifdef DN_DEBUG_LOG
-	log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
-	msg_dump(msg);
-#endif
-
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
+	   msg_dump(msg);
+    }
 
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
 
-#ifdef DN_DEBUG_LOG
-	log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-			" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
-			msg->mlen, msg->type, keylen, key);
-#endif
+    if (TRACING_LEVEL == LOG_VERB) {
+	   log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+		   	     " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
+			     msg->mlen, msg->type, keylen, key);
+    }
 
 }
 
@@ -455,10 +454,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
 		mbuf_insert_head(&msg->mhdr, header_buf);
 
-#ifdef DN_DEBUG_LOG
-		log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
-		log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-#endif
+	    if (TRACING_LEVEL == LOG_VVERB) {
+		   log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+		   log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+        }
 
 		mbuf_insert(&msg->mhdr, encrypted_buf);
 
@@ -471,10 +470,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	   mbuf_insert(&msg->mhdr, data_buf);
 	}
 
-#ifdef DN_DEBUG_LOG
-	log_hexdump(LOG_VERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
-	msg_dump(msg);
-#endif
+    if (TRACING_LEVEL == LOG_VVERB) {
+	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
+	   msg_dump(msg);
+    }
 
 	/* enqueue the message (request) into peer inq */
 	if (TAILQ_EMPTY(&conn->imsg_q)) {

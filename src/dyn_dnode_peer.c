@@ -1085,9 +1085,6 @@ dnode_peer_pool_update(struct server_pool *pool)
 	int64_t now;
 	uint32_t pnlive_server; /* prev # live server */
 
-#ifdef DN_DEBUG_LOG
-	loga("dnode_peer_pool_update  entering ........................");
-#endif
 
 	//fix me
 	if (!pool->auto_eject_hosts) {
@@ -1162,7 +1159,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key
 	ASSERT(array_n(&pool->peers) != 0);
 	ASSERT(key != NULL && keylen != 0);
 
-	ASSERT(rack != NULL);
+	//ASSERT(rack != NULL);
 
 	switch (pool->dist_type) {
 	case DIST_KETAMA:
@@ -1223,11 +1220,6 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 	rstatus_t status;
 	struct server *server;
 	struct conn *conn;
-
-#ifdef DN_DEBUG_LOG
-	loga("dnode_peer_pool_conn  entering ........................");
-    loga("getting a conn for rack '%.*s'  ", rack->name->len, rack->name->data);
-#endif
 
 	//status = dnode_peer_pool_update(pool);
 	status = dnode_peer_pool_run(pool);
