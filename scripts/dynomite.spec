@@ -1,25 +1,33 @@
-Summary: Dynomite: generic replicator
-Name: dynomite
-Version: 0.1.19
-Release: 1
-URL: https://github.com/Netflix/Dynomite
-Source0: %{name}-%{version}.tar.gz
-License: Apache License 2.0
-Group: System Environment/Libraries
-Packager:  Tom Parrott <tomp@tomp.co.uk>
-BuildRoot: %{_tmppath}/%{name}-root
+Name:           dynomite
+Version:        0.3.0
+Release:        1%{?dist}
+Summary:        Netflix Dynomite
+
+License:       Apache 2.0
+URL:           https://github.com/Netflix/dynomite
+Source0:       https://github.com/Netflix/dynomite/archive/v0.3.0.tar.gz
+Patch0:	dynomite-aa
+Patch1: dynomite-ab
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
+Group: Custom
+BuildRequires: gcc gcc-c++ make openssl-devel git
+Requires:      make
 
 %description
-dynomite is thin replication layer for different storage.  Currently, we support memcached and redis protocol.
-The goal is to use this as a caching system or a in-memory storage
+Netflix Dynomite.  Helps build redundant and cross-datacenter redis and memcache replication rings.
 
 %prep
-%setup -q
-autoreconf -fvi
+%setup -q -n %{name}-%{version}
+
+%patch -P 0
+%patch -P 1
 
 %build
+autoreconf -fvi
 
-%configure
+%configure --enable-debug=log
+
 %__make
 
 %install
@@ -47,6 +55,9 @@ fi
 
 %files
 %defattr(-,root,root,-)
-/usr/bin/dynomite
+/usr/sbin/dynomite
 %{_initrddir}/%{name}
 %config(noreplace)%{_sysconfdir}/%{name}/%{name}.yml
+
+%changelog
+
