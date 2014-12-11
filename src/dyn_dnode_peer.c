@@ -1157,7 +1157,6 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key
 	struct dyn_token *token = NULL;
 
 	ASSERT(array_n(&pool->peers) != 0);
-	ASSERT(key != NULL && keylen != 0);
 
 	//ASSERT(rack != NULL);
 
@@ -1242,6 +1241,9 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 	if (conn == NULL) {
 		return NULL;
 	}
+
+	if (server->is_local)
+		return conn; //Don't bother to connect
 
 	status = dnode_peer_connect(ctx, server, conn);
 	if (status != DN_OK) {
