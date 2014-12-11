@@ -605,9 +605,8 @@ server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 	struct server *server;
 
 	ASSERT(array_n(&pool->server) != 0);
-	ASSERT(key != NULL && keylen != 0);
 
-	//fuck it, just return the first (memcache) entry in the array
+	//just return the first (memcache) entry in the array
 	server = array_get(&pool->server, 0);
 
 	return server;

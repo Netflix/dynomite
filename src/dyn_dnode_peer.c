@@ -1157,7 +1157,6 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key
 	struct dyn_token *token = NULL;
 
 	ASSERT(array_n(&pool->peers) != 0);
-	ASSERT(key != NULL && keylen != 0);
 
 	//ASSERT(rack != NULL);
 
