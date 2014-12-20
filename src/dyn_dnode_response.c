@@ -55,7 +55,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
 	pmsg = TAILQ_FIRST(&conn->omsg_q);
 	if (pmsg == NULL) {
-		log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
+		log_debug(LOG_ERR, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
 				msg->id, msg->mlen, conn->sd, msg->noreply);
 		dnode_rsp_put(msg);
 		return true;
