@@ -118,8 +118,8 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_MSG_ID:
-			log_debug(LOG_DEBUG, "DYN_MSG_ID");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_MSG_ID");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else if (ch != ' ') {
@@ -127,7 +127,7 @@ dyn_parse_core(struct msg *r)
 			} else {
 
 				//if (num >= 0) {
-				//log_debug(LOG_DEBUG, "MSG ID : %d", num);
+				log_debug(LOG_DEBUG, "MSG ID : %d", num);
 				dmsg->id = num;
 				state = DYN_SPACES_BEFORE_TYPE_ID;
 				//} else {
@@ -137,7 +137,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACES_BEFORE_TYPE_ID:
-			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_TYPE_ID");
 			if (ch == ' ') {
 				break;
 			} else if (isdigit(ch)) {
@@ -150,13 +150,13 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_TYPE_ID:
-			log_debug(LOG_DEBUG, "DYN_TYPE_ID");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_TYPE_ID");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (num > 0)  {
-					log_debug(LOG_DEBUG, "Type Id: %d", num);
+					//log_debug(LOG_DEBUG, "Type Id: %d", num);
 					dmsg->type = num;
 					//state = DYN_SPACES_BEFORE_VERSION;
 					state = DYN_SPACES_BEFORE_BIT_FIELD;
@@ -179,13 +179,13 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_BIT_FIELD:
-			log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == ' ')  {
-					log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
+					//log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
 					dmsg->bit_field = num & 0xF;
 					state = DYN_SPACES_BEFORE_VERSION;
 				} else {
@@ -193,13 +193,13 @@ dyn_parse_core(struct msg *r)
 				}
 			}
 
-			log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "Post DYN_BIT_FIELD");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 
 			break;
 
 		case DYN_SPACES_BEFORE_VERSION:
-			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_VERSION");
 			if (ch == ' ') {
 				break;
 			} else if (isdigit(ch)) {
@@ -212,8 +212,8 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_VERSION:
-			log_debug(LOG_DEBUG, "DYN_VERSION");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_VERSION");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
@@ -239,31 +239,16 @@ dyn_parse_core(struct msg *r)
 				goto error;
 			}
 
-			//else {
-			//	state = DYN_STAR;
-			//}
-
 			break;
 
-		//case DYN_STAR:
-			//log_debug(LOG_DEBUG, "DYN_STAR");
-		//	if (ch == '*') {
-		//		state = DYN_DATA_LEN;
-		//		num = 0;
-		//	} else {
-		//		goto error;
-		//	}
-
-		//	break;
-
 		case DYN_DATA_LEN:
-			log_debug(LOG_DEBUG, "DYN_DATA_LEN");
-			log_debug(LOG_DEBUG, "num = %d", num);
+			//log_debug(LOG_DEBUG, "DYN_DATA_LEN");
+			//log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == ' ')  {
-					log_debug(LOG_DEBUG, "Data len: %d", num);
+					//log_debug(LOG_DEBUG, "Data len: %d", num);
 					dmsg->mlen = num;
 					state = DYN_SPACE_BEFORE_DATA;
 					num = 0;
@@ -274,12 +259,12 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACE_BEFORE_DATA:
-			log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
+			//log_debug(LOG_DEBUG, "DYN_SPACE_BEFORE_DATA");
 			state = DYN_DATA;
 			break;
 
 		case DYN_DATA:
-			log_debug(LOG_DEBUG, "DYN_DATA");
+			//log_debug(LOG_DEBUG, "DYN_DATA");
 			p -= 1;
 			if (dmsg->mlen > 0)  {
 				dmsg->data = p;
@@ -292,7 +277,7 @@ dyn_parse_core(struct msg *r)
 			break;
 
 		case DYN_SPACES_BEFORE_PAYLOAD_LEN: //this only need in dynomite's custome msg
-			log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
+			//log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
 			if (ch == ' ') {
 				break;
 			} else if (ch == '*') {
@@ -309,7 +294,7 @@ dyn_parse_core(struct msg *r)
 				num = num*10 + (ch - '0');
 			} else {
 				if (ch == CR)  {
-					log_debug(LOG_DEBUG, "Payload len: %d", num);
+					//log_debug(LOG_DEBUG, "Payload len: %d", num);
 					dmsg->plen = num;
 					state = DYN_CRLF_BEFORE_DONE;
 					num = 0;
@@ -577,7 +562,7 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-    if (TRACING_LEVEL == LOG_VVERB) {
+    if (TRACING_LEVEL >= LOG_VVERB) {
        log_debug(LOG_VVERB, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
     	   	    dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
     }

@@ -55,7 +55,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
 	pmsg = TAILQ_FIRST(&conn->omsg_q);
 	if (pmsg == NULL) {
-		log_debug(LOG_ERR, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
+		log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
 				msg->id, msg->mlen, conn->sd, msg->noreply);
 		dnode_rsp_put(msg);
 		return true;
@@ -110,12 +110,16 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 	ASSERT(pmsg != NULL && pmsg->peer == NULL);
 	ASSERT(pmsg->request && !pmsg->done);
 
-    if (TRACING_LEVEL == LOG_VVERB) {
+    if (TRACING_LEVEL >= LOG_VVERB) {
 	   loga("Dumping content for msg:   ");
 	   msg_dump(msg);
 
+	   loga("msg id %d", msg->id);
+
 	   loga("Dumping content for pmsg :");
 	   msg_dump(pmsg);
+
+	   loga("pmsg id %d", pmsg->id);
     }
 
 	peer_conn->dequeue_outq(ctx, peer_conn, pmsg);
