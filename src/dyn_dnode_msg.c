@@ -450,7 +450,10 @@ dyn_parse_req(struct msg *r)
 			//b->last = b->pos;
 			r->pos = decrypted_buf->start;
 			//mbuf_insert(&r->mhdr, decrypted_buf);
-			mbuf_insert_head(&r->mhdr, decrypted_buf);
+			//mbuf_insert_head(&r->mhdr, decrypted_buf);
+			//STAILQ_INSERT_AFTER(&r->mhdr, b, mbuf, next);
+			//mbuf_insert_after(&r->mhdr, b, decrypted_buf);
+			mbuf_insert_after(&r->mhdr, b, decrypted_buf);
 
 			//reset these variables
 			dmsg->payload = decrypted_buf->start;
