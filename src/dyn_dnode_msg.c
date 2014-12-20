@@ -447,9 +447,10 @@ dyn_parse_req(struct msg *r)
             }
 
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
-			b->last = b->pos;
+			//b->last = b->pos;
 			r->pos = decrypted_buf->start;
-			mbuf_insert(&r->mhdr, decrypted_buf);
+			//mbuf_insert(&r->mhdr, decrypted_buf);
+			mbuf_insert_head(&r->mhdr, decrypted_buf);
 
 			//reset these variables
 			dmsg->payload = decrypted_buf->start;
@@ -505,7 +506,7 @@ void dyn_parse_rsp(struct msg *r)
 			   loga("AES encryption key from conn: %s\n", base64_encode(r->owner->aes_key, AES_KEYLEN));
             }
 
-                        //Dont need to decrypt AES key - pull it out from the conn
+            //Dont need to decrypt AES key - pull it out from the conn
 			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
 			if (TRACING_LEVEL == LOG_VVERB) {
@@ -513,9 +514,10 @@ void dyn_parse_rsp(struct msg *r)
             }
 
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
-			b->last = b->pos;
+			//b->last = b->pos;
 			r->pos = decrypted_buf->start;
-			mbuf_insert(&r->mhdr, decrypted_buf);
+			//mbuf_insert(&r->mhdr, decrypted_buf);
+			mbuf_insert_head(&r->mhdr, decrypted_buf);
 		}
 
 		if (r->redis)

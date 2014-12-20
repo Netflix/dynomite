@@ -63,7 +63,7 @@
 #define CONF_DEFAULT_SEEDS                   5
 #define CONF_DEFAULT_DYN_READ_TIMEOUT        10000
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       10000
-#define CONF_DEFAULT_DYN_CONNECTIONS         1000
+#define CONF_DEFAULT_DYN_CONNECTIONS         100
 #define CONF_DEFAULT_VNODE_TOKENS            1
 #define CONF_DEFAULT_GOS_INTERVAL            30000  //5000  //in millisec
 #define CONF_DEFAULT_PEERS                   200

@@ -331,7 +331,7 @@ redis_parse_req(struct msg *r)
 
     /* validate the parsing maker */
     ASSERT(r->pos != NULL);
-    ASSERT(r->pos >= b->pos && r->pos <= b->last);
+    //ASSERT(r->pos >= b->pos && r->pos <= b->last);
 
     for (p = r->pos; p < b->last; p++) {
         ch = *p;
@@ -1578,7 +1578,7 @@ redis_parse_req(struct msg *r)
         }
     }
 
-    ASSERT(p == b->last);
+    //ASSERT(p == b->last);
     r->pos = p;
     r->state = state;
 
