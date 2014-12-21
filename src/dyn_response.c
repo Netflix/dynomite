@@ -54,7 +54,7 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     uint64_t id;
     err_t err;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
     ASSERT(msg->request && req_error(conn, msg));
     ASSERT(msg->owner == conn);
 

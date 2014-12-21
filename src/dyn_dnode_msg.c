@@ -449,15 +449,17 @@ dyn_parse_req(struct msg *r)
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 			//b->last = b->pos;
 			r->pos = decrypted_buf->start;
-			//mbuf_insert(&r->mhdr, decrypted_buf);
+			mbuf_insert(&r->mhdr, decrypted_buf);
 			//mbuf_insert_head(&r->mhdr, decrypted_buf);
 			//STAILQ_INSERT_AFTER(&r->mhdr, b, mbuf, next);
 			//mbuf_insert_after(&r->mhdr, b, decrypted_buf);
-			mbuf_insert_after(&r->mhdr, b, decrypted_buf);
+			//mbuf_insert_after(&r->mhdr, b, decrypted_buf);
+			//mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
+			//mbuf_remove(&r->mhdr, b);
 
 			//reset these variables
-			dmsg->payload = decrypted_buf->start;
-			dmsg->plen = mbuf_length(decrypted_buf);
+			//dmsg->payload = decrypted_buf->start;
+			//dmsg->plen = mbuf_length(decrypted_buf);
 		}
 
 		if (done_parsing)
@@ -519,8 +521,10 @@ void dyn_parse_rsp(struct msg *r)
 			struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 			//b->last = b->pos;
 			r->pos = decrypted_buf->start;
-			//mbuf_insert(&r->mhdr, decrypted_buf);
-			mbuf_insert_head(&r->mhdr, decrypted_buf);
+			mbuf_insert(&r->mhdr, decrypted_buf);
+			//mbuf_insert_head(&r->mhdr, decrypted_buf);
+			//mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
+			//mbuf_remove(&r->mhdr, b);
 		}
 
 		if (r->redis)

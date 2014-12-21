@@ -366,7 +366,7 @@ server_close(struct context *ctx, struct conn *conn)
 					req_put(msg);
 				} else {
 					c_conn = msg->owner;
-					ASSERT(c_conn->client && !c_conn->proxy);
+					//ASSERT(c_conn->client && !c_conn->proxy);
 
 					msg->done = 1;
 					msg->error = 1;
@@ -397,7 +397,7 @@ server_close(struct context *ctx, struct conn *conn)
 			req_put(msg);
 		} else {
 			c_conn = msg->owner;
-			ASSERT(c_conn->client && !c_conn->proxy);
+			//ASSERT(c_conn->client && !c_conn->proxy);
 
 			msg->done = 1;
 			msg->error = 1;
