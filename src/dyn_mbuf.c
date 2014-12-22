@@ -259,7 +259,6 @@ mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg)
 
     if (nbuf != mbuf) {
     	//encryption case with 2 buffers
-    	//STAILQ_REMOVE_HEAD(h, next);
     	mbuf_remove(h, nbuf);
     	return nbuf;
     }

@@ -341,13 +341,14 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		    log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
 			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
 
-		    mbuf_copy(header_buf, encrypted_buf, mbuf_length(encrypted_buf));
-
+		    mbuf_copy(header_buf, encrypted_buf->start, mbuf_length(encrypted_buf));
+		    mbuf_insert(&msg->mhdr, header_buf);
 			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
 			mbuf_remove(&msg->mhdr, data_buf);
 			//mbuf_insert(&msg->mhdr, encrypted_buf);
 			//free it as no one will need it again
 			mbuf_put(data_buf);
+			mbuf_put(encrypted_buf);
 		//} else {
 		//	log_debug(LOG_VERB, "no encryption on the msg payload");
 		//	dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
@@ -356,9 +357,10 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	} else {
 		//write dnode header
 		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, 0);
+		mbuf_insert_head(&msg->mhdr, header_buf);
 	}
 
-	mbuf_insert_head(&msg->mhdr, header_buf);
+
 
 
     if (TRACING_LEVEL == LOG_VVERB) {
@@ -470,12 +472,14 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
            }
 
 
-	       mbuf_copy(header_buf, encrypted_buf, mbuf_length(encrypted_buf));
+	       mbuf_copy(header_buf, encrypted_buf->start, mbuf_length(encrypted_buf));
+	   	   mbuf_insert(&msg->mhdr, header_buf);
+
 	       mbuf_remove(&msg->mhdr, data_buf);
 		   //mbuf_insert(&msg->mhdr, encrypted_buf);
 		   //free data_buf as no one will need it again
 		   mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
-
+           mbuf_put(encrypted_buf);
 		//} else {
 		//   log_debug(LOG_VERB, "No encryption");
 		//   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
@@ -486,9 +490,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
        log_debug(LOG_VERB, "Assemble a non-secured msg to send");
 	   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
 	   mbuf_insert(&msg->mhdr, data_buf);
+		mbuf_insert_head(&msg->mhdr, header_buf);
 	}
 
-	mbuf_insert_head(&msg->mhdr, header_buf);
+
 
     if (TRACING_LEVEL == LOG_VVERB) {
 	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
