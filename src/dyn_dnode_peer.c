@@ -314,7 +314,8 @@ dnode_peer_conn(struct server *server)
 
 	pool = server->owner;
 
-	if (server->ns_conn_q < pool->peer_connections) {
+	//if (server->ns_conn_q < pool->peer_connections) {
+	if (server->ns_conn_q < 2) {
         conn = conn_get_peer(server, false, pool->redis);
         if (is_conn_secured(pool, server)) {
         	conn->dnode_secured = 1;
