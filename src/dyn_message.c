@@ -450,7 +450,7 @@ msg_dump(struct msg *msg)
     struct mbuf *mbuf;
 
     if (msg == NULL) {
-    	loga("msg is NULL - cannot display its info");
+    	log_error("msg is NULL - cannot display its info");
     	return;
     }
 
@@ -511,7 +511,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 	nbuf = STAILQ_FIRST(&msg->mhdr);
 
-    loga("msg->pos %"PRIu64", mbuf->last %"PRIu64" ========= ", msg->pos, mbuf->last);
+    //loga("msg->pos %"PRIu64", mbuf->last %"PRIu64" ========= ", msg->pos, mbuf->last);
     if (nbuf == mbuf) {
       if (msg->pos == mbuf->last) {
         /* no more data to parse */
@@ -519,25 +519,6 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_OK;
       }
     }
-
-    /*
-	nbuf = STAILQ_NEXT(mbuf, next);
-	if (nbuf != NULL) {
-		nmsg = msg_get(msg->owner, msg->request, conn->redis);
-		if (nmsg == NULL) {
-		        mbuf_put(nbuf);
-		        return DN_ENOMEM;
-		}
-		mbuf_insert(&nmsg->mhdr, nbuf);
-		nmsg->pos = nbuf->pos;
-
-		nmsg->mlen = mbuf_length(nbuf);
-		msg->mlen -= nmsg->mlen;
-
-		conn->recv_done(ctx, conn, msg, nmsg);
-		return DN_OK;
-	}
-   */
 
     /*
      * Input mbuf has un-parsed data. Split mbuf of the current message msg

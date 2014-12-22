@@ -124,7 +124,7 @@ struct dyn_ring;
 
 #include "event/dyn_event.h"
 
-#define TRACING_LEVEL 9
+#define TRACING_LEVEL 0
 #define ENCRYPTION 1
 
 

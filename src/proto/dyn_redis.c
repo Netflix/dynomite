@@ -321,9 +321,6 @@ redis_parse_req(struct msg *r)
         SW_SENTINEL
     } state;
 
-    loga("Print out received msg");
-    msg_dump(r);
-
 
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -335,7 +332,7 @@ redis_parse_req(struct msg *r)
 
     /* validate the parsing maker */
     ASSERT(r->pos != NULL);
-    //ASSERT(r->pos >= b->pos && r->pos <= b->last);
+    ASSERT(r->pos >= b->pos && r->pos <= b->last);
 
     for (p = r->pos; p < b->last; p++) {
         ch = *p;
@@ -1690,9 +1687,6 @@ redis_parse_rsp(struct msg *r)
         SW_ALMOST_DONE,
         SW_SENTINEL
     } state;
-
-    loga("Print out msg");
-    msg_dump(r);
 
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);

@@ -408,7 +408,6 @@ dyn_parse_req(struct msg *r)
 		}
 
 		//check whether we need to decrypt the payload
-		loga("dmsg->bit_field ================== %d", dmsg->bit_field);
 		if (dmsg->bit_field == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
 			r->owner->dnode_crypto_state = 1;
@@ -430,16 +429,15 @@ dyn_parse_req(struct msg *r)
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
 				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
-				//Decrypt payload
-				//dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, aes_decrypted_buf);
+
 			} else {
 			    if (TRACING_LEVEL == LOG_VVERB) {
 				   log_debug(LOG_VVERB, "dmsg->mlen is a dummy: %d, NO need to process it", dmsg->mlen);
                 }
 			}
 
+			//Decrypt payload
 			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
-
 
 
 		    if (TRACING_LEVEL == LOG_VVERB) {
@@ -453,18 +451,8 @@ dyn_parse_req(struct msg *r)
 			r->pos = decrypted_buf->start;
 			mbuf_insert(&r->mhdr, decrypted_buf);
 
-			log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "decrypted_buf :::: ");
+			//log_hexdump(LOG_VERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "decrypted_buf :::: ");
 
-			//mbuf_insert_head(&r->mhdr, decrypted_buf);
-			//STAILQ_INSERT_AFTER(&r->mhdr, b, mbuf, next);
-			//mbuf_insert_after(&r->mhdr, b, decrypted_buf);
-			//mbuf_insert_after(&r->mhdr, b, decrypted_buf);
-			//mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
-			//mbuf_remove(&r->mhdr, b);
-
-			//reset these variables
-			//dmsg->payload = decrypted_buf->start;
-			//dmsg->plen = mbuf_length(decrypted_buf);
 		}
 
 		if (done_parsing)
@@ -528,9 +516,6 @@ void dyn_parse_rsp(struct msg *r)
 			b->pos = b->pos + dmsg->plen;
 			r->pos = decrypted_buf->start;
 			mbuf_insert(&r->mhdr, decrypted_buf);
-			//mbuf_insert_head(&r->mhdr, decrypted_buf);
-			//mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
-			//mbuf_remove(&r->mhdr, b);
 		}
 
 		if (r->redis)
