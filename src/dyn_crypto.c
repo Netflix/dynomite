@@ -279,6 +279,7 @@ aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, u
 
 
 rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, unsigned char *aes_key) {
+
 	size_t block_len  = 0;
 	size_t enc_msg_len = 0;
 
@@ -306,30 +307,36 @@ rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf 
 
 
 rstatus_t dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, unsigned char *aes_key) {
-	size_t dec_len   = 0;
-	size_t block_len = 0;
+	if (ENCRYPTION) {
+		size_t dec_len   = 0;
+		size_t block_len = 0;
 
-	ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
+		ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
 
-	//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
-	if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-		return DN_ERROR;
+		//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
+		if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+			return DN_ERROR;
+		}
+
+		if(!EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->pos, (int*) &block_len, enc_msg, (int)enc_msg_len)) {
+			return DN_ERROR;
+		}
+		dec_len += block_len;
+
+		if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->pos + dec_len, (int*) &block_len)) {
+			return DN_ERROR;
+		}
+		dec_len += block_len;
+		mbuf->last = mbuf->pos + dec_len;
+
+		EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+
+		return (int) dec_len;
 	}
 
-	if(!EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->pos, (int*) &block_len, enc_msg, (int)enc_msg_len)) {
-		return DN_ERROR;
-	}
-	dec_len += block_len;
+	mbuf_copy(mbuf, enc_msg, enc_msg_len);
+	return (int) enc_msg_len;
 
-	if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->pos + dec_len, (int*) &block_len)) {
-		return DN_ERROR;
-	}
-	dec_len += block_len;
-	mbuf->last = mbuf->pos + dec_len;
-
-	EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
-
-	return (int) dec_len;
 }
 
 rstatus_t

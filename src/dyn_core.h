@@ -125,6 +125,7 @@ struct dyn_ring;
 #include "event/dyn_event.h"
 
 #define TRACING_LEVEL 9
+#define ENCRYPTION 0
 
 
 typedef enum dyn_state {

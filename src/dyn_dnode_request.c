@@ -325,32 +325,39 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		//TODOs: need to deal with multi-block later
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
 
-		struct mbuf *encrypted_buf = mbuf_get();
-		if (encrypted_buf == NULL) {
-			loga("Unable to obtain an mbuf for encryption!");
-			return; //TODOs: need to clean up
+		//write dnode header
+		if (ENCRYPTION) {
+			struct mbuf *encrypted_buf = mbuf_get();
+			if (encrypted_buf == NULL) {
+				loga("Unable to obtain an mbuf for encryption!");
+				return; //TODOs: need to clean up
+			}
+
+			status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, p_conn->aes_key);
+			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+
+			dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(encrypted_buf));
+
+		    log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+
+			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
+			mbuf_remove(&msg->mhdr, data_buf);
+			mbuf_insert(&msg->mhdr, encrypted_buf);
+			//free it as no one will need it again
+			mbuf_put(data_buf);
+		} else {
+			log_debug(LOG_VERB, "no encryption on the msg payload");
+			dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
 		}
 
-		status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, p_conn->aes_key);
-		log_debug(LOG_VERB, "#encrypted bytes : %d", status);
-
-		//write dnode header
-		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(encrypted_buf));
-		mbuf_insert_head(&msg->mhdr, header_buf);
-
-		log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
-		log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-
-		//remove the original dbuf out of the queue and insert encrypted mbuf to replace
-		mbuf_remove(&msg->mhdr, data_buf);
-		mbuf_insert(&msg->mhdr, encrypted_buf);
-		//free it as no one will need it again
-		mbuf_put(data_buf);
 	} else {
 		//write dnode header
 		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, 0);
-		mbuf_insert_head(&msg->mhdr, header_buf);
 	}
+
+	mbuf_insert_head(&msg->mhdr, header_buf);
+
 
     if (TRACING_LEVEL == LOG_VVERB) {
 	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
@@ -441,34 +448,44 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		log_debug(LOG_VERB, "Assemble a secured msg to send");
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 
-		struct mbuf *encrypted_buf = mbuf_get();
-		if (encrypted_buf == NULL) {
-			loga("Unable to obtain an data_buf for encryption!");
-			return; //TODOs: need to clean up
+		if (ENCRYPTION) {
+		   struct mbuf *encrypted_buf = mbuf_get();
+		   if (encrypted_buf == NULL) {
+			  loga("Unable to obtain an data_buf for encryption!");
+			  return; //TODOs: need to clean up
+		   }
+
+		   status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
+		   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+
+		   //write dnode header
+		   dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
+
+
+	       if (TRACING_LEVEL == LOG_VVERB) {
+		      log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+		      log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+           }
+
+
+	       mbuf_remove(&msg->mhdr, data_buf);
+		   mbuf_insert(&msg->mhdr, encrypted_buf);
+		   //free data_buf as no one will need it again
+		   mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
+
+		} else {
+		   log_debug(LOG_VERB, "No encryption");
+		   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
+		   mbuf_insert(&msg->mhdr, data_buf);
 		}
 
-		status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
-		log_debug(LOG_VERB, "#encrypted bytes : %d", status);
-
-		//write dnode header
-		dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
-		mbuf_insert_head(&msg->mhdr, header_buf);
-
-	    if (TRACING_LEVEL == LOG_VVERB) {
-		   log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
-		   log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-        }
-
-		mbuf_insert(&msg->mhdr, encrypted_buf);
-
-		//free data_buf as no one will need it again
-		mbuf_put(data_buf);
 	} else {
        log_debug(LOG_VERB, "Assemble a non-secured msg to send");
 	   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
-	   mbuf_insert_head(&msg->mhdr, header_buf);
 	   mbuf_insert(&msg->mhdr, data_buf);
 	}
+
+	mbuf_insert_head(&msg->mhdr, header_buf);
 
     if (TRACING_LEVEL == LOG_VVERB) {
 	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
