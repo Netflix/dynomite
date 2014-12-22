@@ -658,6 +658,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 		   struct conn *conn, uint32_t payload_len)
 {
 
+	mbuf_write_char(mbuf, ' ');
+	mbuf_write_char(mbuf, ' ');
+	mbuf_write_char(mbuf, ' ');
     mbuf_write_string(mbuf, &MAGIC_STR);
     mbuf_write_uint64(mbuf, msg_id);
 
@@ -717,6 +720,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 rstatus_t
 dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *conn, uint32_t plen)
 {
+	mbuf_write_char(mbuf, ' ');
+	mbuf_write_char(mbuf, ' ');
+	mbuf_write_char(mbuf, ' ');
     mbuf_write_string(mbuf, &MAGIC_STR);
     mbuf_write_uint64(mbuf, msg_id);
     mbuf_write_char(mbuf, ' ');
