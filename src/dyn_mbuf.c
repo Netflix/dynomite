@@ -251,7 +251,19 @@ mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg)
 
     ASSERT(!STAILQ_EMPTY(h));
 
+    //nbuf = STAILQ_FIRST(h);
+    //mbuf = STAILQ_LAST(h, mbuf, next);
+
+    nbuf = STAILQ_FIRST(h);
     mbuf = STAILQ_LAST(h, mbuf, next);
+
+    if (nbuf != mbuf) {
+    	//encryption case with 2 buffers
+    	//STAILQ_REMOVE_HEAD(h, next);
+    	mbuf_remove(h, nbuf);
+    	return nbuf;
+    }
+
     ASSERT(pos >= mbuf->pos && pos <= mbuf->last);
 
     nbuf = mbuf_get();

@@ -509,12 +509,15 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
     struct mbuf *mbuf, *nbuf;
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+	nbuf = STAILQ_FIRST(&msg->mhdr);
 
     loga("msg->pos %"PRIu64", mbuf->last %"PRIu64" ========= ", msg->pos, mbuf->last);
-    if (msg->pos == mbuf->last) {
+    if (nbuf == mbuf) {
+      if (msg->pos == mbuf->last) {
         /* no more data to parse */
         conn->recv_done(ctx, conn, msg, NULL);
         return DN_OK;
+      }
     }
 
     /*
