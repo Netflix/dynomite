@@ -280,7 +280,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
             }
 			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
-			if (ENCRYPTION) {
+			//if (ENCRYPTION) {
 			   struct mbuf *encrypted_buf = mbuf_get();
 			   if (encrypted_buf == NULL) {
 				  loga("Unable to obtain an mbuf for encryption!");
@@ -301,14 +301,16 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 			      log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
                }
 
+		       mbuf_copy(header_buf, encrypted_buf, mbuf_length(encrypted_buf));
+
 			   //remove the original dbuf out of the queue and insert encrypted mbuf to replace
 			   mbuf_remove(&msg->mhdr, data_buf);
-			   mbuf_insert(&msg->mhdr, encrypted_buf);
+			   //mbuf_insert(&msg->mhdr, encrypted_buf);
 			   mbuf_put(data_buf);
-			} else {
-			   log_debug(LOG_VERB, "no encryption on the response's payload");
-			   dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(data_buf));
-			}
+			//} else {
+			//   log_debug(LOG_VERB, "no encryption on the response's payload");
+			//   dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(data_buf));
+			//}
 
 		} else {
 			dmsg_write(header_buf, msg_id, DMSG_RES, conn, 0);//Dont care about 0 or the real length as we don't use that value in unencryption mode

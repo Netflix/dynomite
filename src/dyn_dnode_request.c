@@ -326,7 +326,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
 
 		//write dnode header
-		if (ENCRYPTION) {
+		//if (ENCRYPTION) {
 			struct mbuf *encrypted_buf = mbuf_get();
 			if (encrypted_buf == NULL) {
 				loga("Unable to obtain an mbuf for encryption!");
@@ -341,15 +341,17 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		    log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
 			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
 
+		    mbuf_copy(header_buf, encrypted_buf, mbuf_length(encrypted_buf));
+
 			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
 			mbuf_remove(&msg->mhdr, data_buf);
-			mbuf_insert(&msg->mhdr, encrypted_buf);
+			//mbuf_insert(&msg->mhdr, encrypted_buf);
 			//free it as no one will need it again
 			mbuf_put(data_buf);
-		} else {
-			log_debug(LOG_VERB, "no encryption on the msg payload");
-			dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
-		}
+		//} else {
+		//	log_debug(LOG_VERB, "no encryption on the msg payload");
+		//	dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
+		//}
 
 	} else {
 		//write dnode header
@@ -448,7 +450,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		log_debug(LOG_VERB, "Assemble a secured msg to send");
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 
-		if (ENCRYPTION) {
+		//if (ENCRYPTION) {
 		   struct mbuf *encrypted_buf = mbuf_get();
 		   if (encrypted_buf == NULL) {
 			  loga("Unable to obtain an data_buf for encryption!");
@@ -468,16 +470,17 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
            }
 
 
+	       mbuf_copy(header_buf, encrypted_buf, mbuf_length(encrypted_buf));
 	       mbuf_remove(&msg->mhdr, data_buf);
-		   mbuf_insert(&msg->mhdr, encrypted_buf);
+		   //mbuf_insert(&msg->mhdr, encrypted_buf);
 		   //free data_buf as no one will need it again
 		   mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
 
-		} else {
-		   log_debug(LOG_VERB, "No encryption");
-		   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
-		   mbuf_insert(&msg->mhdr, data_buf);
-		}
+		//} else {
+		//   log_debug(LOG_VERB, "No encryption");
+		//   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
+		//   mbuf_insert(&msg->mhdr, data_buf);
+		//}
 
 	} else {
        log_debug(LOG_VERB, "Assemble a non-secured msg to send");
