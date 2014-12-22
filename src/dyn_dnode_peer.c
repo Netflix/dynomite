@@ -324,7 +324,7 @@ dnode_peer_conn(struct server *server)
         return conn;
 	}
 
-	ASSERT(server->ns_conn_q == pool->peer_connections);
+	//ASSERT(server->ns_conn_q == pool->peer_connections);
 
 	/*
 	 * Pick a server connection from the head of the queue and insert
