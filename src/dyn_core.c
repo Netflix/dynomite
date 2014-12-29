@@ -216,7 +216,7 @@ core_start(struct instance *nci)
 	if (ctx != NULL) {
 		nci->ctx = ctx;
 
-	    if (TRACING_LEVEL == LOG_VVERB) {
+	    if (get_tracking_level() >= LOG_VVERB) {
 		   crypto_check();
         }
 		return ctx;

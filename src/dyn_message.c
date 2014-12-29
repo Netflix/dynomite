@@ -788,7 +788,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t limit;                        /* bytes to send limit */
     ssize_t n;                           /* bytes sent by sendv */
 
-    if (TRACING_LEVEL == LOG_VVERB) {
+    if (get_tracking_level() >= LOG_VVERB) {
        loga("About to dump out the content of msg");
        msg_dump(msg);
     }

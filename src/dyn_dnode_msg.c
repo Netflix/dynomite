@@ -402,8 +402,8 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-    if (TRACING_LEVEL == LOG_VVERB) {
-    	log_debug(LOG_VVERB, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+    if (get_tracking_level() >= LOG_VVERB) {
+    	log_debug(LOG_NOTICE, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
         msg_dump(r);
 	}
 
@@ -477,9 +477,8 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
-
-    if (TRACING_LEVEL == LOG_VVERB) {
-	   log_debug(LOG_VVERB, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
+    if (get_tracking_level() >= LOG_VVERB) {
+	   log_debug(LOG_NOTICE, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
 	   msg_dump(r);
     }
 
@@ -505,16 +504,16 @@ void dyn_parse_rsp(struct msg *r)
 				return;
 			}
 
-			if (TRACING_LEVEL == LOG_VVERB) {
-			   log_debug(LOG_VVERB, "encrypted aes key length : %d", dmsg->mlen);
+			if (get_tracking_level() >= LOG_VVERB) {
+			   log_debug(LOG_NOTICE, "encrypted aes key length : %d", dmsg->mlen);
 			   loga("AES encryption key from conn: %s\n", base64_encode(r->owner->aes_key, AES_KEYLEN));
             }
 
             //Dont need to decrypt AES key - pull it out from the conn
 			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
-			if (TRACING_LEVEL == LOG_VVERB) {
-			   log_hexdump(LOG_VVERB, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
+			if (get_tracking_level() >= LOG_VVERB) {
+			   log_hexdump(LOG_NOTICE, decrypted_buf->pos, mbuf_length(decrypted_buf), "dyn message decrypted payload: ");
             }
 
 			b->pos = b->pos + dmsg->plen;
@@ -544,8 +543,8 @@ void dyn_parse_rsp(struct msg *r)
 void
 dmsg_free(struct dmsg *dmsg)
 {
-	if (TRACING_LEVEL == LOG_VVERB) {
-       log_debug(LOG_VVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+	if (get_tracking_level() >= LOG_VVERB) {
+       log_debug(LOG_NOTICE, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
     }
 
     dn_free(dmsg);
@@ -555,8 +554,8 @@ dmsg_free(struct dmsg *dmsg)
 void
 dmsg_put(struct dmsg *dmsg)
 {
-	if (TRACING_LEVEL == LOG_VVERB) {
-       log_debug(LOG_VVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+	if (get_tracking_level() >= LOG_VVERB) {
+       log_debug(LOG_NOTICE, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
     }
 
     nfree_dmsgq++;
@@ -568,8 +567,8 @@ dmsg_dump(struct dmsg *dmsg)
 {
     struct mbuf *mbuf;
 
-    if (TRACING_LEVEL >= LOG_VVERB) {
-       log_debug(LOG_VVERB, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
+    if (get_tracking_level() >= LOG_VVERB) {
+       log_debug(LOG_NOTICE, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
     	   	    dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
     }
     //loga_hexdump(dmsg->data, dmsg->mlen, "dmsg with %ld bytes of data", dmsg->mlen);
@@ -579,8 +578,8 @@ dmsg_dump(struct dmsg *dmsg)
 void
 dmsg_init(void)
 {
-    if (TRACING_LEVEL == LOG_VVERB) {
-       log_debug(LOG_VVERB, "dmsg size %d", sizeof(struct dmsg));
+    if (get_tracking_level() >= LOG_VVERB) {
+       log_debug(LOG_NOTICE, "dmsg size %d", sizeof(struct dmsg));
     }
 
     dmsg_id = 0;
@@ -690,7 +689,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
-       if (TRACING_LEVEL == LOG_VVERB) {
+       if (get_tracking_level() >= LOG_VVERB) {
           loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
        }
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
@@ -706,8 +705,8 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_uint32(mbuf, payload_len);
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    if (TRACING_LEVEL == LOG_VVERB) {
-       log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
+    if (get_tracking_level() >= LOG_VVERB) {
+       log_hexdump(LOG_NOTICE, mbuf->pos, mbuf_length(mbuf), "dyn message producer: ");
     }
      
     return DN_OK;
@@ -750,7 +749,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_mbuf(mbuf, data);
     if (conn->dnode_secured) {
-       if (TRACING_LEVEL == LOG_VVERB) {
+       if (get_tracking_level() >= LOG_VVERB) {
           loga("AES key to be encrypted           : %s \n", base64_encode(aes_key, 32));
        }
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
@@ -766,8 +765,8 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
 
     mbuf_write_string(mbuf, &CRLF_STR);
 
-    if (TRACING_LEVEL == LOG_VVERB) {
-       log_hexdump(LOG_VERB, mbuf->pos, mbuf_length(mbuf), "dyn message producer:  ");
+    if (get_tracking_level() >= LOG_VVERB) {
+       log_hexdump(LOG_NOTICE, mbuf->pos, mbuf_length(mbuf), "dyn message producer:  ");
     }
 
     return DN_OK;
@@ -941,22 +940,22 @@ dmsg_parse(struct dmsg *dmsg)
 
 		end = p;
 
-	    if (TRACING_LEVEL == LOG_VVERB) {
-		   log_hexdump(LOG_VVERB, host_id, host_id_len, "host_id: ");
-		   log_hexdump(LOG_VVERB, ts, ts_len, "ts: ");
-		   log_hexdump(LOG_VVERB, node_state, node_state_len, "state: ");
-		   log_hexdump(LOG_VVERB, host_addr, host_addr_len, "host_addr: ");
+	    if (get_tracking_level() >= LOG_VVERB) {
+		   log_hexdump(LOG_NOTICE, host_id, host_id_len, "host_id: ");
+		   log_hexdump(LOG_NOTICE, ts, ts_len, "ts: ");
+		   log_hexdump(LOG_NOTICE, node_state, node_state_len, "state: ");
+		   log_hexdump(LOG_NOTICE, host_addr, host_addr_len, "host_addr: ");
 
-		   log_debug(LOG_VVERB, "\t\t host_id          : '%.*s'", host_id_len, host_id);
-		   log_debug(LOG_VVERB, "\t\t ts               : '%.*s'", ts_len, ts);
-		   log_debug(LOG_VVERB, "\t\t node_state          : '%.*s'", node_state_len, node_state);
-		   log_debug(LOG_VVERB, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
+		   log_debug(LOG_NOTICE, "\t\t host_id          : '%.*s'", host_id_len, host_id);
+		   log_debug(LOG_NOTICE, "\t\t ts               : '%.*s'", ts_len, ts);
+		   log_debug(LOG_NOTICE, "\t\t node_state          : '%.*s'", node_state_len, node_state);
+		   log_debug(LOG_NOTICE, "\t\t host_addr          : '%.*s'", host_addr_len, host_addr);
         }
 
 		struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
 		dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
-	    if (TRACING_LEVEL == LOG_VVERB) {
+	    if (get_tracking_level() >= LOG_VVERB) {
 		   print_dyn_token(&rnode->token, 5);
         }
 
@@ -995,19 +994,19 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 
     struct string s;
 
-    if (TRACING_LEVEL == LOG_VVERB) {
-       log_debug(LOG_VVERB, "dmsg process: type %d", dmsg->type);
+    if (get_tracking_level() >= LOG_VVERB) {
+       log_debug(LOG_NOTICE, "dmsg process: type %d", dmsg->type);
     }
 
     switch(dmsg->type) {
         case DMSG_DEBUG:
            s.len = dmsg->mlen;
            s.data = dmsg->data;
-           log_hexdump(LOG_VERB, s.data, s.len, "dyn processing message ");
+           log_hexdump(LOG_VVERB, s.data, s.len, "dyn processing message ");
            return true;
 
         case GOSSIP_SYN:
-           log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN!!!!!!");
+           log_debug(LOG_VVERB, "I have got a GOSSIP_SYN!!!!!!");
            dmsg_dump(dmsg);
            //TODOs: fix this to reply the 1st time sender
            //dnode_rsp_gos_syn(ctx, conn, dmsg->owner);
@@ -1015,16 +1014,16 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
            return true;
 
         case CRYPTO_HANDSHAKE:
-        	log_debug(LOG_DEBUG, "I have a crypto handshake msg and processing it now");
+        	log_debug(LOG_VVERB, "I have a crypto handshake msg and processing it now");
             //TODOs: will work on this to optimize the performance
         	return true;
 
         case GOSSIP_SYN_REPLY:
-           log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN_REPLY!!!!!!");
+           log_debug(LOG_VVERB, "I have got a GOSSIP_SYN_REPLY!!!!!!");
 
            return true;
         default:
-           log_debug(LOG_DEBUG, "nothing to do");
+           log_debug(LOG_VVERB, "nothing to do");
     }
        
     return false;

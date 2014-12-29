@@ -121,10 +121,10 @@ struct dyn_ring;
 #include "dyn_cbuf.h"
 #include "dyn_ring_queue.h"
 #include "dyn_crypto.h"
+#include "dyn_setting.h"
 
 #include "event/dyn_event.h"
 
-#define TRACING_LEVEL 0
 #define ENCRYPTION 1
 
 

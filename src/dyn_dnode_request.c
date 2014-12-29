@@ -287,8 +287,8 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
 
-    if (TRACING_LEVEL == LOG_VVERB) {
-	   log_debug(LOG_VVERB, "dnode_peer_req_forward entering");
+    if (get_tracking_level() >= LOG_VVERB) {
+	   log_debug(LOG_NOTICE, "dnode_peer_req_forward entering");
     }
 
 	rstatus_t status;
@@ -359,8 +359,8 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	mbuf_insert_head(&msg->mhdr, header_buf);
 
 
-    if (TRACING_LEVEL == LOG_VVERB) {
-	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
+    if (get_tracking_level() >= LOG_VVERB) {
+	   log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
 	   msg_dump(msg);
     }
 
@@ -369,8 +369,8 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
 
-    if (TRACING_LEVEL == LOG_VERB) {
-	   log_debug(LOG_VERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+    if (get_tracking_level() >= LOG_VERB) {
+	   log_debug(LOG_NOTICE, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
 		   	     " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
 			     msg->mlen, msg->type, keylen, key);
     }
@@ -462,11 +462,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		   dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
 
 
-	       if (TRACING_LEVEL == LOG_VVERB) {
-		      log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
-		      log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+	       if (get_tracking_level() >= LOG_VVERB) {
+		      log_hexdump(LOG_NOTICE, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+		      log_hexdump(LOG_NOTICE, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
            }
-
 
 	       mbuf_remove(&msg->mhdr, data_buf);
 		   mbuf_insert(&msg->mhdr, encrypted_buf);
@@ -474,21 +473,21 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		   mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
 
 		} else {
-		   log_debug(LOG_VERB, "No encryption");
+		   log_debug(LOG_VVERB, "No encryption");
 		   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
 		   mbuf_insert(&msg->mhdr, data_buf);
 		}
 
 	} else {
-       log_debug(LOG_VERB, "Assemble a non-secured msg to send");
+       log_debug(LOG_VVERB, "Assemble a non-secured msg to send");
 	   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
 	   mbuf_insert(&msg->mhdr, data_buf);
 	}
 
 	mbuf_insert_head(&msg->mhdr, header_buf);
 
-    if (TRACING_LEVEL == LOG_VVERB) {
-	   log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
+    if (get_tracking_level() >= LOG_VVERB) {
+	   log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
 	   msg_dump(msg);
     }
 
