@@ -469,9 +469,6 @@ dyn_parse_req(struct msg *r)
 	//bad case
 	log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
 	msg_dump(r);
-
-	r->state = 0;
-	r->result = MSG_PARSE_ERROR;
 }
 
 
@@ -534,9 +531,6 @@ void dyn_parse_rsp(struct msg *r)
 	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
 	msg_dump(r);
 
-
-	r->state = 0;
-	r->result = MSG_PARSE_ERROR;
 }
 
 
