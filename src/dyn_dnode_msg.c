@@ -631,9 +631,6 @@ void dyn_parse_rsp(struct msg *r)
 	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
 	msg_dump(r);
 
-
-	r->state = 0;
-	r->result = MSG_PARSE_ERROR;
 }
 
 
