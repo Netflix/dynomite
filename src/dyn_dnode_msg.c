@@ -419,7 +419,6 @@ dyn_parse_core(struct msg *r)
 	log_debug(LOG_ERR, "at error for state %d and c %c", state, *p);
         loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
 	r->result = MSG_PARSE_ERROR;
-	//r->state = state;
         r->pos = p;
 	errno = EINVAL;
 
@@ -439,6 +438,11 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
+
+        if (get_tracking_level() >= LOG_VVERB) {
+    	   log_debug(LOG_NOTICE, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+           msg_dump(r);
+	}
 
 	bool done_parsing = false;
         struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -533,6 +537,11 @@ dyn_parse_req(struct msg *r)
 void dyn_parse_rsp(struct msg *r)
 {
 
+        if (get_tracking_level() >= LOG_VVERB) {
+	   log_debug(LOG_NOTICE, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
+	   msg_dump(r);
+        }
+
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 		struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -554,10 +563,8 @@ void dyn_parse_rsp(struct msg *r)
 				return;
 			}
 
-
             		//Dont need to decrypt AES key - pull it out from the conn
 			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
-
 
 			b->pos = b->pos + dmsg->plen;
 			r->pos = decrypted_buf->start;
@@ -565,6 +572,7 @@ void dyn_parse_rsp(struct msg *r)
             		mbuf_insert(&r->mhdr, decrypted_buf);
             		mbuf_remove(&r->mhdr, b);
             		mbuf_put(b);
+                        r->mlen = mbuf_length(decrypted_buf);
 		}
 
 		if (r->redis)
