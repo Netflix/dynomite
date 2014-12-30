@@ -46,9 +46,7 @@ enum {
         DYN_SPACES_BEFORE_PAYLOAD_LEN,
         DYN_PAYLOAD_LEN,
         DYN_CRLF_BEFORE_DONE,
-        DYN_DONE,
-        DYN_DUMMY,
-        DYN_DUMMY2
+        DYN_DONE
 } state;
 
 
@@ -60,7 +58,6 @@ dyn_parse_core(struct msg *r)
 	uint8_t *p, *token;
 	uint8_t ch;
 	uint64_t num = 0;
-        bool after_split = 0;
 
 	state = r->dyn_state;
 	b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -75,16 +72,6 @@ dyn_parse_core(struct msg *r)
 		}
 	}
 
-        //loga("state ====== %d", state);
-        if (r->dyn_state == DYN_DUMMY) {
-                                  log_hexdump(LOG_NOTICE, b->pos, mbuf_length(b), "inspecting msg after splitting  %"PRIu64" "
-                                        "res %d type %d state %d", r->id, r->result, r->type,
-                                        r->dyn_state);
-            r->dyn_state = DYN_START;
-            state = DYN_START;
-            after_split = 1;
-        }
-
         token = NULL;
         
 	for (p = r->pos; p < b->last; p++) {
@@ -93,6 +80,8 @@ dyn_parse_core(struct msg *r)
 		case DYN_START:
 			log_debug(LOG_DEBUG, "DYN_START");
 			if (ch == ' ') {
+                                if (token == NULL)
+                                   token = p;
 				break;
 			} else if (isdigit(ch)) {
 				num = ch - '0';
@@ -100,7 +89,6 @@ dyn_parse_core(struct msg *r)
                                 if (token == NULL)
                                    token = p;
                         } else {
-                                loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
 				goto skip;
 			}
 
@@ -329,15 +317,6 @@ dyn_parse_core(struct msg *r)
                         if (ch == '*')
                            break;
 
-                       
-                        if (dmsg->plen != 0) {
-                            loga("After splitting?, %d '%c %c'", dmsg->plen, ch, *(p+1));
-                            loga("msg id %d", dmsg->id);
-                            //log_hexdump(LOG_NOTICE, b->pos, mbuf_length(b), "inspecting msg after splitting  %"PRIu64" "
-			    //            "res %d type %d state %d", r->id, r->result, r->type,
-			    //            r->dyn_state); 
-                        } 
-
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
 			} else if (ch == CR)  {
@@ -345,7 +324,6 @@ dyn_parse_core(struct msg *r)
 				dmsg->plen = num;
 				num = 0;
                                 if (p + dmsg->plen + 1 >= b->last) {
-                                    loga("splitttttttttttttttttt at %c", ch);
                                     loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
                                     goto split;
                                 }
@@ -365,7 +343,6 @@ dyn_parse_core(struct msg *r)
 			if (*p == LF) {
 				state = DYN_DONE;
                                 r->pos = p;
-                                 
 			} else {
                                 loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
 				goto error;
@@ -391,26 +368,13 @@ dyn_parse_core(struct msg *r)
 	}
 
         loga("Not fully parsed yet!!!!!!");
-        /*
-        r->dyn_state = state;
-        r->pos = p - 1;
-        dmsg->owner = r;
-        dmsg->source_address = r->owner->addr;
-        log_hexdump(LOG_NOTICE, b->pos, mbuf_length(b), "inspecting incompleted req %"PRIu64" "
-                        "res %d type %d state %d", r->id, r->result, r->type,
-                        r->state);
-        log_hexdump(LOG_NOTICE, , b->last - b->start, "inspecting incompleted req %"PRIu64" "
-                        "res %d type %d state %d", r->id, r->result, r->type,
-                        r->state);
-        return true;
-        */
         split:
         if (mbuf_length(b) == 0 || b->last == b->end) {
            r->result = MSG_PARSE_AGAIN;
            return false;
         }
         log_debug(LOG_NOTICE, "in split");
-        r->dyn_state = DYN_DUMMY;
+        r->dyn_state = DYN_START;
         r->pos = token;
         dmsg->owner = r;
         r->result = MSG_PARSE_REPAIR;
@@ -425,14 +389,6 @@ dyn_parse_core(struct msg *r)
 	dmsg->owner = r;
 	dmsg->source_address = r->owner->addr;
         
-        if (after_split) {
-           loga("dmsg->id: %d, dmsg->mlen: %d, dmsg->plen: %d", dmsg->id, dmsg->mlen, dmsg->plen);
-           log_hexdump(LOG_NOTICE, b->pos, mbuf_length(b), "done after a splitting  and inspecting req %"PRIu64" "
-                        "res %d type %d state %d", r->id, r->result, r->type,
-                        r->dyn_state);
-           r->dyn_state = DYN_DUMMY2;
-        }
-
 	log_debug(LOG_DEBUG, "at done with p at %d", p);
         log_hexdump(LOG_DEBUG, b->pos, mbuf_length(b), "done and inspecting req %"PRIu64" "
                         "res %d type %d state %d", r->id, r->result, r->type,
@@ -520,13 +476,6 @@ dyn_parse_req(struct msg *r)
 				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
 			}
 
-                        //if (dmsg->payload + dmsg->plen > b->last) {
-                        //    r->pos = dmsg->payload;
-                        //    r->token = NULL;
-                        //    r->result = MSG_PARSE_REPAIR;
-                        //    return;
-                        //}
-
                         struct mbuf *decrypted_buf = mbuf_get();
                         if (decrypted_buf == NULL) {
                                 loga("Unable to obtain an mbuf for dnode msg's header!");
@@ -542,17 +491,15 @@ dyn_parse_req(struct msg *r)
 			mbuf_insert(&r->mhdr, decrypted_buf);
                         mbuf_remove(&r->mhdr, b);
                         mbuf_put(b);
+                       
+                        r->mlen = mbuf_length(decrypted_buf);
+ 
 		}
 
 		if (done_parsing)
 			return;
-                if (r->dyn_state == DYN_DUMMY2) {
-                   redis_parse_req(r);
-                   r->dyn_state = DYN_START; 
-                   loga("r->result after a special treatment %d", r->result);
-                   return;
-                }
-		else if (r->redis)
+
+		if (r->redis)
 			return redis_parse_req(r);
 
 		return memcache_parse_req(r);
@@ -585,7 +532,6 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
-
 
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
@@ -631,9 +577,6 @@ void dyn_parse_rsp(struct msg *r)
 	log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
 	msg_dump(r);
 
-
-	r->state = 0;
-	r->result = MSG_PARSE_ERROR;
 }
 
 
