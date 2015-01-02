@@ -486,7 +486,7 @@ core_debug(struct context *ctx)
 static rstatus_t
 core_process_messages(void)
 {
-	log_debug(LOG_VERB, "Length of C2G_OutQ ::: %d", CBUF_Len( C2G_OutQ ));
+	log_debug(LOG_VERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
 
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
