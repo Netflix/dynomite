@@ -126,7 +126,7 @@ dyn_parse_core(struct msg *r)
 			log_debug(LOG_DEBUG, "num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
-			} else if (ch == ' ' && num != 0) {
+			} else if (ch == ' '&& isdigit(*(p-1)))  {
 				log_debug(LOG_DEBUG, "MSG ID : %d", num);
 				dmsg->id = num;
 				state = DYN_TYPE_ID;
@@ -145,7 +145,7 @@ dyn_parse_core(struct msg *r)
 			log_debug(LOG_DEBUG, "DYN_TYPE_ID: num = %d", num);
 			if (isdigit(ch))  {
 				num = num*10 + (ch - '0');
-			} else if (ch == ' ' && num != 0)  {
+			} else if (ch == ' ' && isdigit(*(p-1)))  {
 				log_debug(LOG_DEBUG, "Type Id: %d", num);
 				dmsg->type = num;
 				state = DYN_BIT_FIELD;
@@ -432,9 +432,17 @@ dyn_parse_req(struct msg *r)
 		if (done_parsing)
 			return;
 
-		if (r->redis)
-			return redis_parse_req(r);
-
+		if (r->redis) {
+			int8_t *pos = r->pos;
+			redis_parse_req(r);
+			if (r->result == MSG_PARSE_ERROR) {
+				r->state = 0;
+				r->dyn_state = 0;
+				r->pos = pos;
+				return dyn_parse_req(r);
+			}
+			return;
+		}
 		return memcache_parse_req(r);
 	}
 
@@ -505,8 +513,17 @@ void dyn_parse_rsp(struct msg *r)
 
 		}
 
-		if (r->redis)
-			return redis_parse_rsp(r);
+		if (r->redis) {
+			int8_t *pos = r->pos;
+			redis_parse_rsp(r);
+			if (r->result == MSG_PARSE_ERROR) {
+				r->state = 0;
+				r->dyn_state = 0;
+				r->pos = pos;
+				return redis_parse_rsp(r);
+			}
+			return;
+		}
 
 		return memcache_parse_rsp(r);
 	}
