@@ -707,6 +707,11 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t msize;
     ssize_t n;
 
+    if (get_tracking_level() >= LOG_VVERB) {
+       loga("Dumping out the content of msg in receiving: ");
+       msg_dump(msg);
+    }
+
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
     if (mbuf == NULL || mbuf_full(mbuf)) {
         mbuf = mbuf_get();
@@ -725,6 +730,11 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         if (n == DN_EAGAIN) {
             return DN_OK;
         }
+
+        if (msg->dmsg != NULL || conn->dyn_mode) {
+      	  return DN_OK;
+        }
+
         return DN_ERROR;
     }
 
@@ -788,10 +798,10 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t limit;                        /* bytes to send limit */
     ssize_t n;                           /* bytes sent by sendv */
 
-    //if (get_tracking_level() >= LOG_VVERB) {
-       loga("About to dump out the content of msg");
+    if (get_tracking_level() >= LOG_VVERB) {
+       loga("Dumping out the content of msg in sending: ");
        msg_dump(msg);
-    //}
+    }
 
     TAILQ_INIT(&send_msgq);
 
