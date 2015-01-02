@@ -318,9 +318,10 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 		return;
 	}
 
+	struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+
 	if (p_conn->dnode_secured) {
 		//Encrypting and adding header for a request
-		struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
 		//TODOs: need to deal with multi-block later
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
@@ -353,7 +354,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 
 	} else {
 		//write dnode header
-		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, 0);
+		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
 	}
 
 	mbuf_insert_head(&msg->mhdr, header_buf);

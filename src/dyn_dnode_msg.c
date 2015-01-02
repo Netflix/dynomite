@@ -97,7 +97,6 @@ dyn_parse_core(struct msg *r)
                     goto split;
                 }
 			} else {
-				token = NULL;
 				loga("Facing a weird char %c", p);
 				//goto skip;
 				token = NULL; //reset
@@ -151,8 +150,8 @@ dyn_parse_core(struct msg *r)
 				state = DYN_BIT_FIELD;
 				num = 0;
 			} else {
-				token = NULL;
 				loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+				token = NULL;
 				state = DYN_START;
 				if (ch == '$')
 					p -= 1;
