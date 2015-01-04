@@ -537,7 +537,7 @@ request_send_to_all_racks(struct msg *msg) {
     // yeah, there's probably a better way to do this...
     return t == MSG_REQ_MC_SET || t == MSG_REQ_MC_CAS || t == MSG_REQ_MC_DELETE || t == MSG_REQ_MC_ADD ||
            t == MSG_REQ_MC_REPLACE || t == MSG_REQ_MC_APPEND || t == MSG_REQ_MC_PREPEND || t == MSG_REQ_MC_INCR ||
-           t == MSG_REQ_MC_DECR;
+           t == MSG_REQ_MC_DECR || t == MSG_REQ_MC_TOUCH;
 }
 
 
