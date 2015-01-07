@@ -314,11 +314,11 @@ dyn_parse_core(struct msg *r)
             return false;
    }
 
-   log_debug(LOG_NOTICE, "in split");
+   log_debug(LOG_DEBUG, "in split");
    r->dyn_state = DYN_START;
    r->pos = token;
    r->result = MSG_PARSE_REPAIR;
-   log_hexdump(LOG_NOTICE, b->pos, mbuf_length(b), "split and inspecting req %"PRIu64" "
+   log_hexdump(LOG_DEBUG, b->pos, mbuf_length(b), "split and inspecting req %"PRIu64" "
          "res %d type %d state %d", r->id, r->result, r->type,
          r->dyn_state);
    return false;
@@ -337,21 +337,6 @@ dyn_parse_core(struct msg *r)
          r->dyn_state);
 
    return true;
-
-   skip:
-   log_debug(LOG_NOTICE, "In skip");
-   dmsg->type = DMSG_UNKNOWN;
-   dmsg->source_address = r->owner->addr;
-   log_hexdump(LOG_NOTICE, b->pos, mbuf_length(b), "skip and inspecting req %"PRIu64" "
-         "res %d type %d state %d", r->id, r->result, r->type,
-         state);
-   log_hexdump(LOG_NOTICE, b->start, b->last - b->start, "inspecting req %"PRIu64" "
-         "res %d type %d state %d", r->id, r->result, r->type,
-         state);
-
-   r->dyn_state = DYN_UNKNOWN;
-   return false;
-
 
    error:
    log_debug(LOG_ERR, "at error for state %d and c %c", state, *p);
@@ -453,29 +438,12 @@ dyn_parse_req(struct msg *r)
       return memcache_parse_req(r);
    }
 
-   //locate the next MAGIC number
-
-   if (r->dyn_state == DYN_UNKNOWN) {
-      uint8_t *p;
-      for (p = r->pos; p + 5 < b->last; p++) {
-         if (*p == '$') {
-            if (*(p+1) == '2' && *(p+2) == '0' && *(p+3) == '1' &&
-                  *(p+4) == '4' && *(p+5) == '$') {
-               r->pos = p;
-               b->pos = p;
-               r->token = NULL;
-               r->result = MSG_PARSE_REPAIR;
-               r->dyn_state = DYN_START;
-               return;
-            }
-         }
-      }
-   }
-
 
    //bad case
-   log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
-   msg_dump(r);
+   if (get_tracking_level() >= LOG_VVERB) {
+      log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
+      msg_dump(r);
+   }
 }
 
 
@@ -536,8 +504,10 @@ void dyn_parse_rsp(struct msg *r)
    }
 
    //bad case
-   log_debug(LOG_DEBUG, "Bad message - cannot parse");  //fix me to do something
-   msg_dump(r);
+   if (get_tracking_level() >= LOG_VVERB) {
+      log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
+      msg_dump(r);
+   }
 
 }
 
