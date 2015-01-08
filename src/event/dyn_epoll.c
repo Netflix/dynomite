@@ -107,7 +107,7 @@ event_add_in(struct event_base *evb, struct conn *c)
         return 0;
     }
 
-    event.events = (uint32_t)(EPOLLIN | EPOLLET);
+    event.events = (uint32_t)(EPOLLIN); // | EPOLLET);
     event.data.ptr = c;
 
     status = epoll_ctl(ep, EPOLL_CTL_MOD, c->sd, &event);
@@ -143,7 +143,7 @@ event_add_out(struct event_base *evb, struct conn *c)
         return 0;
     }
 
-    event.events = (uint32_t)(EPOLLIN | EPOLLOUT | EPOLLET);
+    event.events = (uint32_t)(EPOLLIN | EPOLLOUT); // | EPOLLET);
     event.data.ptr = c;
 
     status = epoll_ctl(ep, EPOLL_CTL_MOD, c->sd, &event);
@@ -260,7 +260,7 @@ event_wait(struct event_base *evb, int timeout)
                 log_debug(LOG_VVERB, "epoll %04"PRIX32" triggered on conn %p",
                           ev->events, ev->data.ptr);
 
-                if (ev->events & EPOLLERR) {
+                if (ev->events & (EPOLLERR | EPOLLRDHUP)) {
                     events |= EVENT_ERR;
                 }
 

@@ -788,10 +788,10 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t limit;                        /* bytes to send limit */
     ssize_t n;                           /* bytes sent by sendv */
 
-    //if (get_tracking_level() >= LOG_VVERB) {
+    if (get_tracking_level() >= LOG_VVERB) {
        loga("About to dump out the content of msg");
        msg_dump(msg);
-    //}
+    }
 
     TAILQ_INIT(&send_msgq);
 
@@ -820,9 +820,6 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             if (mbuf_empty(mbuf)) {
                 continue;
             }
-
-            //log_hexdump(LOG_NOTICE, mbuf->pos, mbuf_length(mbuf),
-            //		"Print out mbuf being sent %d", msg->dmsg == NULL);
 
             mlen = mbuf_length(mbuf);
             if ((nsend + mlen) > limit) {

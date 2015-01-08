@@ -249,13 +249,36 @@ dnode_req_recv_done(struct context *ctx, struct conn *conn,
 	dnode_req_local_forward(ctx, conn, msg);
 }
 
+
 struct msg *
 dnode_req_send_next(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
-	struct msg *msg, *nmsg; /* current and next message */
 
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
+
+	//throttling the sending traffics here
+	if (!conn->same_dc) {
+		uint32_t now = time(NULL);
+		if (conn->last_sent != 0) {
+			uint32_t elapsed_time = now - conn->last_sent;
+			uint32_t earned_tokens = elapsed_time * tokens_earned_per_sec();
+			conn->avail_tokens = (conn->avail_tokens + earned_tokens) < max_allowable_rate()?
+					conn->avail_tokens + earned_tokens : max_allowable_rate();
+
+		}
+
+		conn->last_sent = now;
+		if (conn->avail_tokens > 0) {
+			conn->avail_tokens--;
+			return req_send_next(ctx, conn);
+		}
+
+		//requeue
+		status = event_add_out(ctx->evb, conn);
+
+		return NULL;
+	}
 
 	return req_send_next(ctx, conn);
 }
@@ -301,13 +324,12 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	ASSERT(c_conn->client);
 
 	/* enqueue the message (request) into peer inq */
-	if (TAILQ_EMPTY(&p_conn->imsg_q)) {
-		status = event_add_out(ctx->evb, p_conn);
-		if (status != DN_OK) {
-			dnode_req_forward_error(ctx, p_conn, msg);
-			p_conn->err = errno;
-			return;
-		}
+	//if (TAILQ_EMPTY(&p_conn->imsg_q)) {
+	status = event_add_out(ctx->evb, p_conn);
+	if (status != DN_OK) {
+		dnode_req_forward_error(ctx, p_conn, msg);
+		p_conn->err = errno;
+		return;
 	}
 
 	uint64_t msg_id = peer_msg_id++;

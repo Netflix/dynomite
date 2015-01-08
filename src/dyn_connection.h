@@ -90,12 +90,16 @@ struct conn {
     unsigned           eof:1;         /* eof? aka passive close? */
     unsigned           done:1;        /* done? aka close? */
     unsigned           redis:1;       /* redis? */
-    unsigned           dnode_server:1;       /* dndoe server connection? */
+    unsigned           dnode_server:1;       /* dnode server connection? */
     unsigned           dnode_client:1;       /* dnode client? */
     unsigned           dyn_mode:1;           /* is a dyn connection? */
     unsigned           dnode_secured:1;      /* is a secured connection? */
     unsigned           dnode_crypto_state:1; /* crypto state */
-    unsigned char      aes_key[34];              /* a place holder for AES key */
+    unsigned char      aes_key[50]; //aes_key[34];              /* a place holder for AES key */
+
+    unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
+    uint32_t           avail_tokens;          /* used to throttle the traffics */
+    uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
