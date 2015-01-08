@@ -821,9 +821,6 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                 continue;
             }
 
-            //log_hexdump(LOG_NOTICE, mbuf->pos, mbuf_length(mbuf),
-            //		"Print out mbuf being sent %d", msg->dmsg == NULL);
-
             mlen = mbuf_length(mbuf);
             if ((nsend + mlen) > limit) {
                 mlen = limit - nsend;

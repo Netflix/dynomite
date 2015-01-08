@@ -163,6 +163,10 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, env) },
 
+    { string("conn_msg_rate"),
+      conf_set_num,
+      offsetof(struct conf_pool, conn_msg_rate)},
+
     null_command
 };
 
@@ -348,6 +352,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->gos_interval = CONF_UNSET_NUM;
 
+    cp->conn_msg_rate = CONF_UNSET_NUM;
+
     array_null(&cp->server);
     array_null(&cp->dyn_seeds);
 
@@ -499,6 +505,8 @@ conf_pool_each_transform(void *elem, void *data)
     /* gossip */
     sp->g_interval = cp->gos_interval;
 
+    set_tokens_earned_per_sec(cp->conn_msg_rate);
+
     log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
               sp->name.len, sp->name.data);
 
@@ -571,6 +579,8 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
 
         log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
+        log_debug(LOG_VVERB, "  conn_msg_rate: %d", cp->conn_msg_rate);
+
         log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
                               cp->secure_server_option.len,
                               cp->secure_server_option.data);
@@ -1498,6 +1508,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->gos_interval == CONF_UNSET_NUM) {
         cp->gos_interval = CONF_DEFAULT_GOS_INTERVAL;
+    }
+
+    if (cp->conn_msg_rate == CONF_UNSET_NUM) {
+        cp->conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;
     }
 
     if (string_empty(&cp->rack)) {

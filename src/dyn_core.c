@@ -395,12 +395,40 @@ core_timeout(struct context *ctx)
 	}
 }
 
+
 rstatus_t
 core_core(void *arg, uint32_t events)
 {
 	rstatus_t status;
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
+
+
+	/*
+	if (!conn->dyn_mode) {
+		if (conn->client && !conn->proxy) {
+         struct server_pool *sp = conn->owner;
+         log_debug(LOG_VERB, "Client           : '%.*s'", sp->name);
+		} else if (!conn->client && !conn->proxy) {
+			struct server *server = conn->owner;
+			log_debug(LOG_VERB, "Storage server           : '%.*s'", server->name);
+		} else {
+			struct server_pool *sp = conn->owner;
+			log_debug(LOG_VERB, "Proxy           : '%.*s'", sp->name);
+		}
+	} else {
+      if (conn->dnode_client && !conn->dnode_server) {
+      	struct server_pool *sp = conn->owner;
+      	log_debug(LOG_VERB, "Dnode client           : '%.*s'", sp->name);
+      } else if (!conn->dnode_client && !conn->dnode_server) {
+			struct server *server = conn->owner;
+			log_debug(LOG_VERB, "Dnode peer           : '%.*s'", server->name);
+      } else {
+			struct server_pool *sp = conn->owner;
+			log_debug(LOG_VERB, "Dnode server           : '%.*s'", sp->name);
+      }
+	}
+	 */
 
 	if (conn->dyn_mode) {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
@@ -427,7 +455,6 @@ core_core(void *arg, uint32_t events)
 		}
 	}
 
-
 	if (events & EVENT_WRITE) {
 		status = core_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
@@ -435,7 +462,6 @@ core_core(void *arg, uint32_t events)
 			return DN_ERROR;
 		}
 	}
-
 
 	return DN_OK;
 }

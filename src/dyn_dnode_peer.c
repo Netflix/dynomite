@@ -306,6 +306,12 @@ static bool is_conn_secured(struct server_pool *sp, struct server *peer_node)
 }
 
 
+static bool is_same_dc(struct server_pool *sp, struct server *peer_node)
+{
+	return string_compare(&sp->dc, &peer_node->dc) == 0;
+}
+
+
 struct conn *
 dnode_peer_conn(struct server *server)
 {
@@ -316,12 +322,15 @@ dnode_peer_conn(struct server *server)
 
 	//if (server->ns_conn_q < pool->peer_connections) {
 	if (server->ns_conn_q < 1) {
-                conn = conn_get_peer(server, false, pool->redis);
-        if (is_conn_secured(pool, server)) {
-        	conn->dnode_secured = 1;
-        	conn->dnode_crypto_state = 0; //need to do a encryption handshake
-        }
-        return conn;
+		conn = conn_get_peer(server, false, pool->redis);
+		if (is_conn_secured(pool, server)) {
+			conn->dnode_secured = 1;
+			conn->dnode_crypto_state = 0; //need to do a encryption handshake
+		}
+
+		conn->same_dc = is_same_dc(pool, server)? 1 : 0;
+
+		return conn;
 	}
 
 	//ASSERT(server->ns_conn_q == pool->peer_connections);
