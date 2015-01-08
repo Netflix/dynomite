@@ -68,8 +68,8 @@
 #define CONF_DEFAULT_GOS_INTERVAL            30000  //5000  //in millisec
 #define CONF_DEFAULT_PEERS                   200
 
-#define CONF_DEFAULT_CONN_MSG_RATE           100   //conn msgs per sec
-#define CONF_DEFAULT_CONN_MAX_AVAL_TOKENS    1000
+#define CONF_DEFAULT_CONN_MSG_RATE           200   //conn msgs per sec
+#define CONF_DEFAULT_CONN_MAX_AVAL_TOKENS    200
 
 #define CONF_STR_NONE                        "none"
 #define CONF_STR_DC                          "datacenter"
