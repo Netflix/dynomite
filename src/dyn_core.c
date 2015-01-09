@@ -433,6 +433,11 @@ core_core(void *arg, uint32_t events)
 	if (conn->dyn_mode) {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
 				conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
+		//log_debug(LOG_VVERB, "checking peer %s send_bytes %"PRIu32", rec_bytes %"PRIu32"",
+		//		dn_unresolve_peer_desc(conn->sd), conn->send_bytes, conn->recv_bytes);
+		//log_debug(LOG_NOTICE, "ccccccccccccccccccccccccccccccccccccccccccccchecking peer %s last_sent %"PRIu32", last_received %"PRIu32"",
+		//				dn_unresolve_peer_desc(conn->sd), conn->last_sent, conn->last_received);
+
 	} else {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
 				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
@@ -460,11 +465,13 @@ core_core(void *arg, uint32_t events)
 			!conn->dnode_client && !conn->dnode_server &&
 			conn->last_sent != 0 && conn->last_received != 0) {
 			//will make this configurable
-         if (conn->last_sent - conn->last_received > 10) {
-         	 loga("close connection %d on suspection of network glitter", conn->sd);
-         	 //will open a new connection and transfer all of the data from this conn to that
-         	 core_error(ctx, conn);
-             return DN_ERROR;
+         if (conn->last_sent - conn->last_received > 30) {
+
+         	   loga("close connection %d on suspection of network glitter", conn->sd);
+         	   //will open a new connection and transfer all of the data from this conn to that
+         	   core_error(ctx, conn);
+               return DN_ERROR;
+
          }
 		}
 

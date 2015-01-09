@@ -101,7 +101,6 @@ struct conn {
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
     uint32_t           last_received;         /* last ts to receive a byte */
-    uint32_t           timeout_count;         /* how many time we see weird timeout issue */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
