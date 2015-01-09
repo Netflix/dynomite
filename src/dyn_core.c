@@ -456,6 +456,18 @@ core_core(void *arg, uint32_t events)
 	}
 
 	if (events & EVENT_WRITE) {
+		if (conn->dyn_mode &&
+			!conn->dnode_client && !conn->dnode_server &&
+			conn->last_sent != 0 && conn->last_received != 0) {
+			//will make this configurable
+         if (conn->last_sent - conn->last_received > 10) {
+         	 loga("close connection %d on suspection of network glitter", conn->sd);
+         	 //will open a new connection and transfer all of the data from this conn to that
+         	 core_error(ctx, conn);
+             return DN_ERROR;
+         }
+		}
+
 		status = core_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
 			core_close(ctx, conn);

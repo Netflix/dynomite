@@ -257,9 +257,9 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 
+	uint32_t now = time(NULL);
 	//throttling the sending traffics here
 	if (!conn->same_dc) {
-		uint32_t now = time(NULL);
 		if (conn->last_sent != 0) {
 			uint32_t elapsed_time = now - conn->last_sent;
 			uint32_t earned_tokens = elapsed_time * tokens_earned_per_sec();
@@ -280,6 +280,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 		return NULL;
 	}
 
+	conn->last_sent = now;
 	return req_send_next(ctx, conn);
 }
 

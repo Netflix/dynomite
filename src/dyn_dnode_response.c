@@ -35,6 +35,9 @@ struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
+
+	conn->last_received = time(NULL);
+
 	return rsp_recv_next(ctx, conn, alloc);
 }
 
@@ -228,7 +231,7 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 	ASSERT(msg->owner == conn);
 	ASSERT(nmsg == NULL || !nmsg->request);
 
-    if (get_tracking_level() >= LOG_VVERB) {
+   if (get_tracking_level() >= LOG_VVERB) {
 	   loga("Dumping content for msg:   ");
 	   msg_dump(msg);
 

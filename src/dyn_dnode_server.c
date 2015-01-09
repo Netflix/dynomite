@@ -250,6 +250,8 @@ dnode_accept(struct context *ctx, struct conn *p)
 {
     rstatus_t status;
     struct conn *c;
+    struct sockaddr_in client_address;
+    int client_len;
     int sd;
 
     ASSERT(p->dnode_server);
@@ -258,7 +260,7 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     
     for (;;) {
-        sd = accept(p->sd, NULL, NULL);
+        sd = accept(p->sd, (struct sockaddr *)&client_address, &client_len);
         if (sd < 0) {
             if (errno == EINTR) {
                 log_debug(LOG_VERB, "dyn: accept on p %d not ready - eintr", p->sd);
@@ -284,6 +286,15 @@ dnode_accept(struct context *ctx, struct conn *p)
     }
 
     log_debug(LOG_NOTICE, "dyn: accept on sd  %d", sd);
+
+    char clntName[INET_ADDRSTRLEN];
+
+    if(inet_ntop(AF_INET, &client_address.sin_addr.s_addr, clntName, sizeof(clntName))!=NULL){
+       loga("Accepting client connection from %s%c%d on sd %d",clntName,'/',ntohs(client_address.sin_port), sd);
+    } else {
+       loga("Unable to get client's address\n");
+    }
+
     c = conn_get_peer(p->owner, true, p->redis);
     if (c == NULL) {
         log_error("dyn: get conn client peer for c %d from p %d failed: %s", sd, p->sd,
