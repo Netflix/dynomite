@@ -444,7 +444,7 @@ conf_pool_each_transform(void *elem, void *data)
     TAILQ_INIT(&sp->c_conn_q);
 
     array_null(&sp->server);
-    array_null(&sp->racks);
+    array_null(&sp->datacenters);
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
     /* sp->continuum = NULL; */
@@ -499,13 +499,13 @@ conf_pool_each_transform(void *elem, void *data)
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
-    array_init(&sp->racks, 1, sizeof(struct rack));
+    array_init(&sp->datacenters, 1, sizeof(struct datacenter));
     sp->conf_pool = cp;
 
     /* gossip */
     sp->g_interval = cp->gos_interval;
 
-    set_tokens_earned_per_sec(cp->conn_msg_rate);
+    set_msgs_per_sec(cp->conn_msg_rate);
 
     log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
               sp->name.len, sp->name.data);

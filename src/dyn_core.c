@@ -182,7 +182,7 @@ core_ctx_create(struct instance *nci)
 	CBUF_Init(C2S_InQ);
 	CBUF_Init(C2S_OutQ);
 
-	gossip_pool_init(ctx);
+	//gossip_pool_init(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 
@@ -433,11 +433,6 @@ core_core(void *arg, uint32_t events)
 	if (conn->dyn_mode) {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
 				conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
-		//log_debug(LOG_VVERB, "checking peer %s send_bytes %"PRIu32", rec_bytes %"PRIu32"",
-		//		dn_unresolve_peer_desc(conn->sd), conn->send_bytes, conn->recv_bytes);
-		//log_debug(LOG_NOTICE, "ccccccccccccccccccccccccccccccccccccccccccccchecking peer %s last_sent %"PRIu32", last_received %"PRIu32"",
-		//				dn_unresolve_peer_desc(conn->sd), conn->last_sent, conn->last_received);
-
 	} else {
 		log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
 				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
@@ -461,6 +456,7 @@ core_core(void *arg, uint32_t events)
 	}
 
 	if (events & EVENT_WRITE) {
+		/*
 		if (conn->dyn_mode &&
 			!conn->dnode_client && !conn->dnode_server &&
 			conn->last_sent != 0 && conn->last_received != 0) {
@@ -474,7 +470,7 @@ core_core(void *arg, uint32_t events)
 
          }
 		}
-
+      */
 		status = core_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
 			core_close(ctx, conn);
@@ -498,10 +494,12 @@ core_debug(struct context *ctx)
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");
 			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
 			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",server->dc);
+			log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
+
 			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
 			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
+
 			log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
 			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
 			log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
@@ -515,16 +513,22 @@ core_debug(struct context *ctx)
 			}
 		}
 
-		log_debug(LOG_VERB, "Peers Racks.................................................");
-		log_debug(LOG_VERB, "Peer RACK size    : %d", array_n(&sp->racks));
-		for (j = 0, n = array_n(&sp->racks); j < n; j++) {
-			struct rack *rack = (struct rack *) array_get(&sp->racks, j);
-			log_debug(LOG_VERB, "\tRACK '%.*s'", rack->name->len, rack->name->data);
-			log_debug(LOG_VERB, "\tPeer RACK ncontinuumm    : %d", rack->ncontinuum);
-			log_debug(LOG_VERB, "\tPeer RACK nserver_continuum    : %d", rack->nserver_continuum);
+		log_debug(LOG_VERB, "Peers Datacenters/racks/nodes .................................................");
+		uint32_t dc_index, dc_len;
+		for(dc_index = 0, dc_len = array_n(&sp->datacenters); dc_index < dc_len; dc_index++) {
+			struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+			log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
+			uint32_t rack_index, rack_len;
+			for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
+				struct rack *rack = array_get(&dc->racks, rack_index);
+				log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
+				log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
+				log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
+			}
 		}
+
 	}
-	log_debug(LOG_VERB, "..........................................................");
+	log_debug(LOG_VERB, "...............................................................................");
 }
 
 

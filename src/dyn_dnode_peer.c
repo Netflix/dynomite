@@ -1334,12 +1334,6 @@ dnode_peer_pool_run(struct server_pool *pool)
 }
 
 
-static rstatus_t
-rack_destroy(void *elem, void *data)
-{
-	struct rack *rack = elem;
-	return rack_deinit(rack);
-}
 
 void
 dnode_peer_pool_deinit(struct array *server_pool)
@@ -1356,8 +1350,8 @@ dnode_peer_pool_deinit(struct array *server_pool)
 
 
 		dnode_peer_deinit(&sp->peers);
-		array_each(&sp->racks, rack_destroy, NULL);
-		sp->nlive_server = 0;
+		array_each(&sp->datacenters, datacenter_destroy, NULL);
+		array_deinit(&sp->datacenters);
 
 		log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,
 				sp->name.len, sp->name.data);

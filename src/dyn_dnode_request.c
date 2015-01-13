@@ -262,9 +262,9 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 	if (!conn->same_dc) {
 		if (conn->last_sent != 0) {
 			uint32_t elapsed_time = now - conn->last_sent;
-			uint32_t earned_tokens = elapsed_time * tokens_earned_per_sec();
-			conn->avail_tokens = (conn->avail_tokens + earned_tokens) < max_allowable_rate()?
-					conn->avail_tokens + earned_tokens : max_allowable_rate();
+			uint32_t earned_tokens = elapsed_time * msgs_per_sec();
+			conn->avail_tokens = (conn->avail_tokens + earned_tokens) < msgs_per_sec()?
+					conn->avail_tokens + earned_tokens : msgs_per_sec();
 
 		}
 

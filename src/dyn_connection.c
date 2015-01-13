@@ -173,7 +173,7 @@ _conn_get(void)
     conn->dnode_crypto_state = 0;
 
     conn->same_dc = 1;
-    conn->avail_tokens = max_allowable_rate();
+    conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
     conn->last_received = 0;
 

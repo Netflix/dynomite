@@ -85,6 +85,12 @@ struct rack {
 };
 
 
+struct datacenter {
+	struct string      *name;            /* datacenter name */
+	struct array       racks;           /* list of racks in a datacenter */
+	dict               *dict_rack;
+};
+
 
 struct server {
     uint32_t           idx;           /* server index */
@@ -124,7 +130,7 @@ struct server_pool {
     struct conn_tqh    c_conn_q;             /* client connection q */
 
     struct array       server;               /* server[] */
-    struct array       racks;                /* racks info  */
+    struct array       datacenters;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     int64_t            next_rebuild;         /* next distribution rebuild time in usec */
 
@@ -186,10 +192,18 @@ void server_close(struct context *ctx, struct conn *conn);
 void server_connected(struct context *ctx, struct conn *conn);
 void server_ok(struct context *ctx, struct conn *conn);
 
-//struct rack *server_get_rack(struct server_pool *pool, struct string *rackname);
-struct rack *server_get_rack(struct server_pool *pool, struct string *rackname, struct string *dc);
-void rack_init(struct rack *rack);
+struct datacenter *server_get_dc(struct server_pool *pool, struct string *dcname);
+struct rack *server_get_rack(struct datacenter *dc, struct string *rackname);
+struct datacenter *server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname);
+
+rstatus_t rack_init(struct rack *rack);
 rstatus_t rack_deinit(struct rack *rack);
+rstatus_t rack_destroy(void *elem, void *data);
+
+rstatus_t dc_init(struct datacenter *dc);
+rstatus_t dc_deinit(struct datacenter *dc);
+rstatus_t datacenter_destroy(void *elem, void *data);
+
 
 struct conn *server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key, uint32_t keylen);
 rstatus_t server_pool_run(struct server_pool *pool);
