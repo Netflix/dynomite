@@ -109,6 +109,7 @@ struct dyn_ring;
 #include <netinet/in.h>
 
 #include "dyn_array.h"
+#include "dyn_dict.h"
 #include "dyn_string.h"
 #include "dyn_queue.h"
 #include "dyn_rbtree.h"
@@ -172,6 +173,28 @@ struct instance {
     pid_t           pid;                         /* process id */
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
+};
+
+
+struct continuum {
+	uint32_t index;  /* dyn_peer index */
+	uint32_t value;  /* hash value, used by ketama */
+	struct dyn_token *token;  /* used in vnode/dyn_token situations */
+};
+
+struct rack {
+	struct string      *name;
+	struct string      *dc;
+	uint32_t           ncontinuum;           /* # continuum points */
+	uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
+	struct continuum   *continuum;           /* continuum */
+};
+
+
+struct datacenter {
+	struct string      *name;            /* datacenter name */
+	struct array       racks;           /* list of racks in a datacenter */
+	dict               *dict_rack;
 };
 
 struct context *core_start(struct instance *nci);

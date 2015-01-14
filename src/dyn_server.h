@@ -22,6 +22,7 @@
 
 #include "dyn_core.h"
 #include "dyn_token.h"
+#include "dyn_dict.h"
 
 
 #ifndef _DYN_SERVER_H_
@@ -69,27 +70,6 @@
  */
 
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
-
-struct continuum {
-    uint32_t index;  /* dyn_peer index */
-    uint32_t value;  /* hash value, used by ketama */
-    struct dyn_token *token;  /* used in vnode/dyn_token situations */
-};
-
-struct rack {
-    struct string      *name;
-    struct string      *dc;
-    uint32_t           ncontinuum;           /* # continuum points */
-    uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
-    struct continuum   *continuum;           /* continuum */
-};
-
-
-struct datacenter {
-	struct string      *name;            /* datacenter name */
-	struct array       racks;           /* list of racks in a datacenter */
-	dict               *dict_rack;
-};
 
 
 struct server {

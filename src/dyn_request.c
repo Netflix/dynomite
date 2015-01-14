@@ -75,11 +75,12 @@ req_done(struct conn *conn, struct msg *msg)
     uint32_t nfragment;      /* # fragment */
 
     ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
-    ASSERT(msg->request);
 
-    if (!msg->done) {
+    if (msg == NULL || !msg->done) {
         return false;
     }
+
+    ASSERT(msg->request);
 
     id = msg->frag_id;
     if (id == 0) {
@@ -460,7 +461,11 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 
     /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
+    if (c_conn->dyn_mode) {
+   	  if (msg->is_read) {
+   		  c_conn->enqueue_outq(ctx, c_conn, msg);
+   	  }
+    } else if (!msg->noreply) {
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -559,13 +564,9 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     struct server *peer = s_conn->owner;
 
     if (peer->is_local) {
-    	//conn_print(c_conn);
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
-    	//conn_print(c_conn);
-    	//loga("-------------------------------------------------------------");
-    	//conn_print(s_conn);
         dnode_peer_req_forward(ctx, c_conn, s_conn, msg, rack, key, keylen);
     }
 }
@@ -608,7 +609,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 	}
 
 	// need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg),
-			// that will bork the request sent to secondary racks
+	// that will bork the request sent to secondary racks
 	struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
 
 	if (request_send_to_all_racks(msg)) {
@@ -621,25 +622,48 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 				return;
 			}
 
-			//log_debug(LOG_DEBUG, "dc name  '%.*s'", dc->name->len, dc->name->data);
-			uint32_t rack_cnt = array_n(&dc->racks);
-			uint32_t rack_index;
-			for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
-				struct rack *rack = array_get(&dc->racks, rack_index);
-				//log_debug(LOG_DEBUG, "rack name '%.*s'", rack->name->len, rack->name->data);
-				struct msg *rack_msg;
-				if (string_compare(rack->name, &pool->rack) == 0 ) {
-					rack_msg = msg;
-				} else {
-					rack_msg = msg_get(c_conn, msg->request, msg->redis);
-					if (rack_msg == NULL) {
-						log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
-						continue;
+			if (string_compare(dc->name, &pool->dc) == 0) { //send to all local racks
+				//log_debug(LOG_DEBUG, "dc name  '%.*s'", dc->name->len, dc->name->data);
+				uint32_t rack_cnt = array_n(&dc->racks);
+				uint32_t rack_index;
+				for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+					struct rack *rack = array_get(&dc->racks, rack_index);
+					//log_debug(LOG_DEBUG, "rack name '%.*s'", rack->name->len, rack->name->data);
+					struct msg *rack_msg;
+					if (string_compare(rack->name, &pool->rack) == 0 ) {
+						rack_msg = msg;
+					} else {
+						rack_msg = msg_get(c_conn, msg->request, msg->redis);
+						if (rack_msg == NULL) {
+							log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+							continue;
+						}
+
+						msg_clone(msg, mbuf_start, rack_msg);
+						rack_msg->noreply = true;
 					}
 
-					msg_clone(msg, mbuf_start, rack_msg);
-					rack_msg->noreply = true;
+					log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+							dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+
+					remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
 				}
+			} else {
+            uint32_t rack_cnt = array_n(&dc->racks);
+				if (rack_cnt == 0)
+					continue;
+
+				uint32_t ran_index = rand() % rack_cnt;
+				struct rack *rack = array_get(&dc->racks, ran_index);
+
+				struct msg *rack_msg = msg_get(c_conn, msg->request, msg->redis);
+				if (rack_msg == NULL) {
+					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+					continue;
+				}
+
+				msg_clone(msg, mbuf_start, rack_msg);
+				rack_msg->noreply = true;
 
 				log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
 						dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
@@ -647,7 +671,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 				remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
 			}
 		}
-	} else {
+	} else { //for read only requests
 		struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
 		remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
 	}

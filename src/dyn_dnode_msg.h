@@ -20,6 +20,7 @@ typedef enum dmsg_type {
     DMSG_DEBUG,
     DMSG_PARSE_ERROR,
     DMSG_REQ,
+    DMSG_REQ_FORWARD,
     DMSG_RES,
     CRYPTO_HANDSHAKE,
     GOSSIP_SYN,

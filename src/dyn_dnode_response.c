@@ -263,6 +263,8 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	struct msg *msg = rsp_send_next(ctx, conn);
 
+
+
 	if (msg != NULL && conn->dyn_mode) {
 		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
 
