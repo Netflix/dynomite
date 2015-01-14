@@ -49,6 +49,7 @@ struct dmsg {
     uint8_t              bit_field;       /* bits to indicate encryption or decryption. Right most bit indicates encryption.
                                              2nd right most bit indicates compression */
     dmsg_version_t       version;         /* version of the message sender */
+    uint8_t              same_dc;         /* indicate it is an inter_dc */
 
     struct sockaddr      *source_address; /* source ip */
     uint32_t mlen;                        /*  length */

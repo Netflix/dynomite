@@ -306,11 +306,6 @@ static bool is_conn_secured(struct server_pool *sp, struct server *peer_node)
 }
 
 
-static bool is_same_dc(struct server_pool *sp, struct server *peer_node)
-{
-	return string_compare(&sp->dc, &peer_node->dc) == 0;
-}
-
 
 struct conn *
 dnode_peer_conn(struct server *server)
@@ -1362,3 +1357,8 @@ dnode_peer_pool_deinit(struct array *server_pool)
 	log_debug(LOG_DEBUG, "deinit %"PRIu32" peer pools", npool);
 }
 
+
+bool is_same_dc(struct server_pool *sp, struct server *peer_node)
+{
+	return string_compare(&sp->dc, &peer_node->dc) == 0;
+}

@@ -461,7 +461,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 
     /* enqueue message (request) into client outq, if response is expected */
-    if (c_conn->dyn_mode) {
+    if (c_conn->dyn_mode && !c_conn->same_dc) {
    	  if (msg->is_read) {
    		  c_conn->enqueue_outq(ctx, c_conn, msg);
    	  }

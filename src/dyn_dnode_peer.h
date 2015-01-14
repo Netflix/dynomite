@@ -38,4 +38,6 @@ rstatus_t dnode_peer_replace(void *rmsg);
 rstatus_t dnode_peer_remove(void *rmsg);
 rstatus_t dnode_peer_handshake_announcing(void *rmsg);
 
+bool is_same_dc(struct server_pool *sp, struct server *peer_node);
+
 #endif 

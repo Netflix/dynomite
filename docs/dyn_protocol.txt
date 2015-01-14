@@ -4,14 +4,13 @@ I. Specification:
 
 1. Structure format
   <MagicNumber> <Space>
-  <MessageId> <Space>
-  <TypeId> <Space>
-  <BitField> <Space>
-  <Version> <Space>
-  //<Version> <CR LF>
+  <MessageId>   <Space>
+  <TypeId>      <Space>
+  <BitField>    <Space>
+  <Version>     <Space>
+  <Same-dc>   <Space>
   *<Number of data bytes> <Space>
-  <Data> <space>
-  //<Data> <CR LF>
+  <Data>        <space>
   *<Number of payload bytes> <CR LF>
   <Memcache or Redis payload>
 
@@ -23,12 +22,13 @@ I. Specification:
      The 2nd bit from the right indicates a compressed message.
   e. Version: version of the msg.  This usually depends on the version of the dynomite.
      This is needed during upgrading a live cluster with mixed versions.
-
+  f. Same-dc: bit to indicate whether the communication is inter-dcs.
+              We should later to exchange node's metadata like rack, dc, and ip.
 
 3. Example:
    This is a dynomite message that carries a Redis' "get foo" request:
    
-     "2014 1344 1 11 1\r\n*4 minh\r\n*2\r\n$3\r\nget\r\n$3\r\nfoo\r\n"
+     "2014 1344 5 1 1 0\r\n*4 minh\r\n*2\r\n$3\r\nget\r\n$3\r\nfoo\r\n"
     
      where "*2\r\n$3\r\nget\r\n$3\r\nfoo\r\n" is Redis' payload for "get foo" cmd.
      

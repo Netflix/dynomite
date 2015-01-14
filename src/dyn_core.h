@@ -129,6 +129,8 @@ struct dyn_ring;
 #define ENCRYPTION 1
 
 
+typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
+
 typedef enum dyn_state {
 	INIT = 0,
 	STANDBY = 1,
@@ -196,6 +198,97 @@ struct datacenter {
 	struct array       racks;           /* list of racks in a datacenter */
 	dict               *dict_rack;
 };
+
+
+struct server {
+    uint32_t           idx;           /* server index */
+    struct server_pool *owner;        /* owner pool */
+
+    struct string      pname;         /* name:port:weight (ref in conf_server) */
+    struct string      name;          /* name (ref in conf_server) */
+    uint16_t           port;          /* port */
+    uint32_t           weight;        /* weight */
+    int                family;        /* socket family */
+    socklen_t          addrlen;       /* socket length */
+    struct sockaddr    *addr;         /* socket address (ref in conf_server) */
+
+    uint32_t           ns_conn_q;     /* # server connection */
+    struct conn_tqh    s_conn_q;      /* server connection q */
+
+    int64_t            next_retry;    /* next retry time in usec */
+    uint32_t           failure_count; /* # consecutive failures */
+
+    struct string      rack;          /* logical rack */
+    struct string      dc;            /* server's dc */
+    struct array       tokens;        /* DHT tokens this peer owns */
+    bool               is_local;      /* is this peer the current running node?  */
+    unsigned           is_seed:1;     /* seed? */
+    unsigned           processed:1;   /* flag to indicate whether this has been processed */
+    unsigned           is_secure:1;   /* is the connection to the server secure? */
+    uint8_t            state;         /* state of the server - used mainly in peers  */
+};
+
+
+struct server_pool {
+    uint32_t           idx;                  /* pool index */
+    struct context     *ctx;                 /* owner context */
+    struct conf_pool   *conf_pool;           /* back reference to conf_pool */
+
+    struct conn        *p_conn;              /* proxy connection (listener) */
+    uint32_t           dn_conn_q;            /* # client connection */
+    struct conn_tqh    c_conn_q;             /* client connection q */
+
+    struct array       server;               /* server[] */
+    struct array       datacenters;                /* racks info  */
+    uint32_t           nlive_server;         /* # live server */
+    int64_t            next_rebuild;         /* next distribution rebuild time in usec */
+
+    struct string      name;                 /* pool name (ref in conf_pool) */
+    struct string      addrstr;              /* pool address (ref in conf_pool) */
+    uint16_t           port;                 /* port */
+    int                family;               /* socket family */
+    socklen_t          addrlen;              /* socket length */
+    struct sockaddr    *addr;                /* socket address (ref in conf_pool) */
+    int                dist_type;            /* distribution type (dist_type_t) */
+    int                key_hash_type;        /* key hash type (hash_type_t) */
+    hash_t             key_hash;             /* key hasher */
+    struct string      hash_tag;             /* key hash tag (ref in conf_pool) */
+    int                timeout;              /* timeout in msec */
+    int                backlog;              /* listen backlog */
+    uint32_t           client_connections;   /* maximum # client connection */
+    uint32_t           server_connections;   /* maximum # server connection */
+    int64_t            server_retry_timeout; /* server retry timeout in usec */
+    uint32_t           server_failure_limit; /* server failure limit */
+    unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
+    unsigned           preconnect:1;         /* preconnect? */
+    unsigned           redis:1;              /* redis? */
+    /* dynomite */
+    struct string      seed_provider;
+    struct array       seeds;                /*dyn seeds */
+    struct array       peers;
+    struct conn        *d_conn;              /* dnode connection (listener) */
+    struct string      d_addrstr;            /* pool address (ref in conf_pool) */
+    uint16_t           d_port;               /* port */
+    int                d_family;             /* socket family */
+    socklen_t          d_addrlen;            /* socket length */
+    struct sockaddr    *d_addr;              /* socket address (ref in conf_pool) */
+    int                d_timeout;            /* peer timeout in msec */
+    int                d_backlog;            /* listen backlog */
+    int64_t            d_retry_timeout;      /* peer retry timeout in usec */
+    uint32_t           d_failure_limit;      /* peer failure limit */
+    uint32_t           peer_connections;     /* maximum # peer connections */
+    struct string      rack;                 /* the rack for this node */
+    struct array       tokens;               /* the DHT tokens for this server */
+
+    int                g_interval;           /* gossip interval */
+    struct string      dc;                   /* server's dc */
+    struct string      env;                  /* aws, network, ect */
+    /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
+    struct string      secure_server_option;
+    struct string      pem_key_file;
+
+};
+
 
 struct context *core_start(struct instance *nci);
 void core_stop(struct context *ctx);
