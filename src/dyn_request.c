@@ -552,7 +552,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 {
     struct conn *s_conn;
 
-    ASSERT(c_conn->client);
+    ASSERT(c_conn->client || c_conn->dnode_client);
 
     s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (s_conn == NULL) {
@@ -610,7 +610,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
 	// need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg),
 	// that will bork the request sent to secondary racks
-	struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
+	struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
 
 	if (request_send_to_all_racks(msg)) {
 		uint32_t dc_cnt = array_n(&pool->datacenters);
@@ -618,7 +618,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 		for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
 			struct datacenter *dc = array_get(&pool->datacenters, dc_index);
 			if (dc == NULL) {
-				log_error("Wow, this is very bad");
+				log_error("Wow, this is very bad, dc is NULL");
 				return;
 			}
 
@@ -639,7 +639,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 							continue;
 						}
 
-						msg_clone(msg, mbuf_start, rack_msg);
+						msg_clone(msg, orig_mbuf, rack_msg);
 						rack_msg->noreply = true;
 					}
 
@@ -662,7 +662,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 					continue;
 				}
 
-				msg_clone(msg, mbuf_start, rack_msg);
+				msg_clone(msg, orig_mbuf, rack_msg);
 				rack_msg->noreply = true;
 
 				log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",

@@ -38,7 +38,7 @@ dnode_req_put(struct msg *msg)
 bool
 dnode_req_done(struct conn *conn, struct msg *msg)
 {
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	//ASSERT(!conn->dnode_client && !conn->dnode_server );
 	return req_done(conn, msg);
 }
 
@@ -194,7 +194,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 static void
-dnode_req_local_forward(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	struct server_pool *pool;
 	uint8_t *key;
@@ -226,7 +226,39 @@ dnode_req_local_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 		keylen = (uint32_t)(msg->key_end - msg->key_start);
 	}
 
-	local_req_forward(ctx, conn, msg, key, keylen);
+	ASSERT(msg->dmsg != NULL);
+	if (msg->dmsg->type == DMSG_REQ) {
+	   local_req_forward(ctx, conn, msg, key, keylen);
+	} else if (msg->dmsg->type == DMSG_REQ_FORWARD) {
+		//msg_dump(msg);
+
+		struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
+		struct datacenter *dc = server_get_dc(pool, &pool->dc);
+		uint32_t rack_cnt = array_n(&dc->racks);
+		uint32_t rack_index;
+		for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+			struct rack *rack = array_get(&dc->racks, rack_index);
+			//log_debug(LOG_DEBUG, "forwarding to rack  '%.*s'", rack->name->len, rack->name->data);
+			struct msg *rack_msg;
+			if (string_compare(rack->name, &pool->rack) == 0 ) {
+				rack_msg = msg;
+			} else {
+				rack_msg = msg_get(conn, msg->request, msg->redis);
+				if (rack_msg == NULL) {
+					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+					continue;
+				}
+
+				msg_clone(msg, orig_mbuf, rack_msg);
+				rack_msg->noreply = true;
+			}
+
+			log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+					dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data);
+
+			remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
+		}
+	}
 }
 
 
@@ -247,7 +279,7 @@ dnode_req_recv_done(struct context *ctx, struct conn *conn,
 		return;
 	}
 
-	dnode_req_local_forward(ctx, conn, msg);
+	dnode_req_forward(ctx, conn, msg);
 }
 
 
@@ -324,7 +356,7 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 	}
 
 	ASSERT(!p_conn->dnode_client && !p_conn->dnode_server);
-	ASSERT(c_conn->client);
+	ASSERT(c_conn->client || c_conn->dnode_client);
 
 	/* enqueue the message (request) into peer inq */
 	//if (TAILQ_EMPTY(&p_conn->imsg_q)) {
@@ -346,8 +378,7 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 	struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
 	struct server_pool *pool = c_conn->owner;
-	//dmsg_type_t msg_type = (string_compare(&pool->dc, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
-	dmsg_type_t msg_type = DMSG_REQ;
+	dmsg_type_t msg_type = (string_compare(&pool->dc, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
 
 	if (p_conn->dnode_secured) {
 		//Encrypting and adding header for a request

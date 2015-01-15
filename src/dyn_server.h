@@ -84,7 +84,7 @@ void server_ok(struct context *ctx, struct conn *conn);
 
 struct datacenter *server_get_dc(struct server_pool *pool, struct string *dcname);
 struct rack *server_get_rack(struct datacenter *dc, struct string *rackname);
-struct datacenter *server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname);
+struct rack *server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname);
 
 rstatus_t rack_init(struct rack *rack);
 rstatus_t rack_deinit(struct rack *rack);

@@ -391,10 +391,10 @@ dyn_parse_req(struct msg *r)
    struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
    if (dyn_parse_core(r)) {
-
       struct dmsg *dmsg = r->dmsg;
 
-      if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ && dmsg->type != GOSSIP_SYN) {
+      if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
+      	dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
          r->state = 0;
          r->result = MSG_PARSE_OK;
          r->dyn_state = DYN_DONE;

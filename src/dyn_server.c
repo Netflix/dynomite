@@ -966,7 +966,7 @@ server_get_rack(struct datacenter *dc, struct string *rackname)
 }
 
 
-struct datacenter *
+struct rack *
 server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname)
 {
 	struct datacenter *dc = server_get_dc(sp, dcname);
