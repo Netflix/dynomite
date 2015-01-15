@@ -75,11 +75,12 @@ req_done(struct conn *conn, struct msg *msg)
     uint32_t nfragment;      /* # fragment */
 
     ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
-    ASSERT(msg->request);
 
-    if (!msg->done) {
+    if (msg == NULL || !msg->done) {
         return false;
     }
+
+    ASSERT(msg->request);
 
     id = msg->frag_id;
     if (id == 0) {
@@ -460,7 +461,11 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
 
     /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
+    if (c_conn->dyn_mode && !c_conn->same_dc) {
+   	  if (msg->is_read) {
+   		  c_conn->enqueue_outq(ctx, c_conn, msg);
+   	  }
+    } else if (!msg->noreply) {
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -547,7 +552,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 {
     struct conn *s_conn;
 
-    ASSERT(c_conn->client);
+    ASSERT(c_conn->client || c_conn->dnode_client);
 
     s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (s_conn == NULL) {
@@ -559,13 +564,9 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     struct server *peer = s_conn->owner;
 
     if (peer->is_local) {
-    	//conn_print(c_conn);
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
-    	//conn_print(c_conn);
-    	//loga("-------------------------------------------------------------");
-    	//conn_print(s_conn);
         dnode_peer_req_forward(ctx, c_conn, s_conn, msg, rack, key, keylen);
     }
 }
@@ -574,72 +575,106 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
-    struct server_pool *pool = c_conn->owner;
-    uint8_t *key;
-    uint32_t keylen;
+	struct server_pool *pool = c_conn->owner;
+	uint8_t *key;
+	uint32_t keylen;
 
-    ASSERT(c_conn->client && !c_conn->proxy);
+	ASSERT(c_conn->client && !c_conn->proxy);
 
-    if (msg->is_read)
-        stats_pool_incr(ctx, pool, client_read_requests);
-    else
-        stats_pool_incr(ctx, pool, client_write_requests);
+	if (msg->is_read)
+		stats_pool_incr(ctx, pool, client_read_requests);
+	else
+		stats_pool_incr(ctx, pool, client_write_requests);
 
-    key = NULL;
-    keylen = 0;
+	key = NULL;
+	keylen = 0;
 
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
-        uint8_t *tag_start, *tag_end;
+	if (!string_empty(&pool->hash_tag)) {
+		struct string *tag = &pool->hash_tag;
+		uint8_t *tag_start, *tag_end;
 
-        tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
+		tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
+		if (tag_start != NULL) {
+			tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
+			if (tag_end != NULL) {
+				key = tag_start + 1;
+				keylen = (uint32_t)(tag_end - key);
+			}
+		}
+	}
 
-    if (keylen == 0) {
-        key = msg->key_start;
-        keylen = (uint32_t)(msg->key_end - msg->key_start);
-    }
+	if (keylen == 0) {
+		key = msg->key_start;
+		keylen = (uint32_t)(msg->key_end - msg->key_start);
+	}
 
-    struct rack *rack;
-    uint32_t rack_cnt = array_n(&pool->racks);
-    if (rack_cnt > 1 && request_send_to_all_racks(msg)) {
-        // need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg), 
-        // that will bork the request sent to secondary racks
-        struct mbuf *mbuf_start = STAILQ_FIRST(&msg->mhdr);
+	// need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg),
+	// that will bork the request sent to secondary racks
+	struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
 
-        uint32_t i;
-        for (i = 0; i < rack_cnt; i++) {
-            rack = array_get(&pool->racks, i);
-            struct msg *rack_msg;
-            
-            // clone the msg struct if not the current rack/dc.  Fixed this to take DC into account too so that we can have
-            //same rack name in different DCs.
-            if (string_compare(rack->name, &pool->rack) != 0 ) {
-                rack_msg = msg_get(c_conn, msg->request, msg->redis);
-                if (rack_msg == NULL) {
-                    log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
-                    continue;
-                }
+	if (request_send_to_all_racks(msg)) {
+		uint32_t dc_cnt = array_n(&pool->datacenters);
+		uint32_t dc_index;
+		for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+			struct datacenter *dc = array_get(&pool->datacenters, dc_index);
+			if (dc == NULL) {
+				log_error("Wow, this is very bad, dc is NULL");
+				return;
+			}
 
-                msg_clone(msg, mbuf_start, rack_msg);
-                rack_msg->noreply = true;
-            } else {
-                rack_msg = msg;
-            }
+			if (string_compare(dc->name, &pool->dc) == 0) { //send to all local racks
+				//log_debug(LOG_DEBUG, "dc name  '%.*s'", dc->name->len, dc->name->data);
+				uint32_t rack_cnt = array_n(&dc->racks);
+				uint32_t rack_index;
+				for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+					struct rack *rack = array_get(&dc->racks, rack_index);
+					//log_debug(LOG_DEBUG, "rack name '%.*s'", rack->name->len, rack->name->data);
+					struct msg *rack_msg;
+					if (string_compare(rack->name, &pool->rack) == 0 ) {
+						rack_msg = msg;
+					} else {
+						rack_msg = msg_get(c_conn, msg->request, msg->redis);
+						if (rack_msg == NULL) {
+							log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+							continue;
+						}
 
-            remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
-        }
-    } else {
-        rack = server_get_rack(pool, &pool->rack, &pool->dc);
-        remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
-    }
+						msg_clone(msg, orig_mbuf, rack_msg);
+						rack_msg->noreply = true;
+					}
+
+					log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+							dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+
+					remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+				}
+			} else {
+            uint32_t rack_cnt = array_n(&dc->racks);
+				if (rack_cnt == 0)
+					continue;
+
+				uint32_t ran_index = rand() % rack_cnt;
+				struct rack *rack = array_get(&dc->racks, ran_index);
+
+				struct msg *rack_msg = msg_get(c_conn, msg->request, msg->redis);
+				if (rack_msg == NULL) {
+					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+					continue;
+				}
+
+				msg_clone(msg, orig_mbuf, rack_msg);
+				rack_msg->noreply = true;
+
+				log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+						dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+
+				remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+			}
+		}
+	} else { //for read only requests
+		struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+		remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
+	}
 }
 
 

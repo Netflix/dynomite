@@ -146,6 +146,8 @@ def main():
     elif 'sdel' == options.operation :
         r.delete('key_time')
 
+    elif 'flushall' == options.operation :
+        r.flushall();
 
     #mc.disconnect_all()
 

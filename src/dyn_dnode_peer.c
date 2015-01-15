@@ -306,11 +306,6 @@ static bool is_conn_secured(struct server_pool *sp, struct server *peer_node)
 }
 
 
-static bool is_same_dc(struct server_pool *sp, struct server *peer_node)
-{
-	return string_compare(&sp->dc, &peer_node->dc) == 0;
-}
-
 
 struct conn *
 dnode_peer_conn(struct server *server)
@@ -1334,12 +1329,6 @@ dnode_peer_pool_run(struct server_pool *pool)
 }
 
 
-static rstatus_t
-rack_destroy(void *elem, void *data)
-{
-	struct rack *rack = elem;
-	return rack_deinit(rack);
-}
 
 void
 dnode_peer_pool_deinit(struct array *server_pool)
@@ -1356,8 +1345,8 @@ dnode_peer_pool_deinit(struct array *server_pool)
 
 
 		dnode_peer_deinit(&sp->peers);
-		array_each(&sp->racks, rack_destroy, NULL);
-		sp->nlive_server = 0;
+		array_each(&sp->datacenters, datacenter_destroy, NULL);
+		array_deinit(&sp->datacenters);
 
 		log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,
 				sp->name.len, sp->name.data);
@@ -1368,3 +1357,8 @@ dnode_peer_pool_deinit(struct array *server_pool)
 	log_debug(LOG_DEBUG, "deinit %"PRIu32" peer pools", npool);
 }
 
+
+bool is_same_dc(struct server_pool *sp, struct server *peer_node)
+{
+	return string_compare(&sp->dc, &peer_node->dc) == 0;
+}

@@ -34,6 +34,7 @@ enum {
         DYN_TYPE_ID,
         DYN_BIT_FIELD,
         DYN_VERSION,
+        DYN_SAME_DC,
         DYN_STAR,
         DYN_DATA_LEN,
         DYN_DATA,
@@ -187,7 +188,7 @@ dyn_parse_core(struct msg *r)
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             log_debug(LOG_DEBUG, "VERSION : %d", num);
             dmsg->version = num;
-            state = DYN_DATA_LEN;
+            state = DYN_SAME_DC;
             num = 0;
          } else {
             token = NULL;
@@ -198,6 +199,23 @@ dyn_parse_core(struct msg *r)
          }
 
          break;
+
+      case DYN_SAME_DC:
+      	if (isdigit(ch)) {
+      		dmsg->same_dc = ch - '0';
+           	log_debug(LOG_DEBUG, "DYN_SAME_DC %d", dmsg->same_dc);
+      	} else if (ch == ' ' && isdigit(*(p-1))) {
+      		state = DYN_DATA_LEN;
+      		num = 0;
+      	} else {
+      		token = NULL;
+      		loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+      		state = DYN_START;
+      		if (ch == '$')
+      		   p -= 1;
+      	}
+
+      	break;
 
       case DYN_DATA_LEN:
          log_debug(LOG_DEBUG, "DYN_DATA_LEN");
@@ -373,10 +391,10 @@ dyn_parse_req(struct msg *r)
    struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
    if (dyn_parse_core(r)) {
-
       struct dmsg *dmsg = r->dmsg;
 
-      if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ && dmsg->type != GOSSIP_SYN) {
+      if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
+      	dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
          r->state = 0;
          r->result = MSG_PARSE_OK;
          r->dyn_state = DYN_DONE;
@@ -392,6 +410,9 @@ dyn_parse_req(struct msg *r)
 
          done_parsing = true;
       }
+
+      struct conn *conn = r->owner;
+      conn->same_dc = dmsg->same_dc;
 
       //check whether we need to decrypt the payload
       if (dmsg->bit_field == 1) {
@@ -413,7 +434,6 @@ dyn_parse_req(struct msg *r)
          //Decrypt payload
          dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
-
          b->pos = b->pos + dmsg->plen;
          r->pos = decrypted_buf->start;
          mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
@@ -422,7 +442,6 @@ dyn_parse_req(struct msg *r)
          mbuf_put(b);
 
          r->mlen = mbuf_length(decrypted_buf);
-
       }
 
       if (done_parsing)
@@ -606,9 +625,11 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     mbuf_write_string(mbuf, &MAGIC_STR);
     mbuf_write_uint64(mbuf, msg_id);
 
+    //type
     mbuf_write_char(mbuf, ' ');
     mbuf_write_uint8(mbuf, type);
 
+    //bit field
     mbuf_write_char(mbuf, ' ');
     //encryption bit
     if (conn->dnode_secured) {
@@ -617,21 +638,30 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
        mbuf_write_uint8(mbuf, 0);
     }
 
+    //version
     mbuf_write_char(mbuf, ' ');
     mbuf_write_uint8(mbuf, version);
 
-    //mbuf_write_string(mbuf, &CRLF_STR);
+    //same-dc
+    mbuf_write_char(mbuf, ' ');
+    if (conn->same_dc)
+   	 mbuf_write_uint8(mbuf, 1);
+    else
+   	 mbuf_write_uint8(mbuf, 0);
+
+    //data
     mbuf_write_char(mbuf, ' ');
     mbuf_write_char(mbuf, '*');
 
     //write aes key
     unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
-           mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
+        mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
 
+    //payload
     mbuf_write_char(mbuf, ' ');
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
@@ -669,6 +699,14 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
 
     mbuf_write_char(mbuf, ' ');
     mbuf_write_uint8(mbuf, version);
+
+    //same-dc
+    mbuf_write_char(mbuf, ' ');
+    if (conn->same_dc)
+   	 mbuf_write_uint8(mbuf, 1);
+    else
+   	 mbuf_write_uint8(mbuf, 0);
+
     //mbuf_write_string(mbuf, &CRLF_STR);
     mbuf_write_char(mbuf, ' ');
     mbuf_write_char(mbuf, '*');

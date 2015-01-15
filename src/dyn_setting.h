@@ -23,11 +23,9 @@
 uint8_t get_tracking_level(void);
 void set_tracking_level(uint8_t level);
 
-uint32_t max_allowable_rate(void);
-void set_max_allowable_rate(uint32_t rate);
 
-uint32_t tokens_earned_per_sec(void);
-void set_tokens_earned_per_sec(uint32_t tokens_per_sec);
+uint32_t msgs_per_sec(void);
+void set_msgs_per_sec(uint32_t tokens_per_sec);
 
 
 #endif

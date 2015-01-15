@@ -19,7 +19,6 @@
 #include "dyn_conf.h"
 
 static uint8_t tracking_level = 0;
-static uint32_t max_tokens = CONF_DEFAULT_CONN_MAX_AVAL_TOKENS;  //max msgs can be seen through a conn
 static uint32_t conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;           //conn msgs per sec
 
 
@@ -33,24 +32,12 @@ void set_tracking_level(uint8_t level)
     tracking_level = level;
 }
 
-uint32_t max_allowable_rate(void)
-{
-	return max_tokens;
-}
-
-
-void set_max_allowable_rate(uint32_t rate)
-{
-	max_tokens = rate;
-}
-
-
-uint32_t tokens_earned_per_sec(void)
+uint32_t msgs_per_sec(void)
 {
    return conn_msg_rate;
 }
 
-void set_tokens_earned_per_sec(uint32_t tokens_per_sec)
+void set_msgs_per_sec(uint32_t tokens_per_sec)
 {
 	conn_msg_rate = tokens_per_sec;
 }

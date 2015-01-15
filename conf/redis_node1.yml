@@ -6,7 +6,7 @@ dyn_o_mite:
   - 127.0.0.2:8101:rack:dc:1383429731
   listen: 127.0.0.1:8102
   servers:
-  - 127.0.0.1:22123:1
+  - 127.0.0.1:22122:1
   tokens: '12345678'
   secure_server_option: datacenter
   pem_key_file: conf/dynomite.pem

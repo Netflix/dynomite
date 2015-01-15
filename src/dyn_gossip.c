@@ -33,33 +33,6 @@ static uint32_t node_count = 0;
 static struct node *current_node = NULL;
 
 
-static unsigned int dict_string_hash(const void *key) {
-	struct string *s = key;
-    //return dictGenHashFunction((unsigned char*)key, dn_strlen((char*)key));
-	return dictGenHashFunction(s->data, s->len);
-}
-
-
-static int dict_string_key_compare(void *privdata, const void *key1, const void *key2)
-{
-    DICT_NOTUSED(privdata);
-    struct string *s1 = key1;
-    struct string *s2 = key2;
-
-    //return (s1->len != s2->len)? 0 : strncmp(s1->data, s2->data, s1->len) == 0;
-    return string_compare(s1, s2) == 0;
-}
-
-static void dict_string_destructor(void *privdata, void *val)
-{
-    DICT_NOTUSED(privdata);
-
-    struct string *s = val;
-    string_deinit(s);
-    dn_free(s);
-}
-
-
 dictType token_table_dict_type = {
 	dict_string_hash,            /* hash function */
     NULL,                        /* key dup */
@@ -78,38 +51,6 @@ dictType string_table_dict_type = {
     dict_string_destructor,      /* key destructor */
     NULL                         /* val destructor */
 };
-
-
-static unsigned int dict_node_hash(const void *key) {
-	struct node *node = key;
-    return dictGenHashFunction((unsigned char*)node->dc.data, node->dc.len) +
-    		dictGenHashFunction((unsigned char*)node->rack.data, node->rack.len) +
-    		node->token.mag[0];
-}
-
-
-static int dict_node_key_compare(void *privdata, const void *key1, const void *key2)
-{
-    DICT_NOTUSED(privdata);
-    struct node *node1 = key1;
-    struct node *node2 = key2;
-
-    ASSERT(node1 == NULL || node2 == NULL);
-
-    return (string_compare(&node1->dc, &node2->dc) == 0) &&
-    	   (string_compare(&node1->rack, &node2->rack) == 0) &&
-    	   (cmp_dyn_token(&node1->token, &node2->token) == 0);
-
-}
-
-static void dict_node_destructor(void *privdata, void *val)
-{
-    DICT_NOTUSED(privdata);
-
-    struct node *node = val;
-    node_deinit(node);
-    dn_free(node);
-}
 
 
 dictType gossip_table_dict_type = {
@@ -731,13 +672,13 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 	return DN_OK;
 }
 
-static uint64_t max_loop = 10000;
+//static uint64_t max_loop = 10000;
 
 static void *
 gossip_loop(void *arg)
 {
 	struct server_pool *sp = arg;
-    uint64_t counter = 0;
+   //uint64_t counter = 0;
 	struct string seeds;
 	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
@@ -749,17 +690,17 @@ gossip_loop(void *arg)
 
 		log_debug(LOG_VERB, "Gossip is running ...");
 
+		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
+			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
+			gossip_update_seeds(sp, &seeds);
+			string_deinit(&seeds);
+		}
+
 		current_node->ts = (uint64_t) time(NULL);
 		gossip_process_msgs();
 
 		if (current_node->state == NORMAL) {
 			gn_pool.ctx->dyn_state = NORMAL;
-		}
-
-		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
-			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
-			gossip_update_seeds(sp, &seeds);
-			string_deinit(&seeds);
 		}
 
 		if (!sp->ctx->enable_gossip) {
@@ -788,8 +729,8 @@ gossip_loop(void *arg)
 
 		gossip_debug();
 
-		if (counter++ > max_loop)
-			return NULL;
+		//if (counter++ > max_loop)
+		//	return NULL;
 	}
 
 	return NULL;
@@ -826,7 +767,6 @@ gossip_set_seeds_provider(struct string * seeds_provider_str)
 }
 
 
-
 static rstatus_t
 gossip_pool_each_init(void *elem, void *data)
 {
@@ -843,37 +783,44 @@ gossip_pool_each_init(void *elem, void *data)
 
 	gossip_set_seeds_provider(&sp->seed_provider);
 
-	uint32_t n_rack = array_n(&sp->racks);
-	if (n_rack == 0)
+	uint32_t n_dc = array_n(&sp->datacenters);
+	if (n_dc == 0)
 		return DN_OK;
 
-	if (n_rack > 0) {
-	   status = array_init(&gn_pool.datacenters, n_rack, sizeof(struct gossip_dc));
-	   if (status != DN_OK) {
-         return status;
-	   }
+	if (n_dc > 0) {
+		status = array_init(&gn_pool.datacenters, n_dc, sizeof(struct gossip_dc));
+		if (status != DN_OK) {
+			return status;
+		}
 	}
 
 	//add racks and datacenters
-	uint32_t i, nelem;
-	for (i = 0, nelem = array_n(&sp->racks); i < nelem; i++) {
-		struct rack *rack = (struct rack *) array_get(&sp->racks, i);
-		if (dictFind(gn_pool.dict_dc, rack->dc) == NULL) {
-			struct gossip_dc *g_dc = array_push(&gn_pool.datacenters);
-			gossip_dc_init(g_dc, rack->dc);
-			dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
-		}
+	uint32_t dc_cnt = array_n(&sp->datacenters);
+	uint32_t dc_index;
+	for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+		struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+		uint32_t rack_cnt = array_n(&dc->racks);
+		uint32_t rack_index;
+		for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+			struct rack *rack = array_get(&dc->racks, rack_index);
 
-		struct gossip_dc *g_dc = dictFetchValue(gn_pool.dict_dc, rack->dc);
-		if (dictFind(g_dc->dict_rack, rack->name) == NULL) {
-			log_debug(LOG_VERB, "What?? No rack in Dict for rack         : '%.*s'", g_dc->name);
-			struct gossip_rack *g_rack = array_push(&g_dc->racks);
-			gossip_rack_init(g_rack, rack->dc, rack->name);
-			dictAdd(g_dc->dict_rack, &g_rack->name, g_rack);
-		}
+			if (dictFind(gn_pool.dict_dc, rack->dc) == NULL) {
+				struct gossip_dc *g_dc = array_push(&gn_pool.datacenters);
+				gossip_dc_init(g_dc, rack->dc);
+				dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
+			}
 
+			struct gossip_dc *g_dc = dictFetchValue(gn_pool.dict_dc, rack->dc);
+			if (dictFind(g_dc->dict_rack, rack->name) == NULL) {
+				log_debug(LOG_VERB, "What?? No rack in Dict for rack         : '%.*s'", g_dc->name);
+				struct gossip_rack *g_rack = array_push(&g_dc->racks);
+				gossip_rack_init(g_rack, rack->dc, rack->name);
+				dictAdd(g_dc->dict_rack, &g_rack->name, g_rack);
+			}
+		}
 	}
 
+	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(&sp->peers); i < nelem; i++) {
 		struct server *peer = array_get(&sp->peers, i);
 		struct gossip_dc *g_dc = dictFetchValue(gn_pool.dict_dc, &peer->dc);

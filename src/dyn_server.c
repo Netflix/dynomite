@@ -787,29 +787,6 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
 	return DN_OK;
 }
 
-void 
-rack_init(struct rack *rack)
-{
-	rack->continuum = NULL;
-	rack->ncontinuum = 0;
-	rack->nserver_continuum = 0;
-	rack->name = dn_alloc(sizeof(struct string));
-	string_init(rack->name);
-
-	rack->dc = dn_alloc(sizeof(struct string));
-	string_init(rack->dc);
-}
-
-rstatus_t
-rack_deinit(struct rack *rack)
-{
-	if (rack->continuum != NULL) {
-		dn_free(rack->continuum);
-	}
-
-	return DN_OK;
-}
-
 
 void
 server_pool_deinit(struct array *server_pool)
@@ -824,9 +801,6 @@ server_pool_deinit(struct array *server_pool)
 		ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
 
 		server_deinit(&sp->server);
-		if (array_n(&sp->racks) != 0)
-		  array_each(&sp->racks, rack_deinit, NULL);
-		array_deinit(&sp->racks);
 
 		sp->nlive_server = 0;
 
@@ -839,31 +813,162 @@ server_pool_deinit(struct array *server_pool)
 	log_debug(LOG_DEBUG, "deinit %"PRIu32" pools", npool);
 }
 
-struct rack *
-server_get_rack(struct server_pool *pool, struct string *rackname, struct string *dcname)
+
+dictType dc_string_dict_type = {
+		dict_string_hash,            /* hash function */
+		NULL,                        /* key dup */
+		NULL,                        /* val dup */
+		dict_string_key_compare,     /* key compare */
+		dict_string_destructor,      /* key destructor */
+		NULL                         /* val destructor */
+};
+
+
+rstatus_t
+rack_init(struct rack *rack)
 {
+	rack->continuum = dn_alloc(sizeof(struct continuum));
+	rack->ncontinuum = 0;
+	rack->nserver_continuum = 0;
+	rack->name = dn_alloc(sizeof(struct string));
+	string_init(rack->name);
+
+	rack->dc = dn_alloc(sizeof(struct string));
+	string_init(rack->dc);
+
+	return DN_OK;
+}
+
+
+rstatus_t
+rack_deinit(struct rack *rack)
+{
+	if (rack->continuum != NULL) {
+		dn_free(rack->continuum);
+	}
+
+	return DN_OK;
+}
+
+
+rstatus_t dc_init(struct datacenter *dc)
+{
+	rstatus_t status;
+
+	dc->dict_rack = dictCreate(&dc_string_dict_type, NULL);
+	dc->name = dn_alloc(sizeof(struct string));
+	string_init(dc->name);
+
+	status = array_init(&dc->racks, 3, sizeof(struct rack));
+
+	return status;
+}
+
+rstatus_t
+dc_deinit(struct datacenter *dc)
+{
+	array_each(&dc->racks, rack_destroy, NULL);
+	string_deinit(dc->name);
+	//dictRelease(dc->dict_rack);
+	return DN_OK;
+}
+
+
+rstatus_t
+rack_destroy(void *elem, void *data)
+{
+	struct rack *rack = elem;
+	return rack_deinit(rack);
+}
+
+rstatus_t
+datacenter_destroy(void *elem, void *data)
+{
+	struct datacenter *dc = elem;
+	dc_deinit(dc);
+
+	return DN_OK;
+}
+
+
+
+struct datacenter *
+server_get_dc(struct server_pool *pool, struct string *dcname)
+{
+	struct datacenter *dc;
 	uint32_t i, len;
-	for (i = 0, len = array_n(&pool->racks); i < len; i++) {
-		struct rack *rack = (struct rack *) array_get(&pool->racks, i);
-		ASSERT(rack != NULL);
-		ASSERT(rack->name != NULL);
 
-		//TODOs: use dict for fast access/check-up
-		if (string_compare(rack->name, rackname) == 0 && string_compare(rack->dc, dcname) == 0) {
-			//log_debug(LOG_VERB, "server_get_rack : Rack name          : '%.*s'", rack->name->len, rack->name->data);
-			//log_debug(LOG_VERB, "server_get_rack : Rack's DC name          : '%.*s'", rack->dc->len, rack->dc->data);
+	log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
+			                dcname->len, dcname->data);
 
-			//log_debug(LOG_VERB, "server_get_rack : Input's Rack name          : '%.*s'", rackname->len, rackname->data);
-			//log_debug(LOG_VERB, "server_get_rack : Input's DC name          : '%.*s'", dcname->len, dcname->data);
+	for (i = 0, len = array_n(&pool->datacenters); i < len; i++) {
+		dc = (struct datacenter *) array_get(&pool->datacenters, i);
+		ASSERT(dc != NULL);
+		ASSERT(dc->name != NULL);
 
-			//log_debug(LOG_VERB, "rack->ncontinuum  == %d  ", rack->ncontinuum);
-			//log_debug(LOG_VERB, "rack->nserver_continuum  == %d  ", rack->nserver_continuum);
+		if (string_compare(dc->name, dcname) == 0) {
+			return dc;
+		}
+	}
+
+	dc = array_push(&pool->datacenters);
+	dc_init(dc);
+	string_copy(dc->name, dcname->data, dcname->len);
+
+	log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
+			dc->name->len, dc->name->data);
+
+	return dc;
+}
+
+
+struct rack *
+server_get_rack(struct datacenter *dc, struct string *rackname)
+{
+	ASSERT(dc != NULL);
+	ASSERT(dc->dict_rack != NULL);
+	ASSERT(dc->name != NULL);
+
+	log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
+
+	/*
+   struct rack *rack = dictFetchValue(dc->dict_rack, rackname);
+   if (rack == NULL) {
+      rack = array_push(&dc->racks);
+      rack_init(rack);
+      string_copy(rack->name, rackname->data, rackname->len);
+      string_copy(rack->dc, dc->name->data, dc->name->len);
+      rack->continuum = dn_alloc(sizeof(struct continuum));
+
+   	dictAdd(dc->dict_rack, rackname, rack);
+   }
+	 */
+
+	struct rack *rack;
+	uint32_t i, len;
+	for (i = 0, len = array_n(&dc->racks); i < len; i++) {
+		rack = (struct rack *) array_get(&dc->racks, i);
+
+		if (string_compare(rack->name, rackname) == 0) {
 			return rack;
 		}
 	}
 
-    //log_debug(LOG_VERB, "There is no rack associated with the name '%.*s' ", rackname->len, rackname->data);
+	rack = array_push(&dc->racks);
+	rack_init(rack);
+	string_copy(rack->name, rackname->data, rackname->len);
+	string_copy(rack->dc, dc->name->data, dc->name->len);
 
-	return NULL;
+	log_debug(LOG_DEBUG, "server_get_rack exiting  '%.*s'",
+			rack->name->len, rack->name->data);
+
+	return rack;
 }
 
+
+struct rack *
+server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname)
+{
+	struct datacenter *dc = server_get_dc(sp, dcname);
+	return server_get_rack(dc, rackname);
+}

@@ -74,8 +74,6 @@ vnode_update(struct server_pool *sp)
         log_debug(LOG_VERB, "peer dc       : '%.*s'", peer->dc.len, peer->dc.data);
         log_debug(LOG_VERB, "peer->processed = %d", peer->processed);
 
-        struct rack *rack = server_get_rack(sp, &peer->rack, &peer->dc);
-
         //update its own state
         if (i == 0) {
            peer->state = sp->ctx->dyn_state;
@@ -87,17 +85,10 @@ vnode_update(struct server_pool *sp)
 
         peer->processed = 1;
 
-        if (rack == NULL) {
-            rack = array_push(&sp->racks);
-            rack_init(rack);
-            string_copy(rack->name, peer->rack.data, peer->rack.len);
-            string_copy(rack->dc, peer->dc.data, peer->dc.len);
-            rack->continuum = dn_alloc(sizeof(struct continuum));
-        }
-        //else {
-        //	log_debug(LOG_VERB, "Found rack's object: rack name       : '%.*s'", rack->name->len, rack->name->data);
-        //	log_debug(LOG_VERB, "Found rack's object: rack dc       : '%.*s'", rack->dc->len, rack->dc->data);
-        //}
+        struct datacenter *dc = server_get_dc(sp, &peer->dc);
+        struct rack *rack = server_get_rack(dc, &peer->rack);
+
+        ASSERT(rack != NULL);
 
         uint32_t token_cnt = array_n(&peer->tokens);
         uint32_t orig_cnt = rack->nserver_continuum;
@@ -122,14 +113,15 @@ vnode_update(struct server_pool *sp)
             c->token = array_get(&peer->tokens, j);
             rack->ncontinuum++;
         }
+
+        if (array_n(&dc->racks) != 0) {
+             rstatus_t status = array_each(&dc->racks, vnode_rack_verify_continuum, NULL);
+             if (status != DN_OK) {
+                  return status;
+             }
+        }
     }
 
-    if (array_n(&sp->racks) != 0) {
-       rstatus_t status = array_each(&sp->racks, vnode_rack_verify_continuum, NULL);
-       if (status != DN_OK) {
-          return status;
-       }
-    }
 
     return DN_OK;
 }

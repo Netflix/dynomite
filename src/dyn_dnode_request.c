@@ -38,7 +38,7 @@ dnode_req_put(struct msg *msg)
 bool
 dnode_req_done(struct conn *conn, struct msg *msg)
 {
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+	//ASSERT(!conn->dnode_client && !conn->dnode_server );
 	return req_done(conn, msg);
 }
 
@@ -157,6 +157,7 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 			dnode_req_put(msg);
 			return true;
 		}
+
 	}
 
 	return false;
@@ -193,7 +194,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
 
 static void
-dnode_req_local_forward(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 {
 	struct server_pool *pool;
 	uint8_t *key;
@@ -225,7 +226,37 @@ dnode_req_local_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 		keylen = (uint32_t)(msg->key_end - msg->key_start);
 	}
 
-	local_req_forward(ctx, conn, msg, key, keylen);
+	ASSERT(msg->dmsg != NULL);
+	if (msg->dmsg->type == DMSG_REQ) {
+	   local_req_forward(ctx, conn, msg, key, keylen);
+	} else if (msg->dmsg->type == DMSG_REQ_FORWARD) {
+		struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
+		struct datacenter *dc = server_get_dc(pool, &pool->dc);
+		uint32_t rack_cnt = array_n(&dc->racks);
+		uint32_t rack_index;
+		for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+			struct rack *rack = array_get(&dc->racks, rack_index);
+			//log_debug(LOG_DEBUG, "forwarding to rack  '%.*s'", rack->name->len, rack->name->data);
+			struct msg *rack_msg;
+			if (string_compare(rack->name, &pool->rack) == 0 ) {
+				rack_msg = msg;
+			} else {
+				rack_msg = msg_get(conn, msg->request, msg->redis);
+				if (rack_msg == NULL) {
+					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+					continue;
+				}
+
+				msg_clone(msg, orig_mbuf, rack_msg);
+				rack_msg->noreply = true;
+			}
+
+			log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+					dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data);
+
+			remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
+		}
+	}
 }
 
 
@@ -246,7 +277,7 @@ dnode_req_recv_done(struct context *ctx, struct conn *conn,
 		return;
 	}
 
-	dnode_req_local_forward(ctx, conn, msg);
+	dnode_req_forward(ctx, conn, msg);
 }
 
 
@@ -257,14 +288,14 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 
+	uint32_t now = time(NULL);
 	//throttling the sending traffics here
 	if (!conn->same_dc) {
-		uint32_t now = time(NULL);
 		if (conn->last_sent != 0) {
 			uint32_t elapsed_time = now - conn->last_sent;
-			uint32_t earned_tokens = elapsed_time * tokens_earned_per_sec();
-			conn->avail_tokens = (conn->avail_tokens + earned_tokens) < max_allowable_rate()?
-					conn->avail_tokens + earned_tokens : max_allowable_rate();
+			uint32_t earned_tokens = elapsed_time * msgs_per_sec();
+			conn->avail_tokens = (conn->avail_tokens + earned_tokens) < msgs_per_sec()?
+					conn->avail_tokens + earned_tokens : msgs_per_sec();
 
 		}
 
@@ -280,6 +311,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 		return NULL;
 	}
 
+	conn->last_sent = now;
 	return req_send_next(ctx, conn);
 }
 
@@ -305,15 +337,16 @@ dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct 
 
 
 /* Forward a client request over to a peer */
-void
-dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
-		struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen)
+void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
+		struct msg *msg, struct rack *rack,
+		uint8_t *key, uint32_t keylen)
 {
 
-    if (get_tracking_level() >= LOG_VVERB) {
-	   log_debug(LOG_NOTICE, "dnode_peer_req_forward entering");
-    }
+	if (get_tracking_level() >= LOG_VVERB) {
+		log_debug(LOG_NOTICE, "dnode_peer_req_forward entering");
+	}
 
+	struct string *dc = rack->dc;
 	rstatus_t status;
 	/* enqueue message (request) into client outq, if response is expected */
 	if (!msg->noreply) {
@@ -321,7 +354,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 	}
 
 	ASSERT(!p_conn->dnode_client && !p_conn->dnode_server);
-	ASSERT(c_conn->client);
+	ASSERT(c_conn->client || c_conn->dnode_client);
 
 	/* enqueue the message (request) into peer inq */
 	//if (TAILQ_EMPTY(&p_conn->imsg_q)) {
@@ -342,6 +375,9 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 
 	struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
+	struct server_pool *pool = c_conn->owner;
+	dmsg_type_t msg_type = (string_compare(&pool->dc, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
+
 	if (p_conn->dnode_secured) {
 		//Encrypting and adding header for a request
 
@@ -359,9 +395,9 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 			status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, p_conn->aes_key);
 			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
 
-			dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(encrypted_buf));
+			dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(encrypted_buf));
 
-		    log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+			log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
 			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
 
 			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
@@ -371,32 +407,31 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_
 			mbuf_put(data_buf);
 		} else {
 			log_debug(LOG_VERB, "no encryption on the msg payload");
-			dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
+			dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(data_buf));
 		}
 
 	} else {
 		//write dnode header
-		dmsg_write(header_buf, msg_id, DMSG_REQ, p_conn, mbuf_length(data_buf));
+		dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(data_buf));
 	}
 
 	mbuf_insert_head(&msg->mhdr, header_buf);
 
 
-    if (get_tracking_level() >= LOG_VVERB) {
-	   log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
-	   msg_dump(msg);
-    }
+	if (get_tracking_level() >= LOG_VVERB) {
+		log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
+		msg_dump(msg);
+	}
 
 	p_conn->enqueue_inq(ctx, p_conn, msg);
 
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
-
-    if (get_tracking_level() >= LOG_VERB) {
-	   log_debug(LOG_NOTICE, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-		   	     " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
-			     msg->mlen, msg->type, keylen, key);
-    }
+	if (get_tracking_level() >= LOG_VERB) {
+		log_debug(LOG_NOTICE, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+				" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
+				msg->mlen, msg->type, keylen, key);
+	}
 
 }
 

@@ -10,12 +10,12 @@
 #define _DYN_TOKEN_H_
 
 
-
 struct dyn_token {
     uint32_t signum;
     uint32_t *mag;
     uint32_t len;
 };
+
 
 void init_dyn_token(struct dyn_token *token);
 void deinit_dyn_token(struct dyn_token *token);

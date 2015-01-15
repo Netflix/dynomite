@@ -725,6 +725,10 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         if (n == DN_EAGAIN) {
             return DN_OK;
         }
+
+        if (conn->dyn_mode)
+       	 return DN_OK;
+
         return DN_ERROR;
     }
 
@@ -898,6 +902,9 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     if (n > 0) {
         return DN_OK;
     }
+
+    if (conn->dyn_mode)
+   	 return DN_OK;
 
     return (n == DN_EAGAIN) ? DN_OK : DN_ERROR;
 }

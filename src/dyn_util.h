@@ -341,4 +341,14 @@ char *dn_unresolve_addr(struct sockaddr *addr, socklen_t addrlen);
 char *dn_unresolve_peer_desc(int sd);
 char *dn_unresolve_desc(int sd);
 
+unsigned int dict_node_hash(const void *key);
+int dict_node_key_compare(void *privdata, const void *key1, const void *key2);
+void dict_node_destructor(void *privdata, void *val);
+
+
+unsigned int dict_string_hash(const void *key);
+int dict_string_key_compare(void *privdata, const void *key1, const void *key2);
+void dict_string_destructor(void *privdata, void *val);
+
+
 #endif

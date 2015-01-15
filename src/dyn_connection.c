@@ -173,8 +173,9 @@ _conn_get(void)
     conn->dnode_crypto_state = 0;
 
     conn->same_dc = 1;
-    conn->avail_tokens = max_allowable_rate();
+    conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
+    conn->last_received = 0;
 
     unsigned char *ase_key = generate_aes_key();
     strncpy(conn->aes_key, ase_key, strlen(ase_key)); //generate a new key for each connection
