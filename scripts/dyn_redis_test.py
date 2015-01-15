@@ -105,7 +105,7 @@ def main():
              print 'No value for key: ' + 'key_' + str(i)
           else :
              print 'key_' + str(i) + ' has value : ' + value
-       print 'Errour count: ' + str(error_count)
+       print 'Error count: ' + str(error_count)
     elif 'mread' == options.operation :
        n = (end - start) / 10
        n = min(n, 10)
