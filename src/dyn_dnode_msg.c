@@ -434,7 +434,6 @@ dyn_parse_req(struct msg *r)
          //Decrypt payload
          dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
-
          b->pos = b->pos + dmsg->plen;
          r->pos = decrypted_buf->start;
          mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
@@ -443,7 +442,6 @@ dyn_parse_req(struct msg *r)
          mbuf_put(b);
 
          r->mlen = mbuf_length(decrypted_buf);
-
       }
 
       if (done_parsing)

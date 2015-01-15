@@ -2,6 +2,7 @@ dyn_o_mite:
   dyn_listen: 127.0.0.1:8101
   redis: true
   listen: 127.0.0.1:8102
+  dyn_seed_provider: florida_provider  
   servers:
   - 127.0.0.1:22122:1
   tokens: 437425602

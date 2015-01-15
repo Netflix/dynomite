@@ -230,8 +230,6 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 	if (msg->dmsg->type == DMSG_REQ) {
 	   local_req_forward(ctx, conn, msg, key, keylen);
 	} else if (msg->dmsg->type == DMSG_REQ_FORWARD) {
-		//msg_dump(msg);
-
 		struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
 		struct datacenter *dc = server_get_dc(pool, &pool->dc);
 		uint32_t rack_cnt = array_n(&dc->racks);

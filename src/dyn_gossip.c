@@ -672,13 +672,13 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 	return DN_OK;
 }
 
-static uint64_t max_loop = 10000;
+//static uint64_t max_loop = 10000;
 
 static void *
 gossip_loop(void *arg)
 {
 	struct server_pool *sp = arg;
-    uint64_t counter = 0;
+   //uint64_t counter = 0;
 	struct string seeds;
 	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
@@ -690,17 +690,17 @@ gossip_loop(void *arg)
 
 		log_debug(LOG_VERB, "Gossip is running ...");
 
+		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
+			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
+			gossip_update_seeds(sp, &seeds);
+			string_deinit(&seeds);
+		}
+
 		current_node->ts = (uint64_t) time(NULL);
 		gossip_process_msgs();
 
 		if (current_node->state == NORMAL) {
 			gn_pool.ctx->dyn_state = NORMAL;
-		}
-
-		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
-			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
-			gossip_update_seeds(sp, &seeds);
-			string_deinit(&seeds);
 		}
 
 		if (!sp->ctx->enable_gossip) {
@@ -729,8 +729,8 @@ gossip_loop(void *arg)
 
 		gossip_debug();
 
-		if (counter++ > max_loop)
-			return NULL;
+		//if (counter++ > max_loop)
+		//	return NULL;
 	}
 
 	return NULL;
