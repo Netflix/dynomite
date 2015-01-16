@@ -113,7 +113,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
             break;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             token = NULL;
             loga("Facing a weird char %c", p);
             //goto skip;
@@ -133,7 +133,7 @@ dyn_parse_core(struct msg *r)
             state = DYN_TYPE_ID;
             num = 0;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             //goto skip;
             token = NULL; //reset
             state = DYN_START;
@@ -152,7 +152,7 @@ dyn_parse_core(struct msg *r)
             state = DYN_BIT_FIELD;
             num = 0;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             token = NULL;
             state = DYN_START;
             if (ch == '$')
@@ -162,8 +162,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_BIT_FIELD:
-         log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
-         log_debug(LOG_DEBUG, "num = %d", num);
+         log_debug(LOG_DEBUG, "DYN_BIT_FIELD, num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
@@ -173,7 +172,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -192,7 +191,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -209,7 +208,7 @@ dyn_parse_core(struct msg *r)
       		num = 0;
       	} else {
       		token = NULL;
-      		loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+      		//loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
       		state = DYN_START;
       		if (ch == '$')
       		   p -= 1;
@@ -218,8 +217,7 @@ dyn_parse_core(struct msg *r)
       	break;
 
       case DYN_DATA_LEN:
-         log_debug(LOG_DEBUG, "DYN_DATA_LEN");
-         log_debug(LOG_DEBUG, "num = %d", num);
+         log_debug(LOG_DEBUG, "DYN_DATA_LEN: num = %d", num);
             if (ch == '*') {
                break;
             } else if (isdigit(ch))  {
@@ -231,7 +229,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -245,7 +243,7 @@ dyn_parse_core(struct msg *r)
             p += dmsg->mlen - 1;
             state = DYN_SPACES_BEFORE_PAYLOAD_LEN;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             goto split;
          }
 
@@ -271,13 +269,13 @@ dyn_parse_core(struct msg *r)
             dmsg->plen = num;
             num = 0;
             if (p + dmsg->plen + 1 >= b->last) {
-               loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+               //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
                goto split;
             }
             state = DYN_CRLF_BEFORE_DONE;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -291,7 +289,7 @@ dyn_parse_core(struct msg *r)
             r->pos = p;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
