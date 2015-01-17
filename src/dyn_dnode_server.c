@@ -251,8 +251,8 @@ dnode_accept(struct context *ctx, struct conn *p)
     rstatus_t status;
     struct conn *c;
     struct sockaddr_in client_address;
-    int client_len;
-    int sd;
+    int client_len = 0;
+    int sd = 0;
 
     ASSERT(p->dnode_server);
     ASSERT(p->sd > 0);

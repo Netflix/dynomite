@@ -247,7 +247,10 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 					continue;
 				}
 
-				msg_clone(msg, orig_mbuf, rack_msg);
+				if (msg_clone(msg, orig_mbuf, rack_msg) != DN_OK) {
+					msg_put(rack_msg);
+					continue;
+				}
 				rack_msg->noreply = true;
 			}
 
@@ -370,6 +373,7 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 	struct mbuf *header_buf = mbuf_get();
 	if (header_buf == NULL) {
 		loga("Unable to obtain an mbuf for dnode msg's header!");
+		req_put(msg);
 		return;
 	}
 
@@ -389,6 +393,7 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 			struct mbuf *encrypted_buf = mbuf_get();
 			if (encrypted_buf == NULL) {
 				loga("Unable to obtain an mbuf for encryption!");
+				mbuf_put(header_buf);
 				return; //TODOs: need to clean up
 			}
 
@@ -405,6 +410,7 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 			mbuf_insert(&msg->mhdr, encrypted_buf);
 			//free it as no one will need it again
 			mbuf_put(data_buf);
+
 		} else {
 			log_debug(LOG_VERB, "no encryption on the msg payload");
 			dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(data_buf));
@@ -496,7 +502,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	struct mbuf *header_buf = mbuf_get();
 	if (header_buf == NULL) {
 		log_debug(LOG_DEBUG, "Unable to obtain a data_buf");
-		msg_put(msg);
+		dnode_rsp_put(msg);
 		return;
 	}
 

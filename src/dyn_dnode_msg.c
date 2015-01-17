@@ -17,8 +17,6 @@ static uint64_t dmsg_id;          /* message id counter */
 static uint32_t nfree_dmsgq;      /* # free msg q */
 static struct dmsg_tqh free_dmsgq; /* free msg q */
 
-static uint32_t MAGIC_NUMBER = 2014;
-
 static const struct string MAGIC_STR = string("   $2014$ ");
 static const struct string CRLF_STR = string(CRLF);
 
@@ -52,7 +50,7 @@ dyn_parse_core(struct msg *r)
    struct dmsg *dmsg;
    struct mbuf *b;
    uint8_t *p, *token;
-   uint8_t ch;
+   uint8_t ch = ' ';
    uint64_t num = 0;
 
    state = r->dyn_state;
@@ -360,7 +358,7 @@ dyn_parse_core(struct msg *r)
 
    error:
    log_debug(LOG_ERR, "at error for state %d and c %c", state, *p);
-   loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+   //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
    r->result = MSG_PARSE_ERROR;
    r->pos = p;
    errno = EINVAL;
@@ -653,6 +651,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 
     //write aes key
     unsigned char *aes_key = conn->aes_key;
+
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
         mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
     } else {
@@ -940,14 +939,7 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
     ASSERT(dmsg != NULL);
     ASSERT(conn->dyn_mode);
 
-    struct string s;
-
-
     switch(dmsg->type) {
-        case DMSG_DEBUG:
-           s.len = dmsg->mlen;
-           s.data = dmsg->data;
-           return true;
 
         case GOSSIP_SYN:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN!!!!!!");

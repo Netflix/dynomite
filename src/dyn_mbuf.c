@@ -37,6 +37,8 @@ _mbuf_get(void)
     struct mbuf *mbuf;
     uint8_t *buf;
 
+    //loga("_mbuf_get, nfree_mbufq = %d", nfree_mbufq);
+
     if (!STAILQ_EMPTY(&free_mbufq)) {
         ASSERT(nfree_mbufq > 0);
 
@@ -119,6 +121,12 @@ mbuf_free(struct mbuf *mbuf)
     buf = (uint8_t *)mbuf - mbuf_offset;
     dn_free(buf);
 }
+
+uint32_t mbuf_free_queue_size()
+{
+    return 	nfree_mbufq;
+}
+
 
 void
 mbuf_put(struct mbuf *mbuf)

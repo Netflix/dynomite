@@ -746,6 +746,7 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
 
 }
 
+
 static rstatus_t
 dnode_peer_add_node(struct server_pool *sp, struct node *node)
 {
@@ -771,9 +772,10 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 
 	s->port = (uint16_t) node->port;
 	s->is_local = node->is_local;
-    s->state = node->state;
+	s->state = node->state;
+	s->processed = 0;
 
-    array_init(&s->tokens, 1, sizeof(struct dyn_token));
+	array_init(&s->tokens, 1, sizeof(struct dyn_token));
 	struct dyn_token *src_token = &node->token;
 	struct dyn_token *dst_token = array_push(&s->tokens);
 	copy_dyn_token(src_token, dst_token);
@@ -791,7 +793,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	s->is_seed = node->is_seed;
 
 	log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
-			  s->idx, s->pname.len, s->pname.data);
+			s->idx, s->pname.len, s->pname.data);
 
 	dnode_peer_relink_conn_owner(sp);
 

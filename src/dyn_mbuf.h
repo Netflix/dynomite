@@ -61,6 +61,7 @@ void mbuf_init(struct instance *nci);
 void mbuf_deinit(void);
 struct mbuf *mbuf_get(void);
 void mbuf_put(struct mbuf *mbuf);
+uint32_t mbuf_free_queue_size();
 void mbuf_rewind(struct mbuf *mbuf);
 uint32_t mbuf_length(struct mbuf *mbuf);
 uint32_t mbuf_size(struct mbuf *mbuf);

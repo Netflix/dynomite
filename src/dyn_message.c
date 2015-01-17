@@ -189,6 +189,9 @@ msg_tmo_delete(struct msg *msg)
     log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
 }
 
+
+static uint32_t msg_counter = 0;
+
 static struct msg *
 _msg_get(void)
 {
@@ -202,6 +205,9 @@ _msg_get(void)
         TAILQ_REMOVE(&free_msgq, msg, m_tqe);
         goto done;
     }
+
+    msg_counter++;
+    loga("msg_counter : %d", msg_counter);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -264,11 +270,17 @@ done:
     msg->redis = 0;
 
     //dynomite
+    msg->is_read = 1;
     msg->dyn_state = 0;
     msg->dmsg = NULL;
     msg->msg_type = 0;
 
     return msg;
+}
+
+uint32_t msg_free_queue_size(void)
+{
+	return nfree_msgq;
 }
 
 struct msg *
@@ -365,7 +377,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
         }
 
         uint32_t len = mbuf_length(mbuf);
-        mbuf_copy(nbuf, mbuf->start, len);
+        mbuf_copy(nbuf, mbuf->pos, len);
         mbuf_insert(&target->mhdr, nbuf);
     }
 
@@ -431,6 +443,7 @@ msg_put(struct msg *msg)
     struct dmsg *dmsg = msg->dmsg;
     if (dmsg != NULL) {
     	dmsg_put(dmsg);
+    	msg->dmsg = NULL;
     }
 
     while (!STAILQ_EMPTY(&msg->mhdr)) {
@@ -442,6 +455,20 @@ msg_put(struct msg *msg)
     nfree_msgq++;
     TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }
+
+
+uint32_t msg_mbuf_size(struct msg *msg)
+{
+	uint32_t count = 0;
+	struct mbuf *mbuf;
+
+	STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+		count++;
+	}
+
+	return count;
+}
+
 
 void
 msg_dump(struct msg *msg)
