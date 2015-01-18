@@ -459,13 +459,11 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
-
+    if (c_conn->dyn_mode && !c_conn->same_dc && !msg->is_read) {
+        msg->noreply = 1;
+    }
     /* enqueue message (request) into client outq, if response is expected */
-    if (c_conn->dyn_mode && !c_conn->same_dc) {
-   	  if (msg->is_read) {
-   		  c_conn->enqueue_outq(ctx, c_conn, msg);
-   	  }
-    } else if (!msg->noreply) {
+    if (!msg->noreply) {
         c_conn->enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -550,24 +548,24 @@ void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    struct conn *s_conn;
+    struct conn *p_conn;
 
     ASSERT(c_conn->client || c_conn->dnode_client);
 
-    s_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
-    if (s_conn == NULL) {
+    p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    if (p_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;
     }
 
     //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct server *peer = s_conn->owner;
+    struct server *peer = p_conn->owner;
 
     if (peer->is_local) {
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
-        dnode_peer_req_forward(ctx, c_conn, s_conn, msg, rack, key, keylen);
+        dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
     }
 }
 

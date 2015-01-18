@@ -251,6 +251,8 @@ struct msg {
 
 TAILQ_HEAD(msg_tqh, msg);
 
+uint32_t msg_free_queue_size(void);
+
 struct msg *msg_tmo_min(void);
 void msg_tmo_insert(struct msg *msg, struct conn *conn);
 void msg_tmo_delete(struct msg *msg);
@@ -260,6 +262,7 @@ rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target
 void msg_deinit(void);
 struct msg *msg_get(struct conn *conn, bool request, bool redis);
 void msg_put(struct msg *msg);
+uint32_t msg_mbuf_size(struct msg *msg);
 struct msg *msg_get_error(bool redis, dyn_error_t dyn_err, err_t err);
 void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);

@@ -291,6 +291,8 @@ conf_seed_each_transform(void *elem, void *data)
 
     s->next_retry = 0LL;
     s->failure_count = 0;
+
+    s->processed = 0;
     s->is_seed = 1;
     s->is_secure = cseed->is_secure;
 

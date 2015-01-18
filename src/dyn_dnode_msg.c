@@ -17,8 +17,6 @@ static uint64_t dmsg_id;          /* message id counter */
 static uint32_t nfree_dmsgq;      /* # free msg q */
 static struct dmsg_tqh free_dmsgq; /* free msg q */
 
-static uint32_t MAGIC_NUMBER = 2014;
-
 static const struct string MAGIC_STR = string("   $2014$ ");
 static const struct string CRLF_STR = string(CRLF);
 
@@ -52,7 +50,7 @@ dyn_parse_core(struct msg *r)
    struct dmsg *dmsg;
    struct mbuf *b;
    uint8_t *p, *token;
-   uint8_t ch;
+   uint8_t ch = ' ';
    uint64_t num = 0;
 
    state = r->dyn_state;
@@ -113,7 +111,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
             break;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             token = NULL;
             loga("Facing a weird char %c", p);
             //goto skip;
@@ -133,7 +131,7 @@ dyn_parse_core(struct msg *r)
             state = DYN_TYPE_ID;
             num = 0;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             //goto skip;
             token = NULL; //reset
             state = DYN_START;
@@ -152,7 +150,7 @@ dyn_parse_core(struct msg *r)
             state = DYN_BIT_FIELD;
             num = 0;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             token = NULL;
             state = DYN_START;
             if (ch == '$')
@@ -162,8 +160,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_BIT_FIELD:
-         log_debug(LOG_DEBUG, "DYN_BIT_FIELD");
-         log_debug(LOG_DEBUG, "num = %d", num);
+         log_debug(LOG_DEBUG, "DYN_BIT_FIELD, num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
@@ -173,7 +170,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -192,7 +189,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -209,7 +206,7 @@ dyn_parse_core(struct msg *r)
       		num = 0;
       	} else {
       		token = NULL;
-      		loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+      		//loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
       		state = DYN_START;
       		if (ch == '$')
       		   p -= 1;
@@ -218,8 +215,7 @@ dyn_parse_core(struct msg *r)
       	break;
 
       case DYN_DATA_LEN:
-         log_debug(LOG_DEBUG, "DYN_DATA_LEN");
-         log_debug(LOG_DEBUG, "num = %d", num);
+         log_debug(LOG_DEBUG, "DYN_DATA_LEN: num = %d", num);
             if (ch == '*') {
                break;
             } else if (isdigit(ch))  {
@@ -231,7 +227,7 @@ dyn_parse_core(struct msg *r)
             num = 0;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -245,7 +241,7 @@ dyn_parse_core(struct msg *r)
             p += dmsg->mlen - 1;
             state = DYN_SPACES_BEFORE_PAYLOAD_LEN;
          } else {
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             goto split;
          }
 
@@ -271,13 +267,13 @@ dyn_parse_core(struct msg *r)
             dmsg->plen = num;
             num = 0;
             if (p + dmsg->plen + 1 >= b->last) {
-               loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+               //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
                goto split;
             }
             state = DYN_CRLF_BEFORE_DONE;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -291,7 +287,7 @@ dyn_parse_core(struct msg *r)
             r->pos = p;
          } else {
             token = NULL;
-            loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -362,7 +358,7 @@ dyn_parse_core(struct msg *r)
 
    error:
    log_debug(LOG_ERR, "at error for state %d and c %c", state, *p);
-   loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+   //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
    r->result = MSG_PARSE_ERROR;
    r->pos = p;
    errno = EINVAL;
@@ -655,6 +651,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 
     //write aes key
     unsigned char *aes_key = conn->aes_key;
+
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
         mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
     } else {
@@ -942,14 +939,7 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
     ASSERT(dmsg != NULL);
     ASSERT(conn->dyn_mode);
 
-    struct string s;
-
-
     switch(dmsg->type) {
-        case DMSG_DEBUG:
-           s.len = dmsg->mlen;
-           s.data = dmsg->data;
-           return true;
 
         case GOSSIP_SYN:
            log_debug(LOG_DEBUG, "I have got a GOSSIP_SYN!!!!!!");
