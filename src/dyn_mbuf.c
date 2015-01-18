@@ -261,7 +261,9 @@ mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg)
 
     mbuf = STAILQ_LAST(h, mbuf, next);
 
-    ASSERT(pos >= mbuf->pos && pos <= mbuf->last);
+    //ASSERT(pos >= mbuf->pos && pos <= mbuf->last);
+    if (pos < mbuf->pos || pos > mbuf->last)
+   	 return NULL;
 
     nbuf = mbuf_get();
     if (nbuf == NULL) {
