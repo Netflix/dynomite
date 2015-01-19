@@ -190,10 +190,10 @@ msg_tmo_delete(struct msg *msg)
 }
 
 
-static uint32_t msg_counter = 0;
+static uint32_t alloc_msg_count = 0;
 
 static struct msg *
-_msg_get(void)
+_msg_get(bool force_alloc)
 {
     struct msg *msg;
 
@@ -206,8 +206,14 @@ _msg_get(void)
         goto done;
     }
 
-    msg_counter++;
-    loga("msg_counter : %d", msg_counter);
+    //protect our server in the slow network and high traffics.
+    //we drop client requests but still honor our peer requests
+    if (alloc_msg_count >= MAX_ALLOC_MSGS && !force_alloc) {
+   	  return NULL;
+    }
+
+    alloc_msg_count++;
+    log_debug(LOG_WARN, "alloc_msg_count : %d", alloc_msg_count);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -288,7 +294,7 @@ msg_get(struct conn *conn, bool request, bool redis)
 {
     struct msg *msg;
 
-    msg = _msg_get();
+    msg = _msg_get(conn->dyn_mode);
     if (msg == NULL) {
         return NULL;
     }
@@ -401,7 +407,7 @@ msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
     	source = "Storage:";
     }
 
-    msg = _msg_get();
+    msg = _msg_get(1);
     if (msg == NULL) {
         return NULL;
     }
