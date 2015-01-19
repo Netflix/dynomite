@@ -36,13 +36,13 @@
 #endif
 
 /*
- *            dn_message.[ch]
+ *            dyn_message.[ch]
  *         message (struct msg)
  *            +        +            .
  *            |        |            .
  *            /        \            .
- *         Request    Response      .../ dn_mbuf.[ch]  (mesage buffers)
- *      dn_request.c  dn_response.c .../ dn_memcache.c; dn_redis.c (message parser)
+ *         Request    Response      .../ dyn_mbuf.[ch]  (mesage buffers)
+ *      dyn_request.c  dyn_response.c .../ dyn_memcache.c; dyn_redis.c (message parser)
  *
  * Messages in dynomite are manipulated by a chain of processing handlers,
  * where each handler is responsible for taking the input and producing an
