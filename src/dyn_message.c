@@ -208,8 +208,13 @@ _msg_get(bool force_alloc)
 
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
-    if (alloc_msg_count >= MAX_ALLOC_MSGS && !force_alloc) {
+    if (alloc_msg_count >= ALLOWED_ALLOC_MSGS && !force_alloc) {
+   	  log_debug(LOG_WARN, "allocated #msgs %d hit max limit", alloc_msg_count);
    	  return NULL;
+    }
+
+    if (alloc_msg_count >= MAX_ALLOC_MSGS) {
+   	 return NULL; //we hit the max limit
     }
 
     alloc_msg_count++;

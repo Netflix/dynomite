@@ -27,7 +27,8 @@
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
 
-#define MAX_ALLOC_MSGS 100000
+#define ALLOWED_ALLOC_MSGS 200000
+#define MAX_ALLOC_MSGS     1000000
 
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);

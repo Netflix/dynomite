@@ -690,12 +690,6 @@ gossip_loop(void *arg)
 
 		log_debug(LOG_VERB, "Gossip is running ...");
 
-		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
-			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
-			gossip_update_seeds(sp, &seeds);
-			string_deinit(&seeds);
-		}
-
 		current_node->ts = (uint64_t) time(NULL);
 		gossip_process_msgs();
 
@@ -707,6 +701,12 @@ gossip_loop(void *arg)
 			//gossip_debug();
 			continue;  //no gossiping
 		}
+
+		//if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
+		//	log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
+		//	gossip_update_seeds(sp, &seeds);
+		//	string_deinit(&seeds);
+		//}
 
 		if (node_count == 1) { //single node deployment
 			gn_pool.ctx->dyn_state = NORMAL;
