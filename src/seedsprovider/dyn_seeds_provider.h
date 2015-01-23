@@ -9,7 +9,7 @@
 #define SEEDS_CHECK_INTERVAL  (30 * 1000) /* in msec */
 
 
-uint8_t florida_get_seeds(struct context * ctx, struct string *seeds);
+uint8_t florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf);
 
 
 #endif /* DYN_SEEDS_PROVIDER_H_ */

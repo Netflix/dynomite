@@ -76,11 +76,13 @@ _mbuf_get(void)
      */
     mbuf = (struct mbuf *)(buf + mbuf_offset);
     mbuf->magic = MBUF_MAGIC;
+    mbuf->chunk_size = mbuf_chunk_size;
 
 done:
     STAILQ_NEXT(mbuf, next) = NULL;
     return mbuf;
 }
+
 
 struct mbuf *
 mbuf_get(void)
@@ -381,3 +383,44 @@ mbuf_write_uint64(struct mbuf *mbuf, uint64_t num)
 }
 
 
+//allocate an arbitrary size mbuf for a general purpose operation
+struct mbuf *
+mbuf_alloc(size_t size)
+{
+   uint8_t *buf = dn_alloc(size + MBUF_HSIZE);
+   if (buf == NULL) {
+       return NULL;
+   }
+
+   size_t mbuf_offset = size;
+   struct mbuf *mbuf = (struct mbuf *)(buf + mbuf_offset);
+   mbuf->magic = MBUF_MAGIC;
+   mbuf->chunk_size = size;
+
+   STAILQ_NEXT(mbuf, next) = NULL;
+
+   mbuf->start = buf;
+   mbuf->end = buf + mbuf_offset;
+
+   mbuf->pos = mbuf->start;
+   mbuf->last = mbuf->start;
+
+   return mbuf;
+
+
+}
+
+void
+mbuf_dealloc(struct mbuf *mbuf)
+{
+    uint8_t *buf;
+
+    log_debug(LOG_VVERB, "free mbuf %p len %d", mbuf, mbuf->last - mbuf->pos);
+
+    ASSERT(STAILQ_NEXT(mbuf, next) == NULL);
+    ASSERT(mbuf->magic == MBUF_MAGIC);
+
+    size_t mbuf_offset = mbuf->chunk_size - MBUF_HSIZE;
+    buf = (uint8_t *)mbuf - mbuf_offset;
+    dn_free(buf);
+}

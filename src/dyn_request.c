@@ -462,6 +462,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     if (c_conn->dyn_mode && !c_conn->same_dc && !msg->is_read) {
         msg->noreply = 1;
     }
+
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
         c_conn->enqueue_outq(ctx, c_conn, msg);
@@ -765,7 +766,12 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     if (!msg->noreply) {
         conn->enqueue_outq(ctx, conn, msg);
     } else {
-        req_put(msg);
+        if (!conn->dyn_mode && !conn->client && !conn->proxy) { //still enqueue if it is storage conn
+            conn->enqueue_outq(ctx, conn, msg);
+        } else {
+            req_put(msg);
+        }
     }
+
 }
 

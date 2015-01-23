@@ -65,10 +65,10 @@
 #define CONF_DEFAULT_DYN_WRITE_TIMEOUT       10000
 #define CONF_DEFAULT_DYN_CONNECTIONS         100
 #define CONF_DEFAULT_VNODE_TOKENS            1
-#define CONF_DEFAULT_GOS_INTERVAL            30000  //5000  //in millisec
+#define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
 #define CONF_DEFAULT_PEERS                   200
 
-#define CONF_DEFAULT_CONN_MSG_RATE           2000   //conn msgs per sec
+#define CONF_DEFAULT_CONN_MSG_RATE           50000   //conn msgs per sec
 
 #define CONF_STR_NONE                        "none"
 #define CONF_STR_DC                          "datacenter"

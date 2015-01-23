@@ -165,6 +165,14 @@ rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         rsp_put(msg);
         return true;
     }
+
+    if (pmsg->noreply) {
+         conn->dequeue_outq(ctx, conn, pmsg);
+         rsp_put(pmsg);
+         rsp_put(msg);
+         return true;
+    }
+
     ASSERT(pmsg->peer == NULL);
     ASSERT(pmsg->request && !pmsg->done);
 
