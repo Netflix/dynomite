@@ -11,17 +11,18 @@
 #include <ctype.h>
 
 #include "dyn_core.h"
-#include "dyn_server.h"
-#include "dyn_gossip.h"
-#include "dyn_dnode_peer.h"
-#include "dyn_util.h"
-#include "dyn_string.h"
-#include "dyn_ring_queue.h"
-#include "dyn_node_snitch.h"
-#include "dyn_token.h"
-#include "seedsprovider/dyn_seeds_provider.h"
 #include "dyn_dict.h"
+#include "dyn_dnode_peer.h"
+#include "dyn_gossip.h"
+#include "dyn_node_snitch.h"
+#include "dyn_mbuf.h"
+#include "dyn_ring_queue.h"
+#include "dyn_server.h"
+#include "dyn_string.h"
+#include "dyn_token.h"
+#include "dyn_util.h"
 
+#include "seedsprovider/dyn_seeds_provider.h"
 
 static const struct string PEER_PORT = string("8101");
 static const struct string PEER_SSL_PORT = string("8103");
@@ -31,6 +32,7 @@ static void gossip_debug(void);
 static struct gossip_node_pool gn_pool;
 static uint32_t node_count = 0;
 static struct node *current_node = NULL;
+static struct mbuf * seeds_buf = NULL;
 
 
 dictType token_table_dict_type = {
@@ -592,7 +594,7 @@ gossip_add_node_if_absent(struct server_pool *sp,
 
 
 static rstatus_t
-gossip_update_seeds(struct server_pool *sp, struct string *seeds)
+gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
 {
 	struct string rack_name;
 	struct string dc_name;
@@ -612,8 +614,8 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 	init_dyn_token(&token);
 
 	uint8_t *p, *q, *start;
-	start = seeds->data;
-	p = seeds->data + seeds->len - 1;
+	start = seeds->start;
+	p = seeds->last - 1;
 	q = dn_strrchr(p, start, '|');
 
 	uint8_t *seed_node;
@@ -672,23 +674,25 @@ gossip_update_seeds(struct server_pool *sp, struct string *seeds)
 	return DN_OK;
 }
 
-//static uint64_t max_loop = 10000;
 
 static void *
 gossip_loop(void *arg)
 {
 	struct server_pool *sp = arg;
-   //uint64_t counter = 0;
-	struct string seeds;
 	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
-	string_init(&seeds);
+	seeds_buf = mbuf_alloc(SEED_BUF_SIZE);
 
 	log_debug(LOG_VVERB, "gossip_interval : %d msecs", gn_pool.g_interval);
 	for(;;) {
 		usleep(gossip_interval);
 
 		log_debug(LOG_VERB, "Gossip is running ...");
+
+		if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, seeds_buf) == DN_OK) {
+			log_debug(LOG_VERB, "Got seed nodes  '%.*s'", mbuf_length(seeds_buf), seeds_buf->pos);
+			gossip_update_seeds(sp, seeds_buf);
+		}
 
 		current_node->ts = (uint64_t) time(NULL);
 		gossip_process_msgs();
@@ -701,12 +705,6 @@ gossip_loop(void *arg)
 			//gossip_debug();
 			continue;  //no gossiping
 		}
-
-		//if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, &seeds) == DN_OK) {
-		//	log_debug(LOG_VERB, "Got seed nodes  '%.*s'", seeds.len, seeds.data);
-		//	gossip_update_seeds(sp, &seeds);
-		//	string_deinit(&seeds);
-		//}
 
 		if (node_count == 1) { //single node deployment
 			gn_pool.ctx->dyn_state = NORMAL;
@@ -726,12 +724,11 @@ gossip_loop(void *arg)
 			gossip_forward_state(sp);
 		}
 
-
 		gossip_debug();
 
-		//if (counter++ > max_loop)
-		//	return NULL;
-	}
+	} //end for loop
+
+	mbuf_dealloc(seeds_buf);
 
 	return NULL;
 }

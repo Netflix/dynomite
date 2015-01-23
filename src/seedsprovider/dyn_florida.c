@@ -8,6 +8,7 @@
 #include "dyn_core.h"
 #include "dyn_string.h"
 
+
 #define USERAGENT "HTMLGET 1.0"
 #define REQ_HEADER "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n\r\n"
 
@@ -15,12 +16,13 @@
 #define PAGE "REST/v1/admin/get_seeds"
 #define PORT 8080
 
+
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
 
 
 static int64_t last = 0; //storing last time for seeds check
-static struct string last_seeds;
+static uint32_t last_seeds_hash = 0;
 
 
 static bool seeds_check()
@@ -40,12 +42,31 @@ static bool seeds_check()
 }
 
 
-uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
+static uint32_t
+hash_seeds(uint8_t *seeds, size_t length)
+{
+    const uint8_t *ptr = seeds;
+    uint32_t value = 0;
+
+    while (length--) {
+        uint32_t val = (uint32_t) *ptr++;
+        value += val;
+        value += (value << 10);
+        value ^= (value >> 6);
+    }
+    value += (value << 3);
+    value ^= (value >> 11);
+    value += (value << 15);
+
+    return value;
+}
+
+uint8_t florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 	struct sockaddr_in *remote;
 	uint32_t sock;
 	uint32_t tmpres;
 	uint8_t *get;
-	uint8_t buf[BUFSIZ+1];
+	uint8_t buf[BUFSIZ + 1];
 
 	log_debug(LOG_VVERB, "Running florida_get_seeds!");
 
@@ -81,14 +102,16 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 		sent += tmpres;
 	}
 
+	mbuf_rewind(seeds_buf);
+
 	memset(buf, 0, sizeof(buf));
 	uint32_t htmlstart = 0;
 	uint8_t * htmlcontent;
 
-	//assume that the respsone payload is under BUFSIZ
-	while((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
+	//assume that the respsone payload is under BUF_SIZE
+	while ((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
 
-		if(htmlstart == 0) {
+		if (htmlstart == 0) {
 			/* Under certain conditions this will not work.
 			 * If the \r\n\r\n part is splitted into two messages
 			 * it will fail to detect the beginning of HTML content
@@ -103,7 +126,7 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 		}
 
 		if(htmlstart) {
-			string_copy(seeds, htmlcontent, tmpres - (htmlcontent - buf));
+			mbuf_copy(seeds_buf, htmlcontent, tmpres - (htmlcontent - buf));
 		}
 
 		memset(buf, 0, tmpres);
@@ -117,19 +140,13 @@ uint8_t florida_get_seeds(struct context * ctx, struct string *seeds) {
 	dn_free(remote);
 	close(sock);
 
-	if (last_seeds.data == NULL) {  //first time
-		string_init(&last_seeds);
-		string_copy(&last_seeds, seeds->data, seeds->len);
-	} else {
-		if (string_compare(&last_seeds, seeds) == 0) { //if equals, no change
-			return DN_NOOPS;
-		} else {                                   //else, set last_seeds to the latest value
-			string_deinit(&last_seeds);
-			string_copy(&last_seeds, seeds->data, seeds->len);
-		}
-	}
+	uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
 
-	log_debug(LOG_VVERB, "Done calling get_seeds!!");
+	if (last_seeds_hash != seeds_hash) {
+		last_seeds_hash = seeds_hash;
+	} else {
+		return DN_NOOPS;
+	}
 
 	return DN_OK;
 }
