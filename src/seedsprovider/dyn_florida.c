@@ -8,6 +8,15 @@
 #include "dyn_core.h"
 #include "dyn_string.h"
 
+/***************************************************************************
+ * Keep polling the local REST service at the address
+ * http://127.0.0.1:8080/REST/v1/admin/get_seeds
+ * Expect response is a list of peers in the format:
+ *   peer_host1:peer_listen_port:rack:dc:peer_token1|peer_host2:peer_listen_port:rack:dc:peer_token2|...
+ * For example:
+ *   ec2-54-145-17-101.compute-1.amazonaws.com:8101:dyno_pds--useast1e:us-east-1:1383429731|ec2-54-101-51-17.eu-west-1.compute.amazonaws.com:8101:dyno_pds--euwest1c:eu-west-1:1383429731
+ ****************************************************************************/
+
 
 #define USERAGENT "HTMLGET 1.0"
 #define REQ_HEADER "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n\r\n"
