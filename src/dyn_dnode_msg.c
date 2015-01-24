@@ -653,7 +653,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     unsigned char *aes_key = conn->aes_key;
 
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
-        mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
+        mbuf_write_uint32(mbuf, dyn_rsa_size());
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -663,7 +663,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     //mbuf_write_string(mbuf, data);
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
-       mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
+       mbuf_write_bytes(mbuf, aes_encrypted_buf, dyn_rsa_size());
        conn->dnode_crypto_state = 1;
     } else {
        mbuf_write_char(mbuf, 'd'); //TODOs: replace with another string
@@ -711,7 +711,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     //write aes key
     unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured) {
-       mbuf_write_uint32(mbuf, AES_ENCRYPTED_KEYLEN);
+       mbuf_write_uint32(mbuf, dyn_rsa_size());
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -720,7 +720,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     //mbuf_write_mbuf(mbuf, data);
     if (conn->dnode_secured) {
        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
-       mbuf_write_bytes(mbuf, aes_encrypted_buf, AES_ENCRYPTED_KEYLEN);
+       mbuf_write_bytes(mbuf, aes_encrypted_buf, dyn_rsa_size());
     } else {
        mbuf_write_char(mbuf, 'a'); //TODOs: replace with another string
     }

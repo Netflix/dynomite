@@ -18,6 +18,7 @@
 
 static EVP_CIPHER *aes_cipher;
 static RSA *rsa;
+static int rsa_size = 0;
 
 static int aes_key_size = AES_KEYLEN;
 static unsigned char aes_key[AES_KEYLEN];
@@ -59,6 +60,8 @@ load_private_rsa_key(struct server_pool *sp)
 		return DN_ERROR;
 
 	}
+
+	rsa_size = RSA_size(rsa);
 
 	log_debug(LOG_INFO, "Private RSA structure filled");
 	/*
@@ -420,27 +423,30 @@ static int aes_test()
 }
 
 
+int dyn_rsa_size(void) {
+	return rsa_size;
+}
 
 rstatus_t
 dyn_rsa_encrypt(unsigned char *plain_msg, unsigned char *encrypted_buf)
 {
-	if(RSA_public_encrypt(32, plain_msg, encrypted_buf, rsa, RSA_PKCS1_OAEP_PADDING) != 128) {
+	if(RSA_public_encrypt(AES_KEYLEN, plain_msg, encrypted_buf, rsa, RSA_PKCS1_OAEP_PADDING) != RSA_size(rsa)) {
 		ERR_load_crypto_strings();
 		char  err[130];
 		ERR_error_string(ERR_get_error(), err);
 		log_debug(LOG_VERB, "Error in encrypting message: %s\n", err);
 		return DN_ERROR;
 	}
-	return 128;
+	return RSA_size(rsa);
 }
 
 rstatus_t
 dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
 {
-	if(RSA_private_decrypt(128,
-			               encrypted_msg,
-					       decrypted_buf,
-					       rsa, RSA_PKCS1_OAEP_PADDING) != 32) {
+	if(RSA_private_decrypt(RSA_size(rsa),
+			                 encrypted_msg,
+					           decrypted_buf,
+					           rsa, RSA_PKCS1_OAEP_PADDING) != AES_KEYLEN) {
 				ERR_load_crypto_strings();
 				char  err[130];
 				ERR_error_string(ERR_get_error(), err);
@@ -448,14 +454,14 @@ dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
 				return DN_ERROR;
 	}
 
-	return 32;
+	return AES_KEYLEN;
 }
 
 
 static int rsa_test()
 {
-	static unsigned char encrypted_buf[130];
-	static unsigned char decrypted_buf[34];
+	static unsigned char encrypted_buf[256];
+	static unsigned char decrypted_buf[AES_KEYLEN + 1];
 	static unsigned char *msg;
 
 	int i=0;
@@ -463,14 +469,14 @@ static int rsa_test()
 		msg = generate_aes_key();
 
 		log_debug(LOG_VERB, "i = %d", i);
-		log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, 32));
+		log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
 
 
 		dyn_rsa_encrypt(msg, encrypted_buf);
 
 		dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
 
-		log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, 32));
+		log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
 	}
 
 	return 0;
