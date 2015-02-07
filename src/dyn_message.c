@@ -326,6 +326,7 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_splitcopy = redis_post_splitcopy;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
+        msg->broadcast_racks = redis_broadcast_racks;
     } else {
         if (request) {
             if (conn->dyn_mode) {
@@ -344,6 +345,7 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_splitcopy = memcache_post_splitcopy;
         msg->pre_coalesce = memcache_pre_coalesce;
         msg->post_coalesce = memcache_post_coalesce;
+        msg->broadcast_racks = memcache_broadcast_racks;
     }
 
     log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
