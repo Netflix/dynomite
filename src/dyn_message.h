@@ -33,6 +33,7 @@
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
 typedef void (*msg_coalesce_t)(struct msg *r);
+typedef bool (*msg_broadcast_racks_t)(struct msg *r);
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -178,68 +179,69 @@ typedef enum dyn_error {
 } dyn_error_t;
 
 struct msg {
-    TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
-    TAILQ_ENTRY(msg)     s_tqe;           /* link in server q */
-    TAILQ_ENTRY(msg)     m_tqe;           /* link in send q / free q */
+    TAILQ_ENTRY(msg)      c_tqe;           /* link in client q */
+    TAILQ_ENTRY(msg)      s_tqe;           /* link in server q */
+    TAILQ_ENTRY(msg)      m_tqe;           /* link in send q / free q */
 
-    uint64_t             id;              /* message id */
-    struct msg           *peer;           /* message peer */
-    struct conn          *owner;          /* message owner - client | server */
+    uint64_t              id;              /* message id */
+    struct msg            *peer;           /* message peer */
+    struct conn           *owner;          /* message owner - client | server */
 
-    struct rbnode        tmo_rbe;         /* entry in rbtree */
+    struct rbnode         tmo_rbe;         /* entry in rbtree */
 
-    struct mhdr          mhdr;            /* message mbuf header */
-    uint32_t             mlen;            /* message length */
+    struct mhdr           mhdr;            /* message mbuf header */
+    uint32_t              mlen;            /* message length */
 
-    int                  state;           /* current parser state */
-    uint8_t              *pos;            /* parser position marker */
-    uint8_t              *token;          /* token marker */
+    int                   state;           /* current parser state */
+    uint8_t               *pos;            /* parser position marker */
+    uint8_t               *token;          /* token marker */
 
-    msg_parse_t          parser;          /* message parser */
-    msg_parse_result_t   result;          /* message parsing result */
+    msg_parse_t           parser;          /* message parser */
+    msg_parse_result_t    result;          /* message parsing result */
 
-    mbuf_copy_t          pre_splitcopy;   /* message pre-split copy */
-    msg_post_splitcopy_t post_splitcopy;  /* message post-split copy */
-    msg_coalesce_t       pre_coalesce;    /* message pre-coalesce */
-    msg_coalesce_t       post_coalesce;   /* message post-coalesce */
+    mbuf_copy_t           pre_splitcopy;   /* message pre-split copy */
+    msg_post_splitcopy_t  post_splitcopy;  /* message post-split copy */
+    msg_coalesce_t        pre_coalesce;    /* message pre-coalesce */
+    msg_coalesce_t        post_coalesce;   /* message post-coalesce */
+    msg_broadcast_racks_t broadcast_racks; /* message broadcast-racks */
 
-    msg_type_t           type;            /* message type */
+    msg_type_t            type;            /* message type */
 
-    uint8_t              *key_start;      /* key start */
-    uint8_t              *key_end;        /* key end */
+    uint8_t               *key_start;      /* key start */
+    uint8_t               *key_end;        /* key end */
 
-    uint32_t             vlen;            /* value length (memcache) */
-    uint8_t              *end;            /* end marker (memcache) */
+    uint32_t              vlen;            /* value length (memcache) */
+    uint8_t               *end;            /* end marker (memcache) */
 
-    uint8_t              *narg_start;     /* narg start (redis) */
-    uint8_t              *narg_end;       /* narg end (redis) */
-    uint32_t             narg;            /* # arguments (redis) */
-    uint32_t             rnarg;           /* running # arg used by parsing fsa (redis) */
-    uint32_t             rlen;            /* running length in parsing fsa (redis) */
-    uint32_t             integer;         /* integer reply value (redis) */
+    uint8_t               *narg_start;     /* narg start (redis) */
+    uint8_t               *narg_end;       /* narg end (redis) */
+    uint32_t              narg;            /* # arguments (redis) */
+    uint32_t              rnarg;           /* running # arg used by parsing fsa (redis) */
+    uint32_t              rlen;            /* running length in parsing fsa (redis) */
+    uint32_t              integer;         /* integer reply value (redis) */
 
-    struct msg           *frag_owner;     /* owner of fragment message */
-    uint32_t             nfrag;           /* # fragment */
-    uint64_t             frag_id;         /* id of fragmented message */
+    struct msg            *frag_owner;     /* owner of fragment message */
+    uint32_t              nfrag;           /* # fragment */
+    uint64_t              frag_id;         /* id of fragmented message */
 
-    err_t                err;             /* errno on error? */
-    unsigned             error:1;         /* error? */
-    unsigned             ferror:1;        /* one or more fragments are in error? */
-    unsigned             request:1;       /* request? or response? */
-    unsigned             quit:1;          /* quit request? */
-    unsigned             noreply:1;       /* noreply? */
-    unsigned             done:1;          /* done? */
-    unsigned             fdone:1;         /* all fragments are done? */
-    unsigned             first_fragment:1;/* first fragment? */
-    unsigned             last_fragment:1; /* last fragment? */
-    unsigned             swallow:1;       /* swallow response? */
-    unsigned             redis:1;         /* redis? */
-    
-    //dynomite
-    struct dmsg          *dmsg;          /* dyn message */
-    int                  dyn_state;
-    dyn_error_t          dyn_error;      /* error code for dynomite */
-    uint8_t              msg_type;       /* for special message types
+    err_t                 err;             /* errno on error? */
+    unsigned              error:1;         /* error? */
+    unsigned              ferror:1;        /* one or more fragments are in error? */
+    unsigned              request:1;       /* request? or response? */
+    unsigned              quit:1;          /* quit request? */
+    unsigned              noreply:1;       /* noreply? */
+    unsigned              done:1;          /* done? */
+    unsigned              fdone:1;         /* all fragments are done? */
+    unsigned              first_fragment:1;/* first fragment? */
+    unsigned              last_fragment:1; /* last fragment? */
+    unsigned              swallow:1;       /* swallow response? */
+    unsigned              redis:1;         /* redis? */
+
+    //dynomite            
+    struct dmsg           *dmsg;          /* dyn message */
+    int                   dyn_state;
+    dyn_error_t           dyn_error;      /* error code for dynomite */
+    uint8_t               msg_type;       /* for special message types
                                               0 : normal,
                                               1 : local cmd only no matter what
                                               2 : cmd to all nodes in same RACK no matter whats

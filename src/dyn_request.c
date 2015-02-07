@@ -521,30 +521,6 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
               msg->mlen, msg->type, keylen, key);
 }
 
-
-/*
- * TODOs: Should replace these by using msg_type in struct msg
- */
-static bool
-request_send_to_all_racks(struct msg *msg) {
-    msg_type_t t = msg->type;
-
-    if (msg->redis) {
-        return t == MSG_REQ_REDIS_SET || t == MSG_REQ_REDIS_DEL || t == MSG_REQ_REDIS_DECR || t == MSG_REQ_REDIS_HDEL ||
-        	   t == MSG_REQ_REDIS_HSET || t == MSG_REQ_REDIS_INCR || t == MSG_REQ_REDIS_LPOP || t == MSG_REQ_REDIS_LREM ||
-        	   t == MSG_REQ_REDIS_LSET || t == MSG_REQ_REDIS_RPOP || t == MSG_REQ_REDIS_SADD || t == MSG_REQ_REDIS_SPOP ||
-        	   t == MSG_REQ_REDIS_SREM || t == MSG_REQ_REDIS_ZADD || t == MSG_REQ_REDIS_ZREM || t == MSG_REQ_REDIS_HMSET ||
-        	   t == MSG_REQ_REDIS_LPUSH || t == MSG_REQ_REDIS_LTRIM || t == MSG_REQ_REDIS_RPUSH || t == MSG_REQ_REDIS_SETEX ||
-        	   t == MSG_REQ_REDIS_SETNX;
-    }
-
-    // yeah, there's probably a better way to do this...
-    return t == MSG_REQ_MC_SET || t == MSG_REQ_MC_CAS || t == MSG_REQ_MC_DELETE || t == MSG_REQ_MC_ADD ||
-           t == MSG_REQ_MC_REPLACE || t == MSG_REQ_MC_APPEND || t == MSG_REQ_MC_PREPEND || t == MSG_REQ_MC_INCR ||
-           t == MSG_REQ_MC_DECR;
-}
-
-
 void 
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
@@ -611,7 +587,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 	// that will bork the request sent to secondary racks
 	struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
 
-	if (request_send_to_all_racks(msg)) {
+	if (msg->broadcast_racks(msg)) {
 		uint32_t dc_cnt = array_n(&pool->datacenters);
 		uint32_t dc_index;
 		for(dc_index = 0; dc_index < dc_cnt; dc_index++) {

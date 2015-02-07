@@ -2256,3 +2256,44 @@ redis_post_coalesce(struct msg *r)
         NOT_REACHED();
     }
 }
+
+/*
+ * Broadcast-racks is invoked to determine whether a message needs to
+ * be sent to all downstream replicas. Returning 'true' will invoke
+ * replication, 'false' will not. In general, all write operations
+ * should return 'true' and all read operations should return 'false'
+ */
+
+bool
+redis_broadcast_racks(struct msg *r)
+{
+    switch (r->type) {
+    case MSG_REQ_REDIS_SET:
+    case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_DECR:
+    case MSG_REQ_REDIS_HDEL:
+    case MSG_REQ_REDIS_HSET:
+    case MSG_REQ_REDIS_INCR:
+    case MSG_REQ_REDIS_LPOP:
+    case MSG_REQ_REDIS_LREM:
+    case MSG_REQ_REDIS_LSET:
+    case MSG_REQ_REDIS_RPOP:
+    case MSG_REQ_REDIS_SADD:
+    case MSG_REQ_REDIS_SPOP:
+    case MSG_REQ_REDIS_SREM:
+    case MSG_REQ_REDIS_ZADD:
+    case MSG_REQ_REDIS_ZREM:
+    case MSG_REQ_REDIS_HMSET:
+    case MSG_REQ_REDIS_LPUSH:
+    case MSG_REQ_REDIS_LTRIM:
+    case MSG_REQ_REDIS_RPUSH:
+    case MSG_REQ_REDIS_SETEX:
+    case MSG_REQ_REDIS_SETNX:
+        return true;
+
+    default:
+        break;
+    }
+
+    return false;
+}

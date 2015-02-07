@@ -1320,3 +1320,32 @@ void
 memcache_post_coalesce(struct msg *r)
 {
 }
+
+
+/*
+ * Broadcast-racks is invoked to determine whether a message needs to
+ * be sent to all downstream replicas. Returning 'true' will invoke
+ * replication, 'false' will not. In general, all write operations
+ * should return 'true' and all read operations should return 'false'
+ */
+bool
+memcache_broadcast_racks(struct msg *r)
+{
+    switch (r->type) {
+    case MSG_REQ_MC_SET:
+    case MSG_REQ_MC_CAS:
+    case MSG_REQ_MC_DELETE:
+    case MSG_REQ_MC_ADD:
+    case MSG_REQ_MC_REPLACE:
+    case MSG_REQ_MC_APPEND:
+    case MSG_REQ_MC_PREPEND:
+    case MSG_REQ_MC_INCR:
+    case MSG_REQ_MC_DECR:
+        return true;
+
+    default:
+        break;
+    }
+
+    return false;
+}
