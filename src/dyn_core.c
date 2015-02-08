@@ -58,14 +58,23 @@ core_ctx_create(struct instance *nci)
 	/* parse and create configuration */
 	ctx->cf = conf_create(nci->conf_filename);
 	if (ctx->cf == NULL) {
+		loga("Failed to create context!!!");
 		dn_free(ctx);
 		return NULL;
 	}
 
+	status = histo_init();
+   if (status != DN_OK) {
+		loga("Failed to initialize server pool!!!");
+		conf_destroy(ctx->cf);
+		dn_free(ctx);
+		return NULL;
+   }
 
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
 	if (status != DN_OK) {
+		loga("Failed to initialize server pool!!!");
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
 		return NULL;
@@ -75,6 +84,7 @@ core_ctx_create(struct instance *nci)
 	/* crypto init */
     status = crypto_init(ctx);
     if (status != DN_OK) {
+   	loga("Failed to initialize crypto!!!");
     	dn_free(ctx);
     	return NULL;
     }
@@ -84,6 +94,7 @@ core_ctx_create(struct instance *nci)
 	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
 	if (ctx->stats == NULL) {
+		loga("Failed to create stats!!!");
 		crypto_deinit();
 		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
@@ -94,6 +105,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize event handling for client, proxy and server */
 	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
 	if (ctx->evb == NULL) {
+		loga("Failed to create socket event handling!!!");
 		crypto_deinit();
 		stats_destroy(ctx->stats);
 		server_pool_deinit(&ctx->pool);
@@ -105,6 +117,7 @@ core_ctx_create(struct instance *nci)
 	/* preconnect? servers in server pool */
 	status = server_pool_preconnect(ctx);
 	if (status != DN_OK) {
+		loga("Failed to preconnect for server pool!!!");
 		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -118,6 +131,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize proxy per server pool */
 	status = proxy_init(ctx);
 	if (status != DN_OK) {
+		loga("Failed to initialize proxy!!!");
 		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -131,6 +145,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize dnode listener per server pool */
 	status = dnode_init(ctx);
 	if (status != DN_OK) {
+		loga("Failed to initialize dnode!!!");
 		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -146,6 +161,7 @@ core_ctx_create(struct instance *nci)
 	/* initialize peers */
 	status = dnode_peer_init(&ctx->pool, ctx);
 	if (status != DN_OK) {
+		loga("Failed to initialize dnode peers!!!");
 		crypto_deinit();
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
@@ -162,6 +178,7 @@ core_ctx_create(struct instance *nci)
 	/* preconntect peers - probably start gossip here */
 	status = dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK) {
+		loga("Failed to preconnect dnode peers!!!");
 		crypto_deinit();
 		dnode_peer_deinit(&ctx->pool);
 		dnode_deinit(ctx);

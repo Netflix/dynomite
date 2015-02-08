@@ -385,6 +385,26 @@ stats_create_buf(struct stats *st)
     size += st->dc.len;
     size += key_value_extra;
 
+    size += st->latency_999th_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->latency_99th_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->latency_95th_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->latency_mean_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->latency_max_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
     /* server pools */
     for (i = 0; i < array_n(&st->sum); i++) {
         struct stats_pool *stp = array_get(&st->sum, i);
@@ -539,6 +559,31 @@ stats_add_header(struct stats *st)
     }
 
     status = stats_add_string(st, &st->dc_str, &st->dc);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->latency_999th_str, st->latency_999th);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->latency_99th_str, st->latency_99th);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->latency_95th_str, st->latency_95th);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->latency_mean_str, st->latency_mean);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->latency_max_str, st->latency_max);
     if (status != DN_OK) {
         return status;
     }
@@ -1070,6 +1115,12 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
 
+    string_set_text(&st->latency_999th_str, "latency_999th");
+    string_set_text(&st->latency_99th_str, "latency_99th");
+    string_set_text(&st->latency_95th_str, "latency_95th");
+    string_set_text(&st->latency_mean_str, "latency_mean");
+    string_set_text(&st->latency_max_str, "latency_max");
+
     //only display the first pool
     struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
 
@@ -1151,6 +1202,11 @@ stats_swap(struct stats *st)
     log_debug(LOG_PVERB, "swap stats current %p shadow %p", st->current.elem,
               st->shadow.elem);
 
+
+    //set the latencies
+    histo_compute_latencies(&st->latency_mean, &st->latency_95th,
+   		 &st->latency_99th, &st->latency_999th, &st->latency_max);
+
     array_swap(&st->current, &st->shadow);
 
     /*
@@ -1161,6 +1217,7 @@ stats_swap(struct stats *st)
     st->updated = 0;
 
     st->aggregate = 1;
+
 }
 
 static struct stats_metric *
@@ -1200,6 +1257,9 @@ _stats_pool_incr(struct context *ctx, struct server_pool *pool,
     log_debug(LOG_VVVERB, "incr field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.counter);
 }
+
+
+
 
 void
 _stats_pool_decr(struct context *ctx, struct server_pool *pool,
@@ -1260,6 +1320,21 @@ _stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
     log_debug(LOG_VVVERB, "set ts field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.timestamp);
 }
+
+void
+_stats_pool_set_val(struct context *ctx, struct server_pool *pool,
+		              stats_pool_field_t fidx, int64_t val)
+{
+   struct stats_metric *stm;
+
+   stm = stats_pool_to_metric(ctx, pool, fidx);
+
+   stm->value.counter = val;
+
+   log_debug(LOG_VVVERB, "set val field '%.*s' to %"PRId64"", stm->name.len,
+             stm->name.data, stm->value.counter);
+}
+
 
 static struct stats_metric *
 stats_server_to_metric(struct context *ctx, struct server *server,

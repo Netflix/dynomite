@@ -10,7 +10,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ *_stats_pool_set_ts
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -60,7 +60,7 @@
     ACTION( fragments,                    STATS_COUNTER,      "# fragments created from a multi-vector request")          \
     ACTION( stats_count,                  STATS_COUNTER,      "# stats request")                                          \
 
-#define STATS_SERVER_CODEC(ACTION)                                                                                  \
+#define STATS_SERVER_CODEC(ACTION)                                                                                       \
     /* server behavior */                                                                                           \
     ACTION( server_eof,             STATS_COUNTER,           "# eof on server connections")                              \
     ACTION( server_err,             STATS_COUNTER,           "# errors on server connections")                           \
@@ -151,6 +151,11 @@ struct stats {
     struct string       version;        /* version */
     struct string       uptime_str;     /* uptime string */
     struct string       timestamp_str;  /* timestamp string */
+    struct string       latency_999th_str;
+    struct string       latency_99th_str;
+    struct string       latency_95th_str;
+    struct string       latency_mean_str;
+    struct string       latency_max_str;
 
     struct string       rack_str;
     struct string       rack;
@@ -160,6 +165,12 @@ struct stats {
 
     volatile int        aggregate;      /* shadow (b) aggregate? */
     volatile int        updated;        /* current (a) updated? */
+    volatile uint64_t   latency_999th;
+    volatile uint64_t   latency_99th;
+    volatile uint64_t   latency_95th;
+    volatile uint64_t   latency_mean;
+    volatile uint64_t   latency_max;
+
 };
 
 #define DEFINE_ACTION(_name, _type, _desc) STATS_POOL_##_name,
@@ -213,6 +224,10 @@ typedef enum stats_cmd {
     _stats_pool_set_ts(_ctx, _pool, STATS_POOL_##_name, _val);          \
 } while (0)
 
+#define stats_pool_set_val(_ctx, _pool, _name, _val) do {                \
+    _stats_pool_set_val(_ctx, _pool, STATS_POOL_##_name, _val);          \
+} while (0)
+
 #define stats_server_incr(_ctx, _server, _name) do {                    \
     _stats_server_incr(_ctx, _server, STATS_SERVER_##_name);            \
 } while (0)
@@ -244,6 +259,8 @@ typedef enum stats_cmd {
 
 #define stats_pool_decr_by(_ctx, _pool, _name, _val)
 
+#define stats_pool_set_val(_ctx, _pool, _name, _val)
+
 #define stats_server_incr(_ctx, _server, _name)
 
 #define stats_server_decr(_ctx, _server, _name)
@@ -251,15 +268,6 @@ typedef enum stats_cmd {
 #define stats_server_incr_by(_ctx, _server, _name, _val)
 
 #define stats_server_decr_by(_ctx, _server, _name, _val)
-
-///for dnode
-//#define stats_dnode_incr(_ctx, _server, _name)
-
-//#define stats_dnode_decr(_ctx, _server, _name)
-
-//#define stats_dnode_incr_by(_ctx, _server, _name, _val)
-
-//#define stats_dnode_decr_by(_ctx, _server, _name, _val)
 
 
 #endif
@@ -273,19 +281,14 @@ void _stats_pool_decr(struct context *ctx, struct server_pool *pool, stats_pool_
 void _stats_pool_incr_by(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
 void _stats_pool_decr_by(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
 void _stats_pool_set_ts(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
+void _stats_pool_set_val(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
+
 
 void _stats_server_incr(struct context *ctx, struct server *server, stats_server_field_t fidx);
 void _stats_server_decr(struct context *ctx, struct server *server, stats_server_field_t fidx);
 void _stats_server_incr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_decr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_set_ts(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
-
-//for dnode
-//void _stats_dnode_incr(struct context *ctx, struct server *server, stats_dnode_field_t fidx);
-//void _stats_dnode_decr(struct context *ctx, struct server *server, stats_dnode_field_t fidx);
-//void _stats_dnode_incr_by(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
-//void _stats_dnode_decr_by(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
-//void _stats_dnode_set_ts(struct context *ctx, struct server *server, stats_dnode_field_t fidx, int64_t val);
 
 
 struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,

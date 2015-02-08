@@ -280,6 +280,7 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 {
     ASSERT(msg->request);
     ASSERT(conn->client && !conn->proxy);
+    msg->stime_in_microsec = dn_usec_now();
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
 }
@@ -302,6 +303,8 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(msg->request);
     ASSERT(conn->client && !conn->proxy);
 
+    uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
+    histo_add(latency);
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
 }
 
