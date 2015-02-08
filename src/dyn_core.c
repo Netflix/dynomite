@@ -233,9 +233,9 @@ core_start(struct instance *nci)
 	if (ctx != NULL) {
 		nci->ctx = ctx;
 
-	    if (get_tracking_level() >= LOG_VVERB) {
-		   crypto_check();
-        }
+		if (get_tracking_level() >= LOG_VVERB) {
+			crypto_check();
+		}
 		return ctx;
 	}
 
@@ -572,9 +572,9 @@ core_loop(struct context *ctx)
 {
 	int nsd;
 
-	//log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
+	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
-    core_process_messages();
+	core_process_messages();
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;

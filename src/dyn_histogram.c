@@ -229,7 +229,9 @@ void histo_compute_latencies(uint64_t* mean, uint64_t* latency_95th,
 
 	}
 
-	*mean = ceil((double) sum / elements);
+	if (elements != 0)
+	   *mean = ceil((double) sum / elements);
+
 	*latency_95th = val_95th;
 	*latency_99th = val_99th;
 	*latency_999th = val_999th;

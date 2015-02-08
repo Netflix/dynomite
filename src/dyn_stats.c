@@ -563,6 +563,11 @@ stats_add_header(struct stats *st)
         return status;
     }
 
+    status = stats_add_num(st, &st->latency_max_str, st->latency_max);
+    if (status != DN_OK) {
+        return status;
+    }
+
     status = stats_add_num(st, &st->latency_999th_str, st->latency_999th);
     if (status != DN_OK) {
         return status;
@@ -579,11 +584,6 @@ stats_add_header(struct stats *st)
     }
 
     status = stats_add_num(st, &st->latency_mean_str, st->latency_mean);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->latency_max_str, st->latency_max);
     if (status != DN_OK) {
         return status;
     }
@@ -1133,6 +1133,12 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     st->updated = 0;
     st->aggregate = 0;
+
+    st->latency_95th = 0;
+    st->latency_999th = 0;
+    st->latency_99th = 0;
+    st->latency_max = 0;
+    st->latency_mean = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 

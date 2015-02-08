@@ -532,6 +532,9 @@ static bool
 request_send_to_all_racks(struct msg *msg) {
     msg_type_t t = msg->type;
 
+    return msg->is_read? 0 : 1;
+
+    /*
     if (msg->redis) {
         return t == MSG_REQ_REDIS_SET || t == MSG_REQ_REDIS_DEL || t == MSG_REQ_REDIS_DECR || t == MSG_REQ_REDIS_HDEL ||
         	   t == MSG_REQ_REDIS_HSET || t == MSG_REQ_REDIS_INCR || t == MSG_REQ_REDIS_LPOP || t == MSG_REQ_REDIS_LREM ||
@@ -545,6 +548,7 @@ request_send_to_all_racks(struct msg *msg) {
     return t == MSG_REQ_MC_SET || t == MSG_REQ_MC_CAS || t == MSG_REQ_MC_DELETE || t == MSG_REQ_MC_ADD ||
            t == MSG_REQ_MC_REPLACE || t == MSG_REQ_MC_APPEND || t == MSG_REQ_MC_PREPEND || t == MSG_REQ_MC_INCR ||
            t == MSG_REQ_MC_DECR;
+    */
 }
 
 
