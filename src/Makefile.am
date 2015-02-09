@@ -43,6 +43,7 @@ dynomite_SOURCES =			                          \
         dyn_dnode_request.c                                       \
         dyn_dnode_response.c                                      \
         dyn_dnode_server.c dyn_dnode_server.h                     \
+        dyn_histogram.c dyn_histogram.h                           \
         dyn_server.c dyn_server.h		                  \
         dyn_proxy.c dyn_proxy.h		                          \
         dyn_message.c dyn_message.h	                          \

@@ -185,6 +185,7 @@ struct msg {
     uint64_t             id;              /* message id */
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
+    int64_t              stime_in_microsec;  /* start time in microsec */
 
     struct rbnode        tmo_rbe;         /* entry in rbtree */
 

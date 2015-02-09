@@ -230,6 +230,7 @@ done:
     msg->id = ++msg_id;
     msg->peer = NULL;
     msg->owner = NULL;
+    msg->stime_in_microsec = 0L;
 
     rbtree_node_init(&msg->tmo_rbe);
 
