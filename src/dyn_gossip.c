@@ -678,7 +678,6 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
 static void *
 gossip_loop(void *arg)
 {
-
 	struct server_pool *sp = arg;
 	uint64_t gossip_interval = gn_pool.g_interval * 1000;
 
