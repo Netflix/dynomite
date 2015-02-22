@@ -568,15 +568,17 @@ gossip_add_node_if_absent(struct server_pool *sp,
 	struct node *g_node = dictFetchValue(g_rack->dict_token_nodes, token_str);
 
 	if (g_node == NULL) { //never existed
-		//log_debug(LOG_VERB, "adding node : dc[%.*s]", dc->len, dc->data);
-		//log_debug(LOG_VERB, "adding node : g_rack[%.*s]", g_rack->name.len, g_rack->name.data);
-		//log_debug(LOG_VERB, "adding node : address[%.*s]", address->len, address->data);
-		//log_debug(LOG_VERB, "adding node : ip[%.*s]", ip->len, ip->data);
-		//log_debug(LOG_VERB, "adding node : port[%.*s]", port->len, port->data);
-		//log_debug(LOG_VERB, "suggested state : %d", state);
+		log_debug(LOG_VERB, "Node not found!  We need to add it");
+		log_debug(LOG_VERB, "adding node : dc[%.*s]", dc->len, dc->data);
+		log_debug(LOG_VERB, "adding node : g_rack[%.*s]", g_rack->name.len, g_rack->name.data);
+		log_debug(LOG_VERB, "adding node : address[%.*s]", address->len, address->data);
+		log_debug(LOG_VERB, "adding node : ip[%.*s]", ip->len, ip->data);
+		log_debug(LOG_VERB, "adding node : port[%.*s]", port->len, port->data);
+		log_debug(LOG_VERB, "suggested state : %d", state);
 		//print_dyn_token(token, 6);
 		gossip_add_node(sp, dc, g_rack, address, ip, port, token, state);
 	} else if (dictFind(g_rack->dict_name_nodes, ip) != NULL) {
+		log_debug(LOG_VERB, "Node found");
 		if (!g_node->is_local) {  //don't update myself here
 			if (string_compare(&g_node->name, ip) != 0) {
 				gossip_replace_node(sp, g_node, address, ip, state);
@@ -584,6 +586,9 @@ gossip_add_node_if_absent(struct server_pool *sp,
 				gossip_update_state(sp, g_node, state, timestamp);
 			}
 		}
+	} else {
+		log_debug(LOG_VERB, "Replacing an existed token with new IP or address");
+		gossip_replace_node(sp, g_node, address, ip, state);
 	}
 
 	//free token_str
@@ -628,10 +633,10 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
 		//array_init(&tokens, 1, sizeof(struct dyn_token));
 		init_dyn_token(&token);
 		parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip,  &token);
-		//log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
-		//log_debug(LOG_VERB, "rack_name         : '%.*s'", rack_name.len, rack_name.data);
-		//log_debug(LOG_VERB, "dc_name        : '%.*s'", dc_name.len, dc_name.data);
-		//log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
+		log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
+		log_debug(LOG_VERB, "rack_name         : '%.*s'", rack_name.len, rack_name.data);
+		log_debug(LOG_VERB, "dc_name        : '%.*s'", dc_name.len, dc_name.data);
+		log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
 
 		//struct dyn_token *token = array_get(&tokens, 0);
 		gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
@@ -674,6 +679,36 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
 	return DN_OK;
 }
 
+
+static void
+gossip_metainfo(void)
+{
+		dictIterator *dc_it;
+		dictEntry *dc_de;
+		dc_it = dictGetIterator(gn_pool.dict_dc);
+		while ((dc_de = dictNext(dc_it)) != NULL) {
+			struct gossip_dc *g_dc = dictGetVal(dc_de);
+			log_debug(LOG_VERB, "\tDC name           : '%.*s'", g_dc->name.len, g_dc->name.data);
+			dictIterator *rack_it = dictGetIterator(g_dc->dict_rack);
+			dictEntry *rack_de;
+			while ((rack_de = dictNext(rack_it)) != NULL) {
+				struct gossip_rack *g_rack = dictGetVal(rack_de);
+				log_debug(LOG_VERB, "\tRack name           : '%.*s'", g_rack->name.len, g_rack->name.data);
+
+				dictIterator *node_it = dictGetIterator(g_rack->dict_token_nodes);
+				dictEntry *node_de;
+				int i = 0;
+				while ((node_de = dictNext(node_it)) != NULL) {
+					struct node *gnode = dictGetVal(node_de);
+					log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
+
+					struct string *token_key = dictGetKey(node_de);
+					log_debug(LOG_VERB, "\tNode token           : '%.*s'", *token_key);
+				}
+			}
+		}
+
+}
 
 static void *
 gossip_loop(void *arg)
