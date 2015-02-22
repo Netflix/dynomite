@@ -942,8 +942,8 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_OK;
     }
 
-    if (conn->dyn_mode)
-   	 return DN_OK;
+    //if (conn->dyn_mode)
+    //	 return DN_OK;
 
     return (n == DN_EAGAIN) ? DN_OK : DN_ERROR;
 }
