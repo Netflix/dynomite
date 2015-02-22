@@ -39,7 +39,7 @@ static bool seeds_check()
 	int64_t now = dn_msec_now();
 
 	int64_t delta = (int64_t)(now - last);
-	log_debug(LOG_VERB, "Delta or elapsed time : %d", delta);
+	log_debug(LOG_VERB, "Delta or elapsed time : %lu", delta);
 	log_debug(LOG_VERB, "Seeds check internal %d", SEEDS_CHECK_INTERVAL);
 
 	if (delta > SEEDS_CHECK_INTERVAL) {
