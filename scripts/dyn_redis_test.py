@@ -99,7 +99,12 @@ def main():
     elif 'read' == options.operation :
        error_count = 0
        for i in range(start, end ) :
-          value = r.get('key_' + str(i))
+          try:
+             value = r.get('key_' + str(i))
+          except redis.exceptions.ResponseError:
+                print "reconnecting ..."
+                r = redis.StrictRedis(host=options.host, port=options.port, db=0)       
+
           if value is None:
              error_count = error_count + 1
              print 'No value for key: ' + 'key_' + str(i)
