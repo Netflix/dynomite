@@ -94,7 +94,11 @@ def main():
 
     if 'write' == options.operation :
        for i in range(start, end ) :
-           r.set('key_' + str(i), 'value_' + str(i))
+           try:
+             r.set('key_' + str(i), 'value_' + str(i))
+           except redis.exceptions.ResponseError:
+                print "reconnecting ..."
+                r = redis.StrictRedis(host=options.host, port=options.port, db=0)
 
     elif 'read' == options.operation :
        error_count = 0
@@ -135,7 +139,12 @@ def main():
 
     elif 'del' == options.operation :
          for i in range(start, end ) :
-             r.delete('key_' + str(i))
+             try:
+                r.delete('key_' + str(i))
+             except redis.exceptions.ResponseError:
+                print "reconnecting ..."
+                r = redis.StrictRedis(host=options.host, port=options.port, db=0)
+
     elif 'swrite' == options.operation :
          r.set('key_time', str(current_milli_time()))
     elif 'sread' == options.operation :
