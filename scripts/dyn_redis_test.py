@@ -94,6 +94,8 @@ def main():
 
     if 'write' == options.operation :
        for i in range(start, end ) :
+           if (i % 5 == 0) :
+              sys.stdout.write('.')
            try:
              r.set('key_' + str(i), 'value_' + str(i))
            except redis.exceptions.ResponseError:
@@ -139,6 +141,9 @@ def main():
 
     elif 'del' == options.operation :
          for i in range(start, end ) :
+             if (i % 5 == 0) :
+                sys.stdout.write('.')
+
              try:
                 r.delete('key_' + str(i))
              except redis.exceptions.ResponseError:
@@ -166,6 +171,7 @@ def main():
     #mc.disconnect_all()
 
 
+
 if __name__ == '__main__':
     main()
-
+    print ""
