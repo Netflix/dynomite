@@ -121,7 +121,7 @@ def read_ops(skipkeys, numkeys, host, port, db):
             value = r.get('key_' + str(i))
         except redis.exceptions.ResponseError:
             print "reconnecting ..."
-            r = redis.StrictRedis(host=options.host, port=options.port, db=0)
+            r = redis.StrictRedis(host, port, db=0)
 
         if value is None:
             error_count = error_count + 1
@@ -149,7 +149,7 @@ def del_ops(skipkeys, numkeys, host, port, db):
            r.delete('key_' + str(i))
        except redis.exceptions.ResponseError:
            print "reconnecting ..."
-           r = redis.StrictRedis(host=options.host, port=options.port, db=0) 
+           r = redis.StrictRedis(host, port, db=0) 
 
 
 def mread_ops(skipkeys, numkeys, host, port, db):
