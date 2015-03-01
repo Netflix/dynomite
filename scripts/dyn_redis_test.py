@@ -15,10 +15,169 @@ import random
 
 from logging import debug, info, warning, error
 
-
 import redis
 
+num_conn = 5
+dot_rate = 10
 current_milli_time = lambda: int(round(time.time() * 1000))
+threadLock = threading.Lock()
+threads = []
+conns = []
+
+
+class OperationThread (threading.Thread):
+    def __init__(self, threadID, name, options, start_num, end_num):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.name = name
+        self.options = options
+        self.start_num = start_num
+        self.end_num = end_num
+
+
+    def run(self):
+        operation = self.options.operation
+        host = self.options.host
+        port = self.options.port
+        start = self.start_num
+        end   = self.end_num
+        print "Starting thread: " + self.name +  ", start: " + str(start) + " and end: " + str(end)
+
+        # Get lock to synchronize threads
+        threadLock.acquire()
+    
+        if 'write' == operation :
+           write_ops(start, end, host, port, db=0)
+
+        elif 'read' == operation :
+           read_ops(start, end, host, port, db=0)
+
+        elif 'mread' == operation :
+           mread_ops(start, end, host, port, db=0)
+
+        elif 'del' == operation :
+           del_ops(start, end, host, port, db=0)
+
+        elif 'swrite' == operation :
+           r = redis.StrictRedis(host, port, db=0)
+           r.set('key_time', str(current_milli_time()))
+        elif 'sread' == operation :
+           r = redis.StrictRedis(host, port, db=0)
+           is_stop = False
+
+           while not is_stop:
+              value = r.get('key_time')
+              if value != None :
+                 is_stop = True
+
+           print 'Estimated elapsed time : ' + str(current_milli_time() - int(value))
+        elif 'sdel' == operation :
+           r = redis.StrictRedis(host, port, db=0)
+           r.delete('key_time')
+        elif 'flushall' == operation :
+           r = redis.StrictRedis(host, port, db=0)
+           r.flushall();
+    
+        # Free lock to release next thread
+        threadLock.release()
+
+
+
+
+def get_conns(host, port, db, num):
+    for i in range(0, num):
+       conns.append(redis.StrictRedis(host, port, db=0))
+    return conns
+
+def write_ops(skipkeys, numkeys, host, port, db):
+    conns = get_conns(host, port, db, num_conn)
+    start = int(skipkeys)
+    end   = int(numkeys)
+    print 'start: ' + str(start) + ' and end: ' + str(end)
+
+    for i in range(start, end ) :
+        r = conns[i % num_conn]
+        if (i % dot_rate == 0) :
+           sys.stdout.write('.')
+        try:
+           r.set('key_' + str(i), 'value_' + str(i))
+        except redis.exceptions.ResponseError:
+           print "reconnecting ..."
+           r = redis.StrictRedis(host, port, db=0)
+           conns[i % num_conn] = r
+
+
+def read_ops(skipkeys, numkeys, host, port, db):
+    #r = redis.StrictRedis(host, port, db=0)
+    conns = get_conns(host, port, db, num_conn)
+    start = int(skipkeys)
+    end   = int(numkeys)
+     
+    print 'start: ' + str(start) + ' and end: ' + str(end)
+    error_count = 0
+    for i in range(start, end ) :
+        r = conns[i % num_conn]
+        try:
+            value = r.get('key_' + str(i))
+        except redis.exceptions.ResponseError:
+            print "reconnecting ..."
+            r = redis.StrictRedis(host=options.host, port=options.port, db=0)
+
+        if value is None:
+            error_count = error_count + 1
+            print 'No value for key: ' + 'key_' + str(i)
+        else :
+            print 'key_' + str(i) + ' has value : ' + value
+       
+    print 'Error count: ' + str(error_count) 
+
+
+def del_ops(skipkeys, numkeys, host, port, db):
+    #r = redis.StrictRedis(host, port, db=0)
+    conns = get_conns(host, port, db, num_conn)
+    start = int(skipkeys)
+    end   = int(numkeys)
+
+    print 'start: ' + str(start) + ' and end: ' + str(end)   
+
+    for i in range(start, end ) :
+       r = conns[i % num_conn]
+       if (i % dot_rate == 0) :
+           sys.stdout.write('.')
+
+       try:
+           r.delete('key_' + str(i))
+       except redis.exceptions.ResponseError:
+           print "reconnecting ..."
+           r = redis.StrictRedis(host=options.host, port=options.port, db=0) 
+
+
+def mread_ops(skipkeys, numkeys, host, port, db):
+       r = redis.StrictRedis(host, port, db=0)
+       start = int(skipkeys)
+       end   = int(numkeys)
+
+       print 'start: ' + str(start) + ' and end: ' + str(end)   
+
+       n = (end - start) / 10
+       n = min(n, 10)
+       print n
+       keys = []
+       i = 0
+       while (i < n) :
+           ran = random.randint(start, end-1)
+           key = 'key_' + str(ran)
+           if key not in keys :
+              keys.append(key)
+              i = i + 1
+       print keys
+
+       while (len(keys) > 0) :
+          values = r.mget(keys)
+          print values
+          for key in values.keys() :
+              keys.remove(key)
+
 
 
 def main():
@@ -27,7 +186,7 @@ def main():
     parser.add_option("-t", "--threads",
                       action="store",
                       dest="th",
-                      default="1",
+                      default="10",
                       help="Number of client threads")
     parser.add_option("-o", "--operation",
                       action="store",
@@ -60,6 +219,7 @@ def main():
                       default="100",
                       help="Number of keys\n")
 
+
     if len(sys.argv) == 1:
          print "Learn some usages: " + sys.argv[0] + " -h"
          sys.exit(1)
@@ -67,111 +227,31 @@ def main():
 
     (options, args) = parser.parse_args()
 
-
-
-    #logger = logging.getLogger(log_name)
-    #logger.setLevel(logging.DEBUG)
-    #fh = logging.handlers.TimedRotatingFileHandler('/tmp/dynomite-test.log', when="midnight")
-    #fh.setLevel(logging.DEBUG)
-    #formatter = logging.Formatter('%(asctime)s:  %(name)s:  %(levelname)s: %(message)s')
-    #fh.setFormatter(formatter)
-    #logger.addHandler(fh)
-
     print options
-
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(levelname)s %(message)s',
-                        filename='/tmp/dynomite-test.log',
-                        filemode='w')
-
-    #should do some try/catch but I am lazy now
-
-    r = redis.StrictRedis(host=options.host, port=options.port, db=0)
-    numkeys = int(options.numkeys)
     start = int(options.skipkeys)
     end   = int(options.numkeys)
-    print 'start: ' + str(start) + ' and end: ' + str(end)
 
-    if 'write' == options.operation :
-       for i in range(start, end ) :
-           if (i % 5 == 0) :
-              sys.stdout.write('.')
-           try:
-             r.set('key_' + str(i), 'value_' + str(i))
-           except redis.exceptions.ResponseError:
-                print "reconnecting ..."
-                r = redis.StrictRedis(host=options.host, port=options.port, db=0)
+    num_threads = int(options.th)
 
-    elif 'read' == options.operation :
-       error_count = 0
-       for i in range(start, end ) :
-          try:
-             value = r.get('key_' + str(i))
-          except redis.exceptions.ResponseError:
-                print "reconnecting ..."
-                r = redis.StrictRedis(host=options.host, port=options.port, db=0)       
+    step = (end - start) / num_threads
 
-          if value is None:
-             error_count = error_count + 1
-             print 'No value for key: ' + 'key_' + str(i)
-          else :
-             print 'key_' + str(i) + ' has value : ' + value
-       print 'Error count: ' + str(error_count)
-    elif 'mread' == options.operation :
-       n = (end - start) / 10
-       n = min(n, 10)
-       print n
-       keys = []
-       i = 0
-       while (i < n) :
-           ran = random.randint(start, end-1)
-           key = 'key_' + str(ran)
-           if key not in keys :
-              keys.append(key)
-              i = i + 1
-       print keys
+    print "step " + str(step)
 
-       while (len(keys) > 0) :
-         values = r.mget(keys)
-         print values
-         for key in values.keys() :
-             keys.remove(key)
+    for i in range(0, num_threads):
+       if (i != num_threads-1):
+          thread = OperationThread(i, "Thread-" + str(i), options, start + (i*step), start + (i+1)*step)
+       else:
+          thread = OperationThread(i, "Thread-" + str(i), options, start + (i*step), end)
+       #thread = OperationThread(1, "Thread-1", options, 1, 1000)
 
+       thread.start()
+       threads.append(thread)
 
+    for t in threads:
+       t.join()
 
-    elif 'del' == options.operation :
-         for i in range(start, end ) :
-             if (i % 5 == 0) :
-                sys.stdout.write('.')
-
-             try:
-                r.delete('key_' + str(i))
-             except redis.exceptions.ResponseError:
-                print "reconnecting ..."
-                r = redis.StrictRedis(host=options.host, port=options.port, db=0)
-
-    elif 'swrite' == options.operation :
-         r.set('key_time', str(current_milli_time()))
-    elif 'sread' == options.operation :
-         is_stop = False
-
-         while not is_stop:
-           value = r.get('key_time')
-           if value != None :
-               is_stop = True
-
-         print 'Estimated elapsed time : ' + str(current_milli_time() - int(value))
-
-    elif 'sdel' == options.operation :
-        r.delete('key_time')
-
-    elif 'flushall' == options.operation :
-        r.flushall();
-
-    #mc.disconnect_all()
-
-
-
-if __name__ == '__main__':
-    main()
     print ""
+
+
+if  __name__ == '__main__':
+    main()
