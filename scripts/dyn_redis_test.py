@@ -44,7 +44,7 @@ class OperationThread (threading.Thread):
         print "Starting thread: " + self.name +  ", start: " + str(start) + " and end: " + str(end)
 
         # Get lock to synchronize threads
-        threadLock.acquire()
+        #threadLock.acquire()
     
         if 'write' == operation :
            write_ops(start, end, host, port, db=0)
@@ -79,7 +79,7 @@ class OperationThread (threading.Thread):
            r.flushall();
     
         # Free lock to release next thread
-        threadLock.release()
+        #threadLock.release()
 
 
 
