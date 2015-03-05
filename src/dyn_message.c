@@ -765,8 +765,8 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             return DN_OK;
         }
 
-        if (conn->dyn_mode)
-        	 return DN_OK;
+        //if (conn->dyn_mode)
+        //	 return DN_OK;
 
         return DN_ERROR;
     }

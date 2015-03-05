@@ -500,6 +500,11 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 		return;
 	}
 
+	//attemp to reconnect
+	//conn->sd = -1;
+	//dnode_peer_connect(ctx, conn->owner, conn);
+
+
 	for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 

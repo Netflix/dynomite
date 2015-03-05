@@ -333,6 +333,9 @@ core_close(struct context *ctx, struct conn *conn)
 	ASSERT(conn->sd > 0);
 
 	if (conn->dyn_mode) {
+		if (conn->dnode_client) {
+			return; //don't allow dnode client to close
+		}
 		core_dnode_close_log(conn);
 	} else {
 		core_close_log(conn);
