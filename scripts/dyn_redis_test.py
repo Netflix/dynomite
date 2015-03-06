@@ -12,6 +12,7 @@ from datetime import datetime
 from datetime import timedelta
 import threading
 import random
+import string
 
 from logging import debug, info, warning, error
 
@@ -23,6 +24,7 @@ current_milli_time = lambda: int(round(time.time() * 1000))
 threadLock = threading.Lock()
 threads = []
 conns = []
+payload_prefix = 'value_'
 
 
 class OperationThread (threading.Thread):
@@ -94,13 +96,14 @@ def write_ops(skipkeys, numkeys, host, port, db):
     start = int(skipkeys)
     end   = int(numkeys)
     print 'start: ' + str(start) + ' and end: ' + str(end)
+    print 'payload_prefix: ' + payload_prefix
 
     for i in range(start, end ) :
         r = conns[i % num_conn]
         if (i % dot_rate == 0) :
            sys.stdout.write('.')
         try:
-           r.set('key_' + str(i), 'value_' + str(i))
+           r.set('key_' + str(i), payload_prefix + '_' + str(i))
         except redis.exceptions.ResponseError:
            print "reconnecting ..."
            r = redis.StrictRedis(host, port, db=0)
@@ -186,8 +189,8 @@ def main():
     parser.add_option("-t", "--threads",
                       action="store",
                       dest="th",
-                      default="10",
-                      help="Number of client threads")
+                      default="1",
+                      help="Number of client threads. Default is 1")
     parser.add_option("-o", "--operation",
                       action="store",
                       dest="operation",
@@ -197,27 +200,33 @@ def main():
                       action="store",
                       dest="logfle",
                       default="/tmp/dynomite-test.log",
-                      help="log file location")
+                      help="log file location. Default is /tmp/dynomite-test.log")
     parser.add_option("-H", "--host",
                       action="store",
                       dest="host",
                       default="127.0.0.1",
-                      help="targe host ip")
+                      help="targe host ip. Default is 127.0.0.1")
     parser.add_option("-P", "--port",
                       action="store",
                       dest="port",
                       default="8102",
-                      help="target port")
+                      help="target port. Default is 8102")
     parser.add_option("-S", "--skipkeys",
                       action="store",
                       dest="skipkeys",
                       default="0",
-                      help="target port")
+                      help="target port. Default is 0")
     parser.add_option("-n", "--numkeys",
                       action="store",
                       dest="numkeys",
                       default="100",
-                      help="Number of keys\n")
+                      help="Number of keys. Default is 100\n")
+   
+    parser.add_option("-s", "--payloadsize",
+                      action="store",
+                      dest="payloadsize",
+                      default="6",
+                      help="Size of payload in bytes. Default is 6 bytes\n")
 
 
     if len(sys.argv) == 1:
@@ -230,6 +239,8 @@ def main():
     print options
     start = int(options.skipkeys)
     end   = int(options.numkeys)
+    global payload_prefix
+    payload_prefix = ''.join(random.choice(string.ascii_uppercase) for i in range(int(options.payloadsize)))
 
     num_threads = int(options.th)
 
