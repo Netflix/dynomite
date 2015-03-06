@@ -91,6 +91,9 @@ def get_conns(host, port, db, num):
        conns.append(redis.StrictRedis(host, port, db=0))
     return conns
 
+def generate_value(i):
+    return payload_prefix + '_' + str(i)
+
 def write_ops(skipkeys, numkeys, host, port, db):
     conns = get_conns(host, port, db, num_conn)
     start = int(skipkeys)
@@ -103,7 +106,7 @@ def write_ops(skipkeys, numkeys, host, port, db):
         if (i % dot_rate == 0) :
            sys.stdout.write('.')
         try:
-           r.set('key_' + str(i), payload_prefix + '_' + str(i))
+           r.set('key_' + str(i), generate_value(i))
         except redis.exceptions.ResponseError:
            print "reconnecting ..."
            r = redis.StrictRedis(host, port, db=0)
@@ -129,9 +132,10 @@ def read_ops(skipkeys, numkeys, host, port, db):
         if value is None:
             error_count = error_count + 1
             print 'No value for key: ' + 'key_' + str(i)
-        else :
+        elif value != generate_value(i):
             print 'key_' + str(i) + ' has value : ' + value
-       
+            error_count += 1       
+
     print 'Error count: ' + str(error_count) 
 
 
@@ -240,7 +244,7 @@ def main():
     start = int(options.skipkeys)
     end   = int(options.numkeys)
     global payload_prefix
-    payload_prefix = ''.join(random.choice(string.ascii_uppercase) for i in range(int(options.payloadsize)))
+    payload_prefix = ''.join('a' for i in range(int(options.payloadsize)))
 
     num_threads = int(options.th)
 
