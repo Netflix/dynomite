@@ -701,40 +701,45 @@ msg_repair(struct context *ctx, struct conn *conn, struct msg *msg)
 static rstatus_t
 msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    rstatus_t status;
+	rstatus_t status;
 
-    if (msg_empty(msg)) {
-        /* no data to parse */
-        conn->recv_done(ctx, conn, msg, NULL);
-        return DN_OK;
-    }
+	if (msg_empty(msg)) {
+		/* no data to parse */
+		conn->recv_done(ctx, conn, msg, NULL);
+		return DN_OK;
+	}
 
-    msg->parser(msg);
+	msg->parser(msg);
 
-    switch (msg->result) {
-    case MSG_PARSE_OK:
-        status = msg_parsed(ctx, conn, msg);
-        break;
+	switch (msg->result) {
+	case MSG_PARSE_OK:
+		status = msg_parsed(ctx, conn, msg);
+		break;
 
-    case MSG_PARSE_FRAGMENT:
-        status = msg_fragment(ctx, conn, msg);
-        break;
+	case MSG_PARSE_FRAGMENT:
+		status = msg_fragment(ctx, conn, msg);
+		break;
 
-    case MSG_PARSE_REPAIR:
-        status = msg_repair(ctx, conn, msg);
-        break;
+	case MSG_PARSE_REPAIR:
+		status = msg_repair(ctx, conn, msg);
+		break;
 
-    case MSG_PARSE_AGAIN:
-        status = DN_OK;
-        break;
+	case MSG_PARSE_AGAIN:
+		status = DN_OK;
+		break;
 
-    default:
-        status = DN_ERROR;
-        conn->err = errno;
-        break;
-    }
+	default:
+		if (!conn->dyn_mode) {
+			status = DN_ERROR;
+			conn->err = errno;
+		} else {
+			log_debug(LOG_VVERB, "Parsing error in dyn_mode");
+			status = DN_OK;
+		}
+		break;
+	}
 
-    return conn->err != 0 ? DN_ERROR : status;
+	return conn->err != 0 ? DN_ERROR : status;
 }
 
 static rstatus_t
@@ -764,9 +769,6 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         if (n == DN_EAGAIN) {
             return DN_OK;
         }
-
-        //if (conn->dyn_mode)
-        //	 return DN_OK;
 
         return DN_ERROR;
     }
@@ -941,9 +943,6 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     if (n > 0) {
         return DN_OK;
     }
-
-    //if (conn->dyn_mode)
-    //	 return DN_OK;
 
     return (n == DN_EAGAIN) ? DN_OK : DN_ERROR;
 }
