@@ -106,6 +106,7 @@ struct conn {
 TAILQ_HEAD(conn_tqh, conn);
 
 struct context *conn_to_ctx(struct conn *conn);
+struct conn *test_conn_get(void);
 struct conn *conn_get(void *owner, bool client, bool redis);
 struct conn *conn_get_proxy(void *owner);
 struct conn *conn_get_peer(void *owner, bool client, bool redis);
