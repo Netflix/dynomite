@@ -185,6 +185,12 @@ _conn_get(void)
 
 
 struct conn *
+test_conn_get(void) {
+	return _conn_get();
+}
+
+
+struct conn *
 conn_get_peer(void *owner, bool client, bool redis)
 {
     struct conn *conn;

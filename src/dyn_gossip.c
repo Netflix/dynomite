@@ -491,7 +491,7 @@ gossip_replace_node(struct server_pool *sp, struct node *node,
 		struct string *new_address, struct string *new_ip, uint8_t state)
 {
 	rstatus_t status;
-	log_debug(LOG_VERB, "gossip_replace_node : dc[%.*s] rack[%.*s] oldaddr[%.*s] newaddr[%.*s] newip[%.*s]",
+	log_debug(LOG_WARN, "gossip_replace_node : dc[%.*s] rack[%.*s] oldaddr[%.*s] newaddr[%.*s] newip[%.*s]",
 			node->dc, node->rack, node->name, new_address->len, new_address->data, new_ip->len, new_ip->data);
 
 	string_deinit(&node->name);
@@ -501,7 +501,6 @@ gossip_replace_node(struct server_pool *sp, struct node *node,
 	//port is supposed to be the same
 
 	node->state = state;
-
 	gossip_msg_to_core(sp, node, dnode_peer_replace);
 
 	//should check for status
@@ -514,7 +513,7 @@ static rstatus_t
 gossip_update_state(struct server_pool *sp, struct node *node, uint8_t state, uint64_t timestamp)
 {
 	rstatus_t status = DN_OK;
-	log_debug(LOG_VERB, "gossip_update_state : dc[%.*s] rack[%.*s] name[%.*s] token[%d] state[%d]",
+	log_debug(LOG_VVERB, "gossip_update_state : dc[%.*s] rack[%.*s] name[%.*s] token[%d] state[%d]",
 			node->dc, node->rack, node->name, node->token.mag[0], state);
 
 	if (node->ts < timestamp) {
@@ -581,14 +580,16 @@ gossip_add_node_if_absent(struct server_pool *sp,
 		log_debug(LOG_VERB, "Node found");
 		if (!g_node->is_local) {  //don't update myself here
 			if (string_compare(&g_node->name, ip) != 0) {
+				log_debug(LOG_WARN, "Replacing an existing token with new info");
 				gossip_replace_node(sp, g_node, address, ip, state);
 			} else {  //update state
 				gossip_update_state(sp, g_node, state, timestamp);
 			}
 		}
 	} else {
-		log_debug(LOG_VERB, "Replacing an existed token with new IP or address");
+		log_debug(LOG_WARN, "Replacing an existing token with new IP or address");
 		gossip_replace_node(sp, g_node, address, ip, state);
+		dictAdd(g_rack->dict_name_nodes, &g_node->name, g_node);
 	}
 
 	//free token_str

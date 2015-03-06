@@ -128,7 +128,6 @@ struct dyn_ring;
 
 #define ENCRYPTION 1
 
-
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 
 typedef enum dyn_state {

@@ -120,7 +120,7 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          * it crashes
          */
         conn->done = 1;
-        log_error("s %d active %d is done", conn->sd, conn->active(conn));
+        log_debug(LOG_DEBUG, "s %d active %d is done", conn->sd, conn->active(conn));
 
         return NULL;
     }

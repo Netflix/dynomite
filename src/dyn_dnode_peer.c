@@ -315,7 +315,6 @@ dnode_peer_conn(struct server *server)
 
 	pool = server->owner;
 
-	//if (server->ns_conn_q < pool->peer_connections) {
 	if (server->ns_conn_q < 1) {
 		conn = conn_get_peer(server, false, pool->redis);
 		if (is_conn_secured(pool, server)) {
@@ -327,8 +326,6 @@ dnode_peer_conn(struct server *server)
 
 		return conn;
 	}
-
-	//ASSERT(server->ns_conn_q == pool->peer_connections);
 
 	/*
 	 * Pick a server connection from the head of the queue and insert
@@ -488,6 +485,11 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 	struct msg *msg, *nmsg; /* current and next message */
 	struct conn *c_conn;    /* peer client connection */
 
+	struct server *server = conn->owner;
+
+	log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", server->pname.len,
+			server->pname.data);
+
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
 	dnode_peer_close_stats(ctx, conn->owner, conn->err, conn->eof,
@@ -499,6 +501,11 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 		conn_put(conn);
 		return;
 	}
+
+	//attemp to reconnect
+	//conn->sd = -1;
+	//dnode_peer_connect(ctx, conn->owner, conn);
+
 
 	for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
@@ -984,7 +991,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 		return DN_OK;
 	}
 
-	log_debug(LOG_VVERB, "dyn: connect to peer '%.*s'", server->pname.len,
+	log_debug(LOG_WARN, "dyn: connect to peer '%.*s'", server->pname.len,
 			server->pname.data);
 
 	conn->sd = socket(conn->family, SOCK_STREAM, 0);

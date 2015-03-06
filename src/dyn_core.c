@@ -332,6 +332,7 @@ core_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->sd > 0);
 
+
 	if (conn->dyn_mode) {
 		core_dnode_close_log(conn);
 	} else {
@@ -459,37 +460,41 @@ core_core(void *arg, uint32_t events)
 
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {
+		if (conn->err && conn->dyn_mode) {
+			loga("conn err on dnode EVENT_ERR: %d", conn->err);
+		}
 		core_error(ctx, conn);
+
 		return DN_ERROR;
 	}
 
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
 		status = core_recv(ctx, conn);
+
 		if (status != DN_OK || conn->done || conn->err) {
+			if (conn->dyn_mode) {
+				if (conn->err) {
+					loga("conn err on dnode EVENT_READ: %d", conn->err);
+				}
+				return DN_OK;
+			}
+
 			core_close(ctx, conn);
 			return DN_ERROR;
 		}
 	}
 
 	if (events & EVENT_WRITE) {
-		/*
-		if (conn->dyn_mode &&
-			!conn->dnode_client && !conn->dnode_server &&
-			conn->last_sent != 0 && conn->last_received != 0) {
-			//will make this configurable
-         if (conn->last_sent - conn->last_received > 30) {
-
-         	   loga("close connection %d on suspection of network glitter", conn->sd);
-         	   //will open a new connection and transfer all of the data from this conn to that
-         	   core_error(ctx, conn);
-               return DN_ERROR;
-
-         }
-		}
-      */
 		status = core_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
+			if (conn->dyn_mode) {
+				if (conn->err) {
+					loga("conn err on dnode EVENT_WRITE: %d", conn->err);
+				}
+				return DN_OK;
+			}
+
 			core_close(ctx, conn);
 			return DN_ERROR;
 		}
@@ -565,7 +570,6 @@ core_process_messages(void)
 
 	return DN_OK;
 }
-
 
 rstatus_t
 core_loop(struct context *ctx)
