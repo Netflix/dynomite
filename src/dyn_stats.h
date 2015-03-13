@@ -33,7 +33,8 @@
     ACTION( client_err,                   STATS_COUNTER,      "# errors on client connections")                           \
     ACTION( client_connections,           STATS_GAUGE,        "# active client connections")                              \
     ACTION( client_read_requests,         STATS_COUNTER,      "# client read requests")                                   \
-    ACTION( client_write_requests,         STATS_COUNTER,     "# client write responses")                                 \
+    ACTION( client_write_requests,        STATS_COUNTER,      "# client write responses")                                 \
+    ACTION( client_dropped_requests,      STATS_GAUGE,        "# client dropped requests")                                \
     /* pool behavior */                                                                                                   \
     ACTION( server_ejects,                STATS_COUNTER,      "# times backend server was ejected")                       \
     /* dnode client behavior */                                                                                           \
@@ -41,6 +42,7 @@
     ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                     \
     ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                        \
     /* peer behavior */                                                                                                   \
+    ACTION( peer_dropped_requests,        STATS_GAUGE,        "# peer dropped requests")                                  \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
     ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
     ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on peer connections")                           \
