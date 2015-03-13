@@ -179,6 +179,8 @@ client_close(struct context *ctx, struct conn *conn)
                       "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                       msg->type);
         }
+
+        stats_pool_incr(ctx, conn->owner, client_dropped_requests);
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
