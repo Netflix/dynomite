@@ -713,22 +713,27 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 
 	switch (msg->result) {
 	case MSG_PARSE_OK:
+		//log_debug(LOG_VVERB, "MSG_PARSE_OK");
 		status = msg_parsed(ctx, conn, msg);
 		break;
 
 	case MSG_PARSE_FRAGMENT:
+		//log_debug(LOG_VVERB, "MSG_PARSE_FRAGMENT");
 		status = msg_fragment(ctx, conn, msg);
 		break;
 
 	case MSG_PARSE_REPAIR:
+		//log_debug(LOG_VVERB, "MSG_PARSE_REPAIR");
 		status = msg_repair(ctx, conn, msg);
 		break;
 
 	case MSG_PARSE_AGAIN:
+		//log_debug(LOG_VVERB, "MSG_PARSE_AGAIN");
 		status = DN_OK;
 		break;
 
 	default:
+		//log_debug(LOG_VVERB, "Default case");
 		if (!conn->dyn_mode) {
 			status = DN_ERROR;
 			conn->err = errno;
@@ -765,6 +770,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     msize = mbuf_size(mbuf);
 
     n = conn_recv(conn, mbuf->last, msize);
+
     if (n < 0) {
         if (n == DN_EAGAIN) {
             return DN_OK;

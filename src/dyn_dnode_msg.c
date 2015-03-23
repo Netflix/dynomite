@@ -54,6 +54,11 @@ dyn_parse_core(struct msg *r)
    uint64_t num = 0;
 
    state = r->dyn_state;
+   log_debug(LOG_DEBUG, "dyn_state:  %d", r->dyn_state);
+
+   if (r->dyn_state == DYN_DONE)
+   	return true;
+
    b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
    dmsg = r->dmsg;
@@ -81,21 +86,21 @@ dyn_parse_core(struct msg *r)
             break;
          }
          if (ch == '$') {
-                if (p + 5 < b->last) {
+              if (p + 5 < b->last) {
                   if ((*(p+1) == '2') &&
-                   (*(p+2) == '0') &&
-                   (*(p+3) == '1') &&
-                   (*(p+4) == '4') &&
-                   (*(p+5) == '$')) {
-                   state = DYN_MAGIC_STRING;
-                   p += 5;
+                      (*(p+2) == '0') &&
+                      (*(p+3) == '1') &&
+                      (*(p+4) == '4') &&
+                      (*(p+5) == '$')) {
+                     state = DYN_MAGIC_STRING;
+                     p += 5;
                   } else {
-                   //goto skip;
-                   token = NULL; //reset
+                     //goto skip;
+                     token = NULL; //reset
                   }
-                } else {
+              } else {
                     goto split;
-                }
+              }
          } else {
             loga("Facing a weird char %c", p);
             //goto skip;
@@ -125,7 +130,7 @@ dyn_parse_core(struct msg *r)
          log_debug(LOG_DEBUG, "num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (ch - '0');
-         } else if (ch == ' '&& isdigit(*(p-1)))  {
+         } else if (ch == ' ' && isdigit(*(p-1)))  {
             log_debug(LOG_DEBUG, "MSG ID : %d", num);
             dmsg->id = num;
             state = DYN_TYPE_ID;
@@ -216,9 +221,9 @@ dyn_parse_core(struct msg *r)
 
       case DYN_DATA_LEN:
          log_debug(LOG_DEBUG, "DYN_DATA_LEN: num = %d", num);
-            if (ch == '*') {
-               break;
-            } else if (isdigit(ch))  {
+         if (ch == '*') {
+            break;
+         } else if (isdigit(ch))  {
             num = num*10 + (ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             log_debug(LOG_DEBUG, "Data len: %d", num);
@@ -342,7 +347,7 @@ dyn_parse_core(struct msg *r)
    return false;
 
    done:
-   r->dyn_state = DYN_START;
+   //r->dyn_state = DYN_START;
    r->pos = p;
    dmsg->source_address = r->owner->addr;
 
@@ -358,7 +363,6 @@ dyn_parse_core(struct msg *r)
 
    error:
    log_debug(LOG_ERR, "at error for state %d and c %c", state, *p);
-   //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
    r->result = MSG_PARSE_ERROR;
    r->pos = p;
    errno = EINVAL;

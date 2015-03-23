@@ -130,6 +130,19 @@ uint32_t mbuf_free_queue_size()
 }
 
 
+void mbuf_dump(struct mbuf *mbuf)
+{
+	 long int len;
+	 uint8_t *p, *q;
+
+	 p = mbuf->start;
+	 q = mbuf->last;
+	 len = q - p;
+
+	 loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+}
+
+
 void
 mbuf_put(struct mbuf *mbuf)
 {
