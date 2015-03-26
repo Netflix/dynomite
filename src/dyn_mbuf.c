@@ -97,7 +97,8 @@ mbuf_get(void)
 
     buf = (uint8_t *)mbuf - mbuf_offset;
     mbuf->start = buf;
-    mbuf->end = buf + mbuf_offset;
+    mbuf->end = buf + mbuf_offset - MBUF_ESIZE;
+    mbuf->end_extra = buf + mbuf_offset;
 
     ASSERT(mbuf->end - mbuf->start == (int)mbuf_offset);
     ASSERT(mbuf->start < mbuf->end);
@@ -221,7 +222,7 @@ void
 mbuf_insert_after(struct mhdr *mhdr, struct mbuf *mbuf, struct mbuf *nbuf)
 {
     STAILQ_INSERT_AFTER(mhdr, nbuf, mbuf, next);
-    //log_debug(LOG_VVERB, "insert head mbuf %p len %d", mbuf, mbuf->last - mbuf->pos);
+    log_debug(LOG_VVERB, "insert head mbuf %p len %d", mbuf, mbuf->last - mbuf->pos);
 }
 
 /*
@@ -310,7 +311,7 @@ mbuf_init(struct instance *nci)
     nfree_mbufq = 0;
     STAILQ_INIT(&free_mbufq);
 
-    mbuf_chunk_size = nci->mbuf_chunk_size;
+    mbuf_chunk_size = nci->mbuf_chunk_size + MBUF_ESIZE;
     mbuf_offset = mbuf_chunk_size - MBUF_HSIZE;
 
     log_debug(LOG_DEBUG, "mbuf hsize %d chunk size %zu offset %zu length %zu",
@@ -413,15 +414,15 @@ mbuf_alloc(size_t size)
    STAILQ_NEXT(mbuf, next) = NULL;
 
    mbuf->start = buf;
-   mbuf->end = buf + mbuf_offset;
+   mbuf->end = buf + mbuf_offset - MBUF_ESIZE;
+   mbuf->end_extra = buf + mbuf_offset;
 
    mbuf->pos = mbuf->start;
    mbuf->last = mbuf->start;
 
    return mbuf;
-
-
 }
+
 
 void
 mbuf_dealloc(struct mbuf *mbuf)

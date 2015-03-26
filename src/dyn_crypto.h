@@ -28,6 +28,7 @@
 
 
 rstatus_t crypto_init(struct context *ctx);
+rstatus_t crypto_init_for_test();
 rstatus_t crypto_deinit(void);
 
 char* base64_encode(const unsigned char *message, const size_t length);
@@ -39,6 +40,8 @@ rstatus_t aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **d
 
 rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msgLen,
 		                  struct mbuf *mbuf, unsigned char *aes_key);
+rstatus_t dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key);
+
 
 rstatus_t dyn_aes_decrypt(unsigned char *encMsg, size_t encMsgLen,
 		                  struct mbuf *mbuf, unsigned char *aes_key);
@@ -51,7 +54,5 @@ rstatus_t dyn_rsa_encrypt(unsigned char *plain_msg, unsigned char *encrypted_buf
 
 rstatus_t dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf);
 
-
-void crypto_check(void);
 
 #endif /* DYN_CRYPTO_H_ */

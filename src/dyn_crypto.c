@@ -27,24 +27,23 @@ static EVP_CIPHER_CTX *aes_encrypt_ctx;
 static EVP_CIPHER_CTX *aes_decrypt_ctx;
 
 
-static rstatus_t
-load_private_rsa_key(struct server_pool *sp)
+static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
 {
 	FILE * fp;
 
-    if (sp == NULL || string_empty(&sp->pem_key_file)) {
-    	log_error("Could NOT read RSA pem key file due to bad context or configuration");
-    	return DN_ERROR;
-    }
+   if (string_empty(pem_key_file)) {
+   	log_error("Could NOT read RSA pem key file with empty name");
+   	return DN_ERROR;
+   }
 
-    unsigned char file_name[sp->pem_key_file.len + 1];
-    memcpy(file_name, sp->pem_key_file.data, sp->pem_key_file.len);
-    file_name[sp->pem_key_file.len] = '\0';
+   unsigned char file_name[pem_key_file->len + 1];
+   memcpy(file_name, pem_key_file->data, pem_key_file->len);
+   file_name[pem_key_file->len] = '\0';
 
-    if( access( file_name, F_OK ) < 0 ) {
-    	log_error("Error: file %s not exists", file_name);
-        return DN_ERROR;
-    }
+   if( access(file_name, F_OK ) < 0 ) {
+   	log_error("Error: file %s not exists", file_name);
+       return DN_ERROR;
+   }
 
 	if(NULL != (fp= fopen(file_name, "r")) )
 	{
@@ -95,9 +94,24 @@ load_private_rsa_key(struct server_pool *sp)
 	BIO_free_all(pub);
 	BIO_free_all(pri);
 
-    */
+   */
 
 	return DN_OK;
+
+}
+
+
+static rstatus_t
+load_private_rsa_key(struct server_pool *sp)
+{
+    if (sp == NULL || string_empty(&sp->pem_key_file)) {
+    	log_error("Could NOT read RSA pem key file due to bad context or configuration");
+    	return DN_ERROR;
+    }
+
+    load_private_rsa_key_by_file(&sp->pem_key_file);
+
+    return DN_OK;
 }
 
 
@@ -105,7 +119,6 @@ load_private_rsa_key(struct server_pool *sp)
 static rstatus_t
 aes_init(void)
 {
-
 	// Initalize contexts
 	aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 	aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
@@ -122,7 +135,6 @@ aes_init(void)
 
 	// Init AES
 	aes_cipher =  EVP_aes_128_cbc();
-	//aes_key = (unsigned char*) malloc(aes_key_size);
 
 
 	if(RAND_bytes(aes_key, aes_key_size) == 0) {
@@ -166,6 +178,19 @@ crypto_init(struct context *ctx)
 	return DN_OK;
 }
 
+rstatus_t
+crypto_init_for_test()
+{
+	if (aes_init() < 0)
+		return DN_ERROR;
+
+	//init RSA
+	struct string pem_file = string("conf/dynomite.pem");
+	if (load_private_rsa_key_by_file(&pem_file) < 0)
+		return DN_ERROR;
+
+	return DN_OK;
+}
 
 rstatus_t
 crypto_deinit(void)
@@ -186,7 +211,8 @@ crypto_deinit(void)
 
 
 char*
-base64_encode(const unsigned char *message, const size_t length) {
+base64_encode(const unsigned char *message, const size_t length)
+{
 	BIO *bio;
 	BIO *b64;
 	FILE* stream;
@@ -213,7 +239,8 @@ base64_encode(const unsigned char *message, const size_t length) {
 
 
 int
-base64_decode(const char *b64message, const size_t length, unsigned char **buffer) {
+base64_decode(const char *b64message, const size_t length, unsigned char **buffer)
+{
 	BIO *bio;
 	BIO *b64;
 	int decodedLength = calc_decode_length(b64message, length);
@@ -253,7 +280,8 @@ calc_decode_length(const char *b64input, const size_t length) {
 }
 
 rstatus_t
-aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, unsigned char *aes_key) {
+aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, unsigned char *aes_key)
+{
 	size_t block_len  = 0;
 	size_t enc_msg_len = 0;
 
@@ -281,7 +309,9 @@ aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, u
 }
 
 
-rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, unsigned char *aes_key) {
+rstatus_t
+dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, unsigned char *aes_key)
+{
 
 	size_t block_len  = 0;
 	size_t enc_msg_len = 0;
@@ -303,18 +333,26 @@ rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf 
 	}
 
 	EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+
+	//for encrypt, we allow to use up to the extra space
+	if (enc_msg_len + block_len > mbuf->end_extra - mbuf->last) {
+      return DN_ERROR;
+	}
+
 	mbuf->last = mbuf->pos + enc_msg_len + block_len;
 
 	return enc_msg_len + block_len;
 }
 
 
-rstatus_t dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, unsigned char *aes_key) {
+rstatus_t
+dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, unsigned char *aes_key)
+{
 	if (ENCRYPTION) {
 		size_t dec_len   = 0;
 		size_t block_len = 0;
 
-		ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
+		ASSERT(mbuf != NULL && mbuf->start == mbuf->pos);
 
 		//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 		if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
@@ -341,6 +379,109 @@ rstatus_t dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbu
 	return (int) enc_msg_len;
 
 }
+
+/*
+ *  enc
+ *
+ */
+rstatus_t
+dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
+{
+	struct mhdr mhdr_tem;
+
+	if (STAILQ_EMPTY(&msg->mhdr)) {
+		return DN_ERROR;
+	}
+
+	STAILQ_INIT(&mhdr_tem);
+
+	struct mbuf *mbuf;
+	while (!STAILQ_EMPTY(&msg->mhdr)) {
+		ASSERT(nfree_mbufq > 0);
+
+		mbuf = STAILQ_FIRST(&msg->mhdr);
+		STAILQ_REMOVE_HEAD(&msg->mhdr, next);
+
+      mbuf_dump(mbuf);
+
+		struct mbuf *nbuf = mbuf_get();
+		dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
+
+		mbuf_put(mbuf);
+      mbuf_dump(nbuf);
+		if (STAILQ_EMPTY(&mhdr_tem)) {
+			STAILQ_INSERT_HEAD(&mhdr_tem, nbuf, next);
+		} else {
+			STAILQ_INSERT_TAIL(&mhdr_tem, nbuf, next);
+		}
+	}
+
+	while (!STAILQ_EMPTY(&mhdr_tem)) {
+		mbuf = STAILQ_FIRST(&mhdr_tem);
+	   STAILQ_REMOVE_HEAD(&mhdr_tem, next);
+
+	   if (STAILQ_EMPTY(&msg->mhdr)) {
+	      STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+	   } else {
+	   	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
+	   }
+	}
+
+	return DN_OK;
+}
+
+
+/*
+ *  decrypt
+ *
+ */
+rstatus_t
+dyn_aes_decrypt_msg(struct msg *msg, unsigned char *aes_key)
+{
+	struct mhdr mhdr_tem;
+
+	if (STAILQ_EMPTY(&msg->mhdr)) {
+		return DN_ERROR;
+	}
+
+	STAILQ_INIT(&mhdr_tem);
+
+	struct mbuf *mbuf;
+	while (!STAILQ_EMPTY(&msg->mhdr)) {
+		ASSERT(nfree_mbufq > 0);
+
+		mbuf = STAILQ_FIRST(&msg->mhdr);
+		STAILQ_REMOVE_HEAD(&msg->mhdr, next);
+
+		mbuf_dump(mbuf);
+
+		struct mbuf *nbuf = mbuf_get();
+		dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
+
+		mbuf_put(mbuf);
+		mbuf_dump(nbuf);
+		if (STAILQ_EMPTY(&mhdr_tem)) {
+			STAILQ_INSERT_HEAD(&mhdr_tem, nbuf, next);
+		} else {
+			STAILQ_INSERT_TAIL(&mhdr_tem, nbuf, next);
+		}
+	}
+
+	while (!STAILQ_EMPTY(&mhdr_tem)) {
+		mbuf = STAILQ_FIRST(&mhdr_tem);
+	   STAILQ_REMOVE_HEAD(&mhdr_tem, next);
+
+	   if (STAILQ_EMPTY(&msg->mhdr)) {
+	      STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+	   } else {
+	   	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
+	   }
+	}
+
+	return DN_OK;
+
+}
+
 
 rstatus_t
 aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg, unsigned char *aes_key) {
@@ -372,54 +513,14 @@ aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg,
 }
 
 
-unsigned char* generate_aes_key(void) {
-
+unsigned char* generate_aes_key(void)
+{
 	//if(RAND_bytes(aes_key, AES_KEYLEN/8) == 0) {
 	if(RAND_bytes(aes_key, aes_key_size) == 0) {
 		return NULL;
 	}
 
 	return aes_key;
-}
-
-
-
-static int aes_test()
-{
-	log_debug(LOG_VERB, "aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
-
-	unsigned char *msg = "Hi my name is Dynomite";
-	unsigned char *enc_msg = NULL;
-	char *dec_msg          = NULL;
-	int enc_msg_len;
-	int dec_msg_len;
-
-	log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
-
-	// Encrypt the message with AES
-	if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key)) == -1) {
-		log_debug(LOG_VERB, "AES encryption failed\n");
-		return -1;
-	}
-
-	// Print the encrypted message as a base64 string
-	char *b64_string = base64_encode(enc_msg, enc_msg_len);
-	log_debug(LOG_VERB, "AES Encrypted message: %s\n", b64_string);
-
-	// Decrypt the message
-	if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg, aes_key)) == -1) {
-		log_debug(LOG_VERB, "AES decryption failed\n");
-		return -1;
-	}
-
-	log_debug(LOG_VERB, "%d bytes decrypted\n", dec_msg_len);
-	log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
-
-	free(enc_msg);
-	free(dec_msg);
-	free(b64_string);
-
-	return 0;
 }
 
 
@@ -457,33 +558,3 @@ dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
 	return AES_KEYLEN;
 }
 
-
-static int rsa_test()
-{
-	static unsigned char encrypted_buf[256];
-	static unsigned char decrypted_buf[AES_KEYLEN + 1];
-	static unsigned char *msg;
-
-	int i=0;
-	for(; i<3; i++) {
-		msg = generate_aes_key();
-
-		log_debug(LOG_VERB, "i = %d", i);
-		log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
-
-
-		dyn_rsa_encrypt(msg, encrypted_buf);
-
-		dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
-
-		log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
-	}
-
-	return 0;
-}
-
-void crypto_check(void)
-{
-	aes_test();
-	rsa_test();
-}

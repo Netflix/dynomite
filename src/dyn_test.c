@@ -34,6 +34,8 @@ static char *data = "$2014$ 1 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo1\r
 static char *position;
 static size_t test_mbuf_chunk_size;
 
+static unsigned char aes_key[AES_KEYLEN];
+
 
 static struct option long_options[] = {
     { "help",           no_argument,        NULL,   'h' },
@@ -369,6 +371,146 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
 	return DN_OK;
 }
 
+
+static rstatus_t
+rsa_test()
+{
+	static unsigned char encrypted_buf[256];
+	static unsigned char decrypted_buf[AES_KEYLEN + 1];
+	static unsigned char *msg;
+
+	int i=0;
+	for(; i<3; i++) {
+		msg = generate_aes_key();
+
+		log_debug(LOG_VERB, "i = %d", i);
+		log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
+
+
+		dyn_rsa_encrypt(msg, encrypted_buf);
+
+		dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
+
+		log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
+	}
+
+	return DN_OK;
+}
+
+
+static rstatus_t
+rsa_test2()
+{
+	static unsigned char encrypted_buf[256];
+	static unsigned char decrypted_buf[AES_KEYLEN + 1];
+	static unsigned char msg[12] = "10aaaaaaaaaa";
+
+	log_debug(LOG_VERB, "msg           : %s \n", msg);
+
+	dyn_rsa_encrypt(msg, encrypted_buf);
+	loga("encrypted_buf length %d: ", strlen(encrypted_buf));
+
+	dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
+	log_debug(LOG_VERB, "Decrypted message : %s \n", decrypted_buf);
+
+	return DN_OK;
+}
+
+
+static rstatus_t
+aes_test()
+{
+	log_debug(LOG_VERB, "aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
+
+	unsigned char *msg0 = "01234567890123";
+	unsigned char *msg1 = "0123456789012345678901234567890123456789012345";
+	unsigned char *msg2 = "01234567890123456789012345678901234567890123456789012345678901";
+	unsigned char *msg3 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567";
+	unsigned char *msg4 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
+	unsigned char *msg5 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
+
+	const unsigned char *msgs[6];
+
+	msgs[0] = msg0;
+	msgs[1] = msg1;
+	msgs[2] = msg2;
+	msgs[3] = msg3;
+	msgs[4] = msg4;
+	msgs[5] = msg5;
+
+	unsigned char *enc_msg = NULL;
+	char *dec_msg          = NULL;
+	int enc_msg_len;
+	int dec_msg_len;
+
+	loga("=======================AES======================");
+	int i=0;
+	int count = 6;
+	for(;i<count;i++) {
+		unsigned char *msg = msgs[i];
+		log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
+
+		int expected_output_len = 16*((strlen(msg)/16) + 1);
+		//loga("expected_output_len  = %d", expected_output_len);
+		// Encrypt the message with AES
+		if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key)) == -1) {
+			log_debug(LOG_VERB, "AES encryption failed\n");
+			return -1;
+		}
+
+		loga("enc_msg_len length %d: ", enc_msg_len);
+		if (enc_msg_len != expected_output_len) {
+			return DN_ERROR;
+		}
+		// Print the encrypted message as a base64 string
+		char *b64_string = base64_encode(enc_msg, enc_msg_len);
+		log_debug(LOG_VERB, "AES Encrypted message (base64): %s\n", b64_string);
+
+		// Decrypt the message
+		if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg, aes_key)) == -1) {
+			log_debug(LOG_VERB, "AES decryption failed\n");
+			return -1;
+		}
+
+		log_debug(LOG_VERB, "%d bytes decrypted\n", dec_msg_len);
+		log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
+
+		free(enc_msg);
+		free(dec_msg);
+		free(b64_string);
+	}
+	return DN_OK;
+}
+
+
+static rstatus_t
+aes_msg_encryption_test(struct server *server)
+{
+	unsigned char* aes_key = generate_aes_key();
+	struct conn *conn = conn_get_peer(server, false, true);
+	struct msg *msg = msg_get(conn, true, conn->redis);
+
+	struct mbuf *mbuf1 = mbuf_get();
+	struct string s1 = string("abc");
+	mbuf_write_string(mbuf1, &s1);
+	STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
+
+	struct mbuf *mbuf2 = mbuf_get();
+	struct string s2 = string("abcabc");
+	mbuf_write_string(mbuf2, &s2);
+	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
+
+	dyn_aes_encrypt_msg(msg, aes_key);
+
+	loga("dumping the content of msg");
+	msg_dump(msg);
+
+	dyn_aes_decrypt_msg(msg, aes_key);
+	msg_dump(msg);
+
+	return DN_OK;
+}
+
 static void
 test_init(int argc, char **argv)
 {
@@ -390,12 +532,14 @@ test_init(int argc, char **argv)
 	mbuf_init(&nci);
 	msg_init();
 	conn_init();
+
+	crypto_init_for_test();
 }
 
-int
+void
 main(int argc, char **argv)
 {
-    rstatus_t status;
+    //rstatus_t status;
     test_init(argc, argv);
 
     struct server *server = malloc(sizeof(struct server));
@@ -408,6 +552,16 @@ main(int argc, char **argv)
     if (test_msg_recv_chain(conn, msg) != DN_OK) {
    	 loga("Error in testing msg_recv_chain!!!");
     }
+
+    if (rsa_test() != DN_OK) {
+   	 loga("Error in testing RSA !!!");
+    }
+
+    if (aes_test() != DN_OK) {
+   	 loga("Error in testing AES !!!");
+    }
+
+    aes_msg_encryption_test(server);
 
     loga("Testing is done!!!");
 }
