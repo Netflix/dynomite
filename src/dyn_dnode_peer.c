@@ -478,6 +478,26 @@ dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
 	}
 }
 
+
+void
+dnode_peer_attemp_reconnect_or_close(struct context *ctx, struct conn *conn)
+{
+	rstatus_t status;
+
+	if (conn->attempted_reconnect < 30) {
+		status = close(conn->sd);
+		if (status < 0) {
+			log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
+		}
+		conn->sd = -1;
+	   if (dnode_peer_connect(ctx, conn->owner, conn) != DN_OK)
+	      conn->attempted_reconnect++;
+	   else conn->attempted_reconnect = 0;
+	} else {
+		dnode_peer_close(ctx, conn);
+	}
+}
+
 void
 dnode_peer_close(struct context *ctx, struct conn *conn)
 {
@@ -501,11 +521,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 		conn_put(conn);
 		return;
 	}
-
-	//attemp to reconnect
-	//conn->sd = -1;
-	//dnode_peer_connect(ctx, conn->owner, conn);
-
 
 	for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);

@@ -356,6 +356,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             conn->done = 1;
             log_debug(LOG_INFO, "c %d is done", conn->sd);
         }
+
         return NULL;
     }
 

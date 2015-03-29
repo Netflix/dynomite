@@ -415,6 +415,11 @@ dn_get_options(int argc, char **argv, struct instance *nci)
                 return DN_ERROR;
             }
 
+            if ((value / 16) * 16 != value) {
+               log_stderr("dynomite: mbuf chunk size must be a multiple of 16");
+               return DN_ERROR;
+            }
+
             nci->mbuf_chunk_size = (size_t)value;
             break;
 

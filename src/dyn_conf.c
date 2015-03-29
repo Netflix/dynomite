@@ -1955,6 +1955,7 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
+
     status = dn_resolve(&address, field->port, &field->info);
     if (status != DN_OK) {
         string_deinit(&address);

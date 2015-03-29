@@ -176,6 +176,7 @@ _conn_get(void)
     conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
     conn->last_received = 0;
+    conn->attempted_reconnect = 0;
 
     unsigned char *ase_key = generate_aes_key();
     strncpy(conn->aes_key, ase_key, strlen(ase_key)); //generate a new key for each connection

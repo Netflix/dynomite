@@ -35,7 +35,9 @@ struct mbuf {
     uint8_t            *last;   /* write marker */
     uint8_t            *start;  /* start of buffer (const) */
     uint8_t            *end;    /* end of buffer (const) */
+    uint8_t            *end_extra; /*end of the buffer - including the extra region */
     uint32_t           chunk_size;
+    unsigned           read_flip:1; /* readable flag used in encryption/decryption mode */
 };
 
 STAILQ_HEAD(mhdr, mbuf);
@@ -45,6 +47,8 @@ STAILQ_HEAD(mhdr, mbuf);
 #define MBUF_MAX_SIZE   512000
 #define MBUF_SIZE       16384
 #define MBUF_HSIZE      sizeof(struct mbuf)
+#define MBUF_ESIZE      16
+
 
 static inline bool
 mbuf_empty(struct mbuf *mbuf)
@@ -55,7 +59,7 @@ mbuf_empty(struct mbuf *mbuf)
 static inline bool
 mbuf_full(struct mbuf *mbuf)
 {
-    return mbuf->last == mbuf->end ? true : false;
+    return mbuf->last == mbuf->end? true : false;
 }
 
 void mbuf_init(struct instance *nci);
@@ -63,6 +67,7 @@ void mbuf_deinit(void);
 struct mbuf *mbuf_get(void);
 void mbuf_put(struct mbuf *mbuf);
 uint32_t mbuf_free_queue_size();
+void mbuf_dump(struct mbuf *mbuf);
 void mbuf_rewind(struct mbuf *mbuf);
 uint32_t mbuf_length(struct mbuf *mbuf);
 uint32_t mbuf_size(struct mbuf *mbuf);
