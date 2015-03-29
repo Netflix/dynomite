@@ -40,6 +40,7 @@ enum {
         DYN_PAYLOAD_LEN,
         DYN_CRLF_BEFORE_DONE,
         DYN_DONE,
+        DYN_POST_DONE,
         DYN_UNKNOWN
 } state;
 
@@ -56,7 +57,7 @@ dyn_parse_core(struct msg *r)
    state = r->dyn_state;
    log_debug(LOG_DEBUG, "dyn_state:  %d", r->dyn_state);
 
-   if (r->dyn_state == DYN_DONE)
+   if (r->dyn_state == DYN_DONE || r->dyn_state == DYN_POST_DONE)
    	return true;
 
    b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -271,14 +272,9 @@ dyn_parse_core(struct msg *r)
             log_debug(LOG_DEBUG, "Payload len: %d", num);
             dmsg->plen = num;
             num = 0;
-            if (p + dmsg->plen + 1 >= b->last) {
-               //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-               goto split;
-            }
             state = DYN_CRLF_BEFORE_DONE;
          } else {
             token = NULL;
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -292,7 +288,6 @@ dyn_parse_core(struct msg *r)
             r->pos = p;
          } else {
             token = NULL;
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             state = DYN_START;
             if (ch == '$')
                p -= 1;
@@ -347,7 +342,6 @@ dyn_parse_core(struct msg *r)
    return false;
 
    done:
-   //r->dyn_state = DYN_START;
    r->pos = p;
    dmsg->source_address = r->owner->addr;
 
@@ -358,6 +352,7 @@ dyn_parse_core(struct msg *r)
    log_hexdump(LOG_VVERB, b->start, b->last - b->start, "inspecting req %"PRIu64" "
          "res %d type %d state %d", r->id, r->result, r->type,
          r->dyn_state);
+
 
    return true;
 
@@ -382,139 +377,161 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-   if (get_tracking_level() >= LOG_VVERB) {
-      log_debug(LOG_NOTICE, "In dyn_parse_req, start to process request :::::::::::::::::::::: ");
-      msg_dump(r);
-   }
+	if (get_tracking_level() >= LOG_VVERB) {
+		log_debug(LOG_NOTICE, ":::::::::::::::::::::: In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+		msg_dump(r);
+	}
 
-   bool done_parsing = false;
-   struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+	bool done_parsing = false;
+	struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-   if (dyn_parse_core(r)) {
-      struct dmsg *dmsg = r->dmsg;
+	if (dyn_parse_core(r)) {
+		struct dmsg *dmsg = r->dmsg;
+		struct conn *conn = r->owner;
+		conn->same_dc = dmsg->same_dc;
 
-      if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
-      	dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
-         r->state = 0;
-         r->result = MSG_PARSE_OK;
-         r->dyn_state = DYN_DONE;
-         return;
-      }
+		if (r->dyn_state == DYN_DONE && dmsg->bit_field == 1) {
+			dmsg->owner->owner->dnode_secured = 1;
+			r->owner->dnode_crypto_state = 1;
+			r->dyn_state = DYN_POST_DONE;
+			r->result = MSG_PARSE_REPAIR;
 
-      if (dmsg->type == GOSSIP_SYN) {
-         //TODOs: need to address multi-buffer msg later
-         dmsg->payload = b->pos;
+			if (dmsg->mlen > 1) {
+				//Decrypt AES key
+				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
+				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
+			}
 
-         b->pos = b->pos + dmsg->plen;
-         r->pos = b->pos;
+			if (dmsg->plen + b->pos <= b->last) {
+				struct mbuf *decrypted_buf = mbuf_get();
+				if (decrypted_buf == NULL) {
+					loga("Unable to obtain an mbuf for dnode msg's header!");
+					return;
+				}
 
-         done_parsing = true;
-      }
+				dyn_aes_decrypt(b->pos, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
-      struct conn *conn = r->owner;
-      conn->same_dc = dmsg->same_dc;
+				b->pos = b->pos + dmsg->plen;
+				r->pos = decrypted_buf->start;
+				mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
 
-      //check whether we need to decrypt the payload
-      if (dmsg->bit_field == 1) {
-         dmsg->owner->owner->dnode_secured = 1;
-         r->owner->dnode_crypto_state = 1;
+				mbuf_insert(&r->mhdr, decrypted_buf);
+				mbuf_remove(&r->mhdr, b);
+				mbuf_put(b);
 
-         if (dmsg->mlen > 1) {
-            //Decrypt AES key
-            dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-            strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
-         }
+				r->mlen = mbuf_length(decrypted_buf);
 
-         struct mbuf *decrypted_buf = mbuf_get();
-         if (decrypted_buf == NULL) {
-            loga("Unable to obtain an mbuf for dnode msg's header!");
-            return;
-         }
+				if (r->redis) {
+					return redis_parse_req(r);
+				}
 
-         //Decrypt payload
-         dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
+				return memcache_parse_req(r);
+			}
 
-         b->pos = b->pos + dmsg->plen;
-         r->pos = decrypted_buf->start;
-         mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
-         mbuf_insert(&r->mhdr, decrypted_buf);
-         mbuf_remove(&r->mhdr, b);
-         mbuf_put(b);
+			//substract alraedy received bytes
+			dmsg->plen -= b->last - b->pos;
 
-         r->mlen = mbuf_length(decrypted_buf);
-      }
+			return;
+		} else if (r->dyn_state == DYN_POST_DONE) {
+			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
+			if (last_buf->read_flip == 1)
+				redis_parse_req(r);
+			else {
+				r->result = MSG_PARSE_REPAIR;
+			}
 
-      if (done_parsing)
-         return;
+			return;
+		}
 
-      if (r->redis) {
-         return redis_parse_req(r);
-      }
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
+				dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
+			r->state = 0;
+			r->result = MSG_PARSE_OK;
+			r->dyn_state = DYN_DONE;
+			return;
+		}
 
-      return memcache_parse_req(r);
-   }
+		if (dmsg->type == GOSSIP_SYN) {
+			//TODOs: need to address multi-buffer msg later
+			dmsg->payload = b->pos;
+
+			b->pos = b->pos + dmsg->plen;
+			r->pos = b->pos;
+
+			done_parsing = true;
+		}
+
+		if (done_parsing)
+			return;
+
+		if (r->redis) {
+			return redis_parse_req(r);
+		}
+
+		return memcache_parse_req(r);
+	}
 
 
-   //bad case
-   if (get_tracking_level() >= LOG_VVERB) {
-      log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
-      msg_dump(r);
-   }
+	//bad case
+	if (get_tracking_level() >= LOG_VVERB) {
+		log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
+		msg_dump(r);
+	}
 }
 
 
 void dyn_parse_rsp(struct msg *r)
 {
-   if (get_tracking_level() >= LOG_VVERB) {
-      log_debug(LOG_NOTICE, "In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
-      msg_dump(r);
-   }
+	if (get_tracking_level() >= LOG_VVERB) {
+		log_debug(LOG_NOTICE, ":::::::::::::::::::::: In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
+		msg_dump(r);
+	}
 
-   if (dyn_parse_core(r)) {
-      struct dmsg *dmsg = r->dmsg;
-      struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+	if (dyn_parse_core(r)) {
+		struct dmsg *dmsg = r->dmsg;
+		struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-      if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
-         log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
-         r->state = 0;
-         r->result = MSG_PARSE_OK;
-         r->dyn_state = DYN_DONE;
-         return;
-      }
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
+			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
+			r->state = 0;
+			r->result = MSG_PARSE_OK;
+			r->dyn_state = DYN_DONE;
+			return;
+		}
 
-      //check whether we need to decrypt the payload
-      if (dmsg->bit_field == 1) {
-         //dmsg->owner->owner->dnode_secured = 1;
-         struct mbuf *decrypted_buf = mbuf_get();
-         if (decrypted_buf == NULL) {
-            log_debug(LOG_INFO, "Unable to obtain an mbuf for dnode msg's header!");
-            return;
-         }
+		//check whether we need to decrypt the payload
+		if (dmsg->bit_field == 1) {
+			//dmsg->owner->owner->dnode_secured = 1;
+			struct mbuf *decrypted_buf = mbuf_get();
+			if (decrypted_buf == NULL) {
+				log_debug(LOG_INFO, "Unable to obtain an mbuf for dnode msg's header!");
+				return;
+			}
 
-         //Dont need to decrypt AES key - pull it out from the conn
-         dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
+			//Dont need to decrypt AES key - pull it out from the conn
+			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
 
-         b->pos = b->pos + dmsg->plen;
-         r->pos = decrypted_buf->start;
-         mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
-         mbuf_insert(&r->mhdr, decrypted_buf);
-         mbuf_remove(&r->mhdr, b);
-         mbuf_put(b);
-         r->mlen = mbuf_length(decrypted_buf);
-      }
+			b->pos = b->pos + dmsg->plen;
+			r->pos = decrypted_buf->start;
+			mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
+			mbuf_insert(&r->mhdr, decrypted_buf);
+			mbuf_remove(&r->mhdr, b);
+			mbuf_put(b);
+			r->mlen = mbuf_length(decrypted_buf);
+		}
 
-      if (r->redis) {
-         return redis_parse_rsp(r);
-      }
+		if (r->redis) {
+			return redis_parse_rsp(r);
+		}
 
-      return memcache_parse_rsp(r);
-   }
+		return memcache_parse_rsp(r);
+	}
 
-   //bad case
-   if (get_tracking_level() >= LOG_VVERB) {
-      log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
-      msg_dump(r);
-   }
+	//bad case
+	if (get_tracking_level() >= LOG_VVERB) {
+		log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
+		msg_dump(r);
+	}
 
 }
 
@@ -523,7 +540,6 @@ void
 dmsg_free(struct dmsg *dmsg)
 {
     log_debug(LOG_VVVERB, "free dmsg %p id %"PRIu64"", dmsg, dmsg->id);
-
     dn_free(dmsg);
 }
 

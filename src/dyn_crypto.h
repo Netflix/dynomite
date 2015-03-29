@@ -42,7 +42,6 @@ rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msgLen,
 		                  struct mbuf *mbuf, unsigned char *aes_key);
 rstatus_t dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key);
 
-
 rstatus_t dyn_aes_decrypt(unsigned char *encMsg, size_t encMsgLen,
 		                  struct mbuf *mbuf, unsigned char *aes_key);
 

@@ -481,6 +481,17 @@ uint32_t msg_mbuf_size(struct msg *msg)
 	return count;
 }
 
+uint32_t msg_length(struct msg *msg)
+{
+	uint32_t count = 0;
+	struct mbuf *mbuf;
+
+	STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+		count += mbuf->last - mbuf->start;
+	}
+
+	return count;
+}
 
 void
 msg_dump(struct msg *msg)
@@ -698,6 +709,7 @@ msg_repair(struct context *ctx, struct conn *conn, struct msg *msg)
     return DN_OK;
 }
 
+
 static rstatus_t
 msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 {
@@ -733,7 +745,6 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 		break;
 
 	default:
-		//log_debug(LOG_VVERB, "Default case");
 		if (!conn->dyn_mode) {
 			status = DN_ERROR;
 			conn->err = errno;
@@ -741,65 +752,93 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 			log_debug(LOG_VVERB, "Parsing error in dyn_mode");
 			status = DN_OK;
 		}
+
 		break;
 	}
 
 	return conn->err != 0 ? DN_ERROR : status;
 }
 
+
 static rstatus_t
 msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    rstatus_t status;
-    struct msg *nmsg;
-    struct mbuf *mbuf;
-    size_t msize;
-    ssize_t n;
+	rstatus_t status;
+	struct msg *nmsg;
+	struct mbuf *mbuf;
+	size_t msize;
+	ssize_t n;
+	int expected_fill = (msg->dmsg != NULL && msg->dmsg->bit_field == 1) ?
+			msg->dmsg->plen : -1;  //used in encryption case only
 
-    mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-    if (mbuf == NULL || mbuf_full(mbuf)) {
-        mbuf = mbuf_get();
-        if (mbuf == NULL) {
-            return DN_ENOMEM;
-        }
-        mbuf_insert(&msg->mhdr, mbuf);
-        msg->pos = mbuf->pos;
-    }
-    ASSERT(mbuf->end - mbuf->last > 0);
+			mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+			if (mbuf == NULL || mbuf_full(mbuf) ||
+					(expected_fill != -1 && mbuf->last == mbuf->end_extra)) {
+				mbuf = mbuf_get();
+				if (mbuf == NULL) {
+					return DN_ENOMEM;
+				}
+				mbuf_insert(&msg->mhdr, mbuf);
+				msg->pos = mbuf->pos;
+			}
 
-    msize = mbuf_size(mbuf);
+			ASSERT(mbuf->end_extra - mbuf->last > 0);
 
-    n = conn_recv(conn, mbuf->last, msize);
+			msize = (expected_fill == -1)? mbuf_size(mbuf) :
+					(msg->dmsg->plen < mbuf->end_extra - mbuf->last) ? msg->dmsg->plen : mbuf->end_extra - mbuf->last;
 
-    if (n < 0) {
-        if (n == DN_EAGAIN) {
-            return DN_OK;
-        }
+			n = conn_recv(conn, mbuf->last, msize);
 
-        return DN_ERROR;
-    }
+			if (n < 0) {
+				if (n == DN_EAGAIN) {
+					return DN_OK;
+				}
 
-    ASSERT((mbuf->last + n) <= mbuf->end);
-    mbuf->last += n;
-    msg->mlen += (uint32_t)n;
+				return DN_ERROR;
+			}
 
-    for (;;) {
-        status = msg_parse(ctx, conn, msg);
-        if (status != DN_OK) {
-            return status;
-        }
 
-        /* get next message to parse */
-        nmsg = conn->recv_next(ctx, conn, false);
-        if (nmsg == NULL || nmsg == msg) {
-            /* no more data to parse */
-            break;
-        }
+			ASSERT((mbuf->last + n) <= mbuf->end_extra);
+			mbuf->last += n;
+			msg->mlen += (uint32_t)n;
 
-        msg = nmsg;
-    }
+			if (expected_fill != -1) {
+				if ( n >=  msg->dmsg->plen  || mbuf->end_extra == mbuf->last) {
+					log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or eligible!");
+					struct mbuf *nbuf = mbuf_get();
+					if (mbuf->end_extra == mbuf->last) {
+						dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+					} else {
+						dyn_aes_decrypt(mbuf->start, msg->dmsg->plen, nbuf, msg->owner->aes_key);
+						mbuf_copy(nbuf, mbuf->start + msg->dmsg->plen, mbuf->last - mbuf->start - msg->dmsg->plen);
+					}
+					nbuf->read_flip = 1;
+					STAILQ_REMOVE(&msg->mhdr, mbuf, mbuf, next);
+					mbuf_put(mbuf);
+					STAILQ_INSERT_TAIL(&msg->mhdr, nbuf, next);
+					msg->pos = nbuf->start;
+				}
+				msg->dmsg->plen -= n;
+			}
 
-    return DN_OK;
+
+			for (;;) {
+				status = msg_parse(ctx, conn, msg);
+				if (status != DN_OK) {
+					return status;
+				}
+
+				/* get next message to parse */
+				nmsg = conn->recv_next(ctx, conn, false);
+				if (nmsg == NULL || nmsg == msg) {
+					/* no more data to parse */
+					break;
+				}
+
+				msg = nmsg;
+			}
+
+			return DN_OK;
 }
 
 rstatus_t

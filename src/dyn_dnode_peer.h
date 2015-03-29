@@ -19,6 +19,7 @@ rstatus_t dnode_peer_init(struct array *server_pool, struct context *ctx);
 void dnode_peer_deinit(struct array *server);
 struct conn *dnode_peer_conn(struct server *server);
 rstatus_t dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn);
+void dnode_peer_attemp_reconnect_or_close(struct context *ctx, struct conn *conn);
 void dnode_peer_close(struct context *ctx, struct conn *conn);
 void dnode_peer_connected(struct context *ctx, struct conn *conn);
 void dnode_peer_ok(struct context *ctx, struct conn *conn);

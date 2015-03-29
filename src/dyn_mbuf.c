@@ -29,7 +29,7 @@ static uint32_t nfree_mbufq;   /* # free mbuf */
 static struct mhdr free_mbufq; /* free mbuf q */
 
 static size_t mbuf_chunk_size; /* mbuf chunk size - header + data (const) */
-static size_t mbuf_offset;     /* mbuf offset in chunk (const) */
+static size_t mbuf_offset;     /* mbuf offset in chunk (const) - include the extra space*/
 
 static struct mbuf *
 _mbuf_get(void)
@@ -60,18 +60,19 @@ _mbuf_get(void)
      * buffer overrun early by asserting on the magic value during get or
      * put operations
      *
-     *   <------------- mbuf_chunk_size ------------->
-     *   +-------------------------------------------+
-     *   |       mbuf data          |  mbuf header   |
-     *   |     (mbuf_offset)        | (struct mbuf)  |
-     *   +-------------------------------------------+
-     *   ^           ^        ^     ^^
-     *   |           |        |     ||
-     *   \           |        |     |\
-     *   mbuf->start \        |     | mbuf->end (one byte past valid bound)
-     *                mbuf->pos     \
-     *                        \      mbuf
-     *                        mbuf->last (one byte past valid byte)
+     *   <------------- mbuf_chunk_size ------------------------->
+     *   +-------------------------------------------------------+
+     *   |       mbuf data           |          |  mbuf header   |
+     *   |     (mbuf_offset)         |          | (struct mbuf)  |
+     *   +-------------------------------------------------------+
+     *   ^           ^        ^      ^          ^^
+     *   |           |        |      |          ||
+     *   |           |        |      |          \ \mbuf->end_extra (one byte past valid bound)
+     *   \           |        |      \           \
+     *   mbuf->start \        |      mbuf->end    mbuf
+     *             mbuf->pos  |
+     *                        \
+     *                       mbuf->last (one byte past valid byte)
      *
      */
     mbuf = (struct mbuf *)(buf + mbuf_offset);
@@ -105,6 +106,8 @@ mbuf_get(void)
 
     mbuf->pos = mbuf->start;
     mbuf->last = mbuf->start;
+
+    mbuf->read_flip = 0;
 
     log_debug(LOG_VVERB, "get mbuf %p", mbuf);
 
@@ -142,7 +145,6 @@ void mbuf_dump(struct mbuf *mbuf)
 
 	 loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
 }
-
 
 void
 mbuf_put(struct mbuf *mbuf)

@@ -265,6 +265,7 @@ void msg_deinit(void);
 struct msg *msg_get(struct conn *conn, bool request, bool redis);
 void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
+uint32_t msg_length(struct msg *msg);
 struct msg *msg_get_error(bool redis, dyn_error_t dyn_err, err_t err);
 void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);

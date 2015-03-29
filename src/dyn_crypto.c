@@ -291,15 +291,18 @@ aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, u
 
 	//if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 	if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_EncryptInit_ex : '%.*s'", msg_len, msg);
 		return DN_ERROR;
 	}
 
 	if(!EVP_EncryptUpdate(aes_encrypt_ctx, *enc_msg, (int*)&block_len, (unsigned char*)msg, msg_len)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_EncryptUpdate : '%.*s'", msg_len, msg);
 		return DN_ERROR;
 	}
 	enc_msg_len += block_len;
 
 	if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, *enc_msg + enc_msg_len, (int*) &block_len)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
 		return DN_ERROR;
 	}
 
@@ -320,15 +323,18 @@ dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, uns
 
 	//if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 	if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_EncryptInit_ex : '%.*s'", msg_len, msg);
 		return DN_ERROR;
 	}
 
 	if(!EVP_EncryptUpdate(aes_encrypt_ctx, mbuf->start, (int*)&block_len, (unsigned char*) msg, msg_len)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_EncryptUpdate : '%.*s'", msg_len, msg);
 		return DN_ERROR;
 	}
 	enc_msg_len += block_len;
 
 	if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
 		return DN_ERROR;
 	}
 
@@ -356,17 +362,21 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
 
 		//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 		if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+			log_debug(LOG_VERB, "This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
 			return DN_ERROR;
 		}
 
 		if(!EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->pos, (int*) &block_len, enc_msg, (int)enc_msg_len)) {
+			log_debug(LOG_VERB, "This is bad data in EVP_DecryptUpdate : '%.*s'", enc_msg_len, enc_msg);
 			return DN_ERROR;
 		}
 		dec_len += block_len;
 
 		if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->pos + dec_len, (int*) &block_len)) {
+			log_debug(LOG_VERB, "This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
 			return DN_ERROR;
 		}
+
 		dec_len += block_len;
 		mbuf->last = mbuf->pos + dec_len;
 
@@ -381,13 +391,14 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
 }
 
 /*
- *  enc
+ *  AES encrypt a msg with one or more buffers
  *
  */
 rstatus_t
 dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 {
 	struct mhdr mhdr_tem;
+	size_t count = 0;
 
 	if (STAILQ_EMPTY(&msg->mhdr)) {
 		return DN_ERROR;
@@ -402,13 +413,16 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 		mbuf = STAILQ_FIRST(&msg->mhdr);
 		STAILQ_REMOVE_HEAD(&msg->mhdr, next);
 
-      mbuf_dump(mbuf);
+		//mbuf_dump(mbuf);
 
 		struct mbuf *nbuf = mbuf_get();
-		dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
+
+		int n = dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
+		if (n > 0)
+			count += n;
 
 		mbuf_put(mbuf);
-      mbuf_dump(nbuf);
+		//mbuf_dump(nbuf);
 		if (STAILQ_EMPTY(&mhdr_tem)) {
 			STAILQ_INSERT_HEAD(&mhdr_tem, nbuf, next);
 		} else {
@@ -418,21 +432,21 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 
 	while (!STAILQ_EMPTY(&mhdr_tem)) {
 		mbuf = STAILQ_FIRST(&mhdr_tem);
-	   STAILQ_REMOVE_HEAD(&mhdr_tem, next);
+		STAILQ_REMOVE_HEAD(&mhdr_tem, next);
 
-	   if (STAILQ_EMPTY(&msg->mhdr)) {
-	      STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
-	   } else {
-	   	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
-	   }
+		if (STAILQ_EMPTY(&msg->mhdr)) {
+			STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+		} else {
+			STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
+		}
 	}
 
-	return DN_OK;
+	return count;
 }
 
 
 /*
- *  decrypt
+ *  dyn_aes_decrypt_msg: AES decrypt a msg with multiple mbuf blocks
  *
  */
 rstatus_t
@@ -448,7 +462,6 @@ dyn_aes_decrypt_msg(struct msg *msg, unsigned char *aes_key)
 
 	struct mbuf *mbuf;
 	while (!STAILQ_EMPTY(&msg->mhdr)) {
-		ASSERT(nfree_mbufq > 0);
 
 		mbuf = STAILQ_FIRST(&msg->mhdr);
 		STAILQ_REMOVE_HEAD(&msg->mhdr, next);
@@ -469,13 +482,13 @@ dyn_aes_decrypt_msg(struct msg *msg, unsigned char *aes_key)
 
 	while (!STAILQ_EMPTY(&mhdr_tem)) {
 		mbuf = STAILQ_FIRST(&mhdr_tem);
-	   STAILQ_REMOVE_HEAD(&mhdr_tem, next);
+		STAILQ_REMOVE_HEAD(&mhdr_tem, next);
 
-	   if (STAILQ_EMPTY(&msg->mhdr)) {
-	      STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
-	   } else {
-	   	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
-	   }
+		if (STAILQ_EMPTY(&msg->mhdr)) {
+			STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+		} else {
+			STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
+		}
 	}
 
 	return DN_OK;
@@ -494,15 +507,18 @@ aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg,
 
 	//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 	if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
 		return DN_ERROR;
 	}
 
 	if(!EVP_DecryptUpdate(aes_decrypt_ctx, (unsigned char*) *dec_msg, (int*) &block_len, enc_msg, (int) enc_msg_len)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_DecryptUpdate : '%.*s'", enc_msg_len, enc_msg);
 		return DN_ERROR;
 	}
 	dec_len += block_len;
 
 	if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, (unsigned char*) *dec_msg + dec_len, (int*) &block_len)) {
+		log_debug(LOG_VERB, "This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
 		return DN_ERROR;
 	}
 	dec_len += block_len;
@@ -515,7 +531,6 @@ aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg,
 
 unsigned char* generate_aes_key(void)
 {
-	//if(RAND_bytes(aes_key, AES_KEYLEN/8) == 0) {
 	if(RAND_bytes(aes_key, aes_key_size) == 0) {
 		return NULL;
 	}
@@ -545,14 +560,14 @@ rstatus_t
 dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
 {
 	if(RSA_private_decrypt(RSA_size(rsa),
-			                 encrypted_msg,
-					           decrypted_buf,
-					           rsa, RSA_PKCS1_OAEP_PADDING) != AES_KEYLEN) {
-				ERR_load_crypto_strings();
-				char  err[130];
-				ERR_error_string(ERR_get_error(), err);
-				log_debug(LOG_VERB, "Error in decrypting message: %s\n", err);
-				return DN_ERROR;
+			encrypted_msg,
+			decrypted_buf,
+			rsa, RSA_PKCS1_OAEP_PADDING) != AES_KEYLEN) {
+		ERR_load_crypto_strings();
+		char  err[130];
+		ERR_error_string(ERR_get_error(), err);
+		log_debug(LOG_VERB, "Error in decrypting message: %s\n", err);
+		return DN_ERROR;
 	}
 
 	return AES_KEYLEN;

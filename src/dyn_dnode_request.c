@@ -360,7 +360,6 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 	ASSERT(c_conn->client || c_conn->dnode_client);
 
 	/* enqueue the message (request) into peer inq */
-	//if (TAILQ_EMPTY(&p_conn->imsg_q)) {
 	status = event_add_out(ctx->evb, p_conn);
 	if (status != DN_OK) {
 		dnode_req_forward_error(ctx, p_conn, msg);
@@ -377,15 +376,11 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 		return;
 	}
 
-	struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-
 	struct server_pool *pool = c_conn->owner;
 	dmsg_type_t msg_type = (string_compare(&pool->dc, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
 
 	if (p_conn->dnode_secured) {
 		//Encrypting and adding header for a request
-
-		//TODOs: need to deal with multi-block later
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
 
 		//write dnode header
@@ -397,32 +392,21 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 				return; //TODOs: need to clean up
 			}
 
-			status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, p_conn->aes_key);
+			status = dyn_aes_encrypt_msg(msg, p_conn->aes_key);
 			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
 
-			dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(encrypted_buf));
-
-			log_hexdump(LOG_VERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
-			log_hexdump(LOG_VERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-
-			//remove the original dbuf out of the queue and insert encrypted mbuf to replace
-			mbuf_remove(&msg->mhdr, data_buf);
-			mbuf_insert(&msg->mhdr, encrypted_buf);
-			//free it as no one will need it again
-			mbuf_put(data_buf);
-
+			dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
 		} else {
 			log_debug(LOG_VERB, "no encryption on the msg payload");
-			dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(data_buf));
+			dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
 		}
 
 	} else {
 		//write dnode header
-		dmsg_write(header_buf, msg_id, msg_type, p_conn, mbuf_length(data_buf));
+		dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
 	}
 
 	mbuf_insert_head(&msg->mhdr, header_buf);
-
 
 	if (get_tracking_level() >= LOG_VVERB) {
 		log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
@@ -438,7 +422,6 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 				" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
 				msg->mlen, msg->type, keylen, key);
 	}
-
 }
 
 

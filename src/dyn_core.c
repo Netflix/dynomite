@@ -348,12 +348,24 @@ static void
 core_error(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
-	char type = conn->client ? 'c' : (conn->proxy ? 'p' : 's');
 
 	status = dn_get_soerror(conn->sd);
 	if (status < 0) {
-		log_warn("get soerr on %c %d failed, ignored: %s", type, conn->sd,
-				strerror(errno));
+		if (!conn->dyn_mode) {
+                        if (conn->client)
+		                log_warn("get soerr on client %d failed, ignored: %s", conn->sd, strerror(errno));
+			else if (conn->proxy)
+				log_warn("get soerr on proxy %d failed, ignored: %s", conn->sd, strerror(errno));
+			else
+				log_warn("get soerr on storage server %d failed, ignored: %s", conn->sd, strerror(errno));
+		} else {
+			if (conn->dnode_client)
+		                log_warn("get soerr on dnode client %d failed, ignored: %s", conn->sd, strerror(errno));
+			else if (conn->dnode_server)
+				log_warn("get soerr on dnode server %d failed, ignored: %s", conn->sd, strerror(errno));
+			else
+				log_warn("get soerr on peer %d failed, ignored: %s", conn->sd, strerror(errno));
+		}
 	}
 	conn->err = errno;
 
@@ -467,15 +479,7 @@ core_core(void *arg, uint32_t events)
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
 		status = core_recv(ctx, conn);
-
 		if (status != DN_OK || conn->done || conn->err) {
-			if (conn->dyn_mode) {
-				if (conn->err) {
-					loga("conn err on dnode EVENT_READ: %d", conn->err);
-				}
-				return DN_OK;
-			}
-
 			core_close(ctx, conn);
 			return DN_ERROR;
 		}
@@ -484,13 +488,6 @@ core_core(void *arg, uint32_t events)
 	if (events & EVENT_WRITE) {
 		status = core_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
-			if (conn->dyn_mode) {
-				if (conn->err) {
-					loga("conn err on dnode EVENT_WRITE: %d", conn->err);
-				}
-				return DN_OK;
-			}
-
 			core_close(ctx, conn);
 			return DN_ERROR;
 		}

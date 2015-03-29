@@ -482,9 +482,9 @@ aes_test()
 	return DN_OK;
 }
 
-
+/* Inspection test */
 static rstatus_t
-aes_msg_encryption_test(struct server *server)
+aes_msg_test(struct server *server)
 {
 	unsigned char* aes_key = generate_aes_key();
 	struct conn *conn = conn_get_peer(server, false, true);
@@ -500,19 +500,57 @@ aes_msg_encryption_test(struct server *server)
 	mbuf_write_string(mbuf2, &s2);
 	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
 
+	loga("dumping the content of the original msg: ");
+	msg_dump(msg);
+
 	dyn_aes_encrypt_msg(msg, aes_key);
 
-	loga("dumping the content of msg");
+	loga("dumping the content of encrypted msg");
 	msg_dump(msg);
 
 	dyn_aes_decrypt_msg(msg, aes_key);
+
+	loga("dumping the content of decrytped msg");
 	msg_dump(msg);
 
 	return DN_OK;
 }
 
+/* Inspection test */
+static rstatus_t
+aes_msg_test2(struct server *server)
+{
+	unsigned char* aes_key = generate_aes_key();
+	struct conn *conn = conn_get_peer(server, false, true);
+	struct msg *msg = msg_get(conn, true, conn->redis);
+
+	struct mbuf *mbuf1 = mbuf_get();
+	mbuf_write_bytes(mbuf1, data, mbuf_size(mbuf1));
+	STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
+
+	struct mbuf *mbuf2 = mbuf_get();
+	mbuf_write_bytes(mbuf2, data + mbuf_size(mbuf2), strlen(data) - mbuf_size(mbuf2));
+	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
+
+	loga("dumping the content of the original msg: ");
+	msg_dump(msg);
+
+	dyn_aes_encrypt_msg(msg, aes_key);
+
+	loga("dumping the content of msg after encrypting it: ");
+	msg_dump(msg);
+
+	dyn_aes_decrypt_msg(msg, aes_key);
+
+	loga("dumping the content after decrypting it: ");
+	msg_dump(msg);
+
+	return DN_OK;
+}
+
+
 static void
-test_init(int argc, char **argv)
+init_test(int argc, char **argv)
 {
 	rstatus_t status;
 	struct instance nci;
@@ -540,7 +578,7 @@ void
 main(int argc, char **argv)
 {
     //rstatus_t status;
-    test_init(argc, argv);
+    init_test(argc, argv);
 
     struct server *server = malloc(sizeof(struct server));
     init_server(server);
@@ -561,7 +599,13 @@ main(int argc, char **argv)
    	 loga("Error in testing AES !!!");
     }
 
-    aes_msg_encryption_test(server);
+    if (aes_msg_test(server) != DN_OK) {
+   	 loga("Error in testing aes_msg_test !!!");
+    }
+
+    if (aes_msg_test2(server) != DN_OK) {
+   	 loga("Error in testing aes_msg_test2 !!!");
+    }
 
     loga("Testing is done!!!");
 }
