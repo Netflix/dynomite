@@ -437,9 +437,8 @@ dyn_parse_req(struct msg *r)
 			if (last_buf->read_flip == 1)
 				redis_parse_req(r);
 			else {
-				r->result = MSG_PARSE_REPAIR;
+				r->result = MSG_PARSE_AGAIN;
 			}
-
 			return;
 		}
 
