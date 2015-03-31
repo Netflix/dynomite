@@ -50,7 +50,7 @@ dyn_parse_core(struct msg *r)
 {
    struct dmsg *dmsg;
    struct mbuf *b;
-   uint8_t *p, *token;
+   uint8_t *p, *token, *start_pos;
    uint8_t ch = ' ';
    uint64_t num = 0;
 
@@ -73,6 +73,7 @@ dyn_parse_core(struct msg *r)
       }
    }
 
+   start_pos = r->pos;
    token = NULL;
 
    for (p = r->pos; p < b->last; p++) {
@@ -80,12 +81,17 @@ dyn_parse_core(struct msg *r)
       switch (state) {
       case DYN_START:
          log_debug(LOG_DEBUG, "DYN_START");
+         if (ch != ' ' && ch != '$') {
+            break;
+         }
+
          if (ch == ' ') {
             if (token == NULL)
                token = p;
 
             break;
          }
+
          if (ch == '$') {
               if (p + 5 < b->last) {
                   if ((*(p+1) == '2') &&
@@ -314,6 +320,40 @@ dyn_parse_core(struct msg *r)
 
    log_debug(LOG_DEBUG, "Not fully parsed yet!!!!!!");
    split:
+   //this is an attempt recovery when we got a bad message
+   //we try to look for the start the next good one and throw away the bad part
+   if (r->dyn_state == DYN_START) {
+   	if (b->last == b->end) {
+   	   struct mbuf *nbuf = mbuf_get();
+   	   if (nbuf == NULL) {
+   		  loga("Unable to obtain a new mbuf for replacement!");
+   		  mbuf_put(b);
+   		  nbuf = mbuf_get();
+   		  mbuf_insert_head(&r->mhdr, nbuf);
+   		  r->pos = nbuf->pos;
+   		  return false;
+         }
+
+         //replacing the bad mbuf with a new and empty mbuf
+         mbuf_insert(&r->mhdr, nbuf);
+         mbuf_remove(&r->mhdr, b);
+         mbuf_put(b);
+         r->pos = nbuf->pos;
+         return false;
+   	} else { //split it and throw away the bad portion
+         struct mbuf *nbuf;
+
+         nbuf = mbuf_split(&r->mhdr, r->pos, NULL, NULL);
+   	   if (nbuf == NULL) {
+   	        return DN_ENOMEM;
+   	   }
+   	   mbuf_insert(&r->mhdr, nbuf);
+   	   mbuf_remove(&r->mhdr, b);
+   	   r->pos = nbuf->pos;
+   	   return false;
+   	}
+   }
+
    if (mbuf_length(b) == 0 || b->last == b->end) {
       log_debug(LOG_DEBUG, "Would this case ever happen?");
       r->result = MSG_PARSE_AGAIN;

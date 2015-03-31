@@ -745,6 +745,7 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 		break;
 
 	default:
+		/*
 		if (!conn->dyn_mode) {
 			status = DN_ERROR;
 			conn->err = errno;
@@ -752,7 +753,9 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 			log_debug(LOG_VVERB, "Parsing error in dyn_mode");
 			status = DN_OK;
 		}
-
+		*/
+		status = DN_ERROR;
+		conn->err = errno;
 		break;
 	}
 
