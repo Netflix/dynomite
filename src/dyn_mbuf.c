@@ -93,6 +93,7 @@ mbuf_get(void)
 
     mbuf = _mbuf_get();
     if (mbuf == NULL) {
+   	  loga("mbuf is Null");
         return NULL;
     }
 

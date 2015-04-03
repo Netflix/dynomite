@@ -549,7 +549,7 @@ msg_deinit(void)
 bool
 msg_empty(struct msg *msg)
 {
-    return msg->mlen == 0 ? true : false;
+    return msg->mlen == 0 ? true : (msg->dyn_error == BAD_FORMAT? true : false);
 }
 
 static rstatus_t
@@ -771,8 +771,9 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 	struct mbuf *mbuf;
 	size_t msize;
 	ssize_t n;
+
 	int expected_fill = (msg->dmsg != NULL && msg->dmsg->bit_field == 1) ?
-			msg->dmsg->plen : -1;  //used in encryption case only
+			                    msg->dmsg->plen : -1;  //used in encryption case only
 
 	mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 	if (mbuf == NULL || mbuf_full(mbuf) ||
@@ -782,13 +783,18 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 			return DN_ENOMEM;
 		}
 		mbuf_insert(&msg->mhdr, mbuf);
+
 		msg->pos = mbuf->pos;
 	}
 
 	ASSERT(mbuf->end_extra - mbuf->last > 0);
 
-	msize = (expected_fill == -1)? mbuf_size(mbuf) :
-			(msg->dmsg->plen < mbuf->end_extra - mbuf->last) ? msg->dmsg->plen : mbuf->end_extra - mbuf->last;
+	if (expected_fill == -1) {
+		msize = mbuf_size(mbuf);
+	} else {
+		msize = (msg->dmsg->plen <= mbuf_size(mbuf)) ? msg->dmsg->plen :
+				mbuf->end_extra - mbuf->last;
+	}
 
 	n = conn_recv(conn, mbuf->last, msize);
 
@@ -804,32 +810,53 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 	mbuf->last += n;
 	msg->mlen += (uint32_t)n;
 
+	//Only used in encryption case
 	if (expected_fill != -1) {
 		if ( n >=  msg->dmsg->plen  || mbuf->end_extra == mbuf->last) {
-			log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or eligible!");
-			struct mbuf *nbuf = mbuf_get();
+			//log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or eligible!");
+			struct mbuf *nbuf = NULL;
 
-			if (nbuf == NULL) {
-				loga("Enough enough memory error!!!");
-				return DN_ENOMEM;
+			if (n >=  msg->dmsg->plen) {
+				nbuf = mbuf_get();
+
+				if (nbuf == NULL) {
+					loga("Not enough memory error!!!");
+					return DN_ENOMEM;
+				}
+
+				status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+				if (status == DN_OK) {
+					int remain = n - msg->dmsg->plen;
+					uint8_t *pos = mbuf->last - remain;
+					mbuf_copy(nbuf, pos, remain);
+				}
+
+			} else if (mbuf->end_extra == mbuf->last) {
+				nbuf = mbuf_get();
+
+				if (nbuf == NULL) {
+					loga("Not enough memory error!!!");
+					return DN_ENOMEM;
+				}
+
+				status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
 			}
 
-			if (mbuf->end_extra == mbuf->last) {
-				dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
-			} else {
-				dyn_aes_decrypt(mbuf->start, msg->dmsg->plen, nbuf, msg->owner->aes_key);
-				mbuf_copy(nbuf, mbuf->start + msg->dmsg->plen, mbuf->last - mbuf->start - msg->dmsg->plen);
+			if (status != DN_ERROR && nbuf != NULL) {
+				nbuf->read_flip = 1;
+				mbuf_remove(&msg->mhdr, mbuf);
+				mbuf_insert(&msg->mhdr, nbuf);
+				msg->pos = nbuf->start;
+
+				msg->mlen -= mbuf->last - mbuf->start;
+				msg->mlen += nbuf->last - nbuf->start;
+
+				mbuf_put(mbuf);
+			} else { //clean up the mess and recover it
+				mbuf_insert(&msg->mhdr, nbuf);
+				msg->pos = nbuf->last;
+				msg->dyn_error = BAD_FORMAT;
 			}
-			nbuf->read_flip = 1;
-
-			mbuf_remove(&msg->mhdr, mbuf);
-			mbuf_insert(&msg->mhdr, nbuf);
-			msg->pos = nbuf->start;
-
-			msg->mlen -= mbuf->last - mbuf->start;
-			msg->mlen += nbuf->last - nbuf->start;
-
-			mbuf_put(mbuf);
 		}
 
 		msg->dmsg->plen -= n;

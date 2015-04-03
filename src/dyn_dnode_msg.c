@@ -323,6 +323,7 @@ dyn_parse_core(struct msg *r)
    //this is an attempt recovery when we got a bad message
    //we try to look for the start the next good one and throw away the bad part
    if (r->dyn_state == DYN_START) {
+      r->result = MSG_PARSE_AGAIN;
    	if (b->last == b->end) {
    	   struct mbuf *nbuf = mbuf_get();
    	   if (nbuf == NULL) {
@@ -352,6 +353,7 @@ dyn_parse_core(struct msg *r)
    	   r->pos = nbuf->pos;
    	   return false;
    	}
+
    }
 
    if (mbuf_length(b) == 0 || b->last == b->end) {
@@ -442,7 +444,7 @@ dyn_parse_req(struct msg *r)
 				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
 			}
 
-			if (dmsg->plen + b->pos <= b->last) {
+			if (dmsg->plen + b->pos < b->last) {
 				struct mbuf *decrypted_buf = mbuf_get();
 				if (decrypted_buf == NULL) {
 					loga("Unable to obtain an mbuf for dnode msg's header!");
@@ -516,6 +518,7 @@ dyn_parse_req(struct msg *r)
 		log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
 		msg_dump(r);
 	}
+	r->result = MSG_PARSE_AGAIN;
 }
 
 
@@ -571,6 +574,8 @@ void dyn_parse_rsp(struct msg *r)
 		log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
 		msg_dump(r);
 	}
+
+	r->result = MSG_PARSE_AGAIN;
 
 }
 
@@ -667,6 +672,8 @@ done:
     dmsg->id = 0;
     dmsg->source_address = NULL;
     dmsg->owner = NULL;
+    dmsg->bit_field = 0;
+    dmsg->same_dc = 1;
  
     return dmsg;
 }
