@@ -802,7 +802,6 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 		if (n == DN_EAGAIN) {
 			return DN_OK;
 		}
-
 		return DN_ERROR;
 	}
 

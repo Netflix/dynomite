@@ -444,7 +444,7 @@ dyn_parse_req(struct msg *r)
 				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
 			}
 
-			if (dmsg->plen + b->pos < b->last) {
+			if (dmsg->plen + b->pos <= b->last) {
 				struct mbuf *decrypted_buf = mbuf_get();
 				if (decrypted_buf == NULL) {
 					loga("Unable to obtain an mbuf for dnode msg's header!");
