@@ -67,11 +67,9 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
 	TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
 
-	/* stats_server_decr(ctx, conn->owner, in_queue); */
-	/* stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen); */
 	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    stats_pool_decr(ctx, pool, peer_in_queue);
-    stats_pool_decr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
+	stats_pool_decr(ctx, pool, peer_in_queue);
+	stats_pool_decr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
 }
 
 void
@@ -81,6 +79,11 @@ dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct ms
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
 	TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
+
+	//use only the 1st pool
+	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+	stats_pool_incr(ctx, pool, dnode_client_out_queue);
+	stats_pool_incr_by(ctx, pool, dnode_client_out_queue_bytes, msg->mlen);
 }
 
 void
@@ -91,14 +94,10 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
 	TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
 
-
-	/* stats_server_incr(ctx, conn->owner, out_queue); */
-	/* stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
-
 	//use only the 1st pool
 	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
 	stats_pool_incr(ctx, pool, peer_out_queue);
-	stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+   stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
 }
 
 void
@@ -108,6 +107,11 @@ dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct ms
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
 	TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
+
+	//use the 1st pool
+	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+	stats_pool_decr(ctx, pool, dnode_client_out_queue);
+	stats_pool_decr_by(ctx, pool, dnode_client_out_queue_bytes, msg->mlen);
 }
 
 void
@@ -120,13 +124,10 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
 	TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
 
-	/* stats_server_decr(ctx, conn->owner, out_queue); */
-	/* stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen); */
-
 	//use the 1st pool
 	struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
 	stats_pool_decr(ctx, pool, peer_out_queue);
-    stats_pool_decr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+	stats_pool_decr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
 }
 
 struct msg *
@@ -199,7 +200,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 	struct server_pool *pool;
 	uint8_t *key;
 	uint32_t keylen;
-	log_debug(LOG_VERB, "dnode_req_local_forward entering ");
+	log_debug(LOG_VERB, "dnode_req_forward entering ");
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
@@ -254,7 +255,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 				rack_msg->noreply = true;
 			}
 
-			log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+			log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s'",
 					dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data);
 
 			remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
@@ -348,6 +349,9 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 	if (get_tracking_level() >= LOG_VVERB) {
 		log_debug(LOG_NOTICE, "dnode_peer_req_forward entering");
 	}
+
+	log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s'",
+			dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd), rack->name->len, rack->name->data);
 
 	struct string *dc = rack->dc;
 	rstatus_t status;

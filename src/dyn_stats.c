@@ -1226,6 +1226,35 @@ stats_swap(struct stats *st)
 
 }
 
+uint64_t _stats_pool_get_ts(struct context *ctx, struct server_pool *pool,
+                     stats_pool_field_t fidx)
+{
+   struct stats *st = ctx->stats;
+   struct stats_pool *stp;
+   struct stats_metric *stm;
+   uint32_t pidx = pool->idx;
+
+   stp = array_get(&st->current, pidx);
+   stm = array_get(&stp->metric, fidx);
+
+   return stm->value.counter;
+}
+
+int64_t _stats_pool_get_val(struct context *ctx, struct server_pool *pool,
+                     stats_pool_field_t fidx)
+{
+   struct stats *st = ctx->stats;
+   struct stats_pool *stp;
+   struct stats_metric *stm;
+   uint32_t pidx = pool->idx;
+
+   stp = array_get(&st->current, pidx);
+   stm = array_get(&stp->metric, fidx);
+
+   return stm->value.counter;
+}
+
+
 static struct stats_metric *
 stats_pool_to_metric(struct context *ctx, struct server_pool *pool,
                      stats_pool_field_t fidx)
@@ -1248,6 +1277,8 @@ stats_pool_to_metric(struct context *ctx, struct server_pool *pool,
 
     return stm;
 }
+
+
 
 void
 _stats_pool_incr(struct context *ctx, struct server_pool *pool,
@@ -1327,6 +1358,27 @@ _stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
               stm->name.data, stm->value.timestamp);
 }
 
+uint64_t _stats_server_get_ts(struct context *ctx, struct server *server,
+      stats_server_field_t fidx)
+{
+   struct stats *st;
+   struct stats_pool *stp;
+   struct stats_server *sts;
+   struct stats_metric *stm;
+   uint32_t pidx, sidx;
+
+   sidx = server->idx;
+   pidx = server->owner->idx;
+
+   st = ctx->stats;
+   stp = array_get(&st->current, pidx);
+   sts = array_get(&stp->server, sidx);
+   stm = array_get(&sts->metric, fidx);
+
+
+   return stm->value.timestamp;
+}
+
 void
 _stats_pool_set_val(struct context *ctx, struct server_pool *pool,
 		              stats_pool_field_t fidx, int64_t val)
@@ -1341,6 +1393,26 @@ _stats_pool_set_val(struct context *ctx, struct server_pool *pool,
              stm->name.data, stm->value.counter);
 }
 
+int64_t _stats_server_get_val(struct context *ctx, struct server *server,
+      stats_server_field_t fidx)
+{
+   struct stats *st;
+   struct stats_pool *stp;
+   struct stats_server *sts;
+   struct stats_metric *stm;
+   uint32_t pidx, sidx;
+
+   sidx = server->idx;
+   pidx = server->owner->idx;
+
+   st = ctx->stats;
+   stp = array_get(&st->current, pidx);
+   sts = array_get(&stp->server, sidx);
+   stm = array_get(&sts->metric, fidx);
+
+
+   return stm->value.counter;
+}
 
 static struct stats_metric *
 stats_server_to_metric(struct context *ctx, struct server *server,

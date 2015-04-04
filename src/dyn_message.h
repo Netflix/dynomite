@@ -27,8 +27,8 @@
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
 
-#define ALLOWED_ALLOC_MSGS 100000
-#define MAX_ALLOC_MSGS     250000
+#define ALLOWED_ALLOC_MSGS 200000
+#define MAX_ALLOC_MSGS     400000
 
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
@@ -174,7 +174,8 @@ typedef enum msg_type {
 typedef enum dyn_error {
     UNKNOWN_ERROR,
     PEER_CONNECTION_REFUSE,
-    STORAGE_CONNECTION_REFUSE
+    STORAGE_CONNECTION_REFUSE,
+    BAD_FORMAT
 } dyn_error_t;
 
 struct msg {

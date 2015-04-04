@@ -323,18 +323,18 @@ dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, uns
 
 	//if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 	if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-		log_debug(LOG_VERB, "This is bad data in EVP_EncryptInit_ex : '%.*s'", msg_len, msg);
+		loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptInit_ex, crypto data with %ld bytes of data", msg_len);
 		return DN_ERROR;
 	}
 
 	if(!EVP_EncryptUpdate(aes_encrypt_ctx, mbuf->start, (int*)&block_len, (unsigned char*) msg, msg_len)) {
-		log_debug(LOG_VERB, "This is bad data in EVP_EncryptUpdate : '%.*s'", msg_len, msg);
+		loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptUpdate, crypto data with %ld bytes of data", msg_len);
 		return DN_ERROR;
 	}
 	enc_msg_len += block_len;
 
 	if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
-		log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
+		loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptFinal_ex, crypto data with %ld bytes of data", msg_len);
 		return DN_ERROR;
 	}
 
@@ -342,7 +342,7 @@ dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, uns
 
 	//for encrypt, we allow to use up to the extra space
 	if (enc_msg_len + block_len > mbuf->end_extra - mbuf->last) {
-      return DN_ERROR;
+		return DN_ERROR;
 	}
 
 	mbuf->last = mbuf->pos + enc_msg_len + block_len;
@@ -362,18 +362,18 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
 
 		//if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
 		if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-			log_debug(LOG_VERB, "This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
+			loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptInit_ex, crypto data with %ld bytes of data", enc_msg_len);
 			return DN_ERROR;
 		}
 
 		if(!EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->pos, (int*) &block_len, enc_msg, (int)enc_msg_len)) {
-			log_debug(LOG_VERB, "This is bad data in EVP_DecryptUpdate : '%.*s'", enc_msg_len, enc_msg);
+			loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptUpdate, crypto data with %ld bytes of data", enc_msg_len);
 			return DN_ERROR;
 		}
 		dec_len += block_len;
 
 		if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->pos + dec_len, (int*) &block_len)) {
-			log_debug(LOG_VERB, "This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
+			loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptFinal_ex, crypto data with %ld bytes of data", enc_msg_len);
 			return DN_ERROR;
 		}
 
@@ -387,7 +387,6 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
 
 	mbuf_copy(mbuf, enc_msg, enc_msg_len);
 	return (int) enc_msg_len;
-
 }
 
 /*

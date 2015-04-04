@@ -177,6 +177,7 @@ _conn_get(void)
     conn->last_sent = 0;
     conn->last_received = 0;
     conn->attempted_reconnect = 0;
+    conn->non_bytes_recv = 0;
 
     unsigned char *ase_key = generate_aes_key();
     strncpy(conn->aes_key, ase_key, strlen(ase_key)); //generate a new key for each connection
@@ -479,12 +480,14 @@ conn_recv(struct conn *conn, void *buf, size_t size)
                 conn->recv_ready = 0;
             }
             conn->recv_bytes += (size_t)n;
+            conn->non_bytes_recv = 0;
             return n;
         }
 
         if (n == 0) {
             conn->recv_ready = 0;
             conn->eof = 1;
+            conn->non_bytes_recv++;
             log_debug(LOG_INFO, "recv on sd %d eof rb %zu sb %zu", conn->sd,
                       conn->recv_bytes, conn->send_bytes);
             return n;
@@ -594,3 +597,4 @@ void conn_print(struct conn *conn) {
 	log_debug(LOG_VERB, "eof %d", conn->eof);
 	log_debug(LOG_VERB, "err %d", conn->err);
 }
+

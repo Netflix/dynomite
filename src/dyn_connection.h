@@ -102,6 +102,7 @@ struct conn {
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
     uint32_t           last_received;         /* last ts to receive a byte */
     uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
+    uint32_t           non_bytes_recv;        /* #times or epoll triggers we receive no bytes */
 };
 
 TAILQ_HEAD(conn_tqh, conn);

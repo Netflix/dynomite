@@ -479,6 +479,8 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
     ASSERT(!s_conn->client && !s_conn->proxy);
 
+    log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
+  			dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(s_conn->sd));
 
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */

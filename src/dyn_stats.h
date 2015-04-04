@@ -41,6 +41,10 @@
     ACTION( dnode_client_eof,             STATS_COUNTER,      "# eof on dnode client connections")                        \
     ACTION( dnode_client_err,             STATS_COUNTER,      "# errors on dnode client connections")                     \
     ACTION( dnode_client_connections,     STATS_GAUGE,        "# active dnode client connections")                        \
+    ACTION( dnode_client_in_queue,        STATS_GAUGE,        "# dnode client requests in incoming queue")                \
+    ACTION( dnode_client_in_queue_bytes,  STATS_GAUGE,        "current dnode client request bytes in incoming queue")     \
+    ACTION( dnode_client_out_queue,       STATS_GAUGE,        "# dnode client requests in outgoing queue")                \
+    ACTION( dnode_client_out_queue_bytes, STATS_GAUGE,        "current dnode client request bytes in outgoing queue")     \
     /* peer behavior */                                                                                                   \
     ACTION( peer_dropped_requests,        STATS_GAUGE,        "# peer dropped requests")                                  \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
@@ -63,7 +67,7 @@
     ACTION( stats_count,                  STATS_COUNTER,      "# stats request")                                          \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                       \
-    /* server behavior */                                                                                           \
+    /* server behavior */                                                                                                \
     ACTION( server_eof,             STATS_COUNTER,           "# eof on server connections")                              \
     ACTION( server_err,             STATS_COUNTER,           "# errors on server connections")                           \
     ACTION( server_timedout,        STATS_COUNTER,           "# timeouts on server connections")                         \
@@ -226,9 +230,15 @@ typedef enum stats_cmd {
     _stats_pool_set_ts(_ctx, _pool, STATS_POOL_##_name, _val);          \
 } while (0)
 
+#define stats_pool_get_ts(_ctx, _pool, _name)                           \
+    _stats_pool_get_ts(_ctx, _pool, STATS_POOL_##_name)
+
 #define stats_pool_set_val(_ctx, _pool, _name, _val) do {                \
     _stats_pool_set_val(_ctx, _pool, STATS_POOL_##_name, _val);          \
 } while (0)
+
+#define stats_pool_get_val(_ctx, _pool, _name)                          \
+    _stats_pool_get_val(_ctx, _pool, STATS_POOL_##_name)
 
 #define stats_server_incr(_ctx, _server, _name) do {                    \
     _stats_server_incr(_ctx, _server, STATS_SERVER_##_name);            \
@@ -250,6 +260,16 @@ typedef enum stats_cmd {
      _stats_server_set_ts(_ctx, _server, STATS_SERVER_##_name, _val);   \
 } while (0)
 
+#define stats_server_get_ts(_ctx, _server, _name)                       \
+     _stats_server_get_ts(_ctx, _server, STATS_SERVER_##_name)
+
+#define stats_server_set_val(_ctx, _server, _name, _val) do {           \
+     _stats_server_set_val(_ctx, _server, STATS_SERVER_##_name, _val);  \
+} while (0)
+
+#define stats_server_get_val(_ctx, _server, _name)                      \
+     _stats_server_get_val(_ctx, _server, STATS_SERVER_##_name)
+
 
 #else
 
@@ -263,6 +283,8 @@ typedef enum stats_cmd {
 
 #define stats_pool_set_val(_ctx, _pool, _name, _val)
 
+#define stats_pool_get_val(_ctx, _pool, _name)
+
 #define stats_server_incr(_ctx, _server, _name)
 
 #define stats_server_decr(_ctx, _server, _name)
@@ -271,6 +293,13 @@ typedef enum stats_cmd {
 
 #define stats_server_decr_by(_ctx, _server, _name, _val)
 
+#define stats_server_set_ts(_ctx, _server, _name, _val)
+
+#define stats_server_get_ts(_ctx, _server, _name)
+
+#define stats_server_set_val(_ctx, _server, _name, _val)
+
+#define stats_server_get_val(_ctx, _server, _name)
 
 #endif
 
@@ -283,19 +312,24 @@ void _stats_pool_decr(struct context *ctx, struct server_pool *pool, stats_pool_
 void _stats_pool_incr_by(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
 void _stats_pool_decr_by(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
 void _stats_pool_set_ts(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
+uint64_t _stats_pool_get_ts(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx);
 void _stats_pool_set_val(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
-
+int64_t _stats_pool_get_val(struct context *ctx, struct server_pool *pool,
+		                 stats_pool_field_t fidx);
 
 void _stats_server_incr(struct context *ctx, struct server *server, stats_server_field_t fidx);
 void _stats_server_decr(struct context *ctx, struct server *server, stats_server_field_t fidx);
 void _stats_server_incr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_decr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_set_ts(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
-
+uint64_t _stats_server_get_ts(struct context *ctx, struct server *server, stats_server_field_t fidx);
+void _stats_server_set_val(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
+int64_t _stats_server_get_val(struct context *ctx, struct server *server, stats_server_field_t fidx);
 
 struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,
 		                   struct array *server_pool, struct context *ctx);
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
+
 
 #endif

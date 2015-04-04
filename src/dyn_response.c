@@ -111,6 +111,14 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             rsp_put(msg);
         }
 
+        if (conn->dyn_mode) {
+           if (conn->non_bytes_recv > 5) {
+              conn->err = EPIPE;
+              return NULL;
+           }
+           conn->eof = 0;
+        }
+
         /*
          * We treat TCP half-close from a server different from how we treat
          * those from a client. On a FIN from a server, we close the connection

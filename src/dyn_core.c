@@ -422,6 +422,7 @@ core_timeout(struct context *ctx)
 }
 
 
+
 rstatus_t
 core_core(void *arg, uint32_t events)
 {
@@ -479,7 +480,17 @@ core_core(void *arg, uint32_t events)
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
 		status = core_recv(ctx, conn);
+
 		if (status != DN_OK || conn->done || conn->err) {
+			if (conn->dyn_mode) {
+				if (conn->err) {
+					loga("conn err on dnode EVENT_READ: %d", conn->err);
+					core_close(ctx, conn);
+					return DN_ERROR;
+				}
+				return DN_OK;
+			}
+
 			core_close(ctx, conn);
 			return DN_ERROR;
 		}
@@ -488,6 +499,15 @@ core_core(void *arg, uint32_t events)
 	if (events & EVENT_WRITE) {
 		status = core_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
+			if (conn->dyn_mode) {
+				if (conn->err) {
+					loga("conn err on dnode EVENT_WRITE: %d", conn->err);
+					core_close(ctx, conn);
+					return DN_ERROR;
+				}
+				return DN_OK;
+			}
+
 			core_close(ctx, conn);
 			return DN_ERROR;
 		}
