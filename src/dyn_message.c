@@ -889,6 +889,8 @@ msg_recv(struct context *ctx, struct conn *conn)
 
     ASSERT(conn->recv_active);
     conn->recv_ready = 1;
+    int count = 0;
+
     do {
         msg = conn->recv_next(ctx, conn, true);
         if (msg == NULL) {
@@ -899,7 +901,8 @@ msg_recv(struct context *ctx, struct conn *conn)
         if (status != DN_OK) {
             return status;
         }
-    } while (conn->recv_ready);
+        count++;
+    } while (conn->recv_ready && count < 100); //make 100 to be settable
 
     return DN_OK;
 }
