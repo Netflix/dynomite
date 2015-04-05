@@ -407,14 +407,17 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 
 	struct mbuf *mbuf;
 	while (!STAILQ_EMPTY(&msg->mhdr)) {
-		ASSERT(nfree_mbufq > 0);
-
 		mbuf = STAILQ_FIRST(&msg->mhdr);
-		STAILQ_REMOVE_HEAD(&msg->mhdr, next);
+		//STAILQ_REMOVE_HEAD(&msg->mhdr, next);
+		mbuf_remove(&msg->mhdr, mbuf);
 
 		//mbuf_dump(mbuf);
 
 		struct mbuf *nbuf = mbuf_get();
+		if (nbuf == NULL) {
+			mbuf_put(mbuf);
+			return DN_ERROR;
+		}
 
 		int n = dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
 		if (n > 0)
@@ -431,7 +434,8 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 
 	while (!STAILQ_EMPTY(&mhdr_tem)) {
 		mbuf = STAILQ_FIRST(&mhdr_tem);
-		STAILQ_REMOVE_HEAD(&mhdr_tem, next);
+		//STAILQ_REMOVE_HEAD(&mhdr_tem, next);
+		mbuf_remove(&mhdr_tem, mbuf);
 
 		if (STAILQ_EMPTY(&msg->mhdr)) {
 			STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
@@ -441,57 +445,6 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 	}
 
 	return count;
-}
-
-
-/*
- *  dyn_aes_decrypt_msg: AES decrypt a msg with multiple mbuf blocks
- *
- */
-rstatus_t
-dyn_aes_decrypt_msg(struct msg *msg, unsigned char *aes_key)
-{
-	struct mhdr mhdr_tem;
-
-	if (STAILQ_EMPTY(&msg->mhdr)) {
-		return DN_ERROR;
-	}
-
-	STAILQ_INIT(&mhdr_tem);
-
-	struct mbuf *mbuf;
-	while (!STAILQ_EMPTY(&msg->mhdr)) {
-
-		mbuf = STAILQ_FIRST(&msg->mhdr);
-		STAILQ_REMOVE_HEAD(&msg->mhdr, next);
-
-		mbuf_dump(mbuf);
-
-		struct mbuf *nbuf = mbuf_get();
-		dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
-
-		mbuf_put(mbuf);
-		mbuf_dump(nbuf);
-		if (STAILQ_EMPTY(&mhdr_tem)) {
-			STAILQ_INSERT_HEAD(&mhdr_tem, nbuf, next);
-		} else {
-			STAILQ_INSERT_TAIL(&mhdr_tem, nbuf, next);
-		}
-	}
-
-	while (!STAILQ_EMPTY(&mhdr_tem)) {
-		mbuf = STAILQ_FIRST(&mhdr_tem);
-		STAILQ_REMOVE_HEAD(&mhdr_tem, next);
-
-		if (STAILQ_EMPTY(&msg->mhdr)) {
-			STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
-		} else {
-			STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
-		}
-	}
-
-	return DN_OK;
-
 }
 
 

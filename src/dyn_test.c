@@ -500,6 +500,7 @@ aes_msg_test(struct server *server)
 	mbuf_write_string(mbuf2, &s2);
 	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
 
+	/*
 	loga("dumping the content of the original msg: ");
 	msg_dump(msg);
 
@@ -512,11 +513,13 @@ aes_msg_test(struct server *server)
 
 	loga("dumping the content of decrytped msg");
 	msg_dump(msg);
+	*/
 
 	return DN_OK;
 }
 
-/* Inspection test */
+/*
+
 static rstatus_t
 aes_msg_test2(struct server *server)
 {
@@ -547,7 +550,7 @@ aes_msg_test2(struct server *server)
 
 	return DN_OK;
 }
-
+*/
 
 static void
 init_test(int argc, char **argv)
@@ -603,9 +606,6 @@ main(int argc, char **argv)
    	 loga("Error in testing aes_msg_test !!!");
     }
 
-    if (aes_msg_test2(server) != DN_OK) {
-   	 loga("Error in testing aes_msg_test2 !!!");
-    }
 
     loga("Testing is done!!!");
 }

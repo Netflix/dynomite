@@ -133,9 +133,8 @@ def read_ops(skipkeys, numkeys, host, port, db):
             error_count = error_count + 1
             print 'No value for key: ' + 'key_' + str(i)
         elif value != generate_value(i):
-            print 'key_' + str(i) + ' has value : ' + value
-            print 'generated value : ' + generate_value(i)
-            error_count += 1       
+            print 'key_' + str(i) + ' has incorrect value '
+            error_count += 1
 
     print 'Error count: ' + str(error_count) 
 
