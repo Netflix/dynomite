@@ -286,7 +286,7 @@ done:
     msg->dyn_state = 0;
     msg->dmsg = NULL;
     msg->msg_type = 0;
-
+    msg->dyn_error = 0;
     return msg;
 }
 
@@ -772,7 +772,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 	size_t msize;
 	ssize_t n;
 
-	int expected_fill = (msg->dmsg != NULL && msg->dmsg->bit_field == 1) ?
+	int expected_fill = ((msg->dyn_state == DYN_DONE || msg->dyn_state == DYN_POST_DONE) && msg->dmsg->bit_field == 1) ?
 			                    msg->dmsg->plen : -1;  //used in encryption case only
 
 	mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
@@ -792,8 +792,9 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 	if (expected_fill == -1) {
 		msize = mbuf_size(mbuf);
 	} else {
-		msize = (msg->dmsg->plen <= mbuf_size(mbuf)) ? msg->dmsg->plen :
-				mbuf->end_extra - mbuf->last;
+		msize = (msg->dmsg->plen <= mbuf->end_extra - mbuf->last) ?
+				                     msg->dmsg->plen :
+				                     mbuf->end_extra - mbuf->last;
 	}
 
 	n = conn_recv(conn, mbuf->last, msize);
@@ -887,7 +888,6 @@ msg_recv(struct context *ctx, struct conn *conn)
     struct msg *msg;
 
     ASSERT(conn->recv_active);
-
     conn->recv_ready = 1;
     do {
         msg = conn->recv_next(ctx, conn, true);

@@ -36,8 +36,8 @@ struct mbuf {
     uint8_t            *start;  /* start of buffer (const) */
     uint8_t            *end;    /* end of buffer (const) */
     uint8_t            *end_extra; /*end of the buffer - including the extra region */
+    uint32_t           read_flip; /* readable flag used in encryption/decryption mode */
     uint32_t           chunk_size;
-    unsigned           read_flip:1; /* readable flag used in encryption/decryption mode */
 };
 
 STAILQ_HEAD(mhdr, mbuf);

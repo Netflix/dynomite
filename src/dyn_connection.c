@@ -488,7 +488,7 @@ conn_recv(struct conn *conn, void *buf, size_t size)
             conn->recv_ready = 0;
             conn->eof = 1;
             conn->non_bytes_recv++;
-            log_debug(LOG_INFO, "recv on sd %d eof rb %zu sb %zu", conn->sd,
+            log_debug(LOG_NOTICE, "recv on sd %d eof rb %zu sb %zu", conn->sd,
                       conn->recv_bytes, conn->send_bytes);
             return n;
         }

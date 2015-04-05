@@ -389,14 +389,14 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 		//write dnode header
 		if (ENCRYPTION) {
-			struct mbuf *encrypted_buf = mbuf_get();
-			if (encrypted_buf == NULL) {
-				loga("Unable to obtain an mbuf for encryption!");
+			status = dyn_aes_encrypt_msg(msg, p_conn->aes_key);
+			if (status == DN_ERROR) {
+				loga("OOM to obtain an mbuf for encryption!");
 				mbuf_put(header_buf);
-				return; //TODOs: need to clean up
+				req_put(msg);
+				return;
 			}
 
-			status = dyn_aes_encrypt_msg(msg, p_conn->aes_key);
 			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
 
 			dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));

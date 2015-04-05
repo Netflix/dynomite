@@ -98,6 +98,15 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
     if (conn->eof) {
         msg = conn->rmsg;
 
+        if (conn->dyn_mode) {
+            if (conn->non_bytes_recv > 5) {
+                conn->err = EPIPE;
+                return NULL;
+            }
+            conn->eof = 0;
+            return msg;
+        }
+
         /* server sent eof before sending the entire request */
         if (msg != NULL) {
             conn->rmsg = NULL;
@@ -109,14 +118,6 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
                       "%"PRIu32"", conn->sd, msg->id, msg->mlen);
 
             rsp_put(msg);
-        }
-
-        if (conn->dyn_mode) {
-           if (conn->non_bytes_recv > 5) {
-              conn->err = EPIPE;
-              return NULL;
-           }
-           conn->eof = 0;
         }
 
         /*
