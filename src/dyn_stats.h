@@ -21,6 +21,7 @@
  */
 
 #include "dyn_core.h"
+#include "dyn_histogram.h"
 
 #ifndef _DYN_STATS_H_
 #define _DYN_STATS_H_
@@ -136,50 +137,54 @@ struct stats_buffer {
 };
 
 struct stats {
-    struct context      *ctx;
-    uint16_t            port;           /* stats monitoring port */
-    int                 interval;       /* stats aggregation interval */
-    struct string       addr;           /* stats monitoring address */
+    struct context           *ctx;
+    uint16_t                  port;           /* stats monitoring port */
+    int                       interval;       /* stats aggregation interval */
+    struct string             addr;           /* stats monitoring address */
 
-    int64_t             start_ts;       /* start timestamp of dynomite */
-    struct stats_buffer buf;            /* output buffer */
+    int64_t                   start_ts;       /* start timestamp of dynomite */
+    struct stats_buffer       buf;            /* output buffer */
 
-    struct array        current;        /* stats_pool[] (a) */
-    struct array        shadow;         /* stats_pool[] (b) */
-    struct array        sum;            /* stats_pool[] (c = a + b) */
+    struct array              current;        /* stats_pool[] (a) */
+    struct array              shadow;         /* stats_pool[] (b) */
+    struct array              sum;            /* stats_pool[] (c = a + b) */
 
-    pthread_t           tid;            /* stats aggregator thread */
-    int                 sd;             /* stats descriptor */
+    pthread_t                 tid;            /* stats aggregator thread */
+    int                       sd;             /* stats descriptor */
 
-    struct string       service_str;    /* service string */
-    struct string       service;        /* service */
-    struct string       source_str;     /* source string */
-    struct string       source;         /* source */
-    struct string       version_str;    /* version string */
-    struct string       version;        /* version */
-    struct string       uptime_str;     /* uptime string */
-    struct string       timestamp_str;  /* timestamp string */
-    struct string       latency_999th_str;
-    struct string       latency_99th_str;
-    struct string       latency_95th_str;
-    struct string       latency_mean_str;
-    struct string       latency_max_str;
-    struct string       alloc_msgs_str;
+    struct string             service_str;    /* service string */
+    struct string             service;        /* service */
+    struct string             source_str;     /* source string */
+    struct string             source;         /* source */
+    struct string             version_str;    /* version string */
+    struct string             version;        /* version */
+    struct string             uptime_str;     /* uptime string */
+    struct string             timestamp_str;  /* timestamp string */
+    struct string             latency_999th_str;
+    struct string             latency_99th_str;
+    struct string             latency_95th_str;
+    struct string             latency_mean_str;
+    struct string             latency_max_str;
 
-    struct string       rack_str;
-    struct string       rack;
+    struct string             payload_size_999th_str;
+    struct string             payload_size_99th_str;
+    struct string             payload_size_95th_str;
+    struct string             payload_size_mean_str;
+    struct string             payload_size_max_str;
 
-    struct string       dc_str;
-    struct string       dc;
+    struct string             alloc_msgs_str;
 
-    volatile int        aggregate;      /* shadow (b) aggregate? */
-    volatile int        updated;        /* current (a) updated? */
-    volatile uint64_t   latency_999th;
-    volatile uint64_t   latency_99th;
-    volatile uint64_t   latency_95th;
-    volatile uint64_t   latency_mean;
-    volatile uint64_t   latency_max;
-    volatile uint32_t   alloc_msgs;
+    struct string             rack_str;
+    struct string             rack;
+
+    struct string             dc_str;
+    struct string             dc;
+
+    volatile int              aggregate;      /* shadow (b) aggregate? */
+    volatile int              updated;        /* current (a) updated? */
+    volatile struct histogram latency_histo;
+    volatile struct histogram payload_size_histo;
+    volatile uint32_t         alloc_msgs;
 
 };
 
@@ -334,6 +339,10 @@ struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interv
 		                   struct array *server_pool, struct context *ctx);
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
+
+
+void stats_histo_add_latency(struct context *ctx, uint64_t val);
+void stats_histo_add_payloadsize(struct context *ctx, uint64_t val);
 
 
 #endif

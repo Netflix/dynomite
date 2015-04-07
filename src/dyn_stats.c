@@ -29,6 +29,7 @@
 #include <netinet/in.h>
 
 #include "dyn_core.h"
+#include "dyn_histogram.h"
 #include "dyn_server.h"
 #include "dyn_ring_queue.h"
 
@@ -62,6 +63,8 @@ static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: applic
 //static struct string endline = string("\r\n");
 static struct string ok = string("OK");
 //static struct string error = string("ERR");
+
+static struct histogram latency_histo;
 
 void
 stats_describe(void)
@@ -406,6 +409,27 @@ stats_create_buf(struct stats *st)
     size += int64_max_digits;
     size += key_value_extra;
 
+
+    size += st->payload_size_999th_str.len;
+    size += int32_max_digits;
+    size += key_value_extra;
+
+    size += st->payload_size_99th_str.len;
+    size += int32_max_digits;
+    size += key_value_extra;
+
+    size += st->payload_size_95th_str.len;
+    size += int32_max_digits;
+    size += key_value_extra;
+
+    size += st->payload_size_mean_str.len;
+    size += int32_max_digits;
+    size += key_value_extra;
+
+    size += st->payload_size_max_str.len;
+    size += int32_max_digits;
+    size += key_value_extra;
+
     size += st->alloc_msgs_str.len;
     size += int32_max_digits;
     size += key_value_extra;
@@ -568,27 +592,54 @@ stats_add_header(struct stats *st)
         return status;
     }
 
-    status = stats_add_num(st, &st->latency_max_str, st->latency_max);
+    //latency histogram
+    status = stats_add_num(st, &st->latency_max_str, st->latency_histo.val_max);
     if (status != DN_OK) {
         return status;
     }
 
-    status = stats_add_num(st, &st->latency_999th_str, st->latency_999th);
+    status = stats_add_num(st, &st->latency_999th_str, st->latency_histo.val_999th);
     if (status != DN_OK) {
         return status;
     }
 
-    status = stats_add_num(st, &st->latency_99th_str, st->latency_99th);
+    status = stats_add_num(st, &st->latency_99th_str, st->latency_histo.val_99th);
     if (status != DN_OK) {
         return status;
     }
 
-    status = stats_add_num(st, &st->latency_95th_str, st->latency_95th);
+    status = stats_add_num(st, &st->latency_95th_str, st->latency_histo.val_95th);
     if (status != DN_OK) {
         return status;
     }
 
-    status = stats_add_num(st, &st->latency_mean_str, st->latency_mean);
+    status = stats_add_num(st, &st->latency_mean_str, st->latency_histo.mean);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    //payload size histogram
+    status = stats_add_num(st, &st->payload_size_max_str, st->payload_size_histo.val_max);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->payload_size_999th_str, st->payload_size_histo.val_999th);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->payload_size_99th_str, st->payload_size_histo.val_99th);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->payload_size_95th_str, st->payload_size_histo.val_95th);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->payload_size_mean_str, st->payload_size_histo.mean);
     if (status != DN_OK) {
         return status;
     }
@@ -1125,11 +1176,20 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
 
+    //for latency histo
     string_set_text(&st->latency_999th_str, "latency_999th");
     string_set_text(&st->latency_99th_str, "latency_99th");
     string_set_text(&st->latency_95th_str, "latency_95th");
     string_set_text(&st->latency_mean_str, "latency_mean");
     string_set_text(&st->latency_max_str, "latency_max");
+
+    //for payload size histo
+    string_set_text(&st->payload_size_999th_str, "payload_size_999th");
+    string_set_text(&st->payload_size_99th_str, "payload_size_99th");
+    string_set_text(&st->payload_size_95th_str, "payload_size_95th");
+    string_set_text(&st->payload_size_mean_str, "payload_size_mean");
+    string_set_text(&st->payload_size_max_str, "payload_size_max");
+
     string_set_text(&st->alloc_msgs_str, "alloc_msgs");
 
     //only display the first pool
@@ -1145,11 +1205,8 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->updated = 0;
     st->aggregate = 0;
 
-    st->latency_95th = 0;
-    st->latency_999th = 0;
-    st->latency_99th = 0;
-    st->latency_max = 0;
-    st->latency_mean = 0;
+    histo_init(&st->latency_histo);
+    histo_init(&st->payload_size_histo);
 
     st->alloc_msgs = 0;
 
@@ -1223,8 +1280,9 @@ stats_swap(struct stats *st)
 
 
     //set the latencies
-    histo_compute_latencies(&st->latency_mean, &st->latency_95th,
-   		 &st->latency_99th, &st->latency_999th, &st->latency_max);
+    histo_compute(&st->latency_histo);
+
+    histo_compute(&st->payload_size_histo);
 
     st->alloc_msgs = msg_alloc_msgs();
 
@@ -1538,4 +1596,17 @@ _stats_server_set_ts(struct context *ctx, struct server *server,
     log_debug(LOG_VVVERB, "set ts field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.timestamp);
    
+}
+
+//should use macro or something else to make this more elegant
+void stats_histo_add_latency(struct context *ctx, uint64_t val)
+{
+	struct stats *st = ctx->stats;
+	histo_add(&st->latency_histo, val);
+}
+
+void stats_histo_add_payloadsize(struct context *ctx, uint64_t val)
+{
+	struct stats *st = ctx->stats;
+	histo_add(&st->payload_size_histo, val);
 }

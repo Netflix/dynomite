@@ -304,7 +304,7 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(conn->client && !conn->proxy);
 
     uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
-    histo_add(latency);
+    stats_histo_add_latency(ctx, latency);
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
 }
 
@@ -689,6 +689,8 @@ req_recv_done(struct context *ctx, struct conn *conn,
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
     ASSERT(nmsg == NULL || nmsg->request);
+
+    stats_histo_add_payloadsize(ctx, msg->mlen);
 
     /* enqueue next message (request), if any */
     conn->rmsg = nmsg;
