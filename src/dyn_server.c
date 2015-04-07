@@ -353,35 +353,37 @@ server_close(struct context *ctx, struct conn *conn)
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server inq */
-				conn->dequeue_inq(ctx, conn, msg);
+		conn->dequeue_inq(ctx, conn, msg);
 
-				/*
-				 * Don't send any error response, if
-				 * 1. request is tagged as noreply or,
-				 * 2. client has already closed its connection
-				 */
-				if (msg->swallow || msg->noreply) {
-					log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
-							" type %d", conn->sd, msg->id, msg->mlen, msg->type);
-					req_put(msg);
-				} else {
-					c_conn = msg->owner;
-					//ASSERT(c_conn->client && !c_conn->proxy);
+		/*
+		 * Don't send any error response, if
+		 * 1. request is tagged as noreply or,
+		 * 2. client has already closed its connection
+		 */
+		if (msg->swallow || msg->noreply) {
+			log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
+					" type %d", conn->sd, msg->id, msg->mlen, msg->type);
+			req_put(msg);
+		} else {
+			c_conn = msg->owner;
+			//ASSERT(c_conn->client && !c_conn->proxy);
 
-					msg->done = 1;
-					msg->error = 1;
-					msg->err = conn->err;
-					msg->dyn_error = STORAGE_CONNECTION_REFUSE;
+			msg->done = 1;
+			msg->error = 1;
+			msg->err = conn->err;
+			msg->dyn_error = STORAGE_CONNECTION_REFUSE;
 
-					if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-						event_add_out(ctx->evb, msg->owner);
-					}
+			if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
+				event_add_out(ctx->evb, msg->owner);
+			}
 
-					log_debug(LOG_INFO, "close s %d schedule error for req %"PRIu64" "
-							"len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
-							msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
-									conn->err ? strerror(conn->err): " ");
-				}
+			log_debug(LOG_INFO, "close s %d schedule error for req %"PRIu64" "
+					"len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
+					msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
+							conn->err ? strerror(conn->err): " ");
+		}
+
+		stats_server_incr(ctx, conn->owner, server_dropped_requests);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
