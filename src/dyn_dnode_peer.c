@@ -556,9 +556,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 							conn->err ? strerror(conn->err): " ");
 		}
 
-		if (!conn->dnode_client) {
-		   stats_pool_incr(ctx, server->owner, peer_dropped_requests);
-		}
+		stats_pool_incr(ctx, server->owner, peer_dropped_requests);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 

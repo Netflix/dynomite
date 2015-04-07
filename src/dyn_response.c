@@ -99,7 +99,7 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
         msg = conn->rmsg;
 
         if (conn->dyn_mode) {
-            if (conn->non_bytes_recv > 5) {
+            if (conn->non_bytes_recv > MAX_CONN_ALLOWABLE_NON_RECV) {
                 conn->err = EPIPE;
                 return NULL;
             }

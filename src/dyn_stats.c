@@ -346,6 +346,7 @@ static rstatus_t
 stats_create_buf(struct stats *st)
 {
     uint32_t int64_max_digits = 20; /* INT64_MAX = 9223372036854775807 */
+    uint32_t int32_max_digits = 10; /* INT32_MAX = 4294967294 */
     uint32_t key_value_extra = 8;   /* "key": "value", */
     uint32_t pool_extra = 8;        /* '"pool_name": { ' + ' }' */
     uint32_t server_extra = 8;      /* '"server_name": { ' + ' }' */
@@ -403,6 +404,10 @@ stats_create_buf(struct stats *st)
 
     size += st->latency_max_str.len;
     size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->alloc_msgs_str.len;
+    size += int32_max_digits;
     size += key_value_extra;
 
     /* server pools */
@@ -584,6 +589,11 @@ stats_add_header(struct stats *st)
     }
 
     status = stats_add_num(st, &st->latency_mean_str, st->latency_mean);
+    if (status != DN_OK) {
+        return status;
+    }
+
+    status = stats_add_num(st, &st->alloc_msgs_str, st->alloc_msgs);
     if (status != DN_OK) {
         return status;
     }
@@ -1120,6 +1130,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->latency_95th_str, "latency_95th");
     string_set_text(&st->latency_mean_str, "latency_mean");
     string_set_text(&st->latency_max_str, "latency_max");
+    string_set_text(&st->alloc_msgs_str, "alloc_msgs");
 
     //only display the first pool
     struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
@@ -1139,6 +1150,8 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->latency_99th = 0;
     st->latency_max = 0;
     st->latency_mean = 0;
+
+    st->alloc_msgs = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 
@@ -1212,6 +1225,8 @@ stats_swap(struct stats *st)
     //set the latencies
     histo_compute_latencies(&st->latency_mean, &st->latency_95th,
    		 &st->latency_99th, &st->latency_999th, &st->latency_max);
+
+    st->alloc_msgs = msg_alloc_msgs();
 
     array_swap(&st->current, &st->shadow);
 

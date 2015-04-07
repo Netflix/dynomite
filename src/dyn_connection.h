@@ -25,6 +25,9 @@
 #ifndef _DYN_CONNECTION_H_
 #define _DYN_CONNECTION_H_
 
+#define MAX_CONN_QUEUE_SIZE           20000
+#define MAX_CONN_ALLOWABLE_NON_RECV   5
+#define MAX_CONN_ALLOWABLE_NON_SEND   5
 
 typedef rstatus_t (*conn_recv_t)(struct context *, struct conn*);
 typedef struct msg* (*conn_recv_next_t)(struct context *, struct conn *, bool);
@@ -52,7 +55,11 @@ struct conn {
     struct sockaddr    *addr;         /* socket address (ref in server or server_pool) */
 
     struct msg_tqh     imsg_q;        /* incoming request Q */
+    uint32_t           imsg_count;    /* counter for incoming request Q */
+
     struct msg_tqh     omsg_q;        /* outstanding request Q */
+    uint32_t           omsg_count;    /* counter for outstanding request Q */
+
     struct msg         *rmsg;         /* current message being rcvd */
     struct msg         *smsg;         /* current message being sent */
 
@@ -103,9 +110,17 @@ struct conn {
     uint32_t           last_received;         /* last ts to receive a byte */
     uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
     uint32_t           non_bytes_recv;        /* #times or epoll triggers we receive no bytes */
+    //uint32_t           non_bytes_send;        /* #times or epoll triggers that we are not able to send any bytes */
 };
 
 TAILQ_HEAD(conn_tqh, conn);
+
+void conn_add_in_queue_msg(struct conn *conn, struct msg *msg);
+void conn_remove_in_queue_msg(struct conn *conn, struct msg *msg);
+
+void conn_add_out_queue_msg(struct conn *conn, struct msg *msg);
+void conn_remove_out_queue_msg(struct conn *conn, struct msg *msg);
+
 
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *test_conn_get(void);
