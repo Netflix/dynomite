@@ -396,44 +396,30 @@ static void
 dnode_peer_failure(struct context *ctx, struct server *server)
 {
 	struct server_pool *pool = server->owner;
-	int64_t now, next;
+	int64_t now;
 	rstatus_t status;
 
-	//fix me
-	if (!pool->auto_eject_hosts) {
-		return;
-	}
 
 	server->failure_count++;
 
-	log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" limit %"PRIu32,
-			server->pname.len, server->pname.data, server->failure_count,
-			pool->server_failure_limit);
+	log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" ",
+			server->pname.len, server->pname.data, server->failure_count);
 
-	if (server->failure_count < pool->server_failure_limit) {
-		return;
-	}
 
-	now = dn_usec_now();
+	now = dn_msec_now();
 	if (now < 0) {
 		return;
 	}
 
-	//fix me
-	//stats_server_set_ts(ctx, server, server_ejected_at, now);
-
-	//fix me
-	next = now + pool->server_retry_timeout;
-
-	log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' to delete peer '%.*s' "
+	log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' for peer '%.*s' "
 			"for next %"PRIu32" secs", pool->idx, pool->name.len,
 			pool->name.data, server->pname.len, server->pname.data,
 			pool->server_retry_timeout / 1000 / 1000);
 
 	stats_pool_incr(ctx, pool, peer_ejects);
 
-	server->failure_count = 0;
-	server->next_retry = next;
+	if (server->failure_count == 3)
+	   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
 
 	status = dnode_peer_pool_run(pool);
 	if (status != DN_OK) {
@@ -1003,6 +989,12 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
+	if (server->next_retry > dn_msec_now()) {
+		loga("Stop trying to reconnect - back off for this duration %ld ms", server->next_retry - dn_msec_now());
+		server->failure_count = 0;
+		return DN_ERROR;
+	}
+
 	if (conn->sd > 0) {
 		/* already connected on peer connection */
 		return DN_OK;
@@ -1047,6 +1039,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 	ASSERT(!conn->connecting && !conn->connected);
 
 	status = connect(conn->sd, conn->addr, conn->addrlen);
+
 	if (status != DN_OK) {
 		if (errno == EINPROGRESS) {
 			conn->connecting = 1;
@@ -1061,10 +1054,12 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 		goto error;
 	}
 
+
 	ASSERT(!conn->connecting);
 	conn->connected = 1;
-	log_debug(LOG_INFO, "dddddddddyn: connected on s %d to peer '%.*s'", conn->sd,
+	log_debug(LOG_INFO, "dyn: connected on s %d to peer '%.*s'", conn->sd,
 			server->pname.len, server->pname.data);
+
 
 	return DN_OK;
 

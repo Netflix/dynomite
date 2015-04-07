@@ -25,12 +25,15 @@
 
 
 static uint64_t bucket_offsets[BUCKET_SIZE];
-static uint64_t buckets[BUCKET_SIZE];
-static uint64_t max;
 
 
-rstatus_t histo_init()
+rstatus_t histo_init(struct histogram *histo)
 {
+	if (histo == NULL) {
+		return DN_ERROR;
+	}
+
+	uint64_t *buckets = histo->buckets;
 	uint64_t last = 1;
 	bucket_offsets[0] = last;
 	int i;
@@ -48,14 +51,23 @@ rstatus_t histo_init()
 		buckets[i] = 0;
 	}
 
-	max = 0;
+	histo->mean = 0;
+	histo->val_95th = 0;
+	histo->val_999th = 0;
+	histo->val_99th = 0;
+	histo->val_max = 0;
 
 	return DN_OK;
 }
 
 
-static uint64_t count()
+static uint64_t count(struct histogram *histo)
 {
+	if (histo == NULL) {
+		return -1;
+	}
+
+	uint64_t *buckets = histo->buckets;
 	uint64_t sum = 0L;
 	int i;
 	for (i = 0; i < BUCKET_SIZE; i++)
@@ -76,8 +88,13 @@ uint64_t* histo_bucket_offsets()
 }
 
 
-void histo_add(uint64_t val)
+void histo_add(struct histogram *histo, uint64_t val)
 {
+	if (histo == NULL) {
+		return;
+	}
+
+	uint64_t *buckets = histo->buckets;
 	int begin_index, end_index, left_index, right_index, middle_index, index;
 
 	begin_index = left_index = 0;
@@ -108,12 +125,17 @@ void histo_add(uint64_t val)
 	buckets[index]++;
 
 	//store max value
-	max = (max > val)? max : val;
+	histo->val_max = (histo->val_max > val)? histo->val_max : val;
 }
 
 
-uint64_t histo_get_bucket(int bucket)
+uint64_t histo_get_bucket(struct histogram *histo, int bucket)
 {
+	if (histo == NULL) {
+		return -1;
+	}
+
+	uint64_t *buckets = histo->buckets;
 	if (bucket < BUCKET_SIZE)
 		return buckets[bucket];
 
@@ -121,8 +143,13 @@ uint64_t histo_get_bucket(int bucket)
 }
 
 
-void histo_get_buckets(uint64_t* my_buckets)
+void histo_get_buckets(struct histogram *histo, uint64_t* my_buckets)
 {
+	if (histo == NULL) {
+		return;
+	}
+
+	uint64_t *buckets = histo->buckets;
 	int i;
 	for(i=0; i<BUCKET_SIZE; i++) {
 		my_buckets[i] = buckets[i];
@@ -131,8 +158,14 @@ void histo_get_buckets(uint64_t* my_buckets)
 }
 
 
-uint64_t histo_percentile(double percentile)
+uint64_t histo_percentile(struct histogram *histo, double percentile)
 {
+	if (histo == NULL) {
+		return -1;
+	}
+
+	uint64_t *buckets = histo->buckets;
+
 	if (percentile < 0 && percentile > 1.0) {
 		return 0;
 	}
@@ -143,7 +176,7 @@ uint64_t histo_percentile(double percentile)
 		return -1;
 	}
 
-	uint64_t pcount = floor(count() * percentile);
+	uint64_t pcount = floor(count(histo) * percentile);
 	if (pcount == 0)
 		return 0;
 
@@ -160,8 +193,14 @@ uint64_t histo_percentile(double percentile)
 }
 
 
-uint64_t histo_mean()
+uint64_t histo_mean(struct histogram *histo)
 {
+	if (histo == NULL) {
+		return -1;
+	}
+
+	uint64_t *buckets = histo->buckets;
+
 	int last_bucket = BUCKET_SIZE - 1;
 	if (buckets[last_bucket] > 0) {
 		log_error("histogram overflowed!");
@@ -181,19 +220,23 @@ uint64_t histo_mean()
 }
 
 
-uint64_t histo_max()
+uint64_t histo_max(struct histogram *histo)
 {
-	return max;
+	if (histo == NULL) {
+		return -1;
+	}
+
+	return histo->val_max;
 }
 
 
-void histo_compute_latencies(uint64_t* mean, uint64_t* latency_95th,
-		uint64_t* latency_99th, uint64_t* latency_999th, uint64_t* latency_max)
+void histo_compute(struct histogram *histo)
 {
-	if (mean == NULL || latency_95th == NULL || latency_99th == NULL || latency_999th == NULL) {
+	if (histo == NULL) {
 		return;
 	}
 
+	uint64_t *buckets = histo->buckets;
 
 	int last_bucket = BUCKET_SIZE - 1;
 	if (buckets[last_bucket] > 0) {
@@ -201,9 +244,9 @@ void histo_compute_latencies(uint64_t* mean, uint64_t* latency_95th,
 		return;
 	}
 
-	uint64_t p95_count = floor(count() * 0.95);
-	uint64_t p99_count = floor(count() * 0.99);
-	uint64_t p999_count = floor(count() * 0.999);
+	uint64_t p95_count = floor(count(histo) * 0.95);
+	uint64_t p99_count = floor(count(histo) * 0.99);
+	uint64_t p999_count = floor(count(histo) * 0.999);
 
 	uint64_t val_95th = 0;
 	uint64_t val_99th = 0;
@@ -230,16 +273,16 @@ void histo_compute_latencies(uint64_t* mean, uint64_t* latency_95th,
 	}
 
 	if (elements != 0)
-	   *mean = ceil((double) sum / elements);
+	   histo->mean = ceil((double) sum / elements);
 
-	*latency_95th = val_95th;
-	*latency_99th = val_99th;
-	*latency_999th = val_999th;
-	*latency_max = max;
+	histo->val_95th = val_95th;
+	histo->val_99th = val_99th;
+	histo->val_999th = val_999th;
 }
 
 
-void print_buckets() {
+void print_buckets(struct histogram *histo) {
+	uint64_t *buckets = histo->buckets;
 	int i;
 	for(i = 0; i<BUCKET_SIZE; i++) {
 		loga(" val: %lu -  offset: %lu\n", buckets[i], bucket_offsets[i]);

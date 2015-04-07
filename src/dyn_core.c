@@ -63,14 +63,6 @@ core_ctx_create(struct instance *nci)
 		return NULL;
 	}
 
-	status = histo_init();
-   if (status != DN_OK) {
-		loga("Failed to initialize server pool!!!");
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-   }
-
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
 	if (status != DN_OK) {
