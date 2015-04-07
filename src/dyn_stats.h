@@ -34,7 +34,7 @@
     ACTION( client_connections,           STATS_GAUGE,        "# active client connections")                              \
     ACTION( client_read_requests,         STATS_COUNTER,      "# client read requests")                                   \
     ACTION( client_write_requests,        STATS_COUNTER,      "# client write responses")                                 \
-    ACTION( client_dropped_requests,      STATS_GAUGE,        "# client dropped requests")                                \
+    ACTION( client_dropped_requests,      STATS_COUNTER,        "# client dropped requests")                                \
     /* pool behavior */                                                                                                   \
     ACTION( server_ejects,                STATS_COUNTER,      "# times backend server was ejected")                       \
     /* dnode client behavior */                                                                                           \
@@ -46,7 +46,7 @@
     ACTION( dnode_client_out_queue,       STATS_GAUGE,        "# dnode client requests in outgoing queue")                \
     ACTION( dnode_client_out_queue_bytes, STATS_GAUGE,        "current dnode client request bytes in outgoing queue")     \
     /* peer behavior */                                                                                                   \
-    ACTION( peer_dropped_requests,        STATS_GAUGE,        "# peer dropped requests")                                  \
+    ACTION( peer_dropped_requests,        STATS_COUNTER,        "# peer dropped requests")                                  \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
     ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
     ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on peer connections")                           \
@@ -64,6 +64,7 @@
     /* forwarder behavior */                                                                                              \
     ACTION( forward_error,                STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,                    STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+    ACTION( alloc_msgs,                   STATS_COUNTER,      "# allocated in-memory msgs")                               \
     ACTION( stats_count,                  STATS_COUNTER,      "# stats request")                                          \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                       \
@@ -162,6 +163,7 @@ struct stats {
     struct string       latency_95th_str;
     struct string       latency_mean_str;
     struct string       latency_max_str;
+    struct string       alloc_msgs_str;
 
     struct string       rack_str;
     struct string       rack;
@@ -176,6 +178,7 @@ struct stats {
     volatile uint64_t   latency_95th;
     volatile uint64_t   latency_mean;
     volatile uint64_t   latency_max;
+    volatile uint32_t   alloc_msgs;
 
 };
 

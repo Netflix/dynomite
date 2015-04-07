@@ -137,7 +137,11 @@ _conn_get(void)
     /* {family, addrlen, addr} are initialized in enqueue handler */
 
     TAILQ_INIT(&conn->imsg_q);
+    conn->imsg_count = 0;
+
     TAILQ_INIT(&conn->omsg_q);
+    conn->omsg_count = 0;
+
     conn->rmsg = NULL;
     conn->smsg = NULL;
 
@@ -178,6 +182,7 @@ _conn_get(void)
     conn->last_received = 0;
     conn->attempted_reconnect = 0;
     conn->non_bytes_recv = 0;
+    //conn->non_bytes_send = 0;
 
     unsigned char *ase_key = generate_aes_key();
     strncpy(conn->aes_key, ase_key, strlen(ase_key)); //generate a new key for each connection
@@ -186,9 +191,36 @@ _conn_get(void)
 }
 
 
+void conn_add_in_queue_msg(struct conn *conn, struct msg *msg)
+{
+   TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
+   conn->imsg_count++;
+}
+
+
+void conn_remove_in_queue_msg(struct conn *conn, struct msg *msg)
+{
+   TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
+   conn->imsg_count--;
+}
+
+
+void conn_add_out_queue_msg(struct conn *conn, struct msg *msg)
+{
+   TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
+   conn->omsg_count++;
+}
+
+
+void conn_remove_out_queue_msg(struct conn *conn, struct msg *msg)
+{
+   TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
+   conn->omsg_count--;
+}
+
 struct conn *
 test_conn_get(void) {
-	return _conn_get();
+   return _conn_get();
 }
 
 
@@ -533,12 +565,17 @@ conn_sendv(struct conn *conn, struct array *sendv, size_t nsend)
                 conn->send_ready = 0;
             }
             conn->send_bytes += (size_t)n;
+            //conn->non_bytes_send = 0;
             return n;
         }
 
         if (n == 0) {
             log_warn("sendv on sd %d returned zero", conn->sd);
             conn->send_ready = 0;
+            //conn->non_bytes_send++;
+            //if (conn->dyn_mode && conn->non_bytes_send > MAX_CONN_ALLOWABLE_NON_SEND) {
+            //    conn->err = ENOTRECOVERABLE;
+            //}
             return 0;
         }
 

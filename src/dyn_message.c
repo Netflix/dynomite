@@ -209,15 +209,18 @@ _msg_get(bool force_alloc)
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
     if (alloc_msg_count >= ALLOWED_ALLOC_MSGS && !force_alloc) {
-   	  log_debug(LOG_WARN, "allocated #msgs %d hit max limit", alloc_msg_count);
+   	  log_debug(LOG_WARN, "allocated #msgs %d hit max allowable limit", alloc_msg_count);
    	  return NULL;
     }
 
     if (alloc_msg_count >= MAX_ALLOC_MSGS) {
+   	 log_debug(LOG_WARN, "allocated #msgs %d hit max hard limit", alloc_msg_count);
    	 return NULL; //we hit the max limit
     }
 
     alloc_msg_count++;
+
+
     log_debug(LOG_WARN, "alloc_msg_count : %d", alloc_msg_count);
 
     msg = dn_alloc(sizeof(*msg));
@@ -288,6 +291,11 @@ done:
     msg->msg_type = 0;
     msg->dyn_error = 0;
     return msg;
+}
+
+uint32_t msg_alloc_msgs()
+{
+	return alloc_msg_count;
 }
 
 uint32_t msg_free_queue_size(void)
@@ -889,7 +897,6 @@ msg_recv(struct context *ctx, struct conn *conn)
 
     ASSERT(conn->recv_active);
     conn->recv_ready = 1;
-    int count = 0;
 
     do {
         msg = conn->recv_next(ctx, conn, true);
@@ -901,8 +908,8 @@ msg_recv(struct context *ctx, struct conn *conn)
         if (status != DN_OK) {
             return status;
         }
-        count++;
-    } while (conn->recv_ready && count < 100); //make 100 to be settable
+
+    } while (conn->recv_ready);
 
     return DN_OK;
 }
@@ -1053,6 +1060,12 @@ msg_send(struct context *ctx, struct conn *conn)
         status = msg_send_chain(ctx, conn, msg);
         if (status != DN_OK) {
             return status;
+        }
+
+        if (conn->omsg_count > MAX_CONN_QUEUE_SIZE) {
+            conn->send_ready = 0;
+            conn->err = ENOTRECOVERABLE;
+            loga("Setting ENOTRECOVERABLE happens here!");
         }
 
     } while (conn->send_ready);

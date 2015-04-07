@@ -27,8 +27,10 @@
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
 
-#define ALLOWED_ALLOC_MSGS 200000
-#define MAX_ALLOC_MSGS     400000
+#define ALLOWED_ALLOC_MSGS            200000
+#define MAX_ALLOC_MSGS                400000
+
+#define MAX_ALLOWABLE_PROCESSED_MSGS  500
 
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
@@ -274,6 +276,7 @@ void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
+uint32_t msg_alloc_msgs();
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);

@@ -332,6 +332,15 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
     if (conn->eof) {
         msg = conn->rmsg;
 
+        //if (conn->dyn_mode) {
+        //    if (conn->non_bytes_recv > MAX_CONN_ALLOWABLE_NON_RECV) {
+        //        conn->err = EPIPE;
+        //        return NULL;
+        //    }
+        //    conn->eof = 0;
+        //    return msg;
+        //}
+
         /* client sent eof before sending the entire request */
         if (msg != NULL) {
             conn->rmsg = NULL;
