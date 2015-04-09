@@ -989,12 +989,6 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
-	if (server->next_retry > dn_msec_now()) {
-		loga("Stop trying to reconnect - back off for this duration %ld ms", server->next_retry - dn_msec_now());
-		server->failure_count = 0;
-		return DN_ERROR;
-	}
-
 	if (conn->sd > 0) {
 		/* already connected on peer connection */
 		return DN_OK;
@@ -1270,6 +1264,12 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 
 	if (server->is_local)
 		return conn; //Don't bother to connect
+
+	if (server->state == DOWN) {
+		log_debug(LOG_VERB, "Detecting peer '%.*s' is set with state Down", server->name);
+		dnode_peer_close(ctx, conn);
+		return NULL;
+	}
 
 	status = dnode_peer_connect(ctx, server, conn);
 	if (status != DN_OK) {

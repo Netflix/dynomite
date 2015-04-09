@@ -422,8 +422,6 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     rstatus_t status;
 
-    ASSERT(conn->client && !conn->proxy);
-
     log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
               "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
               strerror(errno));
@@ -444,6 +442,7 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
             conn->err = errno;
         }
     }
+
 }
 
 static void
@@ -558,6 +557,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
+        c_conn->err = EHOSTDOWN;
         req_forward_error(ctx, c_conn, msg);
         return;
     }

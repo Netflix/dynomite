@@ -23,6 +23,7 @@
 #include "dyn_core.h"
 #include "dyn_histogram.h"
 
+
 #ifndef _DYN_STATS_H_
 #define _DYN_STATS_H_
 
@@ -103,6 +104,21 @@ typedef enum stats_type {
     STATS_STRING,
     STATS_SENTINEL
 } stats_type_t;
+
+typedef enum {
+    CMD_UNKNOWN,
+    CMD_INFO,
+    CMD_PING,
+    CMD_DESCRIBE,
+    CMD_STANDBY,
+    CMD_WRITES_ONLY,
+    CMD_RESUMING,
+    CMD_NORMAL,
+    CMD_BOOTSTRAPING,
+    CMD_LEAVING,
+    CMD_PEER_DOWN,
+    CMD_PEER_UP,
+} stats_cmd_t;
 
 struct stats_metric {
     stats_type_t  type;         /* type */
@@ -188,6 +204,7 @@ struct stats {
 
 };
 
+
 #define DEFINE_ACTION(_name, _type, _desc) STATS_POOL_##_name,
 typedef enum stats_pool_field {
     STATS_POOL_CODEC(DEFINE_ACTION)
@@ -203,18 +220,11 @@ typedef enum stats_server_field {
 #undef DEFINE_ACTION
 
 
-typedef enum stats_cmd {
-    STATS_INFO,
-    STATS_PING,
-    STATS_DESCRIBE,
-    STATS_STANDBY,
-    STATS_WRITES_ONLY,
-    STATS_RESUMING,
-    STATS_NORMAL,
-    STATS_BOOTSTRAPING,
-    STATS_LEAVING,
-    STATS_UNKNOWN
-} stats_cmd_t;
+
+struct stats_cmd {
+	stats_cmd_t cmd;
+	struct string req_data;
+};
 
 
 #if defined DN_STATS && DN_STATS == 1

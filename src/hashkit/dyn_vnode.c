@@ -60,10 +60,10 @@ vnode_update(struct server_pool *sp)
 {
     ASSERT(array_n(&sp->peers) > 0);
 
-    int64_t now = dn_usec_now();
-    if (now < 0) {
-        return DN_ERROR;
-    }
+    //int64_t now = dn_usec_now();
+    //if (now < 0) {
+    //    return DN_ERROR;
+    //}
 
     int i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
