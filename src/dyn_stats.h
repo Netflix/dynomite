@@ -118,6 +118,7 @@ typedef enum {
     CMD_LEAVING,
     CMD_PEER_DOWN,
     CMD_PEER_UP,
+    CMD_PEER_RESET
 } stats_cmd_t;
 
 struct stats_metric {

@@ -591,7 +591,6 @@ core_loop(struct context *ctx)
 
 	core_timeout(ctx);
 	stats_swap(ctx->stats);
-	//core_debug(ctx);
 
 	return DN_OK;
 }

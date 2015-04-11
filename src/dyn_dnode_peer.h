@@ -9,7 +9,8 @@
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
 
-#define WAIT_BEFORE_RECONNECT_IN_MILLIS   30000
+#define WAIT_BEFORE_RECONNECT_IN_MILLIS      30000
+#define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
 
 void dnode_peer_ref(struct conn *conn, void *owner);
 void dnode_peer_unref(struct conn *conn);

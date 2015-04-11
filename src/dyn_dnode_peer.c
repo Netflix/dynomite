@@ -418,8 +418,8 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 
 	stats_pool_incr(ctx, pool, peer_ejects);
 
-	if (server->failure_count == 3)
-	   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
+	//if (server->failure_count == 3)
+	//   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
 
 	status = dnode_peer_pool_run(pool);
 	if (status != DN_OK) {
@@ -482,6 +482,22 @@ dnode_peer_attemp_reconnect_or_close(struct context *ctx, struct conn *conn)
 	} else {
 		dnode_peer_close(ctx, conn);
 	}
+}
+
+void dnode_peer_close_socket(struct context *ctx, struct conn *conn)
+{
+	rstatus_t status;
+	log_debug(LOG_VERB, "In dnode_peer_close_socket");
+
+	if (conn != NULL) {
+		status = close(conn->sd);
+		if (status < 0) {
+			log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
+		}
+	}
+
+	conn->dnode_crypto_state = 0;
+	conn->sd = -1;
 }
 
 void
@@ -986,6 +1002,8 @@ rstatus_t
 dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
 {
 	rstatus_t status;
+	log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'", server->pname.len,
+				server->pname.data);
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
@@ -1005,13 +1023,15 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 		goto error;
 	}
 
+
 	status = dn_set_nonblocking(conn->sd);
 	if (status != DN_OK) {
 		log_error("dyn: set nonblock on s %d for peer '%.*s' failed: %s",
-				conn->sd,  server->pname.len, server->pname.data,
-				strerror(errno));
+			     	 conn->sd,  server->pname.len, server->pname.data,
+				    strerror(errno));
 		goto error;
 	}
+
 
 	if (server->pname.data[0] != '/') {
 		status = dn_set_tcpnodelay(conn->sd);
@@ -1051,7 +1071,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 
 	ASSERT(!conn->connecting);
 	conn->connected = 1;
-	log_debug(LOG_INFO, "dyn: connected on s %d to peer '%.*s'", conn->sd,
+	log_debug(LOG_WARN, "dyn: connected on s %d to peer '%.*s'", conn->sd,
 			server->pname.len, server->pname.data);
 
 
@@ -1103,49 +1123,19 @@ dnode_peer_pool_update(struct server_pool *pool)
 {
 	rstatus_t status;
 	int64_t now;
-	uint32_t pnlive_server; /* prev # live server */
 
-
-	//fix me
-	if (!pool->auto_eject_hosts) {
-		return DN_OK;
-	}
-
-	//fix me
-	if (pool->next_rebuild == 0LL) {
-		return DN_OK;
-	}
-
-	now = dn_usec_now();
+	now = dn_msec_now();
 	if (now < 0) {
 		return DN_ERROR;
 	}
 
-	//fix me
 	if (now <= pool->next_rebuild) {
-		if (pool->nlive_server == 0) {
-			errno = ECONNREFUSED;
-			return DN_ERROR;
-		}
 		return DN_OK;
 	}
 
-	//fixe me to use anotehr variable
-	pnlive_server = pool->nlive_server;
+	pool->next_rebuild = now + WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS;
+	return dnode_peer_pool_run(pool);
 
-	status = dnode_peer_pool_run(pool);
-	if (status != DN_OK) {
-		log_error("dyn: updating peer pool %"PRIu32" with dist %d failed: %s", pool->idx,
-				pool->dist_type, strerror(errno));
-		return status;
-	}
-
-	log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' to add %"PRIu32" servers",
-			pool->idx, pool->name.len, pool->name.data,
-			pool->nlive_server - pnlive_server);
-
-
-	return DN_OK;
 }
 
 static struct dyn_token *
@@ -1240,9 +1230,11 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 	struct server *server;
 	struct conn *conn;
 
-	//status = dnode_peer_pool_update(pool);
-	status = dnode_peer_pool_run(pool);
+	log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
+
+	status = dnode_peer_pool_update(pool);
 	if (status != DN_OK) {
+		loga("status is not OK");
 		return NULL;
 	}
 
@@ -1252,6 +1244,8 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 		/* from a given {key, keylen} pick a server from pool */
 		server = dnode_peer_pool_server(pool, rack, key, keylen);
 		if (server == NULL) {
+			log_debug(LOG_VERB, "What? There is no such server in rack '%.*s' for key '%.*s'",
+					rack->name, keylen, key);
 			return NULL;
 		}
 	}
@@ -1262,13 +1256,29 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 		return NULL;
 	}
 
-	if (server->is_local)
+	if (server->is_local) {
 		return conn; //Don't bother to connect
+	}
 
 	if (server->state == DOWN) {
-		log_debug(LOG_VERB, "Detecting peer '%.*s' is set with state Down", server->name);
+		log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Down", server->name);
+		conn->err = EHOSTDOWN;
 		dnode_peer_close(ctx, conn);
 		return NULL;
+	} else if (server->state == RESET) {
+		log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", server->name);
+
+		dnode_peer_close_socket(ctx, conn);
+		status = dnode_peer_connect(ctx, server, conn);
+		if (status != DN_OK) {
+			conn->err = EHOSTDOWN;
+			dnode_peer_close(ctx, conn);
+			return NULL;
+		}
+
+		server->state = NORMAL;
+		log_debug(LOG_WARN, "after setting back server's state to NORMAL");
+		return conn;
 	}
 
 	status = dnode_peer_connect(ctx, server, conn);
@@ -1279,6 +1289,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 
 	return conn;
 }
+
 
 static rstatus_t
 dnode_peer_pool_each_preconnect(void *elem, void *data)

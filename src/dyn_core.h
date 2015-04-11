@@ -142,7 +142,8 @@ typedef enum dyn_state {
 	DOWN        = 8,
 	REMOVED     = 9,
 	EXITING     = 10,
-	UNKNOWN     = 11
+	RESET       = 11,
+	UNKNOWN     = 12
 } dyn_state_t;
 
 

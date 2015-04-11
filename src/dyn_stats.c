@@ -64,6 +64,8 @@ static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: applic
 static struct string ok = string("OK\r\n");
 //static struct string error = string("ERR");
 
+static struct string all = string("all");
+
 static struct histogram latency_histo;
 
 void
@@ -908,25 +910,19 @@ static void parse_request(int sd, struct stats_cmd *st_cmd)
 				st_cmd->cmd = CMD_UNKNOWN;
 				return;
 			} else {
-				if (strncmp(reqline[1], "/\0", 2) == 0 )
+				if (strncmp(reqline[1], "/\0", 2) == 0 ) {
 					reqline[1] = "/info";
-
-				if (strcmp(reqline[1], "/info") == 0) {
+					return;
+				} else if (strcmp(reqline[1], "/info") == 0) {
 					st_cmd->cmd = CMD_INFO;
 					return;
-				}
-
-				if (strcmp(reqline[1], "/ping") == 0) {
+				} else if (strcmp(reqline[1], "/ping") == 0) {
 					st_cmd->cmd = CMD_PING;
 					return;
-				}
-
-				if (strcmp(reqline[1], "/describe") == 0) {
+				} else if (strcmp(reqline[1], "/describe") == 0) {
 					st_cmd->cmd = CMD_DESCRIBE;
 					return;
-				}
-
-				if (strncmp(reqline[1], "/peer", 5) == 0) {
+				} else if (strncmp(reqline[1], "/peer", 5) == 0) {
 					log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
 					char* peer_state = reqline[1] + 5;
 					log_debug(LOG_VERB, "Peer : %s", peer_state);
@@ -940,6 +936,11 @@ static void parse_request(int sd, struct stats_cmd *st_cmd)
 						st_cmd->cmd = CMD_PEER_UP;
 						string_init(&st_cmd->req_data);
 						string_copy_c(&st_cmd->req_data, peer_state + 4);
+					} else if (strncmp(peer_state, "/reset", 6) == 0) {
+						log_debug(LOG_VERB, "Peer's state is RESET!");
+						st_cmd->cmd = CMD_PEER_RESET;
+						string_init(&st_cmd->req_data);
+						string_copy_c(&st_cmd->req_data, peer_state + 7);
 					} else {
 						st_cmd->cmd = CMD_PING;
 					}
@@ -1060,28 +1061,34 @@ stats_send_rsp(struct stats *st)
 	} else if (cmd == CMD_RESUMING) {
 		st->ctx->dyn_state = RESUMING;
 		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_PEER_DOWN) {
-		log_debug(LOG_VERB, "Setting peer '%.*s' to state Down", st_cmd.req_data);
+	} else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
+		log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
 		struct server_pool *sp = array_get(&st->ctx->pool, 0);
 		int i, len;
+
+		//I think it is ok to keep this simple without a synchronization
 		for (i = 0, len = array_n(&sp->peers); i < len; i++) {
 			struct server *peer = array_get(&sp->peers, i);
 			log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
-			if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
-				peer->state = DOWN;  //I think it is ok to keep this simple without a synchronization
-				break;
-			}
-		}
-		string_deinit(&st_cmd.req_data);
-	} else if (cmd == CMD_PEER_UP) {
-		log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state Up", st_cmd.req_data);
-		struct server_pool *sp = array_get(&st->ctx->pool, 0);
-		int i, len;
-		for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-			struct server *peer = array_get(&sp->peers, i);
-			log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
-			if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
-				peer->state = NORMAL;  //I think it is ok to keep this simple without a synchronization
+
+			if (string_compare(&st_cmd.req_data, &all) == 0) {
+				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET/ALL command", st_cmd.req_data, cmd);
+				peer->state = RESET;
+			} else if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
+				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET command", st_cmd.req_data, cmd);
+				switch (cmd) {
+				case CMD_PEER_UP:
+					peer->state = NORMAL;
+					break;
+				case CMD_PEER_RESET:
+					peer->state = RESET;
+					break;
+				case CMD_PEER_DOWN:
+					peer->state = DOWN;
+					break;
+				default:
+					peer->state = NORMAL;
+				}
 				break;
 			}
 		}
