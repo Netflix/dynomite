@@ -61,8 +61,10 @@ static struct stats_desc stats_server_desc[] = {
 #define  MAX_HTTP_HEADER_SIZE 1024
 static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
 //static struct string endline = string("\r\n");
-static struct string ok = string("OK");
+static struct string ok = string("OK\r\n");
 //static struct string error = string("ERR");
+
+static struct string all = string("all");
 
 static struct histogram latency_histo;
 
@@ -879,7 +881,7 @@ stats_make_rsp(struct stats *st)
 }
 
 
-static stats_cmd_t parse_request(int sd)
+static void parse_request(int sd, struct stats_cmd *st_cmd)
 {
 	size_t max_buf_size = 99999;
 	char mesg[max_buf_size], *reqline[3];
@@ -889,60 +891,88 @@ static stats_cmd_t parse_request(int sd)
 
 	rcvd=recv(sd, mesg, max_buf_size, 0);
 
-	if (rcvd<0)    // receive error
-	   fprintf(stderr,("recv() error\n"));
-	else if (rcvd==0)    // receive socket closed
-	   fprintf(stderr,"Client disconnected upexpectedly.\n");
-	else  {  // message received
-	   printf("%s", mesg);
-	   reqline[0] = strtok (mesg, " \t\n");
-	   if ( strncmp(reqline[0], "GET\0", 4)==0 ) {
-              reqline[1] = strtok (NULL, " \t");
-              reqline[2] = strtok (NULL, " \t\n");
-              printf("0: %s\n", reqline[0]);
-              printf("1: %s\n", reqline[1]);
-              printf("2: %s\n", reqline[2]);
+	if (rcvd < 0) {
+		log_debug(LOG_VERB, "stats recv error");
+	} else if (rcvd == 0) {   // receive socket closed
+		log_debug(LOG_VERB, "Client disconnected upexpectedly");
+	} else  {  // message received
+		log_debug(LOG_VERB, "%s", mesg);
+		reqline[0] = strtok(mesg, " \t\n");
+		if ( strncmp(reqline[0], "GET\0", 4) == 0 ) {
+			reqline[1] = strtok (NULL, " \t");
+			reqline[2] = strtok (NULL, " \t\n");
+			log_debug(LOG_VERB, "0: %s\n", reqline[0]);
+			log_debug(LOG_VERB, "1: %s\n", reqline[1]);
+			log_debug(LOG_VERB, "2: %s\n", reqline[2]);
 
-              if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
-                  write(sd, "HTTP/1.0 400 Bad Request\n", 25);
-                  return UNKNOWN;
-              } else {
-                  if (strncmp(reqline[1], "/\0", 2)==0 )
-                      reqline[1] = "/info";
+			if (strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
+				write(sd, "HTTP/1.0 400 Bad Request\n", 25);
+				st_cmd->cmd = CMD_UNKNOWN;
+				return;
+			} else {
+				if (strncmp(reqline[1], "/\0", 2) == 0 ) {
+					reqline[1] = "/info";
+					return;
+				} else if (strcmp(reqline[1], "/info") == 0) {
+					st_cmd->cmd = CMD_INFO;
+					return;
+				} else if (strcmp(reqline[1], "/ping") == 0) {
+					st_cmd->cmd = CMD_PING;
+					return;
+				} else if (strcmp(reqline[1], "/describe") == 0) {
+					st_cmd->cmd = CMD_DESCRIBE;
+					return;
+				} else if (strncmp(reqline[1], "/peer", 5) == 0) {
+					log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
+					char* peer_state = reqline[1] + 5;
+					log_debug(LOG_VERB, "Peer : %s", peer_state);
+					if (strncmp(peer_state, "/down", 5) == 0) {
+						log_debug(LOG_VERB, "Peer's state is down!");
+						st_cmd->cmd = CMD_PEER_DOWN;
+						string_init(&st_cmd->req_data);
+						string_copy_c(&st_cmd->req_data, peer_state + 6);
+					} else if (strncmp(peer_state, "/up", 3) == 0) {
+						log_debug(LOG_VERB, "Peer's state is UP!");
+						st_cmd->cmd = CMD_PEER_UP;
+						string_init(&st_cmd->req_data);
+						string_copy_c(&st_cmd->req_data, peer_state + 4);
+					} else if (strncmp(peer_state, "/reset", 6) == 0) {
+						log_debug(LOG_VERB, "Peer's state is RESET!");
+						st_cmd->cmd = CMD_PEER_RESET;
+						string_init(&st_cmd->req_data);
+						string_copy_c(&st_cmd->req_data, peer_state + 7);
+					} else {
+						st_cmd->cmd = CMD_PING;
+					}
 
-                  if (strcmp(reqline[1], "/info") == 0) {
-                      return STATS_INFO;
-                  }
+					return;
+				}
 
-                  if (strcmp(reqline[1], "/ping") == 0) {
-                      return STATS_PING;
-                  }
+				if (strncmp(reqline[1], "/state", 6) == 0) {
+					log_debug(LOG_VERB, "Setting state - URL Parameters : %s", reqline[1]);
+					char* state = reqline[1] + 7;
+					log_debug(LOG_VERB, "cmd : %s", state);
+					if (strcmp(state, "standby") == 0) {
+						st_cmd->cmd = CMD_STANDBY;
+						return;
+					} else if (strcmp(state, "writes_only") == 0) {
+						st_cmd->cmd = CMD_WRITES_ONLY;
+						return;
+					} else if (strcmp(state, "normal") == 0) {
+						st_cmd->cmd = CMD_NORMAL;
+						return;
+					} else if (strcmp(state, "resuming") == 0) {
+						st_cmd->cmd = CMD_RESUMING;
+						return;
+					}
+				}
 
-                  if (strcmp(reqline[1], "/describe") == 0) {
-                      return STATS_DESCRIBE;
-                  }
+				st_cmd->cmd = CMD_PING;
+				return;
+			}
+		}
+	}
 
-                  if (str6icmp(reqline[1], '//', 's', 't', 'a', 't', 'e') == 0) {
-                      log_debug(LOG_VERB, "URL Parameters : %s", reqline[1]);
-                      char* state = reqline[1] + 7;
-                      log_debug(LOG_VERB, "cmd === %s", state);
-                      if (strcmp(state, "standby") == 0) {
-                          return STATS_STANDBY;
-                      } else if (strcmp(state, "writes_only") == 0) {
-                          return STATS_WRITES_ONLY;
-                      } else if (strcmp(state, "normal") == 0) {
-                          return STATS_NORMAL;
-                      } else if (strcmp(state, "resuming") == 0) {
-                          return STATS_RESUMING;
-                      }
-                   }
-
-                   return STATS_PING;
-              }
-        }
-    }
-
-	return 0;
 }
 
 
@@ -994,46 +1024,83 @@ stats_http_rsp(int sd, uint8_t *content, size_t len)
 static rstatus_t
 stats_send_rsp(struct stats *st)
 {
-    rstatus_t status;
-    int sd;
+	rstatus_t status;
+	int sd;
 
-    status = stats_make_rsp(st);
-    if (status != DN_OK) {
-        return status;
-    }
+	//TODO: move this to an appropriate place that need it.
+	status = stats_make_rsp(st);
+	if (status != DN_OK) {
+		return status;
+	}
 
-    sd = accept(st->sd, NULL, NULL);
-    if (sd < 0) {
-        log_error("accept on m %d failed: %s", st->sd, strerror(errno));
-        return DN_ERROR;
-    }
+	sd = accept(st->sd, NULL, NULL);
+	if (sd < 0) {
+		log_error("accept on m %d failed: %s", st->sd, strerror(errno));
+		return DN_ERROR;
+	}
 
-    stats_cmd_t cmd = parse_request(sd);
+	struct stats_cmd st_cmd;
 
-    log_debug(LOG_VERB, "cmd %d", cmd);
+	parse_request(sd, &st_cmd);
+	stats_cmd_t cmd = st_cmd.cmd;
 
-    if (cmd == STATS_INFO) {
-        log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
-        return stats_http_rsp(sd, st->buf.data, st->buf.len);
-    } else if (cmd == STATS_NORMAL) {
-        st->ctx->dyn_state = NORMAL;
-        return stats_http_rsp(sd, ok.data, ok.len);
-    } else if (cmd == STATS_STANDBY) {
-        st->ctx->dyn_state = STANDBY;
-        return stats_http_rsp(sd, ok.data, ok.len);
-    } else if (cmd == STATS_WRITES_ONLY) {
-        st->ctx->dyn_state = WRITES_ONLY;
-        return stats_http_rsp(sd, ok.data, ok.len);
-    } else if (cmd == STATS_RESUMING) {
-    	st->ctx->dyn_state = RESUMING;
-    	return stats_http_rsp(sd, ok.data, ok.len);
-    } else {
-        log_debug(LOG_VERB, "Unsupported cmd");
-    }
+	log_debug(LOG_VERB, "cmd %d", cmd);
 
-    close(sd);
+	if (cmd == CMD_INFO) {
+		log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+		return stats_http_rsp(sd, st->buf.data, st->buf.len);
+	} else if (cmd == CMD_NORMAL) {
+		st->ctx->dyn_state = NORMAL;
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_STANDBY) {
+		st->ctx->dyn_state = STANDBY;
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_WRITES_ONLY) {
+		st->ctx->dyn_state = WRITES_ONLY;
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_RESUMING) {
+		st->ctx->dyn_state = RESUMING;
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
+		log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
+		struct server_pool *sp = array_get(&st->ctx->pool, 0);
+		int i, len;
 
-    return DN_OK;
+		//I think it is ok to keep this simple without a synchronization
+		for (i = 0, len = array_n(&sp->peers); i < len; i++) {
+			struct server *peer = array_get(&sp->peers, i);
+			log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
+
+			if (string_compare(&st_cmd.req_data, &all) == 0) {
+				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET/ALL command", st_cmd.req_data, cmd);
+				peer->state = RESET;
+			} else if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
+				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET command", st_cmd.req_data, cmd);
+				switch (cmd) {
+				case CMD_PEER_UP:
+					peer->state = NORMAL;
+					break;
+				case CMD_PEER_RESET:
+					peer->state = RESET;
+					break;
+				case CMD_PEER_DOWN:
+					peer->state = DOWN;
+					break;
+				default:
+					peer->state = NORMAL;
+				}
+				break;
+			}
+		}
+		string_deinit(&st_cmd.req_data);
+	} else {
+		log_debug(LOG_VERB, "Unsupported cmd");
+	}
+
+	stats_http_rsp(sd, ok.data, ok.len);
+	close(sd);
+
+	return DN_OK;
 }
 
 static void

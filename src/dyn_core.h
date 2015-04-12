@@ -131,18 +131,19 @@ struct dyn_ring;
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 
 typedef enum dyn_state {
-	INIT = 0,
-	STANDBY = 1,
+	INIT        = 0,
+	STANDBY     = 1,
 	WRITES_ONLY = 2,
-	RESUMING = 3,
-	NORMAL = 4,
-	SUSPENDING = 5,
-	LEAVING = 6,
-	JOINING = 7,
-	DOWN = 8,
-	REMOVED = 9,
-	EXITING = 10,
-	UNKNOWN = 11
+	RESUMING    = 3,
+	NORMAL      = 4,
+	SUSPENDING  = 5,
+	LEAVING     = 6,
+	JOINING     = 7,
+	DOWN        = 8,
+	REMOVED     = 9,
+	EXITING     = 10,
+	RESET       = 11,
+	UNKNOWN     = 12
 } dyn_state_t;
 
 
@@ -224,7 +225,7 @@ struct server {
     unsigned           is_seed:1;     /* seed? */
     unsigned           processed:1;   /* flag to indicate whether this has been processed */
     unsigned           is_secure:1;   /* is the connection to the server secure? */
-    uint8_t            state;         /* state of the server - used mainly in peers  */
+    dyn_state_t        state;         /* state of the server - used mainly in peers  */
 };
 
 

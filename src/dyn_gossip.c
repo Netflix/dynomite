@@ -941,7 +941,6 @@ gossip_destroy(struct server_pool *sp)
 
 void gossip_debug(void)
 {
-
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(&gn_pool.datacenters); i < nelem; i++) {
 		log_debug(LOG_VERB, "===============Gossip dump===============================");
