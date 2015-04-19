@@ -650,7 +650,9 @@ dn_unresolve_desc(int sd)
 
 
 unsigned int dict_node_hash(const void *key) {
-	struct node *node = key;
+    struct node *node = key;
+    if (node == NULL)
+       return 0;
     return dictGenHashFunction((unsigned char*)node->dc.data, node->dc.len) +
     		dictGenHashFunction((unsigned char*)node->rack.data, node->rack.len) +
     		node->token.mag[0];
@@ -681,10 +683,11 @@ void dict_node_destructor(void *privdata, void *val)
 }
 
 
-
 unsigned int dict_string_hash(const void *key) {
 	struct string *s = key;
-    //return dictGenHashFunction((unsigned char*)key, dn_strlen((char*)key));
+	//return dictGenHashFunction((unsigned char*)key, dn_strlen((char*)key));
+	if (s == NULL)
+		return 0;
 	return dictGenHashFunction(s->data, s->len);
 }
 

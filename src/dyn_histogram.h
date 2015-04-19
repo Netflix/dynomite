@@ -23,6 +23,7 @@ struct histogram {
 
 
 rstatus_t histo_init(struct histogram *histo);
+rstatus_t histo_reset(struct histogram *histo);
 void histo_add(struct histogram *histo, uint64_t val);
 uint64_t histo_get_bucket(struct histogram *histo, int bucket);
 void histo_get_buckets(struct histogram *histo, uint64_t* my_buckets);

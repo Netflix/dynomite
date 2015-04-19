@@ -61,6 +61,28 @@ rstatus_t histo_init(struct histogram *histo)
 }
 
 
+rstatus_t histo_reset(struct histogram *histo)
+{
+	if (histo == NULL) {
+		return DN_ERROR;
+	}
+
+	uint64_t *buckets = histo->buckets;
+	int i;
+	for(i = 0; i<BUCKET_SIZE; i++) {
+		buckets[i] = 0;
+	}
+
+	histo->mean = 0;
+	histo->val_95th = 0;
+	histo->val_999th = 0;
+	histo->val_99th = 0;
+	histo->val_max = 0;
+
+	return DN_OK;
+}
+
+
 static uint64_t count(struct histogram *histo)
 {
 	if (histo == NULL) {
