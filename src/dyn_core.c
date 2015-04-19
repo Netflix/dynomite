@@ -404,6 +404,17 @@ core_timeout(struct context *ctx)
 
 		msg_tmo_delete(msg);
 
+		if (conn->dyn_mode) {
+			if (!conn->dnode_client && !conn->dnode_server) { //outgoing peer requests
+		 	   struct server *server = conn->owner;
+			   stats_pool_incr(ctx, server->owner, peer_timedout_requests);
+			}
+		} else {
+			if (!conn->client && !conn->proxy) { //storage server requests
+			   stats_server_incr(ctx, conn->owner, server_dropped_requests);
+			}
+		}
+
 		conn->err = ETIMEDOUT;
 
 		core_close(ctx, conn);
