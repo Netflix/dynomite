@@ -48,7 +48,8 @@
     ACTION( dnode_client_out_queue,       STATS_GAUGE,        "# dnode client requests in outgoing queue")                \
     ACTION( dnode_client_out_queue_bytes, STATS_GAUGE,        "current dnode client request bytes in outgoing queue")     \
     /* peer behavior */                                                                                                   \
-    ACTION( peer_dropped_requests,        STATS_COUNTER,        "# peer dropped requests")                                \
+    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# peer dropped requests")                                  \
+    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# peer timedout requests")                                 \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
     ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
     ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on peer connections")                           \
@@ -75,7 +76,8 @@
     ACTION( server_timedout,              STATS_COUNTER,           "# timeouts on server connections")                         \
     ACTION( server_connections,           STATS_GAUGE,             "# active server connections")                              \
     ACTION( server_ejected_at,            STATS_TIMESTAMP,         "timestamp when server was ejected in usec since epoch")    \
-    ACTION( server_dropped_requests,      STATS_COUNTER,           "# peer dropped requests")                                  \
+    ACTION( server_dropped_requests,      STATS_COUNTER,           "# server dropped requests")                                \
+    ACTION( server_timedout_requests,     STATS_COUNTER,           "# server timedout requests")                               \
     /* data behavior */                                                                                                        \
     ACTION( read_requests,                STATS_COUNTER,           "# read requests")                                          \
     ACTION( read_request_bytes,           STATS_COUNTER,           "total read request bytes")                                 \
