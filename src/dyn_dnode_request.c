@@ -352,7 +352,7 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 	struct string *dc = rack->dc;
 	rstatus_t status;
 	/* enqueue message (request) into client outq, if response is expected */
-	if (!msg->noreply) {
+	if (!msg->noreply && !msg->swallow) {
 		c_conn->enqueue_outq(ctx, c_conn, msg);
 	}
 

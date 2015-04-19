@@ -466,7 +466,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     rstatus_t status;
     struct conn *s_conn;
 
- 	if (log_loggable(LOG_VVERB)) {
+    if (log_loggable(LOG_VVERB)) {
        loga("local_req_forward entering ............");
     }
 
@@ -536,9 +536,6 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 }
 
 
-/*
- * TODOs: Should replace these by using msg_type in struct msg
- */
 static bool
 request_send_to_all_racks(struct msg *msg) {
     msg_type_t t = msg->type;
@@ -642,7 +639,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 						}
 
 						msg_clone(msg, orig_mbuf, rack_msg);
-						rack_msg->noreply = true;
+						rack_msg->swallow = true;
 					}
 
 					log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
