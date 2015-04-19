@@ -346,10 +346,6 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 		uint8_t *key, uint32_t keylen)
 {
 
-	if (get_tracking_level() >= LOG_VVERB) {
-		log_debug(LOG_NOTICE, "dnode_peer_req_forward entering");
-	}
-
 	log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s'",
 			dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd), rack->name->len, rack->name->data);
 
@@ -412,8 +408,8 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 	mbuf_insert_head(&msg->mhdr, header_buf);
 
-	if (get_tracking_level() >= LOG_VVERB) {
-		log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
+	if (log_loggable(LOG_VVERB)) {
+		log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
 		msg_dump(msg);
 	}
 
@@ -421,11 +417,10 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
-	if (get_tracking_level() >= LOG_VERB) {
-		log_debug(LOG_NOTICE, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+	log_debug(LOG_NOTICE, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
 				" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
 				msg->mlen, msg->type, keylen, key);
-	}
+
 }
 
 
@@ -500,47 +495,47 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 
 		if (ENCRYPTION) {
-		   struct mbuf *encrypted_buf = mbuf_get();
-		   if (encrypted_buf == NULL) {
-			  loga("Unable to obtain an data_buf for encryption!");
-			  return; //TODOs: need to clean up
-		   }
+			struct mbuf *encrypted_buf = mbuf_get();
+			if (encrypted_buf == NULL) {
+				loga("Unable to obtain an data_buf for encryption!");
+				return; //TODOs: need to clean up
+			}
 
-		   status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
-		   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+			status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
+			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
 
-		   //write dnode header
-		   dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
+			//write dnode header
+			dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
 
 
-	       if (get_tracking_level() >= LOG_VVERB) {
-		      log_hexdump(LOG_NOTICE, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
-		      log_hexdump(LOG_NOTICE, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-           }
+			if (log_loggable(LOG_VVERB)) {
+				log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");
+				log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
+			}
 
-	       mbuf_remove(&msg->mhdr, data_buf);
-		   mbuf_insert(&msg->mhdr, encrypted_buf);
-		   //free data_buf as no one will need it again
-		   mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
+			mbuf_remove(&msg->mhdr, data_buf);
+			mbuf_insert(&msg->mhdr, encrypted_buf);
+			//free data_buf as no one will need it again
+			mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
 
 		} else {
-		   log_debug(LOG_VVERB, "No encryption");
-		   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
-		   mbuf_insert(&msg->mhdr, data_buf);
+			log_debug(LOG_VVERB, "No encryption");
+			dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
+			mbuf_insert(&msg->mhdr, data_buf);
 		}
 
 	} else {
-       log_debug(LOG_VVERB, "Assemble a non-secured msg to send");
-	   dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
-	   mbuf_insert(&msg->mhdr, data_buf);
+		log_debug(LOG_VVERB, "Assemble a non-secured msg to send");
+		dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
+		mbuf_insert(&msg->mhdr, data_buf);
 	}
 
 	mbuf_insert_head(&msg->mhdr, header_buf);
 
-    if (get_tracking_level() >= LOG_VVERB) {
-	   log_hexdump(LOG_NOTICE, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
-	   msg_dump(msg);
-    }
+	if (log_loggable(LOG_VVERB)) {
+		log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
+		msg_dump(msg);
+	}
 
 	/* enqueue the message (request) into peer inq */
 	if (TAILQ_EMPTY(&conn->imsg_q)) {
@@ -557,5 +552,4 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 
 	msg->noreply = 1;
 	conn->enqueue_inq(ctx, conn, msg);
-
 }
