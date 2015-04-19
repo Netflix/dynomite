@@ -817,8 +817,14 @@ stats_aggregate(struct stats *st)
         }
     }
 
+    if (st->reset_histogram) {
+   	 st->reset_histogram = 0;
+   	 histo_reset(&st->latency_histo);
+   	 histo_reset(&st->payload_size_histo);
+    }
     st->aggregate = 0;
 }
+
 
 static rstatus_t
 stats_make_rsp(struct stats *st)
@@ -921,6 +927,15 @@ static void parse_request(int sd, struct stats_cmd *st_cmd)
 					return;
 				} else if (strcmp(reqline[1], "/describe") == 0) {
 					st_cmd->cmd = CMD_DESCRIBE;
+					return;
+				} else if (strcmp(reqline[1], "/loglevelup") == 0) {
+					st_cmd->cmd = CMD_LOG_LEVEL_UP;
+					return;
+				} else if (strcmp(reqline[1], "/logleveldown") == 0) {
+					st_cmd->cmd = CMD_LOG_LEVEL_DOWN;
+					return;
+				} else if (strcmp(reqline[1], "/historeset") == 0) {
+					st_cmd->cmd = CMD_HISTO_RESET;
 					return;
 				} else if (strncmp(reqline[1], "/peer", 5) == 0) {
 					log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
@@ -1060,6 +1075,16 @@ stats_send_rsp(struct stats *st)
 		return stats_http_rsp(sd, ok.data, ok.len);
 	} else if (cmd == CMD_RESUMING) {
 		st->ctx->dyn_state = RESUMING;
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_LOG_LEVEL_UP) {
+		log_level_up();
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_LOG_LEVEL_DOWN) {
+		log_level_down();
+		return stats_http_rsp(sd, ok.data, ok.len);
+	} else if (cmd == CMD_HISTO_RESET) {
+		st->reset_histogram = 1;
+		st->updated = 1;
 		return stats_http_rsp(sd, ok.data, ok.len);
 	} else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
 		log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
@@ -1274,7 +1299,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     histo_init(&st->latency_histo);
     histo_init(&st->payload_size_histo);
-
+    st->reset_histogram = 0;
     st->alloc_msgs = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
@@ -1670,10 +1695,12 @@ void stats_histo_add_latency(struct context *ctx, uint64_t val)
 {
 	struct stats *st = ctx->stats;
 	histo_add(&st->latency_histo, val);
+	ctx->stats->updated = 1;
 }
 
 void stats_histo_add_payloadsize(struct context *ctx, uint64_t val)
 {
 	struct stats *st = ctx->stats;
 	histo_add(&st->payload_size_histo, val);
+	ctx->stats->updated = 1;
 }

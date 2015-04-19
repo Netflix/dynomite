@@ -66,7 +66,6 @@
     /* forwarder behavior */                                                                                              \
     ACTION( forward_error,                STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,                    STATS_COUNTER,      "# fragments created from a multi-vector request")          \
-    ACTION( alloc_msgs,                   STATS_COUNTER,      "# allocated in-memory msgs")                               \
     ACTION( stats_count,                  STATS_COUNTER,      "# stats request")                                          \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                             \
@@ -118,7 +117,10 @@ typedef enum {
     CMD_LEAVING,
     CMD_PEER_DOWN,
     CMD_PEER_UP,
-    CMD_PEER_RESET
+    CMD_PEER_RESET,
+    CMD_LOG_LEVEL_UP,
+    CMD_LOG_LEVEL_DOWN,
+    CMD_HISTO_RESET
 } stats_cmd_t;
 
 struct stats_metric {
@@ -199,6 +201,7 @@ struct stats {
 
     volatile int              aggregate;      /* shadow (b) aggregate? */
     volatile int              updated;        /* current (a) updated? */
+    volatile bool             reset_histogram;
     volatile struct histogram latency_histo;
     volatile struct histogram payload_size_histo;
     volatile uint32_t         alloc_msgs;

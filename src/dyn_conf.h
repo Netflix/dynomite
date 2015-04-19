@@ -49,7 +49,7 @@
 
 #define CONF_DEFAULT_HASH                    HASH_MURMUR
 #define CONF_DEFAULT_DIST                    DIST_VNODE
-#define CONF_DEFAULT_TIMEOUT                 10000
+#define CONF_DEFAULT_TIMEOUT                 500
 #define CONF_DEFAULT_LISTEN_BACKLOG          512
 #define CONF_DEFAULT_CLIENT_CONNECTIONS      0
 #define CONF_DEFAULT_REDIS                   false
