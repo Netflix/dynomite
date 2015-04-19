@@ -60,12 +60,15 @@ dnode_peer_timeout(struct conn *conn)
 	struct server *server;
 	struct server_pool *pool;
 
-	ASSERT(!conn->dnode_server && !conn->dnode_client);
+	ASSERT(conn->dyno_mode && !conn->dnode_client && !conn->dnode_server);
 
 	server = conn->owner;
 	pool = server->owner;
 
-	return pool->d_timeout;
+	if (conn->same_dc)
+	   return pool->timeout + 100; //add extra 100ms for local inter-rack max overhead
+
+	return pool->timeout + 10000; //add extra 10s for inter-dc max overhead
 }
 
 bool
@@ -304,8 +307,6 @@ static bool is_conn_secured(struct server_pool *sp, struct server *peer_node)
 
     return false;
 }
-
-
 
 struct conn *
 dnode_peer_conn(struct server *server)

@@ -152,11 +152,10 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     struct rbnode *node;
     int timeout;
 
-    ASSERT(msg->request);
+    //ASSERT(msg->request);
     ASSERT(!msg->quit && !msg->noreply);
 
-    //TODOs: need to fix this for different timeouts
-    timeout = server_timeout(conn);
+    timeout = conn->dyn_mode? dnode_peer_timeout(conn) : server_timeout(conn);
     if (timeout <= 0) {
         return;
     }
