@@ -18,19 +18,8 @@
 #include "dyn_core.h"
 #include "dyn_conf.h"
 
-static uint8_t tracking_level = 0;
 static uint32_t conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;           //conn msgs per sec
 
-
-uint8_t get_tracking_level(void)
-{
-    return tracking_level;
-}
-
-void set_tracking_level(uint8_t level)
-{
-    tracking_level = level;
-}
 
 uint32_t msgs_per_sec(void)
 {

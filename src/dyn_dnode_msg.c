@@ -400,8 +400,8 @@ dyn_parse_core(struct msg *r)
 void
 dyn_parse_req(struct msg *r)
 {
-	if (get_tracking_level() >= LOG_VVERB) {
-		log_debug(LOG_NOTICE, ":::::::::::::::::::::: In dyn_parse_req, start to process request :::::::::::::::::::::: ");
+	if (log_loggable(LOG_VVERB)) {
+		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_req, start to process request :::::::::::::::::::::: ");
 		msg_dump(r);
 	}
 
@@ -496,8 +496,8 @@ dyn_parse_req(struct msg *r)
 
 
 	//bad case
-	if (get_tracking_level() >= LOG_VVERB) {
-		log_debug(LOG_NOTICE, "Bad or splitted message");  //fix me to do something
+	if (log_loggable(LOG_VVERB)) {
+		log_debug(LOG_VVERB, "Bad or splitted message");  //fix me to do something
 		msg_dump(r);
 	}
 	r->result = MSG_PARSE_AGAIN;
@@ -506,8 +506,8 @@ dyn_parse_req(struct msg *r)
 
 void dyn_parse_rsp(struct msg *r)
 {
-	if (get_tracking_level() >= LOG_VVERB) {
-		log_debug(LOG_NOTICE, ":::::::::::::::::::::: In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
+	if (log_loggable(LOG_VVERB)) {
+		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
 		msg_dump(r);
 	}
 
@@ -553,7 +553,7 @@ void dyn_parse_rsp(struct msg *r)
 	}
 
 	//bad case
-	if (get_tracking_level() >= LOG_VVERB) {
+	if (log_loggable(LOG_DEBUG)) {
 		log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
 		msg_dump(r);
 	}

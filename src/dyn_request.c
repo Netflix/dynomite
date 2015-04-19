@@ -466,7 +466,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     rstatus_t status;
     struct conn *s_conn;
 
-    if (get_tracking_level() >= LOG_VVERB) {
+ 	if (log_loggable(LOG_VVERB)) {
        loga("local_req_forward entering ............");
     }
 
