@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 
@@ -559,12 +560,21 @@ dn_run(struct instance *nci)
     core_stop(ctx);
 }
 
+static void
+dn_coredump_init(void)
+{
+   struct rlimit core_limits;
+   core_limits.rlim_cur = core_limits.rlim_max = RLIM_INFINITY;
+   setrlimit(RLIMIT_CORE, &core_limits);
+}
+
 int
 main(int argc, char **argv)
 {
     rstatus_t status;
     struct instance nci;
 
+    dn_coredump_init();
     dn_set_default_options(&nci);
 
     status = dn_get_options(argc, argv, &nci);
