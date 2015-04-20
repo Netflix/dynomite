@@ -166,8 +166,10 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
 
     rbtree_insert(&tmo_rbt, node);
 
-    log_debug(LOG_VERB, "insert msg %"PRIu64" into tmo rbt with expiry of "
+    if (log_loggable(LOG_VERB)) {
+       log_debug(LOG_VERB, "insert msg %"PRIu64" into tmo rbt with expiry of "
               "%d msec", msg->id, timeout);
+    }
 }
 
 void
@@ -185,7 +187,9 @@ msg_tmo_delete(struct msg *msg)
 
     rbtree_delete(&tmo_rbt, node);
 
-    log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
+    if (log_loggable(LOG_VERB)) {
+       log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
+    }
 }
 
 
@@ -354,8 +358,10 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_coalesce = memcache_post_coalesce;
     }
 
-    log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
               msg, msg->id, msg->request, conn->sd);
+    }
 
     return msg;
 }
@@ -439,8 +445,10 @@ msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
     mbuf->last += n;
     msg->mlen = (uint32_t)n;
 
-    log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" error '%s'",
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" error '%s'",
               msg, msg->id, msg->mlen, errstr);
+    }
 
     return msg;
 }
@@ -450,14 +458,18 @@ msg_free(struct msg *msg)
 {
     ASSERT(STAILQ_EMPTY(&msg->mhdr));
 
-    log_debug(LOG_VVERB, "free msg %p id %"PRIu64"", msg, msg->id);
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "free msg %p id %"PRIu64"", msg, msg->id);
+    }
     dn_free(msg);
 }
 
 void
 msg_put(struct msg *msg)
 {
-    log_debug(LOG_VVERB, "put msg %p id %"PRIu64"", msg, msg->id);
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "put msg %p id %"PRIu64"", msg, msg->id);
+    }
 
     struct dmsg *dmsg = msg->dmsg;
     if (dmsg != NULL) {
@@ -693,8 +705,10 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     	
     }
 
-    log_debug(LOG_VERB, "fragment msg into %"PRIu64" and %"PRIu64" frag id "
+    if (log_loggable(LOG_VERB)) {
+       log_debug(LOG_VERB, "fragment msg into %"PRIu64" and %"PRIu64" frag id "
               "%"PRIu64"", msg->id, nmsg->id, msg->frag_id);
+    }
 
     conn->recv_done(ctx, conn, msg, nmsg);
 

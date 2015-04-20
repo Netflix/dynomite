@@ -189,9 +189,11 @@ rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         conn->dequeue_outq(ctx, conn, pmsg);
         pmsg->done = 1;
 
-        log_debug(LOG_INFO, "swallow rsp %"PRIu64" len %"PRIu32" of req "
+        if (log_loggable(LOG_DEBUG)) {
+           log_debug(LOG_DEBUG, "swallow rsp %"PRIu64" len %"PRIu32" of req "
                   "%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
                   conn->sd);
+        }
 
         rsp_put(msg);
         req_put(pmsg);
@@ -204,15 +206,15 @@ rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 static void
 rsp_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
-    ASSERT(!msg->request);
+	ASSERT(!msg->request);
 
-    if (msg->is_read) {
-       stats_server_incr(ctx, server, read_responses);
-       stats_server_incr_by(ctx, server, read_response_bytes, msg->mlen);
-    } else {
-        stats_server_incr(ctx, server, write_responses);
-        stats_server_incr_by(ctx, server, write_response_bytes, msg->mlen);
-    }
+	if (msg->is_read) {
+		stats_server_incr(ctx, server, read_responses);
+		stats_server_incr_by(ctx, server, read_response_bytes, msg->mlen);
+	} else {
+		stats_server_incr(ctx, server, write_responses);
+		stats_server_incr_by(ctx, server, write_response_bytes, msg->mlen);
+	}
 }
 
 static void
@@ -331,7 +333,9 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 
     conn->smsg = msg;
 
-    log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    }
 
     return msg;
 }
@@ -344,7 +348,9 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(conn->client && !conn->proxy);
     ASSERT(conn->smsg == NULL);
 
-    log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    }
 
     pmsg = msg->peer;
 

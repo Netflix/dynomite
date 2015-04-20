@@ -133,9 +133,11 @@ dnode_client_close(struct context *ctx, struct conn *conn)
         ASSERT(msg->peer == NULL);
         ASSERT(msg->request && !msg->done);
 
-        log_debug(LOG_INFO, "dyn: close c %d discarding pending req %"PRIu64" len "
+        if (log_loggable(LOG_INFO)) {
+           log_debug(LOG_INFO, "dyn: close c %d discarding pending req %"PRIu64" len "
                   "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                   msg->type);
+        }
 
         req_put(msg);
     }
@@ -150,10 +152,12 @@ dnode_client_close(struct context *ctx, struct conn *conn)
         conn->dequeue_outq(ctx, conn, msg);
 
         if (msg->done) {
-            log_debug(LOG_INFO, "dyn: close c %d discarding %s req %"PRIu64" len "
+            if (log_loggable(LOG_INFO)) {
+               log_debug(LOG_INFO, "dyn: close c %d discarding %s req %"PRIu64" len "
                       "%"PRIu32" type %d", conn->sd,
                       msg->error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
+            }
             req_put(msg);
         } else {
             msg->swallow = 1;
@@ -161,9 +165,11 @@ dnode_client_close(struct context *ctx, struct conn *conn)
             ASSERT(msg->request);
             ASSERT(msg->peer == NULL);
 
-            log_debug(LOG_INFO, "dyn: close c %d schedule swallow of req %"PRIu64" "
+            if (log_loggable(LOG_INFO)) {
+               log_debug(LOG_INFO, "dyn: close c %d schedule swallow of req %"PRIu64" "
                       "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
                       msg->type);
+            }
         }
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));

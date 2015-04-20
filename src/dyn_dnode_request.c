@@ -146,8 +146,10 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
 	if (msg_empty(msg)) {
 		ASSERT(conn->rmsg == NULL);
-		log_debug(LOG_VERB, "dyn: filter empty req %"PRIu64" from c %d", msg->id,
-				conn->sd);
+		if (log_loggable(LOG_VERB)) {
+		   log_debug(LOG_VERB, "dyn: filter empty req %"PRIu64" from c %d", msg->id,
+				       conn->sd);
+		}
 		dnode_req_put(msg);
 		return true;
 	}
@@ -200,7 +202,10 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 	struct server_pool *pool;
 	uint8_t *key;
 	uint32_t keylen;
-	log_debug(LOG_VERB, "dnode_req_forward entering ");
+
+	if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_DEBUG, "dnode_req_forward entering ");
+	}
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
@@ -255,8 +260,10 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 				rack_msg->noreply = true;
 			}
 
-			log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s'",
-					dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data);
+			if (log_loggable(LOG_DEBUG)) {
+			   log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s'",
+					       dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data);
+			}
 
 			remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
 		}
@@ -322,7 +329,9 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 void
 dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
+	if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
+	}
 	ASSERT(!conn->dnode_client && !conn->dnode_server);
 	req_send_done(ctx, conn, msg);
 }
@@ -331,12 +340,12 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 static void
 dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
-        ASSERT(msg->request);
-        //use only the 1st pool
-        //struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-        struct server_pool *pool = server->owner;
-        stats_pool_incr(ctx, pool, peer_requests);
-        stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
+	ASSERT(msg->request);
+	//use only the 1st pool
+	//struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+	struct server_pool *pool = server->owner;
+	stats_pool_incr(ctx, pool, peer_requests);
+	stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
 }
 
 
@@ -346,8 +355,10 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 		uint8_t *key, uint32_t keylen)
 {
 
-	log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s'",
-			dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd), rack->name->len, rack->name->data);
+	if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s'",
+		          dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd), rack->name->len, rack->name->data);
+	}
 
 	struct string *dc = rack->dc;
 	rstatus_t status;
@@ -381,7 +392,9 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 	if (p_conn->dnode_secured) {
 		//Encrypting and adding header for a request
-		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
+		if (log_loggable(LOG_VVERB)) {
+		   log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
+		}
 
 		//write dnode header
 		if (ENCRYPTION) {
@@ -393,11 +406,15 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 				return;
 			}
 
-			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+			if (log_loggable(LOG_VVERB)) {
+			   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+			}
 
 			dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
 		} else {
-			log_debug(LOG_VERB, "no encryption on the msg payload");
+			if (log_loggable(LOG_VVERB)) {
+			   log_debug(LOG_VERB, "no encryption on the msg payload");
+			}
 			dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
 		}
 
@@ -417,9 +434,11 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 	dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
 
-	log_debug(LOG_NOTICE, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-				" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
-				msg->mlen, msg->type, keylen, key);
+	if (log_loggable(LOG_VVERB)) {
+	   log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+		   		" type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
+				   msg->mlen, msg->type, keylen, key);
+	}
 
 }
 
@@ -491,8 +510,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 	uint64_t msg_id = peer_msg_id++;
 
 	if (conn->dnode_secured) {
-		log_debug(LOG_VERB, "Assemble a secured msg to send");
-		log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+		if (log_loggable(LOG_VERB)) {
+		   log_debug(LOG_VERB, "Assemble a secured msg to send");
+		   log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+		}
 
 		if (ENCRYPTION) {
 			struct mbuf *encrypted_buf = mbuf_get();
@@ -502,7 +523,9 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 			}
 
 			status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
-			log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+			if (log_loggable(LOG_VERB)) {
+			   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+			}
 
 			//write dnode header
 			dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
@@ -519,13 +542,17 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 			mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
 
 		} else {
-			log_debug(LOG_VVERB, "No encryption");
+			if (log_loggable(LOG_VVERB)) {
+			   log_debug(LOG_VVERB, "No encryption");
+			}
 			dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
 			mbuf_insert(&msg->mhdr, data_buf);
 		}
 
 	} else {
-		log_debug(LOG_VVERB, "Assemble a non-secured msg to send");
+		if (log_loggable(LOG_VVERB)) {
+		   log_debug(LOG_VVERB, "Assemble a non-secured msg to send");
+		}
 		dmsg_write_mbuf(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(data_buf));
 		mbuf_insert(&msg->mhdr, data_buf);
 	}

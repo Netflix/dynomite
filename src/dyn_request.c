@@ -422,9 +422,11 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     rstatus_t status;
 
-    log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
-              "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
-              strerror(errno));
+    if (log_loggable(LOG_INFO)) {
+       log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
+                 "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
+                 strerror(errno));
+    }
 
     msg->done = 1;
     msg->error = 1;
@@ -487,8 +489,10 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
     ASSERT(!s_conn->client && !s_conn->proxy);
 
-    log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
-  			dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(s_conn->sd));
+    if (log_loggable(LOG_DEBUG)) {
+       log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
+  		      	dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(s_conn->sd));
+    }
 
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */
@@ -502,16 +506,16 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
             }
         }
     } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
-    	log_debug(LOG_VERB, "Node is in STANDBY state. Drop write/read requests");
+    	log_debug(LOG_INFO, "Node is in STANDBY state. Drop write/read requests");
     	req_forward_error(ctx, c_conn, msg);
     	return;
     } else if (ctx->dyn_state == WRITES_ONLY && msg->is_read) {
     	//no reads from peers/clients but allow writes from peers/clients
-    	log_debug(LOG_VERB, "Node is in WRITES_ONLY state. Drop read requests");
+    	log_debug(LOG_INFO, "Node is in WRITES_ONLY state. Drop read requests");
     	req_forward_error(ctx, c_conn, msg);
         return;
     } else if (ctx->dyn_state == RESUMING) {
-    	log_debug(LOG_VERB, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
+    	log_debug(LOG_INFO, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
     	if (msg->is_read) {
     		req_forward_error(ctx, c_conn, msg);
     		return;
@@ -530,9 +534,11 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     req_forward_stats(ctx, s_conn->owner, msg);
 
 
-    log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
-              msg->mlen, msg->type, keylen, key);
+    if (log_loggable(LOG_VERB)) {
+       log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
+                " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
+                msg->mlen, msg->type, keylen, key);
+    }
 }
 
 
@@ -642,9 +648,10 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 						rack_msg->swallow = true;
 					}
 
-					log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-							dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
-
+					if (log_loggable(LOG_DEBUG)) {
+					   log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+						   	dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+					}
 					remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
 				}
 			} else {
@@ -664,9 +671,10 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 				msg_clone(msg, orig_mbuf, rack_msg);
 				rack_msg->noreply = true;
 
-				log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-						dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
-
+				if (log_loggable(LOG_DEBUG)) {
+				   log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+					   	dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+				}
 				remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
 			}
 		}
@@ -740,8 +748,10 @@ req_send_next(struct context *ctx, struct conn *conn)
 
     ASSERT(nmsg->request && !nmsg->done);
 
-    log_debug(LOG_VVERB, "send next req %"PRIu64" len %"PRIu32" type %d on "
-              "s %d", nmsg->id, nmsg->mlen, nmsg->type, conn->sd);
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "send next req %"PRIu64" len %"PRIu32" type %d on "
+                "s %d", nmsg->id, nmsg->mlen, nmsg->type, conn->sd);
+    }
 
     return nmsg;
 }
@@ -754,8 +764,10 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(msg->request && !msg->done);
     //ASSERT(msg->owner == conn);
 
-    log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
-              "s %d", msg->id, msg->mlen, msg->type, conn->sd);
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
+                "s %d", msg->id, msg->mlen, msg->type, conn->sd);
+    }
 
     /* dequeue the message (request) from server inq */
     conn->dequeue_inq(ctx, conn, msg);
