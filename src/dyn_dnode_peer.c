@@ -31,8 +31,10 @@ dnode_peer_ref(struct conn *conn, void *owner)
 
 	conn->owner = owner;
 
-	log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
-			peer->pname.len, peer->pname.data);
+	if (log_loggable(LOG_VVERB)) {
+	   log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
+		    	   peer->pname.len, peer->pname.data);
+	}
 }
 
 void
@@ -50,8 +52,10 @@ dnode_peer_unref(struct conn *conn)
 	peer->ns_conn_q--;
 	TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
 
-	log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
-			peer->pname.len, peer->pname.data);
+	if (log_loggable(LOG_VVERB)) {
+	   log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
+			   peer->pname.len, peer->pname.data);
+	}
 }
 
 int
@@ -403,8 +407,10 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 
 	server->failure_count++;
 
-	log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" ",
-			server->pname.len, server->pname.data, server->failure_count);
+	if (log_loggable(LOG_VERB)) {
+	   log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" ",
+			      server->pname.len, server->pname.data, server->failure_count);
+	}
 
 
 	now = dn_msec_now();
@@ -412,10 +418,12 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 		return;
 	}
 
-	log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' for peer '%.*s' "
-			"for next %"PRIu32" secs", pool->idx, pool->name.len,
-			pool->name.data, server->pname.len, server->pname.data,
-			pool->server_retry_timeout / 1000 / 1000);
+	if (log_loggable(LOG_INFO)) {
+	   log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' for peer '%.*s' "
+		   	"for next %"PRIu32" secs", pool->idx, pool->name.len,
+			   pool->name.data, server->pname.len, server->pname.data,
+			   pool->server_retry_timeout / 1000 / 1000);
+	}
 
 	stats_pool_incr(ctx, pool, peer_ejects);
 
@@ -434,19 +442,16 @@ dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
 		unsigned eof, unsigned connected)
 {
 	if (connected) {
-		//stats_server_decr(ctx, server, server_connections);
 		stats_pool_decr(ctx, server->owner, peer_connections);
 	}
 
 	if (eof) {
-		//stats_server_incr(ctx, server, server_eof);
 		stats_pool_incr(ctx, server->owner, peer_eof);
 		return;
 	}
 
 	switch (err) {
 	case ETIMEDOUT:
-		//stats_server_incr(ctx, server, server_timedout);
 		stats_pool_incr(ctx, server->owner, peer_timedout);
 		break;
 	case EPIPE:
@@ -459,7 +464,6 @@ dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
 	case EHOSTDOWN:
 	case EHOSTUNREACH:
 	default:
-		//stats_server_incr(ctx, server, server_err);
 		stats_pool_incr(ctx, server->owner, peer_err);
 		break;
 	}
@@ -488,7 +492,9 @@ dnode_peer_attemp_reconnect_or_close(struct context *ctx, struct conn *conn)
 void dnode_peer_close_socket(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
-	log_debug(LOG_VERB, "In dnode_peer_close_socket");
+        if (log_loggable(LOG_VERB)) {
+	   log_debug(LOG_VERB, "In dnode_peer_close_socket");
+        }
 
 	if (conn != NULL) {
 		status = close(conn->sd);
@@ -628,7 +634,10 @@ dnode_peer_forward_state(void *rmsg)
 	rstatus_t status;
 	struct ring_msg *msg = rmsg;
 	struct server_pool *sp = msg->sp;
-	log_debug(LOG_VVERB, "dnode_peer_forward_state: forwarding");
+
+        if (log_loggable(LOG_VVERB)) {
+	   log_debug(LOG_VVERB, "dnode_peer_forward_state: forwarding");
+        }
 
 	//we assume one mbuf is enough for now - will enhance with multiple mbufs later
 	struct mbuf *mbuf = mbuf_get();
@@ -1003,8 +1012,11 @@ rstatus_t
 dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
 {
 	rstatus_t status;
-	log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'", server->pname.len,
+
+        if (log_loggable(LOG_VERB)) {
+	   log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'", server->pname.len,
 				server->pname.data);
+        }
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
@@ -1091,15 +1103,15 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 	ASSERT(conn->connecting && !conn->connected);
 
-	//fix me
-	//stats_server_incr(ctx, server, server_connections);
 	stats_pool_incr(ctx, server->owner, peer_connections);
 
 	conn->connecting = 0;
 	conn->connected = 1;
 
-	log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->sd,
-			server->pname.len, server->pname.data);
+        if (log_loggable(LOG_INFO)) {
+	   log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->sd,
+			  server->pname.len, server->pname.data);
+        }
 }
 
 void
@@ -1161,64 +1173,62 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 static struct server *
+dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen, uint32_t avoid_idx)
+{
+	uint32_t idx, counter = 1;
+	struct server *server = NULL;
+
+	if (rack->ncontinuum > 1) {
+		do {
+			idx = rack->continuum + (avoid_idx + counter) % rack->ncontinuum;
+			server = array_get(&pool->peers, idx);
+			counter++;
+		} while (server->state == DOWN && counter < rack->ncontinuum);
+	}
+
+	//TODOs: pick another server in another rack of the same DC if we don't have any good server
+	return server;
+}
+
+static struct server *
 dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
 	struct server *server;
-	uint32_t hash, idx;
+	uint32_t idx;
 	struct dyn_token *token = NULL;
 
 	ASSERT(array_n(&pool->peers) != 0);
 
-	//ASSERT(rack != NULL);
-
-	switch (pool->dist_type) {
-	case DIST_KETAMA:
-		token = dnode_peer_pool_hash(pool, key, keylen);
-		hash = token->mag[0];
-		idx = ketama_dispatch(rack->continuum, rack->ncontinuum, hash);
-		break;
-
-	case DIST_VNODE:
-		if (keylen == 0) {
-			idx = 0; //for no argument command
-			break;
-		}
+	if (keylen == 0) {
+		idx = 0; //for no argument command
+	} else {
 		token = dnode_peer_pool_hash(pool, key, keylen);
 		//print_dyn_token(token, 1);
 		idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
 		//loga("found idx %d for rack '%.*s' ", idx, rack->name->len, rack->name->data);
-		break;
 
-	case DIST_MODULA:
-		token = dnode_peer_pool_hash(pool, key, keylen);
-		hash = token->mag[0];
-		idx = modula_dispatch(rack->continuum, rack->ncontinuum, hash);
-		break;
-
-	case DIST_RANDOM:
-		idx = random_dispatch(rack->continuum, rack->ncontinuum, 0);
-		break;
-
-	case DIST_SINGLE:
-		idx = 0;
-		break;
-
-	default:
-		NOT_REACHED();
-		return NULL;
+		//TODOs: should reuse the token
+		if (token != NULL) {
+			deinit_dyn_token(token);
+			dn_free(token);
+		}
 	}
 
-	//TODOs: should reuse the token
-	if (token != NULL) {
-		deinit_dyn_token(token);
-		dn_free(token);
-	}
 	ASSERT(idx < array_n(&pool->peers));
 
 	server = array_get(&pool->peers, idx);
 
-	log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
-			key, pool->dist_type, server->pname.len, server->pname.data);
+	if (server->state == DOWN) {
+		if (!is_same_dc(pool, server)) {
+			//pick another reroute server in the server DC
+			server = dnode_peer_pool_reroute_server(pool, rack, key, keylen, idx);
+		}
+	}
+
+	if (log_loggable(LOG_VERB)) {
+		log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
+				key, pool->dist_type, server->pname.len, server->pname.data);
+	}
 
 	return server;
 }
@@ -1231,7 +1241,9 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 	struct server *server;
 	struct conn *conn;
 
-	log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
+        if (log_loggable(LOG_VERB)) {
+	   log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
+        }
 
 	status = dnode_peer_pool_update(pool);
 	if (status != DN_OK) {

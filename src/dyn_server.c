@@ -457,8 +457,10 @@ server_connect(struct context *ctx, struct server *server, struct conn *conn)
 		return DN_OK;
 	}
 
-	log_debug(LOG_VVERB, "connect to server '%.*s'", server->pname.len,
-			server->pname.data);
+        if (log_loggable(LOG_VVERB)) {
+	   log_debug(LOG_VVERB, "connect to server '%.*s'", server->pname.len,
+		   	server->pname.data);
+        }
 
 	conn->sd = socket(conn->family, SOCK_STREAM, 0);
 	if (conn->sd < 0) {
@@ -535,8 +537,10 @@ server_connected(struct context *ctx, struct conn *conn)
 	conn->connecting = 0;
 	conn->connected = 1;
 
-	log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-			server->pname.len, server->pname.data);
+        if (log_loggable(LOG_INFO)) {
+	   log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
+		   	server->pname.len, server->pname.data);
+        }
 }
 
 void
@@ -548,11 +552,13 @@ server_ok(struct context *ctx, struct conn *conn)
 	ASSERT(conn->connected);
 
 	if (server->failure_count != 0) {
-		log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
-				" to 0", server->pname.len, server->pname.data,
-				server->failure_count);
-		server->failure_count = 0;
-		server->next_retry = 0LL;
+           if (log_loggable(LOG_VERB)) {
+		   log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
+				 " to 0", server->pname.len, server->pname.data,
+				 server->failure_count);
+           }
+           server->failure_count = 0;
+           server->next_retry = 0LL;
 	}
 }
 
@@ -900,8 +906,10 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	struct datacenter *dc;
 	uint32_t i, len;
 
-	log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
-			                dcname->len, dcname->data);
+        if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
+		 	                dcname->len, dcname->data);
+        }
 
 	for (i = 0, len = array_n(&pool->datacenters); i < len; i++) {
 		dc = (struct datacenter *) array_get(&pool->datacenters, i);
@@ -917,8 +925,10 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	dc_init(dc);
 	string_copy(dc->name, dcname->data, dcname->len);
 
-	log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
-			dc->name->len, dc->name->data);
+        if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
+		   	dc->name->len, dc->name->data);
+        }
 
 	return dc;
 }
@@ -931,8 +941,9 @@ server_get_rack(struct datacenter *dc, struct string *rackname)
 	ASSERT(dc->dict_rack != NULL);
 	ASSERT(dc->name != NULL);
 
-	log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
-
+        if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
+        }
 	/*
    struct rack *rack = dictFetchValue(dc->dict_rack, rackname);
    if (rack == NULL) {
@@ -961,8 +972,10 @@ server_get_rack(struct datacenter *dc, struct string *rackname)
 	string_copy(rack->name, rackname->data, rackname->len);
 	string_copy(rack->dc, dc->name->data, dc->name->len);
 
-	log_debug(LOG_DEBUG, "server_get_rack exiting  '%.*s'",
-			rack->name->len, rack->name->data);
+        if (log_loggable(LOG_DEBUG)) {
+	   log_debug(LOG_DEBUG, "server_get_rack exiting  '%.*s'",
+		   	rack->name->len, rack->name->data);
+        }
 
 	return rack;
 }
