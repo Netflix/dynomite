@@ -59,7 +59,7 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **dyn_listen**: The port that dynomite nodes use to inter-communicate and gossip.
 + **gos_interval**: The sleeping time in milliseconds at the end of a gossip round.
 + **tokens**: The token(s) owned by a node.  Currently, we don't support vnode yet so this only works with one token for the time being.
-+ **dyn_seed_provider**: A seed provider implementation to provide a list of seed nodes
++ **dyn_seed_provider**: A seed provider implementation to provide a list of seed nodes.
 + **dyn_seeds**: A list of seed nodes in the format: address:port:rack:dc:tokens (node that vnode is not supported yet)
 + **listen**: The listening address and port (name:port or ip:port) for this server pool.
 + **timeout**: The timeout value in msec that we wait for to establish a connection to the server or receive a response from a server. By default, we wait indefinitely.
