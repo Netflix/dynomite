@@ -248,6 +248,19 @@
 * ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 
+### HyperLogLog
+
+    +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
+    |      Command      | Supported? | Format                                                                                                              |
+    +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
+    |     PFADD         |    Yes     | PFADD key element [element...]                                                                                      |
+    +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
+    |     PFCOUNT       |    Yes     | PFCOUNT key [key...]                                                                                                |
+    +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
+    |     PFMERGE       |    No      | PFMERGE destkey sourcekey [sourcekey ...]                                                                           |
+    +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
+
+
 ### Pub/Sub
 
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
