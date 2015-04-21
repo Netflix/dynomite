@@ -1173,17 +1173,19 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 static struct server *
-dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen, uint32_t avoid_idx)
+dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-	uint32_t idx, counter = 1;
+	uint32_t idx, pos = 0;
 	struct server *server = NULL;
+	struct continuum *entry;
 
 	if (rack->ncontinuum > 1) {
 		do {
-			idx = rack->continuum + (avoid_idx + counter) % rack->ncontinuum;
-			server = array_get(&pool->peers, idx);
-			counter++;
-		} while (server->state == DOWN && counter < rack->ncontinuum);
+			pos = pos % rack->ncontinuum;
+			entry = rack->continuum + pos;
+			server = array_get(&pool->peers, entry->index);
+			pos++;
+		} while (server->state == DOWN && pos < rack->ncontinuum);
 	}
 
 	//TODOs: pick another server in another rack of the same DC if we don't have any good server
@@ -1221,7 +1223,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack, uint8_t *key
 	if (server->state == DOWN) {
 		if (!is_same_dc(pool, server)) {
 			//pick another reroute server in the server DC
-			server = dnode_peer_pool_reroute_server(pool, rack, key, keylen, idx);
+			server = dnode_peer_pool_reroute_server(pool, rack, key, keylen);
 		}
 	}
 

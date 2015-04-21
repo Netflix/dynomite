@@ -182,7 +182,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 	msg->err = errno;
 
 	/* noreply request don't expect any response */
-	if (msg->noreply) {
+	if (msg->noreply || msg->swallow) {
 		dnode_req_put(msg);
 		return;
 	}
@@ -257,12 +257,12 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 					msg_put(rack_msg);
 					continue;
 				}
-				rack_msg->noreply = true;
+				rack_msg->swallow = true;
 			}
 
 			if (log_loggable(LOG_DEBUG)) {
-			   log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s'",
-					       dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data);
+			   log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s' dc '%.*s' ",
+					       dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data, rack->dc->len, rack->dc->data);
 			}
 
 			remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
@@ -356,8 +356,11 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 {
 
 	if (log_loggable(LOG_DEBUG)) {
-	   log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s'",
-		          dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd), rack->name->len, rack->name->data);
+      struct server *server = p_conn->owner;
+      log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s' dc '%.*s' ",
+		          dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd),
+		          rack->name->len, rack->name->data,
+		          server->dc.len, server->dc.data);
 	}
 
 	struct string *dc = rack->dc;
@@ -529,7 +532,6 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, st
 
 			//write dnode header
 			dmsg_write(header_buf, msg_id, GOSSIP_SYN, conn, mbuf_length(encrypted_buf));
-
 
 			if (log_loggable(LOG_VVERB)) {
 				log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "dyn message original payload: ");

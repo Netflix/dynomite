@@ -473,9 +473,6 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy && !c_conn->dnode_server);
-    if (c_conn->dyn_mode && !c_conn->same_dc && !msg->is_read) {
-        msg->noreply = 1;
-    }
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
@@ -665,11 +662,12 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 				struct msg *rack_msg = msg_get(c_conn, msg->request, msg->redis);
 				if (rack_msg == NULL) {
 					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+					msg_put(rack_msg);
 					continue;
 				}
 
 				msg_clone(msg, orig_mbuf, rack_msg);
-				rack_msg->noreply = true;
+				rack_msg->swallow = true;
 
 				if (log_loggable(LOG_DEBUG)) {
 				   log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
