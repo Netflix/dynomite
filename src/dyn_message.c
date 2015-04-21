@@ -380,6 +380,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->post_coalesce = src->post_coalesce;
 
     target->noreply = src->noreply;
+    target->swallow = src->swallow;
     target->type = src->type;
     target->key_start = src->key_start;
     target->key_end = src->key_end;

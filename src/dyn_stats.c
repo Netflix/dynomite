@@ -1100,7 +1100,7 @@ stats_send_rsp(struct stats *st)
 				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET/ALL command", st_cmd.req_data, cmd);
 				peer->state = RESET;
 			} else if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
-				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET command", st_cmd.req_data, cmd);
+				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to a new state due to command %d", st_cmd.req_data, cmd);
 				switch (cmd) {
 				case CMD_PEER_UP:
 					peer->state = NORMAL;
