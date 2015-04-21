@@ -133,6 +133,8 @@ typedef enum msg_type {
     MSG_REQ_REDIS_RPOPLPUSH,
     MSG_REQ_REDIS_RPUSH,
     MSG_REQ_REDIS_RPUSHX,
+    MSG_REQ_REDIS_PFADD,                     /* redis requests - hyperloglog */
+    MSG_REQ_REDIS_PFCOUNT,
     MSG_REQ_REDIS_SADD,                   /* redis requests - sets */
     MSG_REQ_REDIS_SCARD,
     MSG_REQ_REDIS_SDIFF,
