@@ -70,7 +70,11 @@ def rebalance_ops(filename, host, port, db):
     for line in open(filename,'r').readlines():
         if line != '':
           print line
+          line = line.strip('\n')
+          if line == '':
+            continue
           try:
+
             value = r1.delete(line)
             #r2.set(line, value)
             i = i + 1
@@ -79,6 +83,7 @@ def rebalance_ops(filename, host, port, db):
           except redis.exceptions.ResponseError:
             print "reconnecting ..."
             r1 = redis.StrictRedis(host, port, db=0)
+
 
 
 def main():
