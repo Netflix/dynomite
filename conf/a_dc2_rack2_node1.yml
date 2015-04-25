@@ -1,0 +1,16 @@
+dyn_o_mite:
+  datacenter: dc2
+  rack: rack2
+  dyn_listen: 127.0.0.2:8101
+  dyn_seeds:
+  - 127.0.0.1:8101:rack1:dc1:12345678
+  - 127.0.0.3:8101:rack2:dc2:12345678
+  - 127.0.0.4:8101:rack1:dc2:1383429731
+  - 127.0.0.5:8101:rack1:dc2:12345678  
+  listen: 127.0.0.2:8102
+  servers:
+  - 127.0.0.1:22122:1
+  tokens: '1383429731'
+  secure_server_option: datacenter
+  pem_key_file: conf/dynomite.pem
+  redis: true

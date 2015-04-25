@@ -193,6 +193,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 			conn->err = errno;
 		}
 	}
+
 }
 
 

@@ -454,6 +454,41 @@ msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
     return msg;
 }
 
+
+struct msg *
+msg_get_rsp_integer(bool redis)
+{
+    struct msg *msg;
+    struct mbuf *mbuf;
+    int n;
+
+    msg = _msg_get(1);
+    if (msg == NULL) {
+        return NULL;
+    }
+
+    msg->state = 0;
+    msg->type = MSG_RSP_REDIS_INTEGER;
+
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+        msg_put(msg);
+        return NULL;
+    }
+    mbuf_insert(&msg->mhdr, mbuf);
+
+    n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":0\r\n");
+    mbuf->last += n;
+    msg->mlen = (uint32_t)n;
+
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" ",
+              msg, msg->id, msg->mlen);
+    }
+
+    return msg;
+}
+
 static void
 msg_free(struct msg *msg)
 {

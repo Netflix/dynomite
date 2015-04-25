@@ -159,6 +159,7 @@ struct context {
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     unsigned           enable_gossip:1;   /* enable/disable gossip */
+    unsigned           admin_opt;   /* admin mode */
 };
 
 

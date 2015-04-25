@@ -1013,10 +1013,13 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 {
 	rstatus_t status;
 
-        if (log_loggable(LOG_VERB)) {
-	   log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'", server->pname.len,
+	if (log_loggable(LOG_VERB)) {
+		log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'", server->pname.len,
 				server->pname.data);
-        }
+	}
+
+	if (ctx->admin_opt > 0)
+		return DN_OK;
 
 	ASSERT(!conn->dnode_server && !conn->dnode_client);
 
@@ -1040,8 +1043,8 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 	status = dn_set_nonblocking(conn->sd);
 	if (status != DN_OK) {
 		log_error("dyn: set nonblock on s %d for peer '%.*s' failed: %s",
-			     	 conn->sd,  server->pname.len, server->pname.data,
-				    strerror(errno));
+				conn->sd,  server->pname.len, server->pname.data,
+				strerror(errno));
 		goto error;
 	}
 
@@ -1243,9 +1246,9 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack 
 	struct server *server;
 	struct conn *conn;
 
-        if (log_loggable(LOG_VERB)) {
-	   log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
-        }
+	if (log_loggable(LOG_VERB)) {
+		log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
+	}
 
 	status = dnode_peer_pool_update(pool);
 	if (status != DN_OK) {

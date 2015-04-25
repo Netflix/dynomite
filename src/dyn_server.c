@@ -899,17 +899,16 @@ datacenter_destroy(void *elem, void *data)
 }
 
 
-
 struct datacenter *
 server_get_dc(struct server_pool *pool, struct string *dcname)
 {
 	struct datacenter *dc;
 	uint32_t i, len;
 
-        if (log_loggable(LOG_DEBUG)) {
-	   log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
-		 	                dcname->len, dcname->data);
-        }
+	if (log_loggable(LOG_DEBUG)) {
+		log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
+				dcname->len, dcname->data);
+	}
 
 	for (i = 0, len = array_n(&pool->datacenters); i < len; i++) {
 		dc = (struct datacenter *) array_get(&pool->datacenters, i);
@@ -925,10 +924,10 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	dc_init(dc);
 	string_copy(dc->name, dcname->data, dcname->len);
 
-        if (log_loggable(LOG_DEBUG)) {
-	   log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
-		   	dc->name->len, dc->name->data);
-        }
+	if (log_loggable(LOG_DEBUG)) {
+		log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
+				dc->name->len, dc->name->data);
+	}
 
 	return dc;
 }
@@ -941,9 +940,9 @@ server_get_rack(struct datacenter *dc, struct string *rackname)
 	ASSERT(dc->dict_rack != NULL);
 	ASSERT(dc->name != NULL);
 
-        if (log_loggable(LOG_DEBUG)) {
-	   log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
-        }
+	if (log_loggable(LOG_DEBUG)) {
+		log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
+	}
 	/*
    struct rack *rack = dictFetchValue(dc->dict_rack, rackname);
    if (rack == NULL) {
@@ -972,10 +971,10 @@ server_get_rack(struct datacenter *dc, struct string *rackname)
 	string_copy(rack->name, rackname->data, rackname->len);
 	string_copy(rack->dc, dc->name->data, dc->name->len);
 
-        if (log_loggable(LOG_DEBUG)) {
-	   log_debug(LOG_DEBUG, "server_get_rack exiting  '%.*s'",
-		   	rack->name->len, rack->name->data);
-        }
+	if (log_loggable(LOG_DEBUG)) {
+		log_debug(LOG_DEBUG, "server_get_rack exiting  '%.*s'",
+				rack->name->len, rack->name->data);
+	}
 
 	return rack;
 }
