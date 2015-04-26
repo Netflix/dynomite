@@ -256,14 +256,14 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
+	rstatus_t status;
+
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, "dnode_rsp_send_next entering");
 	}
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	struct msg *msg = rsp_send_next(ctx, conn);
-
-
 
 	if (msg != NULL && conn->dyn_mode) {
 		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
@@ -276,47 +276,38 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 			loga("Unable to obtain an mbuf for header!");
 			return NULL; //need to address error here properly
 		}
-
+		dmsg_type_t msg_type = DMSG_RES;
 		//TODOs: need to set the outcoming conn to be secured too if the incoming conn is secured
 		if (pmsg->owner->dnode_secured || conn->dnode_secured) {
 			if (log_loggable(LOG_VVERB)) {
 				log_debug(LOG_VVERB, "Encrypting response ...");
 				loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
 			}
-			struct mbuf *data_buf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
 			if (ENCRYPTION) {
-				struct mbuf *encrypted_buf = mbuf_get();
-				if (encrypted_buf == NULL) {
-					loga("Unable to obtain an mbuf for encryption!");
-					return NULL; //TODOs: need to clean up
-				}
+			  status = dyn_aes_encrypt_msg(msg, conn->aes_key);
+			  if (status == DN_ERROR) {
+					loga("OOM to obtain an mbuf for encryption!");
+					mbuf_put(header_buf);
+					req_put(msg);
+					return NULL;
+			  }
 
-				rstatus_t status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf),
-						encrypted_buf, conn->aes_key);
+			  if (log_loggable(LOG_VVERB)) {
+				   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+			  }
 
-				if (log_loggable(LOG_VVERB)) {
-					log_debug(LOG_VVERB, "#encrypted bytes : %d", status);
-				}
-
-				dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(encrypted_buf));
-
-				if (log_loggable(LOG_VVERB)) {
-					log_hexdump(LOG_VVERB, data_buf->pos, mbuf_length(data_buf), "resp dyn message - original payload: ");
-					log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
-				}
-
-				//remove the original dbuf out of the queue and insert encrypted mbuf to replace
-				mbuf_remove(&msg->mhdr, data_buf);
-				mbuf_insert(&msg->mhdr, encrypted_buf);
-				mbuf_put(data_buf);
+			  dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
 			} else {
-				log_debug(LOG_VVERB, "no encryption on the response's payload");
-				dmsg_write(header_buf, msg_id, DMSG_RES, conn, mbuf_length(data_buf));
+				if (log_loggable(LOG_VVERB)) {
+				   log_debug(LOG_VERB, "no encryption on the msg payload");
+				}
+				dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
 			}
 
 		} else {
-			dmsg_write(header_buf, msg_id, DMSG_RES, conn, 0);//Dont care about 0 or the real length as we don't use that value in unencryption mode
+			//write dnode header
+			dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
 		}
 
 		mbuf_insert_head(&msg->mhdr, header_buf);

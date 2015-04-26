@@ -59,7 +59,7 @@ dnode_peer_unref(struct conn *conn)
 }
 
 int
-dnode_peer_timeout(struct conn *conn)
+dnode_peer_timeout(struct msg *msg, struct conn *conn)
 {
 	struct server *server;
 	struct server_pool *pool;
@@ -68,11 +68,17 @@ dnode_peer_timeout(struct conn *conn)
 
 	server = conn->owner;
 	pool = server->owner;
+   int additional_timeout = 0;
 
-	if (conn->same_dc)
-	   return pool->timeout + 100; //add extra 100ms for local inter-rack max overhead
+   if (conn->same_dc)
+   	additional_timeout = 200;
+   else
+   	additional_timeout = 5000;
 
-	return pool->timeout + 10000; //add extra 10s for inter-dc max overhead
+   if (!msg->is_read) //make sure write request has a longer timeout so we almost never want to drop it
+   	additional_timeout += 20000;
+
+	return pool->timeout + additional_timeout;
 }
 
 bool
@@ -649,7 +655,7 @@ dnode_peer_forward_state(void *rmsg)
 	mbuf_copy(mbuf, msg->data, msg->len);
 
 	struct array *peers = &sp->peers;
-	uint32_t i,nelem;
+	uint32_t nelem;
 	nelem = array_n(peers);
 
 	//pick a random peer
@@ -791,8 +797,6 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
 	struct server *s = array_push(peers);
 
 	s->owner = sp;
-
-	uint32_t i,nelem;
 	s->idx = array_idx(peers, s);
 
 	//log_debug(LOG_VERB, "node rack_name         : '%.*s'", node->rack.len, node->rack.data);
@@ -873,7 +877,7 @@ dnode_peer_remove(void *rmsg)
 {
 	//rstatus_t status;
 	struct ring_msg *msg = rmsg;
-	struct server_pool *sp = msg->sp;
+	//struct server_pool *sp = msg->sp;
 	struct node *node = array_get(&msg->nodes, 0);
 	log_debug(LOG_VVERB, "dyn: peer has a removed message '%.*s'", node->name.len, node->name.data);
 	return DN_OK;
@@ -1137,7 +1141,6 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
 rstatus_t
 dnode_peer_pool_update(struct server_pool *pool)
 {
-	rstatus_t status;
 	int64_t now;
 
 	now = dn_msec_now();
@@ -1178,7 +1181,7 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 static struct server *
 dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-	uint32_t idx, pos = 0;
+	uint32_t pos = 0;
 	struct server *server = NULL;
 	struct continuum *entry;
 

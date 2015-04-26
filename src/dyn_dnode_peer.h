@@ -14,7 +14,7 @@
 
 void dnode_peer_ref(struct conn *conn, void *owner);
 void dnode_peer_unref(struct conn *conn);
-int dnode_peer_timeout(struct conn *conn);
+int dnode_peer_timeout(struct msg *msg, struct conn *conn);
 bool dnode_peer_active(struct conn *conn);
 rstatus_t dnode_peer_each_pool_init(void *elem, void *context);
 rstatus_t dnode_peer_init(struct array *server_pool, struct context *ctx);
