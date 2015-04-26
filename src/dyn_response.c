@@ -321,10 +321,10 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         }
         msg->peer = pmsg;
         pmsg->peer = msg;
-        if (!conn->dyn_mode) {
-           stats_pool_incr(ctx, conn->owner, forward_error);
-        } else {  //dyn_mode
-           stats_pool_incr(ctx, conn->owner, peer_forward_error);
+        if (conn->dyn_mode) {
+      	  stats_pool_incr(ctx, conn->owner, peer_forward_error);
+        } else {
+      	  stats_pool_incr(ctx, conn->owner, forward_error);
         }
     } else {
         msg = pmsg->peer;

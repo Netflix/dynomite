@@ -547,7 +547,42 @@ request_send_to_all_racks(struct msg *msg) {
 }
 
 
-void 
+static void
+admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
+		struct rack *rack, uint8_t *key, uint32_t keylen)
+{
+	struct conn *p_conn;
+	rstatus_t status;
+
+	ASSERT(c_conn->client || c_conn->dnode_client);
+
+	p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+	if (p_conn == NULL) {
+		c_conn->err = EHOSTDOWN;
+		req_forward_error(ctx, c_conn, msg);
+		return;
+	}
+
+	struct server *peer = p_conn->owner;
+	struct msg *nmsg;
+
+	if (peer->is_local) {
+		//do nothing
+		nmsg = msg_get_rsp_integer(true);
+		c_conn->enqueue_outq(ctx, c_conn, msg);
+		msg->peer = nmsg;
+		nmsg->peer = msg;
+
+		msg->done = 1;
+		//msg->pre_coalesce(msg);
+		status = event_add_out(ctx->evb, c_conn);
+	} else {
+		log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
+		local_req_forward(ctx, c_conn, msg, key, keylen);
+	}
+}
+
+void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
@@ -613,6 +648,14 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 	// need to capture the initial mbuf location as once we add in the dynomite headers (as mbufs to the src msg),
 	// that will bork the request sent to secondary racks
 	struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
+
+	if (ctx->admin_opt == 1) {
+		if (msg->type == MSG_REQ_REDIS_DEL || msg->type == MSG_REQ_MC_DELETE) {
+		  struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+		  admin_local_req_forward(ctx, c_conn, msg, rack, key, keylen);
+		  return;
+		}
+	}
 
 	if (request_send_to_all_racks(msg)) {
 		uint32_t dc_cnt = array_n(&pool->datacenters);
