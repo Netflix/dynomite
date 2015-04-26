@@ -464,6 +464,14 @@ dyn_parse_req(struct msg *r)
 		struct conn *conn = r->owner;
 		conn->same_dc = dmsg->same_dc;
 
+		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
+				dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
+			r->state = 0;
+			r->result = MSG_PARSE_OK;
+			r->dyn_state = DYN_DONE;
+			return;
+		}
+
 		if (r->dyn_state == DYN_DONE && dmsg->bit_field == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
 			r->owner->dnode_crypto_state = 1;
@@ -509,19 +517,14 @@ dyn_parse_req(struct msg *r)
 			return;
 		} else if (r->dyn_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
-			if (last_buf->read_flip == 1)
-				redis_parse_req(r);
-			else {
+			if (last_buf->read_flip == 1) {
+				if (r->redis)
+					redis_parse_req(r);
+				else
+					memcache_parse_req(r);
+			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
-			return;
-		}
-
-		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
-				dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
-			r->state = 0;
-			r->result = MSG_PARSE_OK;
-			r->dyn_state = DYN_DONE;
 			return;
 		}
 
@@ -545,7 +548,6 @@ dyn_parse_req(struct msg *r)
 		return memcache_parse_req(r);
 	}
 
-
 	//bad case
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, "Bad or splitted message");  //fix me to do something
@@ -562,9 +564,12 @@ void dyn_parse_rsp(struct msg *r)
 		msg_dump(r);
 	}
 
+	bool done_parsing = false;
+	struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
-		struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+		struct conn *conn = r->owner;
+		conn->same_dc = dmsg->same_dc;
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
 			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
@@ -574,27 +579,64 @@ void dyn_parse_rsp(struct msg *r)
 			return;
 		}
 
-		//check whether we need to decrypt the payload
-		if (dmsg->bit_field == 1) {
-			//dmsg->owner->owner->dnode_secured = 1;
-			struct mbuf *decrypted_buf = mbuf_get();
-			if (decrypted_buf == NULL) {
-				log_debug(LOG_INFO, "Unable to obtain an mbuf for dnode msg's header!");
-				r->result = MSG_OOM_ERROR;
-				return;
+		if (r->dyn_state == DYN_DONE && dmsg->bit_field == 1) {
+			dmsg->owner->owner->dnode_secured = 1;
+			r->owner->dnode_crypto_state = 1;
+			r->dyn_state = DYN_POST_DONE;
+			r->result = MSG_PARSE_REPAIR;
+
+			if (dmsg->mlen > 1) {
+				//Decrypt AES key
+				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
+				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
 			}
 
-			//Dont need to decrypt AES key - pull it out from the conn
-			dyn_aes_decrypt(dmsg->payload, dmsg->plen, decrypted_buf, r->owner->aes_key);
+			if (dmsg->plen + b->pos <= b->last) {
+				struct mbuf *decrypted_buf = mbuf_get();
+				if (decrypted_buf == NULL) {
+					loga("Unable to obtain an mbuf for dnode msg's header!");
+					r->result = MSG_OOM_ERROR;
+					return;
+				}
 
-			b->pos = b->pos + dmsg->plen;
-			r->pos = decrypted_buf->start;
-			mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
-			mbuf_insert(&r->mhdr, decrypted_buf);
-			mbuf_remove(&r->mhdr, b);
-			mbuf_put(b);
-			r->mlen = mbuf_length(decrypted_buf);
+				dyn_aes_decrypt(b->pos, dmsg->plen, decrypted_buf, r->owner->aes_key);
+
+				b->pos = b->pos + dmsg->plen;
+				r->pos = decrypted_buf->start;
+				mbuf_copy(decrypted_buf, b->pos, mbuf_length(b));
+
+				mbuf_insert(&r->mhdr, decrypted_buf);
+				mbuf_remove(&r->mhdr, b);
+				mbuf_put(b);
+
+				r->mlen = mbuf_length(decrypted_buf);
+				if (r->redis) {
+					return redis_parse_rsp(r);
+				}
+
+				return memcache_parse_rsp(r);
+			}
+
+			//substract alraedy received bytes
+			dmsg->plen -= b->last - b->pos;
+			return;
+
+		} else if (r->dyn_state == DYN_POST_DONE) {
+			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
+			if (last_buf->read_flip == 1) {
+				if (r->redis)
+					redis_parse_rsp(r);
+				else
+					memcache_parse_rsp(r);
+
+			} else {
+				r->result = MSG_PARSE_AGAIN;
+			}
+			return;
 		}
+
+		if (done_parsing)
+			return;
 
 		if (r->redis) {
 			return redis_parse_rsp(r);
