@@ -434,7 +434,7 @@ aes_test(void)
         // Encrypt the message with AES
         rstatus_t ret = DN_OK;
         ret = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key);
-        if (ret != DN_OK) {
+        if (ret == DN_ERROR) {
             log_debug(LOG_VERB, "AES encryption failed\n");
             return ret;
         }
@@ -451,7 +451,7 @@ aes_test(void)
         // Decrypt the message
 
         ret = aes_decrypt((unsigned char*)enc_msg, enc_msg_len, (unsigned char**) &dec_msg, aes_key);
-        if(ret != DN_OK) {
+        if(ret == DN_ERROR) {
             log_debug(LOG_VERB, "AES decryption failed\n");
             return ret;
         }
