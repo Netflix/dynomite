@@ -66,7 +66,7 @@ void mbuf_init(struct instance *nci);
 void mbuf_deinit(void);
 struct mbuf *mbuf_get(void);
 void mbuf_put(struct mbuf *mbuf);
-uint32_t mbuf_free_queue_size();
+uint32_t mbuf_free_queue_size(void);
 void mbuf_dump(struct mbuf *mbuf);
 void mbuf_rewind(struct mbuf *mbuf);
 uint32_t mbuf_length(struct mbuf *mbuf);
@@ -76,7 +76,7 @@ void mbuf_insert(struct mhdr *mhdr, struct mbuf *mbuf);
 void mbuf_insert_head(struct mhdr *mhdr, struct mbuf *mbuf);
 void mbuf_insert_after(struct mhdr *mhdr, struct mbuf *mbuf, struct mbuf *nbuf);
 void mbuf_remove(struct mhdr *mhdr, struct mbuf *mbuf);
-void mbuf_copy(struct mbuf *mbuf, uint8_t *pos, size_t n);
+void mbuf_copy(struct mbuf *mbuf, void *pos, size_t n);
 struct mbuf *mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg);
 
 void mbuf_write_char(struct mbuf *mbuf, char ch);

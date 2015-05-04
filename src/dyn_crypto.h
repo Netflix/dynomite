@@ -28,7 +28,7 @@
 
 
 rstatus_t crypto_init(struct context *ctx);
-rstatus_t crypto_init_for_test();
+rstatus_t crypto_init_for_test(void);
 rstatus_t crypto_deinit(void);
 
 char* base64_encode(const unsigned char *message, const size_t length);
