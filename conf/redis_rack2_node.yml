@@ -7,7 +7,7 @@ dyn_o_mite:
   listen: 127.0.0.2:8102
   servers:
   - 127.0.0.1:22122:1
-  tokens: '1383429731'
+  tokens: '138342973'
   secure_server_option: datacenter
   pem_key_file: conf/dynomite.pem
   redis: true
