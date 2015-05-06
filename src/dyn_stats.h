@@ -122,7 +122,8 @@ typedef enum {
     CMD_PEER_RESET,
     CMD_LOG_LEVEL_UP,
     CMD_LOG_LEVEL_DOWN,
-    CMD_HISTO_RESET
+    CMD_HISTO_RESET,
+    CMD_CL_DESCRIBE /* cluster_describe */
 } stats_cmd_t;
 
 struct stats_metric {
