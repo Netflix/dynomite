@@ -69,3 +69,6 @@ dynomite
 Makefile
 Makefile.in
 /Debug
+/src/test
+cscope.out
+/src/cscope.out

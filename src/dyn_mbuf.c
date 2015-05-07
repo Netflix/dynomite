@@ -129,7 +129,7 @@ mbuf_free(struct mbuf *mbuf)
     dn_free(buf);
 }
 
-uint32_t mbuf_free_queue_size()
+uint32_t mbuf_free_queue_size(void)
 {
     return 	nfree_mbufq;
 }

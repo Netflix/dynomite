@@ -191,35 +191,40 @@ _conn_get(void)
 }
 
 
-void conn_add_in_queue_msg(struct conn *conn, struct msg *msg)
+void
+conn_add_in_queue_msg(struct conn *conn, struct msg *msg)
 {
    TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
    conn->imsg_count++;
 }
 
 
-void conn_remove_in_queue_msg(struct conn *conn, struct msg *msg)
+void
+conn_remove_in_queue_msg(struct conn *conn, struct msg *msg)
 {
    TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
    conn->imsg_count--;
 }
 
 
-void conn_add_out_queue_msg(struct conn *conn, struct msg *msg)
+void
+conn_add_out_queue_msg(struct conn *conn, struct msg *msg)
 {
    TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
    conn->omsg_count++;
 }
 
 
-void conn_remove_out_queue_msg(struct conn *conn, struct msg *msg)
+void
+conn_remove_out_queue_msg(struct conn *conn, struct msg *msg)
 {
    TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
    conn->omsg_count--;
 }
 
 struct conn *
-test_conn_get(void) {
+test_conn_get(void)
+{
    return _conn_get();
 }
 
@@ -599,9 +604,9 @@ conn_sendv(struct conn *conn, struct array *sendv, size_t nsend)
     return DN_ERROR;
 }
 
-
-
-void conn_print(struct conn *conn) {
+void
+conn_print(struct conn *conn)
+{
 	log_debug(LOG_VERB, "sd %d", conn->sd);
 	log_debug(LOG_VERB, "redis %d", conn->redis);
 
