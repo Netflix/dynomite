@@ -64,22 +64,23 @@ dnode_peer_timeout(struct msg *msg, struct conn *conn)
 	struct server *server;
 	struct server_pool *pool;
 
-	ASSERT(conn->dyno_mode && !conn->dnode_client && !conn->dnode_server);
+	ASSERT(conn->dyn_mode && !conn->dnode_client && !conn->dnode_server);
 
 	server = conn->owner;
 	pool = server->owner;
-   int additional_timeout = 0;
+	int additional_timeout = 0;
 
-   if (conn->same_dc)
-   	additional_timeout = 200;
-   else
-   	additional_timeout = 5000;
+	if (conn->same_dc)
+		additional_timeout = 200;
+	else
+		additional_timeout = 5000;
 
-   if (!msg->is_read) //make sure write request has a longer timeout so we almost never want to drop it
-   	additional_timeout += 20000;
+	if (!msg->is_read) //make sure write request has a longer timeout so we almost never want to drop it
+		additional_timeout += 20000;
 
 	return pool->timeout + additional_timeout;
 }
+
 
 bool
 dnode_peer_active(struct conn *conn)
