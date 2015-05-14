@@ -31,6 +31,7 @@
 #include "dyn_core.h"
 #include "dyn_histogram.h"
 #include "dyn_server.h"
+#include "dyn_node_snitch.h"
 #include "dyn_ring_queue.h"
 #include "dyn_gossip.h"
 
@@ -63,7 +64,7 @@ static struct stats_desc stats_server_desc[] = {
 static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
 //static struct string endline = string("\r\n");
 static struct string ok = string("OK\r\n");
-//static struct string error = string("ERR");
+static struct string err_resp = string("ERR");
 
 static struct string all = string("all");
 
@@ -317,7 +318,7 @@ stats_pool_unmap(struct array *stats_pool)
 }
 
 static rstatus_t
-stats_create_buf(struct stats *st)
+stats_create_bufs(struct stats *st)
 {
     uint32_t int64_max_digits = 20; /* INT64_MAX = 9223372036854775807 */
     uint32_t int32_max_digits = 10; /* INT32_MAX = 4294967294 */
@@ -454,42 +455,44 @@ stats_create_buf(struct stats *st)
     st->buf.size = size;
     st->buf.len = 0;
 
-    log_debug(LOG_DEBUG, "stats buffer size %zu", size);
+    log_debug(LOG_DEBUG, "stats info buffer size %zu", size);
+
+    st->clus_desc_buf.len = 0;
+    st->clus_desc_buf.size = 0;
 
     return DN_OK;
 }
 
 static void
-stats_destroy_buf(struct stats *st)
+stats_destroy_buf(struct stats_buffer *buf)
 {
-    if (st->buf.size != 0) {
-        ASSERT(st->buf.data != NULL);
-        dn_free(st->buf.data);
-        st->buf.size = 0;
+    if (buf->size != 0) {
+        ASSERT(buf->data != NULL);
+        dn_free(buf->data);
+        buf->size = 0;
     }
 }
 
 static void
-stats_reset_buf(struct stats *st)
+stats_reset_buf(struct stats_buffer *buf)
 {
-    st->buf.len = 0;
+    buf->len = 0;
 }
 
 static rstatus_t
-stats_add_string(struct stats *st, struct string *key, struct string *val)
+stats_add_string(struct stats_buffer *buf, struct string *key, struct string *val)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
     size_t room;
     int n;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
     n = dn_snprintf(pos, room, "\"%.*s\":\"%.*s\",", key->len, key->data,
                     val->len, val->data);
     if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
         return DN_ERROR;
     }
 
@@ -499,20 +502,19 @@ stats_add_string(struct stats *st, struct string *key, struct string *val)
 }
 
 static rstatus_t
-stats_add_num(struct stats *st, struct string *key, int64_t val)
+stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
     size_t room;
     int n;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
     n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",", key->len, key->data,
                     val);
     if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
         return DN_ERROR;
     }
 
@@ -534,48 +536,45 @@ stats_add_header(struct stats *st)
     cur_ts = (int64_t)time(NULL);
     uptime = cur_ts - st->start_ts;
 
-    THROW_STATUS(stats_add_string(st, &st->service_str, &st->service));
-    THROW_STATUS(stats_add_string(st, &st->source_str, &st->source));
-    THROW_STATUS(stats_add_string(st, &st->version_str, &st->version));
-    THROW_STATUS(stats_add_num(st, &st->uptime_str, uptime));
-    THROW_STATUS(stats_add_num(st, &st->timestamp_str, cur_ts));
-    THROW_STATUS(stats_add_string(st, &st->rack_str, &st->rack));
-    THROW_STATUS(stats_add_string(st, &st->dc_str, &st->dc));
+    THROW_STATUS(stats_add_string(&st->buf, &st->service_str, &st->service));
+    THROW_STATUS(stats_add_string(&st->buf, &st->source_str, &st->source));
+    THROW_STATUS(stats_add_string(&st->buf, &st->version_str, &st->version));
+    THROW_STATUS(stats_add_num(&st->buf, &st->uptime_str, uptime));
+    THROW_STATUS(stats_add_num(&st->buf, &st->timestamp_str, cur_ts));
+    THROW_STATUS(stats_add_string(&st->buf, &st->rack_str, &st->rack));
+    THROW_STATUS(stats_add_string(&st->buf, &st->dc_str, &st->dc));
     //latency histogram
-    THROW_STATUS(stats_add_num(st, &st->latency_max_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_max_str,
                  (int64_t)st->latency_histo.val_max))
-    THROW_STATUS(stats_add_num(st, &st->latency_999th_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_999th_str,
                  (int64_t)st->latency_histo.val_999th));
-    THROW_STATUS(stats_add_num(st, &st->latency_99th_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_99th_str,
                  (int64_t)st->latency_histo.val_99th));
-    THROW_STATUS(stats_add_num(st, &st->latency_95th_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_95th_str,
                  (int64_t)st->latency_histo.val_95th));
-    THROW_STATUS(stats_add_num(st, &st->latency_mean_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_mean_str,
                  (int64_t)st->latency_histo.mean));
     //payload size histogram
-    THROW_STATUS(stats_add_num(st, &st->payload_size_max_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_max_str,
                  (int64_t)st->payload_size_histo.val_max));
-    THROW_STATUS(stats_add_num(st, &st->payload_size_999th_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_999th_str,
                  (int64_t)st->payload_size_histo.val_999th));
-    THROW_STATUS(stats_add_num(st, &st->payload_size_99th_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_99th_str,
                  (int64_t)st->payload_size_histo.val_99th));
-    THROW_STATUS(stats_add_num(st, &st->payload_size_95th_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_95th_str,
                  (int64_t)st->payload_size_histo.val_95th));
-    THROW_STATUS(stats_add_num(st, &st->payload_size_mean_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_mean_str,
                  (int64_t)st->payload_size_histo.mean));
-    THROW_STATUS(stats_add_num(st, &st->alloc_msgs_str,
+    THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
 
     return DN_OK;
 }
 
 static rstatus_t
-stats_add_footer(struct stats *st)
+stats_add_footer(struct stats_buffer *buf)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
-
-    buf = &st->buf;
 
     if (buf->len == buf->size) {
         return DN_ERROR;
@@ -591,14 +590,12 @@ stats_add_footer(struct stats *st)
 }
 
 static rstatus_t
-stats_begin_nesting(struct stats *st, struct string *key, bool arr)
+stats_begin_nesting(struct stats_buffer *buf, struct string *key, bool arr)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
     size_t room;
     int n;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
@@ -608,6 +605,7 @@ stats_begin_nesting(struct stats *st, struct string *key, bool arr)
     else
         n = dn_snprintf(pos, room, "%c", arr ? '[' : '{');
     if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "failed, len:%u size %u", buf->len, buf->size);
         return DN_ERROR;
     }
 
@@ -617,12 +615,10 @@ stats_begin_nesting(struct stats *st, struct string *key, bool arr)
 }
 
 static rstatus_t
-stats_end_nesting(struct stats *st, bool arr)
+stats_end_nesting(struct stats_buffer *buf, bool arr)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
 
     // eliminate the , if any
@@ -648,7 +644,7 @@ stats_copy_metric(struct stats *st, struct array *metric)
 
     for (i = 0; i < array_n(metric); i++) {
         struct stats_metric *stm = array_get(metric, i);
-        THROW_STATUS(stats_add_num(st, &stm->name, stm->value.counter));
+        THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
     }
 
     return DN_OK;
@@ -738,37 +734,98 @@ stats_make_info_rsp(struct stats *st)
         struct stats_pool *stp = array_get(&st->sum, i);
         uint32_t j;
 
-        THROW_STATUS(stats_begin_nesting(st, &stp->name, false));
+        THROW_STATUS(stats_begin_nesting(&st->buf, &stp->name, false));
         /* copy pool metric from sum(c) to buffer */
         THROW_STATUS(stats_copy_metric(st, &stp->metric));
 
         for (j = 0; j < array_n(&stp->server); j++) {
             struct stats_server *sts = array_get(&stp->server, j);
 
-            THROW_STATUS(stats_begin_nesting(st, &sts->name, false));
+            THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
             /* copy server metric from sum(c) to buffer */
             THROW_STATUS(stats_copy_metric(st, &sts->metric));
-            THROW_STATUS(stats_end_nesting(st, false));
+            THROW_STATUS(stats_end_nesting(&st->buf, false));
         }
 
-        THROW_STATUS(stats_end_nesting(st, false));
+        THROW_STATUS(stats_end_nesting(&st->buf, false));
     }
 
-    THROW_STATUS(stats_add_footer(st));
+    THROW_STATUS(stats_add_footer(&st->buf));
 
+    return DN_OK;
+}
+
+static void
+get_host_from_pname(struct string *host, struct string *pname)
+{
+    uint8_t *found = dn_strchr(pname->data,
+                               &pname->data[pname->len], ':');
+    string_init(host);
+    if (found) {
+        size_t hostlen = found - pname->data;
+        THROW_STATUS(string_copy(host, pname->data, hostlen));
+        return;
+    }
+    THROW_STATUS(string_copy(host, pname->data, pname->len));
+    return;
+}
+
+static rstatus_t
+stats_add_node_host(struct stats *st, struct node *node)
+{
+    struct string host_str;
+    string_set_text(&host_str, "host");
+    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    struct string host;
+    // pname is host:port. for local its 0.0.0.0:port
+    // so try to get the hostname if local otherwise use whats in pname
+    char *hn = NULL;
+    if (node->is_local && (hn = get_public_hostname(sp))) {
+        THROW_STATUS(string_copy(&host, hn, dn_strlen(hn)));
+    } else
+        get_host_from_pname(&host, &node->pname);
+
+    THROW_STATUS(stats_add_string(&st->clus_desc_buf, &host_str,
+                                 &host));
+    string_deinit(&host);
+    return DN_OK;
+}
+
+static rstatus_t
+stats_add_node_name(struct stats *st, struct node *node)
+{
+    struct string name_str;
+    string_set_text(&name_str, "name");
+    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    // name is the ip address
+    if (node->is_local) {
+        // get the ip aka name
+        struct string ip;
+        char * ip4 = get_public_ip4(sp);
+        if (ip4) {
+            string_set_raw(&ip, ip4);
+            THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str, &ip));
+        } else
+            THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str,
+                                          &node->name));
+    } else {
+        THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str,
+                                      &node->name));
+    }
     return DN_OK;
 }
 
 static rstatus_t
 stats_add_node_details(struct stats *st, struct node *node)
 {
-    struct string name_str, port_str, token_str;
-    string_set_text(&name_str, "name");
+    struct string port_str, token_str;
     string_set_text(&port_str, "port");
     string_set_text(&token_str, "token");
-    THROW_STATUS(stats_add_string(st, &name_str, &node->name));
-    THROW_STATUS(stats_add_num(st, &port_str, node->port));
-    THROW_STATUS(stats_add_num(st, &token_str, *(node->token.mag)));
+    
+    THROW_STATUS(stats_add_node_name(st, node));
+    THROW_STATUS(stats_add_node_host(st, node));
+    THROW_STATUS(stats_add_num(&st->clus_desc_buf, &port_str, node->port));
+    THROW_STATUS(stats_add_num(&st->clus_desc_buf, &token_str, *(node->token.mag)));
     return DN_OK;
 }
 
@@ -778,17 +835,17 @@ stats_add_rack_details(struct stats *st, struct gossip_rack *rack)
     struct string name_str, servers_str;
     string_set_text(&name_str, "name");
     string_set_text(&servers_str, "servers");
-    THROW_STATUS(stats_add_string(st, &name_str, &rack->name));
+    THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str, &rack->name));
     // servers : [
-    THROW_STATUS(stats_begin_nesting(st, &servers_str, true));
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &servers_str, true));
     uint32_t ni;
     for(ni = 0; ni < array_n(&rack->nodes); ni++) {
         struct node *node = array_get(&rack->nodes, ni);
-        THROW_STATUS(stats_begin_nesting(st, NULL, false));
+        THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
         THROW_STATUS(stats_add_node_details(st, node));
-        THROW_STATUS(stats_end_nesting(st, false));
+        THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
     }
-    THROW_STATUS(stats_end_nesting(st, true));
+    THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, true));
     return DN_OK;
 }
 
@@ -799,45 +856,64 @@ stats_add_dc_details(struct stats *st, struct gossip_dc *dc)
     string_set_text(&name_str, "name");
     string_set_text(&racks_str, "racks");
 
-    THROW_STATUS(stats_add_string(st, &name_str, &dc->name));
+    THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str, &dc->name));
     // racks : [
-    THROW_STATUS(stats_begin_nesting(st, &racks_str, true));
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &racks_str, true));
     uint32_t ri;
     for(ri = 0; ri < array_n(&dc->racks); ri++) {
         struct gossip_rack *rack = array_get(&dc->racks, ri);
 
-        THROW_STATUS(stats_begin_nesting(st, NULL, false));
+        THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
         THROW_STATUS(stats_add_rack_details(st, rack));
-        THROW_STATUS(stats_end_nesting(st, false));
+        THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
     }
-    THROW_STATUS(stats_end_nesting(st, true));
+    THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, true));
+    return DN_OK;
+}
+
+static rstatus_t
+stats_resize_clus_desc_buf(struct stats *st)
+{
+    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    ASSERT(sp);
+    size_t size = 1024 * array_n(&sp->peers);
+    size = DN_ALIGN(size, DN_ALIGNMENT);
+    if (st->clus_desc_buf.size < size) {
+        stats_destroy_buf(&st->clus_desc_buf);
+        st->clus_desc_buf.data = dn_alloc(size);
+        if (st->clus_desc_buf.data == NULL) {
+            log_error("create cluster desc buffer of size %zu failed: %s",
+                      size, strerror(errno));
+            return DN_ENOMEM;
+        }
+        st->clus_desc_buf.size = size;
+    }
+
+    stats_reset_buf(&st->clus_desc_buf);
     return DN_OK;
 }
 
 static rstatus_t
 stats_make_cl_desc_rsp(struct stats *st)
 {
-    struct server_pool *sp = array_get(&st->ctx->pool, 0);
-    ASSERT(sp);
-    stats_reset_buf(st);
-    THROW_STATUS(stats_begin_nesting(st, NULL, false));
+    THROW_STATUS(stats_resize_clus_desc_buf(st));
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
 
-    // dcs : [
     struct string dcs_str;
     string_set_text(&dcs_str, "dcs");
-    THROW_STATUS(stats_begin_nesting(st, &dcs_str, true));
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &dcs_str, true));
     uint32_t di;
     for(di = 0; di < array_n(&gn_pool.datacenters); di++) {
         struct gossip_dc *dc = array_get(&gn_pool.datacenters, di);
 
-        THROW_STATUS(stats_begin_nesting(st, NULL, false));
+        THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
         THROW_STATUS(stats_add_dc_details(st, dc));
-        THROW_STATUS(stats_end_nesting(st, false));
+        THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
 
     }
-    // ]
-    THROW_STATUS(stats_end_nesting(st, true));
-    THROW_STATUS(stats_add_footer(st));
+
+    THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, true));
+    THROW_STATUS(stats_add_footer(&st->clus_desc_buf));
     return DN_OK;
 }
 
@@ -1005,15 +1081,20 @@ stats_send_rsp(struct stats *st)
     log_debug(LOG_VERB, "cmd %d", cmd);
 
     if (cmd == CMD_INFO) {
-        THROW_STATUS(stats_make_info_rsp(st));
-        log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
-        return stats_http_rsp(sd, st->buf.data, st->buf.len);
+        if (stats_make_info_rsp(st) != DN_OK)
+            return stats_http_rsp(sd, err_resp.data, err_resp.len);
+        else  {
+            log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+            return stats_http_rsp(sd, st->buf.data, st->buf.len);
+        }
     } else if (cmd == CMD_NORMAL) {
         st->ctx->dyn_state = NORMAL;
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_CL_DESCRIBE) {
-        THROW_STATUS(stats_make_cl_desc_rsp(st));
-        return stats_http_rsp(sd, st->buf.data, st->buf.len);
+        if (stats_make_cl_desc_rsp(st) != DN_OK)
+            return stats_http_rsp(sd, err_resp.data, err_resp.len);
+        else
+            return stats_http_rsp(sd, st->clus_desc_buf.data, st->clus_desc_buf.len);
     } else if (cmd == CMD_STANDBY) {
         st->ctx->dyn_state = STANDBY;
         return stats_http_rsp(sd, ok.data, ok.len);
@@ -1263,7 +1344,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
         goto error;
     }
 
-    status = stats_create_buf(st);
+    status = stats_create_bufs(st);
     if (status != DN_OK) {
         goto error;
     }
@@ -1288,7 +1369,8 @@ stats_destroy(struct stats *st)
     stats_pool_unmap(&st->sum);
     stats_pool_unmap(&st->shadow);
     stats_pool_unmap(&st->current);
-    stats_destroy_buf(st);
+    stats_destroy_buf(&st->buf);
+    stats_destroy_buf(&st->clus_desc_buf);
     dn_free(st);
 }
 
