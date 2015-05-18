@@ -80,7 +80,7 @@ char *get_public_hostname(struct server_pool *sp)
 	if (is_aws_env(sp)) {
         public_hostname = getenv("EC2_PUBLIC_HOSTNAME");
         if (public_hostname != NULL)
-    	  return public_hostname;
+            return public_hostname;
 	} else {
 		public_hostname = getenv("PUBLIC_HOSTNAME");
 		if (public_hostname != NULL)
@@ -113,12 +113,12 @@ char *get_public_ip4(struct server_pool *sp)
 	}
 
     struct server *peer = (struct server *) array_get(&sp->peers, 0);
-    char c = (char) peer->name.data[0];
-    if ((peer != NULL) && (peer->name.data != NULL) && isdigit(c) ) {
-       return (char *) peer->name.data;
+    if ((peer != NULL) && (peer->name.data != NULL)) {
+        char c = (char) peer->name.data[0];
+        if (isdigit(c))
+            return (char *) peer->name.data;
     }
     return NULL;
-
 }
 
 

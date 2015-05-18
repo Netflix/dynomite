@@ -122,7 +122,8 @@ typedef enum {
     CMD_PEER_RESET,
     CMD_LOG_LEVEL_UP,
     CMD_LOG_LEVEL_DOWN,
-    CMD_HISTO_RESET
+    CMD_HISTO_RESET,
+    CMD_CL_DESCRIBE /* cluster_describe */
 } stats_cmd_t;
 
 struct stats_metric {
@@ -164,7 +165,8 @@ struct stats {
     struct string             addr;           /* stats monitoring address */
 
     int64_t                   start_ts;       /* start timestamp of dynomite */
-    struct stats_buffer       buf;            /* output buffer */
+    struct stats_buffer       buf;            /* info buffer */
+    struct stats_buffer       clus_desc_buf;  /* cluster_describe buffer */
 
     struct array              current;        /* stats_pool[] (a) */
     struct array              shadow;         /* stats_pool[] (b) */

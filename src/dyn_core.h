@@ -73,6 +73,17 @@
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
 
+#define THROW_STATUS(s)                                             \
+                {                                                   \
+                    rstatus_t __ret = (s);                          \
+                    if (__ret != DN_OK) {                           \
+                        log_debug(LOG_WARN, "failed "#s);           \
+                        return __ret;                               \
+                    }                                               \
+                }
+
+#define IGNORE_RET_VAL(x) x;
+
 struct array;
 struct string;
 struct context;

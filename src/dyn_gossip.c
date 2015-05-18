@@ -29,7 +29,7 @@ static const struct string PEER_SSL_PORT = string("8103");
 
 
 static void gossip_debug(void);
-static struct gossip_node_pool gn_pool;
+struct gossip_node_pool gn_pool;
 static uint32_t node_count = 0;
 static struct node *current_node = NULL;
 static struct mbuf * seeds_buf = NULL;
