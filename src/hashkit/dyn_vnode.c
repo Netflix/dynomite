@@ -125,13 +125,13 @@ vnode_update(struct server_pool *sp)
 uint32_t
 vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token)
 {
-    struct continuum *begin, *end, *left, *right, *middle;
+    struct continuum *left, *right, *middle;
 
     ASSERT(continuum != NULL);
     ASSERT(ncontinuum != 0);
 
-    begin = left = continuum;
-    end = right = continuum + ncontinuum - 1;
+    left = continuum;
+    right = continuum + ncontinuum - 1;
 
     if (cmp_dyn_token(right->token, token) < 0 || cmp_dyn_token(left->token, token) >= 0)
         return left->index;

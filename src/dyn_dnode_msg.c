@@ -31,7 +31,7 @@ dyn_parse_core(struct msg *r)
 {
    struct dmsg *dmsg;
    struct mbuf *b;
-   uint8_t *p, *token, *start_pos;
+   uint8_t *p, *token;
    uint8_t ch = ' ';
    uint64_t num = 0;
 
@@ -677,8 +677,6 @@ dmsg_put(struct dmsg *dmsg)
 void
 dmsg_dump(struct dmsg *dmsg)
 {
-    struct mbuf *mbuf;
-
     log_debug(LOG_VVVERB, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
                  dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
 }
