@@ -503,6 +503,11 @@ msg_free(struct msg *msg)
 void
 msg_put(struct msg *msg)
 {
+    if (msg == NULL) {
+   	 log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
+   	 return;
+    }
+
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "put msg %p id %"PRIu64"", msg, msg->id);
     }
