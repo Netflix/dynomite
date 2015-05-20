@@ -56,7 +56,6 @@ dyn_parse_core(struct msg *r)
       }
    }
 
-   start_pos = r->pos;
    token = NULL;
 
    for (p = r->pos; p < b->last; p++) {
