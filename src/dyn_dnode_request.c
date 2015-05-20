@@ -317,7 +317,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 
 		//requeue
 		status = event_add_out(ctx->evb, conn);
-        status;
+        IGNORE_RET_VAL(status);
 
 		return NULL;
 	}
