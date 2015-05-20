@@ -541,8 +541,6 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
 static bool
 request_send_to_all_racks(struct msg *msg) {
-    msg_type_t t = msg->type;
-
     return msg->is_read? 0 : 1;
 }
 
@@ -576,6 +574,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 		msg->done = 1;
 		//msg->pre_coalesce(msg);
 		status = event_add_out(ctx->evb, c_conn);
+        IGNORE_RET_VAL(status);
 	} else {
 		log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
 		local_req_forward(ctx, c_conn, msg, key, keylen);

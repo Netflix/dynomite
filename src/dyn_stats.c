@@ -1064,7 +1064,6 @@ stats_http_rsp(int sd, uint8_t *content, size_t len)
 static rstatus_t
 stats_send_rsp(struct stats *st)
 {
-    rstatus_t status;
     int sd;
 
     sd = accept(st->sd, NULL, NULL);

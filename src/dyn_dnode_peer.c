@@ -258,6 +258,7 @@ dnode_peer_each_pool_init(void *elem, void *context)
 		dnode_peer_deinit(peers);
 		return status;
 	}
+    IGNORE_RET_VAL(peer_cnt);
 	ASSERT(array_n(peers) == peer_cnt);
 
 	status = array_each(peers, dnode_peer_each_set_owner, sp);
