@@ -117,10 +117,10 @@ void histo_add(struct histogram *histo, uint64_t val)
 	}
 
 	uint64_t *buckets = histo->buckets;
-	int begin_index, end_index, left_index, right_index, middle_index, index;
+	int left_index, right_index, middle_index, index;
 
-	begin_index = left_index = 0;
-	end_index = right_index = BUCKET_SIZE-1;
+	left_index = 0;
+	right_index = BUCKET_SIZE-1;
 
 
 	while (left_index < right_index ) {

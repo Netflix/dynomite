@@ -133,8 +133,6 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 struct msg *
 dnode_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-	struct msg *msg;
-
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 	return req_recv_next(ctx, conn, alloc);
 }
@@ -319,6 +317,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 
 		//requeue
 		status = event_add_out(ctx->evb, conn);
+        IGNORE_RET_VAL(status);
 
 		return NULL;
 	}

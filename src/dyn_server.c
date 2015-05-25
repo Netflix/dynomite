@@ -167,6 +167,7 @@ server_deinit(struct array *server)
 
 	for (i = 0, nserver = array_n(server); i < nserver; i++) {
 		struct server *s = array_pop(server);
+        IGNORE_RET_VAL(s);
 		ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 	}
 	array_deinit(server);

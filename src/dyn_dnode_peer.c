@@ -259,6 +259,7 @@ dnode_peer_each_pool_init(void *elem, void *context)
 		dnode_peer_deinit(peers);
 		return status;
 	}
+    IGNORE_RET_VAL(peer_cnt);
 	ASSERT(array_n(peers) == peer_cnt);
 
 	status = array_each(peers, dnode_peer_each_set_owner, sp);
@@ -285,6 +286,7 @@ dnode_peer_deinit(struct array *nodes)
 		struct server *s;
 
 		s = array_pop(nodes);
+        IGNORE_RET_VAL(s);
 		ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 	}
 	array_deinit(nodes);
@@ -1362,17 +1364,6 @@ void
 dnode_peer_pool_disconnect(struct context *ctx)
 {
 	array_each(&ctx->pool, dnode_peer_pool_each_disconnect, NULL);
-}
-
-static rstatus_t
-dnode_peer_pool_each_set_owner(void *elem, void *data)
-{
-	struct server_pool *sp = elem;
-	struct context *ctx = data;
-
-	sp->ctx = ctx;
-
-	return DN_OK;
 }
 
 rstatus_t
