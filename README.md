@@ -8,6 +8,8 @@ When Dynomite team decided to settle on using C language, we found Twemproxy and
 
 
 ## Build
+You may need to install the following dependencies.
+yum -y install autoreconf automake autoconf libtool openssl openssl-devel
 
 To build Dynomite from source with _debug logs enabled_ and _assertions disabled_:
 
@@ -26,8 +28,36 @@ To build Dynomite in _debug mode_:
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
+
+## Run
+To run the server specify the default config file to use on the command line or accept the defaults.
+dynomite -c thisServersConfig.yml
+
+The output should look something like:
+
+    [root@ip-1-2-3-4 dynomite]# dynomite -c dynomite.yml
+    [Wed Apr 22 20:16:15 2015] dynomite.c:195 dynomite-0.1.19 built for Linux 3.10.0-229.el7.x86_64 x86_64 started on pid 13915
+    [Wed Apr 22 20:16:15 2015] dynomite.c:200 run, rabbit run / dig that hole, forget the sun / and when at last the work is done / don't sit down / it's time to dig another one
+    [Wed Apr 22 20:16:15 2015] dyn_stats.c:1192 m 4 listening on '0.0.0.0:22222'
+    [Wed Apr 22 20:16:15 2015] dyn_proxy.c:211 p 8 listening on '127.0.0.1:8102' in redis pool 0 'dyn_o_mite' with 1 servers
+    [Wed Apr 22 20:16:15 2015] dyn_dnode_server.c:195 dyn: p 9 listening on '127.0.0.1:8101' in redis pool 0 'dyn_o_mite' with 1 servers
+
+Depending on setting in the configuration file, the server will listen on three ports.  The first is the gossip channel which dynomite uses to communicate to other servers.
+
+    dyn_listen: 0.0.0.0:8101
+
+The next is the port that Redis/Memcached clients will connect to:
+
+    listen: 0.0.0.0:8102
     
+The third is used to publish statistics:
+
+     dyn_stats: 0.0.0.0:22222
+
+![config diagram](https://cloud.githubusercontent.com/assets/4102322/6461488/b16d3496-c1a0-11e4-808d-eea13164a006.png?raw=true =649x576) </br>
+
 ## Help
+dynomite -h
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
                       [-c conf file] [-s stats port] [-a stats addr]
