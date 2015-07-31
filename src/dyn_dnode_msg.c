@@ -503,18 +503,7 @@ dyn_parse_req(struct msg *r)
 
 				r->mlen = mbuf_length(decrypted_buf);
 
-				if (r->data_store == DATA_REDIS) {
-					return redis_parse_req(r);
-				}
-				else if (r->data_store == DATA_MEMCACHE){
-					return memcache_parse_req(r);
-				}
-				else{
-					if (log_loggable(LOG_VVERB)) {
-					//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-					}
-			    	exit(0);
-				}
+				data_store_req(r);
 
 			}
 
@@ -525,18 +514,7 @@ dyn_parse_req(struct msg *r)
 		} else if (r->dyn_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
-				if (r->data_store == DATA_REDIS) {
-					redis_parse_req(r);
-				}
-				else if (r->data_store == DATA_MEMCACHE){
-					memcache_parse_req(r);
-				}
-				else{
-					if (log_loggable(LOG_VVERB)) {
-					//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-					}
-					exit(0);
-				}
+				data_store_req(r);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
@@ -556,19 +534,7 @@ dyn_parse_req(struct msg *r)
 		if (done_parsing)
 			return;
 
-
-		if (r->data_store == DATA_REDIS) {
-			return redis_parse_req(r);
-		}
-		else if (r->data_store == DATA_MEMCACHE){
-			return memcache_parse_req(r);
-		}
-		else{
-			if (log_loggable(LOG_VVERB)) {
-			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-			}
-			exit(0);
-		}
+		return data_store_req(r);
 	}
 
 	//bad case
@@ -634,19 +600,7 @@ void dyn_parse_rsp(struct msg *r)
 
 				r->mlen = mbuf_length(decrypted_buf);
 
-
-				if (r->data_store==DATA_REDIS) {
-					return redis_parse_rsp(r);
-				}
-				else if (r->data_store==DATA_MEMCACHE){
-					return memcache_parse_rsp(r);
-				}
-				else{
-					if (log_loggable(LOG_VVERB)) {
-					//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse response)", data_store);
-					}
-					exit(0);
-				}
+				return data_store_rsp(r);
 			}
 
 			//Subtract already received bytes
@@ -656,18 +610,7 @@ void dyn_parse_rsp(struct msg *r)
 		} else if (r->dyn_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
-				if (r->data_store==DATA_REDIS){
-					redis_parse_rsp(r);
-				}
-				else if (r->data_store==DATA_MEMCACHE){
-					memcache_parse_rsp(r);
-				}
-				else{
-					if (log_loggable(LOG_VVERB)) {
-					//		log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-					}
-					exit(0);
-				}
+				data_store_rsp(r);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
@@ -677,19 +620,7 @@ void dyn_parse_rsp(struct msg *r)
 		if (done_parsing)
 			return;
 
-		if (r->data_store==DATA_REDIS) {
-			return redis_parse_rsp(r);
-		}
-		else if (r->data_store==DATA_MEMCACHE){
-			return memcache_parse_rsp(r);
-		}
-		else{
-			if (log_loggable(LOG_VVERB)) {
-		//		log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-			}
-			exit(0);
-		}
-
+		return data_store_rsp(r);
 	}
 
 	//bad case
@@ -1153,4 +1084,40 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
     return false;
 }
 
+/*
+ *
+ */
 
+void
+data_store_req(struct msg *r)
+{
+	if (r->data_store == DATA_REDIS) {
+		return redis_parse_req(r);
+	}
+	else if (r->data_store == DATA_MEMCACHE){
+		return memcache_parse_req(r);
+	}
+	else{
+		//if (log_loggable(LOG_VVERB)) {
+			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
+		//}
+		exit(0);
+	}
+}
+
+void
+data_store_rsp(struct msg *r)
+{
+	if (r->data_store == DATA_REDIS) {
+		return redis_parse_rsp(r);
+	}
+	else if (r->data_store == DATA_MEMCACHE){
+		return memcache_parse_rsp(r);
+	}
+	else{
+		//if (log_loggable(LOG_VVERB)) {
+			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
+		//}
+		exit(0);
+	}
+}
