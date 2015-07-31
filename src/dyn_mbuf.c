@@ -102,7 +102,7 @@ mbuf_get(void)
     mbuf->end = buf + mbuf_offset - MBUF_ESIZE;
     mbuf->end_extra = buf + mbuf_offset;
 
-    ASSERT(mbuf->end - mbuf->start == (int)mbuf_offset);
+   // ASSERT(mbuf->end - mbuf->start == (int)mbuf_offset);
     ASSERT(mbuf->start < mbuf->end);
 
     mbuf->pos = mbuf->start;

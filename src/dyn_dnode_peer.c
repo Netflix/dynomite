@@ -330,7 +330,7 @@ dnode_peer_conn(struct server *server)
 	pool = server->owner;
 
 	if (server->ns_conn_q < 1) {
-		conn = conn_get_peer(server, false, pool->redis);
+		conn = conn_get_peer(server, false, pool->data_store);
 		if (is_conn_secured(pool, server)) {
 			conn->dnode_secured = 1;
 			conn->dnode_crypto_state = 0; //need to do a encryption handshake
@@ -685,7 +685,7 @@ dnode_peer_forward_state(void *rmsg)
 		return DN_ERROR;
 	}
 
-	dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
+	dnode_peer_gossip_forward(sp->ctx, conn, sp->data_store, mbuf);
 
 	//free this as nobody else will do
 	//mbuf_put(mbuf);
@@ -761,8 +761,8 @@ dnode_peer_handshake_announcing(void *rmsg)
 
 		//conn->
 
-		dnode_peer_gossip_forward(sp->ctx, conn, sp->redis, mbuf);
-		//peer_gossip_forward1(sp->ctx, conn, sp->redis, &data);
+		dnode_peer_gossip_forward(sp->ctx, conn, sp->data_store, mbuf);
+		//peer_gossip_forward1(sp->ctx, conn, sp->data_store, &data);
 	}
 
 	//free this as nobody else will do

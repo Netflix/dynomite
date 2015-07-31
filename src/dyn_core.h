@@ -69,6 +69,9 @@
 #define DN_EAGAIN   -2
 #define DN_ENOMEM   -3
 
+#define DATA_REDIS		 	0	/* Data store is Redis */
+#define DATA_MEMCACHE		1	/* Data store is Memcache */
+
 
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
@@ -273,7 +276,7 @@ struct server_pool {
     uint32_t           server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */
-    unsigned           redis:1;              /* redis? */
+    int		           data_store;           /* data store? */
     /* dynomite */
     struct string      seed_provider;
     struct array       seeds;                /*dyn seeds */

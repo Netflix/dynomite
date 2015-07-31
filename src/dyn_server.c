@@ -188,7 +188,7 @@ server_conn(struct server *server)
 	 */
 
 	if (server->ns_conn_q < pool->server_connections) {
-		return conn_get(server, false, pool->redis);
+		return conn_get(server, false, pool->data_store);
 	}
 	ASSERT(server->ns_conn_q == pool->server_connections);
 

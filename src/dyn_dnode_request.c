@@ -20,7 +20,7 @@ dnode_req_get(struct conn *conn)
 
 	ASSERT(conn->dnode_client && !conn->dnode_server);
 
-	msg = msg_get(conn, true, conn->redis);
+	msg = msg_get(conn, true, conn->data_store);
 	if (msg == NULL) {
 		conn->err = errno;
 	}
@@ -246,7 +246,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 			if (string_compare(rack->name, &pool->rack) == 0 ) {
 				rack_msg = msg;
 			} else {
-				rack_msg = msg_get(conn, msg->request, msg->redis);
+				rack_msg = msg_get(conn, msg->request, msg->data_store);
 				if (rack_msg == NULL) {
 					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
 					continue;
@@ -493,10 +493,10 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
  * Sending a mbuf of gossip data over the wire to a peer
  */
 void
-dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *data_buf)
+dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data_buf)
 {
 	rstatus_t status;
-	struct msg *msg = msg_get(conn, 1, redis);
+	struct msg *msg = msg_get(conn, 1, data_store);
 
 	if (msg == NULL) {
 		log_debug(LOG_DEBUG, "Unable to obtain a msg");

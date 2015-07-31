@@ -79,9 +79,9 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, client_connections) },
 
-    { string("redis"),
-      conf_set_bool,
-      offsetof(struct conf_pool, redis) },
+    { string("data_store"),
+      conf_set_num,
+      offsetof(struct conf_pool, data_store) },
 
     { string("preconnect"),
       conf_set_bool,
@@ -328,7 +328,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->client_connections = CONF_UNSET_NUM;
 
-    cp->redis = CONF_UNSET_NUM;
+    cp->data_store = CONF_UNSET_NUM;
     cp->preconnect = CONF_UNSET_NUM;
     cp->auto_eject_hosts = CONF_UNSET_NUM;
     cp->server_connections = CONF_UNSET_NUM;
@@ -466,7 +466,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->dist_type = cp->distribution;
     sp->hash_tag = cp->hash_tag;
 
-    sp->redis = cp->redis ? 1 : 0;
+    sp->data_store = cp->data_store;
     sp->timeout = cp->timeout;
     sp->backlog = cp->backlog;
 
@@ -544,7 +544,14 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  distribution: %d", cp->distribution);
         log_debug(LOG_VVERB, "  client_connections: %d",
                   cp->client_connections);
-        log_debug(LOG_VVERB, "  redis: %d", cp->redis);
+        const char * temp_log = "unknown";
+        if(cp->data_store == DATA_REDIS){
+        	temp_log = "redis";
+        }
+        else if(cp->data_store == DATA_MEMCACHE){
+        	temp_log = "memcache";
+        }
+        log_debug(LOG_VVERB, "  data_store: %d (%s)", cp->data_store, temp_log);
         log_debug(LOG_VVERB, "  preconnect: %d", cp->preconnect);
         log_debug(LOG_VVERB, "  auto_eject_hosts: %d", cp->auto_eject_hosts);
         log_debug(LOG_VVERB, "  server_connections: %d",
@@ -1466,8 +1473,8 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     cp->client_connections = CONF_DEFAULT_CLIENT_CONNECTIONS;
 
-    if (cp->redis == CONF_UNSET_NUM) {
-        cp->redis = CONF_DEFAULT_REDIS;
+    if (cp->data_store == CONF_UNSET_NUM) {
+        cp->data_store = CONF_DEFAULT_DATASTORE;
     }
 
     if (cp->preconnect == CONF_UNSET_NUM) {
