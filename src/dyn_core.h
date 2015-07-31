@@ -69,9 +69,6 @@
 #define DN_EAGAIN   -2
 #define DN_ENOMEM   -3
 
-#define DATA_REDIS		 	0	/* Data store is Redis */
-#define DATA_MEMCACHE		1	/* Data store is Memcache */
-
 
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
@@ -159,6 +156,11 @@ typedef enum dyn_state {
 	RESET       = 11,
 	UNKNOWN     = 12
 } dyn_state_t;
+
+typedef enum data_store {
+	DATA_REDIS        = 0, /* Data store is Redis */
+	DATA_MEMCACHE	  = 1  /* Data store is Memcache */
+} data_store_t;
 
 
 struct context {
@@ -276,7 +278,7 @@ struct server_pool {
     uint32_t           server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */
-    int		           data_store;           /* data store? */
+
     /* dynomite */
     struct string      seed_provider;
     struct array       seeds;                /*dyn seeds */
@@ -301,6 +303,7 @@ struct server_pool {
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
     struct string      pem_key_file;
+    data_store_t	   data_store;	/* the backend data store */
 
 };
 
