@@ -30,7 +30,7 @@ rsp_get(struct conn *conn)
 
     ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
 
-    msg = msg_get(conn, false, conn->redis);
+    msg = msg_get(conn, false, conn->data_store);
     if (msg == NULL) {
         conn->err = errno;
     }
@@ -85,7 +85,7 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
         rsp_put(pmsg);
     }
 
-    return msg_get_error(conn->redis, msg->dyn_error, err);
+    return msg_get_error(conn->data_store, msg->dyn_error, err);
 }
 
 struct msg *

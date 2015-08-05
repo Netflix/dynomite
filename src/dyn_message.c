@@ -285,7 +285,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
-    msg->redis = 0;
+    msg->data_store = DATA_REDIS;
 
     //dynomite
     msg->is_read = 1;
@@ -307,7 +307,7 @@ uint32_t msg_free_queue_size(void)
 }
 
 struct msg *
-msg_get(struct conn *conn, bool request, bool redis)
+msg_get(struct conn *conn, bool request, int data_store)
 {
     struct msg *msg;
 
@@ -318,9 +318,9 @@ msg_get(struct conn *conn, bool request, bool redis)
 
     msg->owner = conn;
     msg->request = request ? 1 : 0;
-    msg->redis = redis ? 1 : 0;
+    msg->data_store = data_store;
 
-    if (redis) {
+    if (data_store == DATA_REDIS) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -338,7 +338,7 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_splitcopy = redis_post_splitcopy;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
-    } else {
+    } else if (data_store == DATA_MEMCACHE) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -356,6 +356,9 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_splitcopy = memcache_post_splitcopy;
         msg->pre_coalesce = memcache_pre_coalesce;
         msg->post_coalesce = memcache_post_coalesce;
+    } else{
+    	log_debug(LOG_VVERB,"incorrect selection of data store %d", data_store);
+    	exit(0);
     }
 
     if (log_loggable(LOG_VVERB)) {
@@ -371,7 +374,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 {
     target->owner = src->owner;
     target->request = src->request;
-    target->redis = src->redis;
+    target->data_store = src->data_store;
 
     target->parser = src->parser;
     target->pre_splitcopy = src->pre_splitcopy;
@@ -412,13 +415,13 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 
 
 struct msg *
-msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
+msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
 {
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? strerror(err) : "unknown";
-    char *protstr = redis ? "-ERR" : "SERVER_ERROR";
+    char *protstr = data_store ? "-ERR" : "SERVER_ERROR"; //Yannis: something wrong is here
     char *source;
 
     if (dyn_err == PEER_CONNECTION_REFUSE) {
@@ -456,7 +459,7 @@ msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
 
 
 struct msg *
-msg_get_rsp_integer(bool redis)
+msg_get_rsp_integer(int data_store)
 {
     struct msg *msg;
     struct mbuf *mbuf;
@@ -633,7 +636,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, conn->redis);
+    nmsg = msg_get(msg->owner, msg->request, conn->data_store);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -671,7 +674,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, msg->redis);
+    nmsg = msg_get(msg->owner, msg->request, msg->data_store);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;

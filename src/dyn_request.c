@@ -32,7 +32,7 @@ req_get(struct conn *conn)
 
     ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
 
-    msg = msg_get(conn, true, conn->redis);
+    msg = msg_get(conn, true, conn->data_store);
     if (msg == NULL) {
         conn->err = errno;
     }
@@ -677,7 +677,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 					if (string_compare(rack->name, &pool->rack) == 0 ) {
 						rack_msg = msg;
 					} else {
-						rack_msg = msg_get(c_conn, msg->request, msg->redis);
+						rack_msg = msg_get(c_conn, msg->request, msg->data_store);
 						if (rack_msg == NULL) {
 							log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
 							continue;
@@ -701,7 +701,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 				uint32_t ran_index = rand() % rack_cnt;
 				struct rack *rack = array_get(&dc->racks, ran_index);
 
-				struct msg *rack_msg = msg_get(c_conn, msg->request, msg->redis);
+				struct msg *rack_msg = msg_get(c_conn, msg->request, msg->data_store);
 				if (rack_msg == NULL) {
 					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
 					msg_put(rack_msg);

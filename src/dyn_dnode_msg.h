@@ -98,4 +98,7 @@ rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 		                  struct conn *conn, uint32_t plen);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
+void data_store_parse_req(struct msg *r);
+void data_store_parse_rsp(struct msg *r);
+
 #endif

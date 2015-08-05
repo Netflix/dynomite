@@ -96,7 +96,6 @@ struct conn {
     unsigned           connected:1;   /* connected? */
     unsigned           eof:1;         /* eof? aka passive close? */
     unsigned           done:1;        /* done? aka close? */
-    unsigned           redis:1;       /* redis? */
     unsigned           dnode_server:1;       /* dnode server connection? */
     unsigned           dnode_client:1;       /* dnode client? */
     unsigned           dyn_mode:1;           /* is a dyn connection? */
@@ -104,6 +103,7 @@ struct conn {
     unsigned           dnode_crypto_state:1; /* crypto state */
     unsigned char      aes_key[50]; //aes_key[34];              /* a place holder for AES key */
 
+    int				   data_store;
     unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
@@ -124,9 +124,9 @@ void conn_remove_out_queue_msg(struct conn *conn, struct msg *msg);
 
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *test_conn_get(void);
-struct conn *conn_get(void *owner, bool client, bool redis);
+struct conn *conn_get(void *owner, bool client, int data_store);
 struct conn *conn_get_proxy(void *owner);
-struct conn *conn_get_peer(void *owner, bool client, bool redis);
+struct conn *conn_get_peer(void *owner, bool client, int data_store);
 struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 ssize_t conn_recv(struct conn *conn, void *buf, size_t size);
