@@ -503,7 +503,7 @@ dyn_parse_req(struct msg *r)
 
 				r->mlen = mbuf_length(decrypted_buf);
 
-				data_store_req(r);
+				data_store_parse_req(r);
 
 			}
 
@@ -514,7 +514,7 @@ dyn_parse_req(struct msg *r)
 		} else if (r->dyn_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
-				data_store_req(r);
+				data_store_parse_req(r);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
@@ -534,7 +534,7 @@ dyn_parse_req(struct msg *r)
 		if (done_parsing)
 			return;
 
-		return data_store_req(r);
+		return data_store_parse_req(r);
 	}
 
 	//bad case
@@ -600,7 +600,7 @@ void dyn_parse_rsp(struct msg *r)
 
 				r->mlen = mbuf_length(decrypted_buf);
 
-				return data_store_rsp(r);
+				return data_store_parse_rsp(r);
 			}
 
 			//Subtract already received bytes
@@ -610,7 +610,7 @@ void dyn_parse_rsp(struct msg *r)
 		} else if (r->dyn_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
-				data_store_rsp(r);
+				data_store_parse_rsp(r);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
@@ -620,7 +620,7 @@ void dyn_parse_rsp(struct msg *r)
 		if (done_parsing)
 			return;
 
-		return data_store_rsp(r);
+		return data_store_parse_rsp(r);
 	}
 
 	//bad case
@@ -1089,7 +1089,7 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
  */
 
 void
-data_store_req(struct msg *r)
+data_store_parse_req(struct msg *r)
 {
 	if (r->data_store == DATA_REDIS) {
 		return redis_parse_req(r);
@@ -1106,7 +1106,7 @@ data_store_req(struct msg *r)
 }
 
 void
-data_store_rsp(struct msg *r)
+data_store_parse_rsp(struct msg *r)
 {
 	if (r->data_store == DATA_REDIS) {
 		return redis_parse_rsp(r);
