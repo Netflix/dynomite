@@ -31,7 +31,7 @@ enum {
         DYN_DONE,
         DYN_POST_DONE,
         DYN_UNKNOWN
-} state;
+} dyn_state;
 
 typedef enum dmsg_type {
     DMSG_UNKNOWN = 0,
@@ -98,7 +98,7 @@ rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 		                  struct conn *conn, uint32_t plen);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
-void data_store_req(struct msg *r);
-void data_store_rsp(struct msg *r);
+void data_store_parse_req(struct msg *r);
+void data_store_parse_rsp(struct msg *r);
 
 #endif
