@@ -355,7 +355,7 @@ conn_get(void *owner, bool client, int data_store)
         conn->type = CONN_SERVER;
         conn->recv = msg_recv;
         conn->recv_next = rsp_recv_next;
-        conn->recv_done = rsp_recv_done;
+        conn->recv_done = server_rsp_recv_done;
 
         conn->send = msg_send;
         conn->send_next = req_send_next;
