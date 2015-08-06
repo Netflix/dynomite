@@ -29,6 +29,7 @@
 
 #include <dyn_core.h>
 #include <dyn_token.h>
+#include <ctype.h>
 
 static const uint32_t crc32tab[256] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba,
@@ -134,4 +135,23 @@ hash_crc32a(const char *key, size_t key_length, struct dyn_token *token)
     set_int_dyn_token(token, val);
 
     return DN_OK;
+}
+
+// crc32 for sequential buffers.
+
+#define _CRC32_(crc, ch)     ((crc) = ((crc) >> 8) ^ crc32tab[((crc) ^ (ch)) &\
+                                                              0xff])
+uint32_t
+crc32_sz(const char *buf, int buf_length, uint32_t in_crc32)
+{
+    uint32_t crc = ~in_crc32;
+    const char  *p;
+    int         len,
+                nr;
+
+    len = 0;
+    nr = buf_length;
+    for (len += nr, p = buf; nr--; ++p)
+        _CRC32_(crc, tolower((unsigned int) *p));
+    return ~crc;
 }
