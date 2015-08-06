@@ -354,7 +354,8 @@ redis_error(struct msg *r)
  *     the last argument is handled in a special way in order to allow for
  *     a binary-safe last argument.
  *
- * Dynomite only supports the Redis unified protocol for requests.
+ * Dynomite supports the Redis unified protocol for requests and inline ping.
+ * The inline ping is being utilized by redis-benchmark
  */
 void
 redis_parse_req(struct msg *r)
@@ -391,6 +392,7 @@ redis_parse_req(struct msg *r)
         SW_ARGN,
         SW_ARGN_LF,
         SW_FRAGMENT,
+		SW_INLINE_PING,
         SW_SENTINEL
     } state;
 
@@ -412,9 +414,15 @@ redis_parse_req(struct msg *r)
         switch (state) {
 
         case SW_START:
+
         case SW_NARG:
             if (r->token == NULL) {
-                if (ch != '*') {
+                if (ch == 'p' || ch == 'P' ){ /* inline ping */
+                	state = SW_INLINE_PING;
+                	log_hexdump(LOG_VERB, b->pos, mbuf_length(b),"INLINE PING");
+                	break;
+                }
+                else if (ch != '*') {
                     goto error;
                 }
                 r->token = p;
@@ -437,6 +445,23 @@ redis_parse_req(struct msg *r)
             }
 
             break;
+
+        case SW_INLINE_PING:
+            if (str3icmp(p,  'i', 'n', 'g')) {
+        		log_hexdump(LOG_VERB, b->pos, mbuf_length(b),"PING");
+        	    r->type = MSG_REQ_REDIS_PING;
+        	    p = p + 4;
+        	    r->is_read = 1;
+                state = SW_REQ_TYPE_LF;
+        	    goto done;
+        	 }
+        	else{
+        		log_hexdump(LOG_VERB, b->pos, mbuf_length(b),"PING ERROR %d, %s",p-m,p);
+        		goto error;
+        	}
+
+        break;
+
 
         case SW_NARG_LF:
             switch (ch) {
