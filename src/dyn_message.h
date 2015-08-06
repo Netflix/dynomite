@@ -30,10 +30,12 @@
 #define MAX_ALLOC_MSGS                400000
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
+#define MAX_REPLICAS_PER_DC           3
 
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
 typedef void (*msg_coalesce_t)(struct msg *r);
+typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef uint64_t msgid_t;
 
 typedef enum msg_parse_result {
@@ -190,18 +192,38 @@ typedef enum consistency {
     LOCAL_QUORUM = 1
 } consistency_t;
 
-#define DEFAULT_READ_CONSISTENCY LOCAL_QUORUM
-#define DEFAULT_WRITE_CONSISTENCY LOCAL_QUORUM
+#define DEFAULT_READ_CONSISTENCY LOCAL_ONE
+#define DEFAULT_WRITE_CONSISTENCY LOCAL_ONE
 extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
 
+struct response_mgr {
+    bool        is_read;
+    bool        done;
+    /* we could use the dynamic array
+       here. But we have only 3 ASGs */
+    struct msg  *responses[MAX_REPLICAS_PER_DC];
+    uint8_t     received_responses; // non-error responses received
+    uint8_t     max_responses;      // max responses expected
+    uint8_t     quorum_responses;   // responses expected to form a quorum
+    uint8_t     error_responses;    // error responses received
+    struct msg  *err_rsp;           // first error response
+};
+
+void init_response_mgr(struct response_mgr *rspmgr, bool is_read,
+                       uint8_t max_responses);
+// DN_OK if response was accepted
+rstatus_t rspmgr_submit_response(struct response_mgr *rspmgr, struct msg *rsp);
+bool rspmgr_is_done(struct response_mgr *rspmgr);
+struct msg* rspmgr_get_response(struct response_mgr *rspmgr);
+void rspmgr_free_response(struct response_mgr *rspmgr, struct msg *dont_free);
 
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
     TAILQ_ENTRY(msg)     s_tqe;           /* link in server q */
     TAILQ_ENTRY(msg)     m_tqe;           /* link in send q / free q */
 
-    uint64_t             id;              /* message id */
+    msgid_t              id;              /* message id */
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
@@ -267,10 +289,19 @@ struct msg {
                                           */
     unsigned             is_read:1;       /*  0 : write
                                               1 : read */
-
+    msg_response_handler_t rsp_handler;
+    consistency_t        consistency;
+    msgid_t              parent_id;       /* parent message id */
+    struct response_mgr  rspmgr;
 };
 
 TAILQ_HEAD(msg_tqh, msg);
+
+static inline rstatus_t
+msg_handle_response(struct msg *req, struct msg *rsp)
+{
+    return req->rsp_handler(req, rsp);
+}
 
 uint32_t msg_free_queue_size(void);
 
@@ -292,6 +323,7 @@ rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
 uint32_t msg_alloc_msgs(void);
 uint32_t msg_payload_crc32(struct msg *msg);
+struct msg *msg_get_rsp_integer(int data_store);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
@@ -311,14 +343,13 @@ void req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 struct msg *rsp_get(struct conn *conn);
 void rsp_put(struct msg *msg);
 struct msg *rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
-void rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
+void server_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
 struct msg *rsp_send_next(struct context *ctx, struct conn *conn);
 void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
 /* for dynomite  */
 struct msg *dnode_req_get(struct conn *conn);
-void dnode_req_put(struct msg *msg);
 bool dnode_req_done(struct conn *conn, struct msg *msg);
 bool dnode_req_error(struct conn *conn, struct msg *msg);
 void dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
