@@ -20,12 +20,11 @@
  * limitations under the License.
  */
 
-#include "dyn_core.h"
-#include "dyn_dnode_msg.h"
-
-
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
+
+#include "dyn_core.h"
+#include "dyn_dnode_msg.h"
 
 #define ALLOWED_ALLOC_MSGS            200000
 #define MAX_ALLOC_MSGS                400000
@@ -35,6 +34,7 @@
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
 typedef void (*msg_coalesce_t)(struct msg *r);
+typedef uint64_t msgid_t;
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -181,6 +181,20 @@ typedef enum dyn_error {
     STORAGE_CONNECTION_REFUSE,
     BAD_FORMAT
 } dyn_error_t;
+
+/* This is a wrong place for this typedef. But adding to core has some
+ * dependency issues - FixIt someother day :(
+ */
+typedef enum consistency {
+    LOCAL_ONE = 0,
+    LOCAL_QUORUM = 1
+} consistency_t;
+
+#define DEFAULT_READ_CONSISTENCY LOCAL_QUORUM
+#define DEFAULT_WRITE_CONSISTENCY LOCAL_QUORUM
+extern consistency_t g_write_consistency;
+extern consistency_t g_read_consistency;
+
 
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
