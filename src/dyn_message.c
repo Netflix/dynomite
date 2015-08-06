@@ -28,6 +28,7 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "proto/dyn_proto.h"
+#include "hashkit/dyn_hashkit.h"
 
 #if (IOV_MAX > 128)
 #define DN_IOV_MAX 128
@@ -608,6 +609,39 @@ bool
 msg_empty(struct msg *msg)
 {
     return msg->mlen == 0 ? true : (msg->dyn_error == BAD_FORMAT? true : false);
+}
+
+uint32_t
+msg_payload_crc32(struct msg *msg)
+{
+    // take a continous buffer crc
+    uint32_t crc = 0;
+    struct mbuf *mbuf;
+    /* Since we want to checksum only the payload, we have to start from the
+       payload offset. which is somewhere in the mbufs. Skip the mbufs till we
+       find the start of the payload. If there is no dyno header, we start from
+       the beginning of the first mbuf */
+    bool start_found = msg->dmsg ? false : true;
+
+    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+        uint8_t *start = mbuf->start;
+        uint8_t *end = mbuf->last;
+        if (!start_found) {
+            // if payload start is within this mbuf
+            if ((mbuf->start <= msg->dmsg->payload) &&
+                (msg->dmsg->payload < mbuf->last)) {
+                start = msg->dmsg->payload;
+                start_found = true;
+            } else {
+                // else skip this mbuf
+                continue;
+            }
+        }
+
+        crc = crc32_sz(start, end - start, crc);
+    }
+    return crc;
+
 }
 
 static rstatus_t

@@ -77,6 +77,8 @@ rstatus_t hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *to
 rstatus_t hash_hsieh(const char *key, size_t key_length, struct dyn_token *token);
 rstatus_t hash_jenkins(const char *key, size_t length, struct dyn_token *token);
 
+uint32_t crc32_sz(const char *buf, size_t length, uint32_t in_crc32);
+
 rstatus_t hash_murmur(const char *key, size_t length, struct dyn_token *token);
 rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *token);
 

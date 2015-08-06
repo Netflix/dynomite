@@ -291,6 +291,7 @@ bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
 uint32_t msg_alloc_msgs(void);
+uint32_t msg_payload_crc32(struct msg *msg);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
