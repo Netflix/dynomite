@@ -24,6 +24,11 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
+static rstatus_t msg_write_one_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_write_local_quorum_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_read_local_quorum_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_read_one_rsp_handler(struct msg *req, struct msg *rsp);
+static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
 
 struct msg *
 req_get(struct conn *conn)
@@ -252,6 +257,7 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
     }
 
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
 
     if (!conn->dyn_mode) {
        stats_server_incr(ctx, conn->owner, in_queue);
@@ -270,6 +276,7 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(!conn->client && !conn->proxy);
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
 
     stats_server_decr(ctx, conn->owner, in_queue);
     stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
@@ -283,6 +290,7 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     msg->stime_in_microsec = dn_usec_now();
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 }
 
 void
@@ -292,6 +300,7 @@ req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(!conn->client && !conn->proxy);
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 
     stats_server_incr(ctx, conn->owner, out_queue);
     stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
@@ -306,6 +315,7 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
     stats_histo_add_latency(ctx, latency);
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
 }
 
 void
@@ -317,6 +327,7 @@ req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     msg_tmo_delete(msg);
 
     TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, msg->id, msg->parent_id);
 
     stats_server_decr(ctx, conn->owner, out_queue);
     stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
@@ -481,6 +492,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
+    log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg);
         return;
@@ -541,8 +553,23 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
 
 static bool
-request_send_to_all_racks(struct msg *msg) {
-    return msg->is_read? 0 : 1;
+request_send_to_all_dcs(struct msg *msg)
+{
+    if (!msg->is_read)
+        return true;
+    return false;
+}
+
+static bool
+request_send_to_all_local_racks(struct msg *msg)
+{
+    if (!msg->is_read)
+        return true;
+    if (msg->type == MSG_REQ_REDIS_PING)
+        return false;
+    if (msg->consistency == LOCAL_QUORUM)
+        return true;
+    return false;
 }
 
 static void
@@ -605,13 +632,112 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     struct server *peer = p_conn->owner;
 
     if (peer->is_local) {
+        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
+                  msg->id, msg->parent_id);
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
     } else {
+        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
+                  msg->id, msg->parent_id, p_conn);
         dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
     }
 }
 
+static void
+req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
+                            struct msg *msg, struct mbuf *orig_mbuf,
+                            uint8_t *key, uint32_t keylen, struct datacenter *dc)
+{
+    //log_debug(LOG_DEBUG, "dc name  '%.*s'",
+    //            dc->name->len, dc->name->data);
+    uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
+    uint8_t rack_index;
+    msg->rsp_handler = msg_get_rsp_handler(msg);
+    init_response_mgr(&msg->rspmgr, msg->is_read, rack_cnt);
+    log_debug(LOG_INFO, "msg %d:%d same DC racks:%d expect replies %d",
+              msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
+    for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+        struct rack *rack = array_get(&dc->racks, rack_index);
+        //log_debug(LOG_DEBUG, "rack name '%.*s'",
+        //            rack->name->len, rack->name->data);
+        struct msg *rack_msg;
+        // clone message even for local node
+        struct server_pool *pool = c_conn->owner;
+        if (string_compare(rack->name, &pool->rack) == 0 ) {
+            rack_msg = msg;
+        } else {
+            rack_msg = msg_get(c_conn, msg->request, msg->data_store);
+            if (rack_msg == NULL) {
+                log_debug(LOG_VERB, "whelp, looks like yer screwed "
+                        "now, buddy. no inter-rack messages for "
+                        "you!");
+                continue;
+            }
+
+            msg_clone(msg, orig_mbuf, rack_msg);
+            log_debug(LOG_VERB, "msg (%d:%d) clone to rack msg (%d:%d)",
+                    msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
+            rack_msg->swallow = true;
+        }
+
+        if (log_loggable(LOG_DEBUG)) {
+            log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+                    dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+        }
+        log_debug(LOG_VERB, "c_conn: %p forwarding (%d:%d)",
+                c_conn, rack_msg->id, rack_msg->parent_id);
+        remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+    }
+}
+
+static void
+req_forward_local_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
+                     struct mbuf *orig_mbuf, uint8_t *key, uint32_t keylen,
+                     struct datacenter *dc)
+{
+    struct server_pool *pool = c_conn->owner;
+    if (request_send_to_all_local_racks(msg)) {
+        // send request to all local racks
+        req_forward_all_local_racks(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
+    } else {
+        // send request to only local token owner
+        ASSERT(msg->is_read);
+        msg->rsp_handler = msg_get_rsp_handler(msg);
+        struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack,
+                                                        &pool->dc);
+        remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
+    }
+
+}
+
+static void
+req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
+                      struct mbuf *orig_mbuf, uint8_t *key, uint32_t keylen,
+                      struct datacenter *dc)
+{
+    uint32_t rack_cnt = array_n(&dc->racks);
+    if (rack_cnt == 0)
+        return;
+
+    uint32_t ran_index = (uint32_t)rand() % rack_cnt;
+    struct rack *rack = array_get(&dc->racks, ran_index);
+
+    struct msg *rack_msg = msg_get(c_conn, msg->request, msg->data_store);
+    if (rack_msg == NULL) {
+        log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+        msg_put(rack_msg);
+        return;
+    }
+
+    msg_clone(msg, orig_mbuf, rack_msg);
+    rack_msg->swallow = true;
+
+    if (log_loggable(LOG_DEBUG)) {
+        log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+                dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+    }
+    remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+}
 
 static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
@@ -631,7 +757,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     keylen = 0;
 
     // add the message to the dict
-    log_debug(LOG_VERB, "conn %p adding message %d", c_conn, msg->id);
+    log_debug(LOG_VERB, "conn %p adding message %d:%d", c_conn, msg->id, msg->parent_id);
     dictAdd(c_conn->outstanding_msgs_dict, &msg->id, msg);
 
     if (!string_empty(&pool->hash_tag)) {
@@ -666,7 +792,13 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         }
     }
 
-	if (request_send_to_all_racks(msg)) {
+    if (msg->is_read) {
+        msg->consistency = conn_get_read_consistency(c_conn);
+    } else {
+        msg->consistency = conn_get_write_consistency(c_conn);
+    }
+
+    /* forward the request */
     uint32_t dc_cnt = array_n(&pool->datacenters);
     uint32_t dc_index;
 
@@ -678,62 +810,12 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
             return;
         }
 
-			if (string_compare(dc->name, &pool->dc) == 0) { //send to all local racks
-				//log_debug(LOG_DEBUG, "dc name  '%.*s'", dc->name->len, dc->name->data);
-				uint32_t rack_cnt = array_n(&dc->racks);
-				uint32_t rack_index;
-				for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
-					struct rack *rack = array_get(&dc->racks, rack_index);
-					//log_debug(LOG_DEBUG, "rack name '%.*s'", rack->name->len, rack->name->data);
-					struct msg *rack_msg;
-					if (string_compare(rack->name, &pool->rack) == 0 ) {
-						rack_msg = msg;
-					} else {
-						rack_msg = msg_get(c_conn, msg->request, msg->data_store);
-						if (rack_msg == NULL) {
-							log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
-							continue;
-						}
-
-						msg_clone(msg, orig_mbuf, rack_msg);
-						rack_msg->swallow = true;
-					}
-
-					if (log_loggable(LOG_DEBUG)) {
-					   log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-						   	dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
-					}
-					remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
-				}
-			} else {
-            uint32_t rack_cnt = array_n(&dc->racks);
-				if (rack_cnt == 0)
-					continue;
-
-				uint32_t ran_index = rand() % rack_cnt;
-				struct rack *rack = array_get(&dc->racks, ran_index);
-
-				struct msg *rack_msg = msg_get(c_conn, msg->request, msg->data_store);
-				if (rack_msg == NULL) {
-					log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
-					msg_put(rack_msg);
-					continue;
-				}
-
-				msg_clone(msg, orig_mbuf, rack_msg);
-				rack_msg->swallow = true;
-
-				if (log_loggable(LOG_DEBUG)) {
-				   log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-					   	dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
-				}
-				remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
-			}
-		}
-	} else { //for read only requests
-		struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
-		remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
-	}
+        if (string_compare(dc->name, &pool->dc) == 0)
+            req_forward_local_dc(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
+        else if (request_send_to_all_dcs(msg)) {
+            req_forward_remote_dc(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
+        }
+    }
 }
 
 
@@ -841,3 +923,198 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 
 }
 
+static msg_response_handler_t 
+msg_get_rsp_handler(struct msg *req)
+{
+    if (req->consistency == LOCAL_ONE)
+        return req->is_read ? msg_read_one_rsp_handler :
+                              msg_write_one_rsp_handler;
+    return req->is_read ? msg_read_local_quorum_rsp_handler :
+                          msg_write_local_quorum_rsp_handler;
+}
+
+static rstatus_t
+msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
+{
+    if (req->peer)
+        log_warn("Received more than one response for local_one. req: %d:%d \
+                 prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
+                 req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
+    req->peer = rsp;
+    rsp->peer = req;
+    return DN_OK;
+}
+
+static rstatus_t
+msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
+{
+    if (req->peer)
+        log_warn("Received more than one response for local_one. req: %d:%d \
+                 prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
+                 req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
+    req->peer = rsp;
+    rsp->peer = req;
+    return DN_OK;
+}
+
+static rstatus_t
+msg_read_local_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+{
+    rspmgr_submit_response(&req->rspmgr, rsp);
+    if (!rspmgr_is_done(&req->rspmgr))
+        return DN_EAGAIN;
+    // rsp is absorbed by rspmgr. so we can use that variable
+    rsp = rspmgr_get_response(&req->rspmgr);
+    rspmgr_free_other_responses(&req->rspmgr, rsp);
+    req->peer = rsp;
+    rsp->peer = req;
+    req->err = rsp->err;
+    req->error = rsp->error;
+    req->dyn_error = rsp->dyn_error;
+    return DN_OK;
+}
+
+
+static rstatus_t
+msg_write_local_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+{
+    rspmgr_submit_response(&req->rspmgr, rsp);
+    if (!rspmgr_is_done(&req->rspmgr))
+        return DN_EAGAIN;
+    // rsp is absorbed by rspmgr. so we can use that variable
+    rsp = rspmgr_get_response(&req->rspmgr);
+    rspmgr_free_other_responses(&req->rspmgr, rsp);
+    req->peer = rsp;
+    rsp->peer = req;
+    req->err = rsp->err;
+    req->error = rsp->error;
+    req->dyn_error = rsp->dyn_error;
+    return DN_OK;
+}
+
+void
+init_response_mgr(struct response_mgr *rspmgr, bool is_read,
+                  uint8_t max_responses)
+{
+    memset(rspmgr, 0, sizeof(struct response_mgr));
+    rspmgr->is_read = is_read;
+    rspmgr->max_responses = max_responses;
+    rspmgr->quorum_responses = max_responses/2 + 1;
+}
+
+static bool
+rspmgr_check_is_done(struct response_mgr *rspmgr)
+{
+    // do the required calculation and tell if we are done here
+    // TODO:lets assume this write for now
+    if (rspmgr->received_responses >= rspmgr->quorum_responses)
+        rspmgr->done = true;
+    uint8_t pending_responses = rspmgr->max_responses -
+                                rspmgr->received_responses -
+                                rspmgr->error_responses;
+    if (pending_responses)
+        return false;
+    else
+        rspmgr->done = true;
+    // This is required*********
+    /*if ((pending_responses + rspmgr->received_responses) <
+                                                    rspmgr->quorum_responses)
+        rspmgr->done = true;// decision is done. no quorum possible*/
+    return rspmgr->done;
+}
+
+bool
+rspmgr_is_done(struct response_mgr *rspmgr)
+{
+    if (rspmgr->done)
+        return true;
+    return rspmgr_check_is_done(rspmgr);
+}
+
+static struct msg*
+rspmgr_get_write_response(struct response_mgr *rspmgr)
+{
+    struct msg *rsp;
+    if (rspmgr->received_responses >= rspmgr->quorum_responses) {
+        rsp = rspmgr->responses[0];
+        log_debug(LOG_INFO, "return quorum rsp %p", rsp);
+    } else {
+        rsp = rspmgr->err_rsp;
+        log_warn("return non quorum error rsp %p", rsp);
+    }
+    return rsp;
+}
+
+static struct msg*
+rspmgr_get_read_response(struct response_mgr *rspmgr)
+{
+    // no quorum possible
+    if (rspmgr->received_responses < rspmgr->quorum_responses) {
+        log_warn("return non quorum error rsp %p", rspmgr->err_rsp);
+        ASSERT(rspmgr->err_rsp);
+        return rspmgr->err_rsp;
+    }
+    // try and get the quorum number of responses:
+    /* I would have done a better job here but we are having only three replicas.
+     * Added a Static assert here just in case */
+    STATIC_ASSERT(MAX_REPLICAS_PER_DC == 3, "This code should change");
+    if (rspmgr->received_responses == 2) { //doesnt matter if responses are same
+        log_debug(LOG_INFO, "only 2 responses. return 1st rsp %p", rspmgr->responses[0]);
+        return rspmgr->responses[0];
+    }
+
+    uint32_t chk0, chk1, chk2;
+    chk0 = msg_payload_crc32(rspmgr->responses[0]);
+    chk1 = msg_payload_crc32(rspmgr->responses[1]);
+    if (chk0 == chk1) {
+        return rspmgr->responses[0];
+    } else {
+        chk2 = msg_payload_crc32(rspmgr->responses[2]);
+        if (chk1 == chk2)
+            return rspmgr->responses[1];
+        else if (chk0 == chk2)
+            return rspmgr->responses[0];
+    }
+    log_warn("none of the responses match, returning first");
+    return rspmgr->responses[0];
+}
+
+struct msg*
+rspmgr_get_response(struct response_mgr *rspmgr)
+{
+    ASSERT(rspmgr->done);
+    if (!rspmgr->is_read)
+        return rspmgr_get_write_response(rspmgr);
+    return rspmgr_get_read_response(rspmgr);
+}
+
+void
+rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
+{
+    int i;
+    for (i = 0; i < rspmgr->received_responses; i++) {
+        if (dont_free && (rspmgr->responses[i] == dont_free))
+            continue;
+        rsp_put(rspmgr->responses[i]);
+    }
+    if (rspmgr->err_rsp) {
+        if (dont_free && (dont_free == rspmgr->err_rsp))
+            return;
+        rsp_put(rspmgr->err_rsp);
+    }
+}
+
+rstatus_t
+rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
+{
+    if (rsp->error) {
+        rspmgr->error_responses++;
+        if (rspmgr->err_rsp == NULL)
+            rspmgr->err_rsp = rsp;
+        else
+            rsp_put(rsp);
+    } else {
+        rspmgr->responses[rspmgr->received_responses++] =  rsp;
+    }
+    return DN_OK;
+}
