@@ -207,6 +207,7 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_BITCOUNT:
 
     case MSG_REQ_REDIS_SET:
+    case MSG_REQ_REDIS_SCAN:
     case MSG_REQ_REDIS_HDEL:
     case MSG_REQ_REDIS_HMGET:
     case MSG_REQ_REDIS_HMSET:
@@ -676,6 +677,12 @@ redis_parse_req(struct msg *r)
                 if (str4icmp(m, 's', 'a', 'd', 'd')) {
                     r->type = MSG_REQ_REDIS_SADD;
                     r->is_read = 0;
+                    break;
+                }
+
+                if (str4icmp(m, 's', 'c', 'a', 'n')) {
+                    r->type = MSG_REQ_REDIS_SCAN;
+                    r->is_read = 1;
                     break;
                 }
 
