@@ -10,61 +10,61 @@
 struct msg *
 dnode_rsp_get(struct conn *conn)
 {
-	struct msg *msg;
+    struct msg *msg;
 
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(!conn->dnode_client && !conn->dnode_server);
 
-	msg = msg_get(conn, false, conn->data_store);
-	if (msg == NULL) {
-		conn->err = errno;
-	}
+    msg = msg_get(conn, false, conn->data_store);
+    if (msg == NULL) {
+        conn->err = errno;
+    }
 
-	return msg;
+    return msg;
 }
 
 void
 dnode_rsp_put(struct msg *msg)
 {
-	ASSERT(!msg->request);
-	ASSERT(msg->peer == NULL);
-	msg_put(msg);
+    ASSERT(!msg->request);
+    ASSERT(msg->peer == NULL);
+    msg_put(msg);
 }
 
 
 struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(!conn->dnode_client && !conn->dnode_server);
 
-	conn->last_received = time(NULL);
+    conn->last_received = time(NULL);
 
-	return rsp_recv_next(ctx, conn, alloc);
+    return rsp_recv_next(ctx, conn, alloc);
 }
 
 static bool
 dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	struct msg *pmsg;
+    struct msg *pmsg;
 
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(!conn->dnode_client && !conn->dnode_server);
 
-	if (msg_empty(msg)) {
-		ASSERT(conn->rmsg == NULL);
-		log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
-				conn->sd);
-		dnode_rsp_put(msg);
-		return true;
-	}
+    if (msg_empty(msg)) {
+        ASSERT(conn->rmsg == NULL);
+        log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
+                conn->sd);
+        dnode_rsp_put(msg);
+        return true;
+    }
 
-	pmsg = TAILQ_FIRST(&conn->omsg_q);
-	if (pmsg == NULL) {
-		log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
-				msg->id, msg->mlen, conn->sd, msg->noreply);
-		dnode_rsp_put(msg);
-		return true;
-	}
-	ASSERT(pmsg->peer == NULL);
-	ASSERT(pmsg->request && !pmsg->done);
+    pmsg = TAILQ_FIRST(&conn->omsg_q);
+    if (pmsg == NULL) {
+        log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
+                msg->id, msg->mlen, conn->sd, msg->noreply);
+        dnode_rsp_put(msg);
+        return true;
+    }
+    ASSERT(pmsg->peer == NULL);
+    ASSERT(pmsg->request && !pmsg->done);
 
 	if (pmsg->swallow) {
 		conn->dequeue_outq(ctx, conn, pmsg);
@@ -85,9 +85,9 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 static void
 dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
 {
-	ASSERT(!msg->request);
-	stats_pool_incr(ctx, server->owner, peer_responses);
-	stats_pool_incr_by(ctx, server->owner, peer_response_bytes, msg->mlen);
+    ASSERT(!msg->request);
+    stats_pool_incr(ctx, server->owner, peer_responses);
+    stats_pool_incr_by(ctx, server->owner, peer_response_bytes, msg->mlen);
 }
 
 
@@ -156,45 +156,45 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
 void
 dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 {
-	rstatus_t status;
-	struct msg *pmsg;
+    rstatus_t status;
+    struct msg *pmsg;
 
-	//ASSERT(p_conn->dnode_client && !p_conn->dnode_server);
+    //ASSERT(p_conn->dnode_client && !p_conn->dnode_server);
 
-	//add messsage
-	struct mbuf *nbuf = mbuf_get();
-	if (nbuf == NULL) {
-		log_debug(LOG_ERR, "Error happened in calling mbuf_get");
-		return;  //TODOs: need to address this further
-	}
+    //add messsage
+    struct mbuf *nbuf = mbuf_get();
+    if (nbuf == NULL) {
+        log_debug(LOG_ERR, "Error happened in calling mbuf_get");
+        return;  //TODOs: need to address this further
+    }
 
-	msg->done = 1;
+    msg->done = 1;
 
-	//TODOs: need to free the old msg object
-	pmsg = msg_get(p_conn, 0, msg->redis);
-	if (pmsg == NULL) {
-		mbuf_put(nbuf);
-		return;
-	}
+    //TODOs: need to free the old msg object
+    pmsg = msg_get(p_conn, 0, msg->redis);
+    if (pmsg == NULL) {
+        mbuf_put(nbuf);
+        return;
+    }
 
-	pmsg->done = 1;
-	// establish msg <-> pmsg (response <-> request) link
-	msg->peer = pmsg;
-	pmsg->peer = msg;
-	pmsg->pre_coalesce(pmsg);
-	pmsg->owner = p_conn;
+    pmsg->done = 1;
+    // establish msg <-> pmsg (response <-> request) link
+    msg->peer = pmsg;
+    pmsg->peer = msg;
+    pmsg->pre_coalesce(pmsg);
+    pmsg->owner = p_conn;
 
-	//dyn message's meta data
-	uint64_t msg_id = msg->dmsg->id;
-	uint8_t type = GOSSIP_SYN_REPLY;
-	struct string data = string("SYN_REPLY_OK");
+    //dyn message's meta data
+    uint64_t msg_id = msg->dmsg->id;
+    uint8_t type = GOSSIP_SYN_REPLY;
+    struct string data = string("SYN_REPLY_OK");
 
-	dmsg_write(nbuf, msg_id, type, p_conn, 0);
-	mbuf_insert(&pmsg->mhdr, nbuf);
+    dmsg_write(nbuf, msg_id, type, p_conn, 0);
+    mbuf_insert(&pmsg->mhdr, nbuf);
 
-	//dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
-	//should we do this?
-	//s_conn->dequeue_outq(ctx, s_conn, pmsg);
+    //dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
+    //should we do this?
+    //s_conn->dequeue_outq(ctx, s_conn, pmsg);
 
 
 
@@ -207,48 +207,47 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
      //}
 
 
-	if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-		status = event_add_out(ctx->evb, p_conn);
-		if (status != DN_OK) {
-			p_conn->err = errno;
-		}
-	}
+    if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+        status = event_add_out(ctx->evb, p_conn);
+        if (status != DN_OK) {
+            p_conn->err = errno;
+        }
+    }
 
-	//dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
+    //dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
 }
 
 */
 
 void
 dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
-		            struct msg *msg, struct msg *nmsg)
+                    struct msg *msg, struct msg *nmsg)
 {
-	log_debug(LOG_VERB, "dnode_rsp_recv_done entering ...");
+    log_debug(LOG_VERB, "dnode_rsp_recv_done entering ...");
 
-	ASSERT(!conn->dnode_client && !conn->dnode_server);
-	ASSERT(msg != NULL && conn->rmsg == msg);
-	ASSERT(!msg->request);
-	ASSERT(msg->owner == conn);
-	ASSERT(nmsg == NULL || !nmsg->request);
+    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(msg != NULL && conn->rmsg == msg);
+    ASSERT(!msg->request);
+    ASSERT(msg->owner == conn);
+    ASSERT(nmsg == NULL || !nmsg->request);
 
-	if (log_loggable(LOG_VVERB)) {
-	   loga("Dumping content for msg:   ");
-	   msg_dump(msg);
+    if (log_loggable(LOG_VVERB)) {
+       loga("Dumping content for msg:   ");
+       msg_dump(msg);
 
-	   if (nmsg != NULL) {
-	      loga("Dumping content for nmsg :");
-	      msg_dump(nmsg);
-	   }
+       if (nmsg != NULL) {
+          loga("Dumping content for nmsg :");
+          msg_dump(nmsg);
+       }
     }
 
-	/* enqueue next message (response), if any */
-	conn->rmsg = nmsg;
+    /* enqueue next message (response), if any */
+    conn->rmsg = nmsg;
 
-	if (dnode_rsp_filter(ctx, conn, msg)) {
-		return;
-	}
-
-	dnode_rsp_forward(ctx, conn, msg);
+    if (dnode_rsp_filter(ctx, conn, msg)) {
+        return;
+    }
+    dnode_rsp_forward(ctx, conn, msg);
 }
 
 
@@ -256,96 +255,93 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 struct msg *
 dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
-	rstatus_t status;
+    rstatus_t status;
 
-	if (log_loggable(LOG_VVERB)) {
-		log_debug(LOG_VVERB, "dnode_rsp_send_next entering");
-	}
 
-	ASSERT(conn->dnode_client && !conn->dnode_server);
-	struct msg *msg = rsp_send_next(ctx, conn);
+    ASSERT(conn->dnode_client && !conn->dnode_server);
+    struct msg *msg = rsp_send_next(ctx, conn);
 
-	if (msg != NULL && conn->dyn_mode) {
-		struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
+    if (msg != NULL && conn->dyn_mode) {
+        struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
 
-		//need to deal with multi-block later
-		uint64_t msg_id = pmsg->dmsg->id;
+        //need to deal with multi-block later
+        uint64_t msg_id = pmsg->dmsg->id;
 
-		struct mbuf *header_buf = mbuf_get();
-		if (header_buf == NULL) {
-			loga("Unable to obtain an mbuf for header!");
-			return NULL; //need to address error here properly
-		}
-		dmsg_type_t msg_type = DMSG_RES;
-		//TODOs: need to set the outcoming conn to be secured too if the incoming conn is secured
-		if (pmsg->owner->dnode_secured || conn->dnode_secured) {
-			if (log_loggable(LOG_VVERB)) {
-				log_debug(LOG_VVERB, "Encrypting response ...");
-				loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
-			}
+        struct mbuf *header_buf = mbuf_get();
+        if (header_buf == NULL) {
+            loga("Unable to obtain an mbuf for header!");
+            return NULL; //need to address error here properly
+        }
+        dmsg_type_t msg_type = DMSG_RES;
+        //TODOs: need to set the outcoming conn to be secured too if the incoming conn is secured
+        if (pmsg->owner->dnode_secured || conn->dnode_secured) {
+            if (log_loggable(LOG_VVERB)) {
+                log_debug(LOG_VVERB, "Encrypting response ...");
+                loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+            }
 
-			if (ENCRYPTION) {
-			  status = dyn_aes_encrypt_msg(msg, conn->aes_key);
-			  if (status == DN_ERROR) {
-					loga("OOM to obtain an mbuf for encryption!");
-					mbuf_put(header_buf);
-					req_put(msg);
-					return NULL;
-			  }
+            if (ENCRYPTION) {
+              status = dyn_aes_encrypt_msg(msg, conn->aes_key);
+              if (status == DN_ERROR) {
+                    loga("OOM to obtain an mbuf for encryption!");
+                    mbuf_put(header_buf);
+                    req_put(msg);
+                    return NULL;
+              }
 
-			  if (log_loggable(LOG_VVERB)) {
-				   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
-			  }
+              if (log_loggable(LOG_VVERB)) {
+                   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+              }
 
-			  dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
-			} else {
-				if (log_loggable(LOG_VVERB)) {
-				   log_debug(LOG_VERB, "no encryption on the msg payload");
-				}
-				dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
-			}
+              dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
+            } else {
+                if (log_loggable(LOG_VVERB)) {
+                   log_debug(LOG_VERB, "no encryption on the msg payload");
+                }
+                dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
+            }
 
-		} else {
-			//write dnode header
-			dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
-		}
+        } else {
+            //write dnode header
+            dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
+        }
 
-		mbuf_insert_head(&msg->mhdr, header_buf);
+        mbuf_insert_head(&msg->mhdr, header_buf);
 
-		if (log_loggable(LOG_VVERB)) {
-			log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
-			msg_dump(msg);
-		}
+        if (log_loggable(LOG_VVERB)) {
+            log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
+            msg_dump(msg);
+        }
 
-	}
+    }
 
-	return msg;
+    return msg;
 }
 
 void
 dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	if (log_loggable(LOG_VVERB)) {
-	   log_debug(LOG_VVERB, "dnode_rsp_send_done entering");
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "dnode_rsp_send_done entering");
    }
 
-	struct msg *pmsg; /* peer message (request) */
+    struct msg *pmsg; /* peer message (request) */
 
-	ASSERT(conn->dnode_client && !conn->dnode_server);
-	ASSERT(conn->smsg == NULL);
+    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->smsg == NULL);
 
 	log_debug(LOG_VVERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
 
-	pmsg = msg->peer;
+    pmsg = msg->peer;
 
-	ASSERT(!msg->request && pmsg->request);
-	ASSERT(pmsg->peer == msg);
-	ASSERT(pmsg->done && !pmsg->swallow);
+    ASSERT(!msg->request && pmsg->request);
+    ASSERT(pmsg->peer == msg);
+    ASSERT(pmsg->done && !pmsg->swallow);
 
-	/* dequeue request from client outq */
-	conn->dequeue_outq(ctx, conn, pmsg);
+    /* dequeue request from client outq */
+    conn->dequeue_outq(ctx, conn, pmsg);
 
-	req_put(pmsg);
+    req_put(pmsg);
 }
 
 
