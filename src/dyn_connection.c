@@ -38,10 +38,10 @@
  *                 +         +          +
  *                 |         |          |
  *                 |       Proxy        |
- *                 |     dn_proxy.[ch]  |
+ *                 |     dyn_proxy.[ch]  |
  *                 /                    \
  *              Client                Server
- *           dn_client.[ch]         dn_server.[ch]
+ *           dyn_client.[ch]         dyn_server.[ch]
  *
  * Dynomite essentially multiplexes m client connections over n server
  * connections. Usually m >> n, so that dynomite can pipeline requests
@@ -95,6 +95,9 @@
 static uint32_t nfree_connq;       /* # free conn q */
 static struct conn_tqh free_connq; /* free conn q */
 
+consistency_t g_read_consistency = DEFAULT_READ_CONSISTENCY;
+consistency_t g_write_consistency = DEFAULT_WRITE_CONSISTENCY;
+
 /*
  * Return the context associated with this connection.
  */
@@ -111,6 +114,12 @@ conn_to_ctx(struct conn *conn)
     }
 
     return pool->ctx;
+}
+
+static rstatus_t
+conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
+{
+    return DN_ENO_IMPL;
 }
 
 static struct conn *
@@ -183,6 +192,10 @@ _conn_get(void)
     conn->attempted_reconnect = 0;
     conn->non_bytes_recv = 0;
     //conn->non_bytes_send = 0;
+    conn_set_read_consistency(conn, DEFAULT_READ_CONSISTENCY);
+    conn_set_write_consistency(conn, DEFAULT_WRITE_CONSISTENCY);
+    conn->type = CONN_UNSPECIFIED;
+    conn->rsp_handler = conn_cant_handle_response; // default rsp handler
 
     unsigned char *ase_key = generate_aes_key();
     strncpy(conn->aes_key, ase_key, strlen(ase_key)); //generate a new key for each connection
@@ -190,36 +203,28 @@ _conn_get(void)
     return conn;
 }
 
-
-void
-conn_add_in_queue_msg(struct conn *conn, struct msg *msg)
+inline void
+conn_set_read_consistency(struct conn *conn, consistency_t cons)
 {
-   TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
-   conn->imsg_count++;
+    conn->read_consistency = cons;
 }
 
-
-void
-conn_remove_in_queue_msg(struct conn *conn, struct msg *msg)
+inline consistency_t
+conn_get_read_consistency(struct conn *conn)
 {
-   TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
-   conn->imsg_count--;
+    return conn->read_consistency;
 }
 
-
-void
-conn_add_out_queue_msg(struct conn *conn, struct msg *msg)
+inline void
+conn_set_write_consistency(struct conn *conn, consistency_t cons)
 {
-   TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
-   conn->omsg_count++;
+    conn->write_consistency = cons;
 }
 
-
-void
-conn_remove_out_queue_msg(struct conn *conn, struct msg *msg)
+inline consistency_t
+conn_get_write_consistency(struct conn *conn)
 {
-   TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
-   conn->omsg_count--;
+    return conn->write_consistency;
 }
 
 struct conn *
@@ -248,6 +253,7 @@ conn_get_peer(void *owner, bool client, int data_store)
          * dyn client receives a request, possibly parsing it, and sends a
          * response downstream.
          */
+        conn->type = CONN_DNODE_PEER_CLIENT;
         conn->recv = msg_recv;
         conn->recv_next = dnode_req_recv_next;
         conn->recv_done = dnode_req_recv_done;
@@ -272,6 +278,7 @@ conn_get_peer(void *owner, bool client, int data_store)
          * dyn server receives a response, possibly parsing it, and sends a
          * request upstream.
          */
+        conn->type = CONN_DNODE_PEER_SERVER;
         conn->recv = msg_recv;
         conn->recv_next = dnode_rsp_recv_next;
         conn->recv_done = dnode_rsp_recv_done;
@@ -321,6 +328,7 @@ conn_get(void *owner, bool client, int data_store)
          * client receives a request, possibly parsing it, and sends a
          * response downstream.
          */
+        conn->type = CONN_CLIENT;
         conn->recv = msg_recv;
         conn->recv_next = req_recv_next;
         conn->recv_done = req_recv_done;
@@ -344,6 +352,7 @@ conn_get(void *owner, bool client, int data_store)
          * server receives a response, possibly parsing it, and sends a
          * request upstream.
          */
+        conn->type = CONN_SERVER;
         conn->recv = msg_recv;
         conn->recv_next = rsp_recv_next;
         conn->recv_done = rsp_recv_done;
@@ -384,6 +393,7 @@ conn_get_dnode(void *owner)
     }
 
     conn->data_store = pool->data_store;
+    conn->type = CONN_DNODE_SERVER;
 
     conn->dnode_server = 1;
     conn->dyn_mode = 1;
@@ -426,6 +436,7 @@ conn_get_proxy(void *owner)
         return NULL;
     }
 
+    conn->type = CONN_PROXY;
     conn->data_store = pool->data_store;
 
     conn->proxy = 1;
