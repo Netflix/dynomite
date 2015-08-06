@@ -352,6 +352,7 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
        log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
     }
 
+    log_debug(LOG_VERB, "conn %p msg %p done", conn, msg);
     pmsg = msg->peer;
 
     ASSERT(!msg->request && pmsg->request);
@@ -361,6 +362,9 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     /* dequeue request from client outq */
     conn->dequeue_outq(ctx, conn, pmsg);
 
+    // Remove it from the dict
+    struct msg *req = msg->peer;
+    dictDelete(conn->outstanding_msgs_dict, &req->id);
     req_put(pmsg);
 }
 

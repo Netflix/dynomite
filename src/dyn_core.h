@@ -68,6 +68,7 @@
 #define DN_ERROR    -1
 #define DN_EAGAIN   -2
 #define DN_ENOMEM   -3
+#define DN_ENO_IMPL -4
 
 
 typedef int rstatus_t; /* return type */
