@@ -41,7 +41,7 @@ dyn_parse_core(struct msg *r)
    }
 
    if (r->dyn_state == DYN_DONE || r->dyn_state == DYN_POST_DONE)
-   	return true;
+       return true;
 
    b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
@@ -212,23 +212,23 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_SAME_DC:
-      	if (isdigit(ch)) {
-      		dmsg->same_dc = ch - '0';
-      		if (log_loggable(LOG_DEBUG)) {
-           	   log_debug(LOG_DEBUG, "DYN_SAME_DC %d", dmsg->same_dc);
-      		}
-      	} else if (ch == ' ' && isdigit(*(p-1))) {
-      		state = DYN_DATA_LEN;
-      		num = 0;
-      	} else {
-      		token = NULL;
-      		//loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-      		state = DYN_START;
-      		if (ch == '$')
-      		   p -= 1;
-      	}
+          if (isdigit(ch)) {
+              dmsg->same_dc = ch - '0';
+              if (log_loggable(LOG_DEBUG)) {
+                  log_debug(LOG_DEBUG, "DYN_SAME_DC %d", dmsg->same_dc);
+              }
+          } else if (ch == ' ' && isdigit(*(p-1))) {
+              state = DYN_DATA_LEN;
+              num = 0;
+          } else {
+              token = NULL;
+              //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+              state = DYN_START;
+              if (ch == '$')
+                 p -= 1;
+          }
 
-      	break;
+          break;
 
       case DYN_DATA_LEN:
          if (log_loggable(LOG_DEBUG)) {
@@ -344,15 +344,15 @@ dyn_parse_core(struct msg *r)
    //we try to look for the start the next good one and throw away the bad part
    if (r->dyn_state == DYN_START) {
       r->result = MSG_PARSE_AGAIN;
-   	if (b->last == b->end) {
-   	   struct mbuf *nbuf = mbuf_get();
-   	   if (nbuf == NULL) {
-   		  loga("Unable to obtain a new mbuf for replacement!");
-   		  mbuf_put(b);
-   		  nbuf = mbuf_get();
-   		  mbuf_insert_head(&r->mhdr, nbuf);
-   		  r->pos = nbuf->pos;
-   		  return false;
+       if (b->last == b->end) {
+          struct mbuf *nbuf = mbuf_get();
+          if (nbuf == NULL) {
+             loga("Unable to obtain a new mbuf for replacement!");
+             mbuf_put(b);
+             nbuf = mbuf_get();
+             mbuf_insert_head(&r->mhdr, nbuf);
+             r->pos = nbuf->pos;
+             return false;
          }
 
          //replacing the bad mbuf with a new and empty mbuf
@@ -361,18 +361,18 @@ dyn_parse_core(struct msg *r)
          mbuf_put(b);
          r->pos = nbuf->pos;
          return false;
-   	} else { //split it and throw away the bad portion
+       } else { //split it and throw away the bad portion
            struct mbuf *nbuf;
 
            nbuf = mbuf_split(&r->mhdr, r->pos, NULL, NULL);
-   	   if (nbuf == NULL) {
-   	        return DN_ENOMEM;
-   	   }
-   	   mbuf_insert(&r->mhdr, nbuf);
-   	   mbuf_remove(&r->mhdr, b);
-   	   r->pos = nbuf->pos;
-   	   return false;
-   	}
+          if (nbuf == NULL) {
+               return DN_ENOMEM;
+          }
+          mbuf_insert(&r->mhdr, nbuf);
+          mbuf_remove(&r->mhdr, b);
+          r->pos = nbuf->pos;
+          return false;
+       }
 
    }
 
@@ -385,13 +385,13 @@ dyn_parse_core(struct msg *r)
    }
 
    if (r->pos == b->last) {
-   	if (log_loggable(LOG_DEBUG)) {
+       if (log_loggable(LOG_DEBUG)) {
            log_debug(LOG_DEBUG, "Forward to reading the new block of data");
-   	}
-   	r->dyn_state = DYN_START;
-   	r->result = MSG_PARSE_AGAIN;
-   	token = NULL;
-   	return false;
+       }
+       r->dyn_state = DYN_START;
+       r->result = MSG_PARSE_AGAIN;
+       token = NULL;
+       return false;
    }
 
    if (log_loggable(LOG_VVERB)) {
@@ -645,11 +645,11 @@ dmsg_free(struct dmsg *dmsg)
 void
 dmsg_put(struct dmsg *dmsg)
 {
-	if (log_loggable(LOG_VVVERB)) {
-		log_debug(LOG_VVVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
-	}
-	nfree_dmsgq++;
-	TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
+    if (log_loggable(LOG_VVVERB)) {
+        log_debug(LOG_VVVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
+    }
+    nfree_dmsgq++;
+    TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
 }
 
 void
@@ -760,9 +760,9 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     //same-dc
     mbuf_write_char(mbuf, ' ');
     if (conn->same_dc)
-   	 mbuf_write_uint8(mbuf, 1);
+        mbuf_write_uint8(mbuf, 1);
     else
-   	 mbuf_write_uint8(mbuf, 0);
+        mbuf_write_uint8(mbuf, 0);
 
     //data
     mbuf_write_char(mbuf, ' ');
@@ -819,9 +819,9 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     //same-dc
     mbuf_write_char(mbuf, ' ');
     if (conn->same_dc)
-   	 mbuf_write_uint8(mbuf, 1);
+        mbuf_write_uint8(mbuf, 1);
     else
-   	 mbuf_write_uint8(mbuf, 0);
+        mbuf_write_uint8(mbuf, 0);
 
     //mbuf_write_string(mbuf, &CRLF_STR);
     mbuf_write_char(mbuf, ' ');

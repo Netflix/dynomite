@@ -24,6 +24,9 @@
 #include "dyn_server.h"
 #include "dyn_client.h"
 
+static rstatus_t client_handle_response(struct conn *conn, msgid_t msg,
+                                        struct msg *rsp);
+
 static unsigned int
 dict_msg_id_hash(const void *key)
 {
@@ -73,6 +76,8 @@ client_ref(struct conn *conn, void *owner)
     conn->owner = owner;
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->type = CONN_CLIENT;
+    conn->rsp_handler = client_handle_response;
+
     log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
@@ -220,3 +225,34 @@ client_close(struct context *ctx, struct conn *conn)
 
     conn_put(conn);
 }
+
+// A response handler first deletes the link between the response and the
+// request. This request can be a request clone at the dnode_server connection.
+rstatus_t
+client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
+{
+    // First lets delink the response and message that earlier code did
+    if (rsp->peer) {
+        rsp->peer->peer = NULL;
+    }
+    rsp->peer = NULL;
+    // now the handler owns the response. the caller owns the request
+    ASSERT(conn->type == CONN_CLIENT);
+    // Fetch the original request
+    struct msg *req = dictFetchValue(conn->outstanding_msgs_dict, &reqid);
+    if (!req) {
+        log_notice("looks like we already cleanedup the request for %d", reqid);
+        rsp_put(rsp);
+        return DN_OK;
+    }
+    rstatus_t status = msg_handle_response(req, rsp);
+    if (status == DN_OK) {
+        struct context *ctx = conn_to_ctx(conn);
+        status = event_add_out(ctx->evb, conn);
+        if (status != DN_OK) {
+            conn->err = errno;
+        }
+    }
+    return status;
+}
+
