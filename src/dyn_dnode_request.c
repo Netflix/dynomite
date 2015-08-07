@@ -102,7 +102,7 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     //use only the 1st pool
     struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     stats_pool_incr(ctx, pool, peer_out_queue);
-    stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+   stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
 }
 
 void

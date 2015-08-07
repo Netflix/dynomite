@@ -251,14 +251,17 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-        status = event_add_out(ctx->evb, c_conn);
-        if (status != DN_OK) {
-            c_conn->err = errno;
-        }
-    }
-
     server_rsp_forward_stats(ctx, s_conn->owner, rsp);
+    // this should really be the message's response handler be doing it
+    if (req_done(c_conn, req)) {
+        // handler owns the response now
+        log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p", rsp->id,
+                   rsp->parent_id, req->id, req->parent_id, c_conn);
+        rstatus_t status = DN_OK;
+        status = conn_handle_response(c_conn, c_conn->type == CONN_CLIENT ?
+                                      req->id : req->parent_id, rsp);
+        IGNORE_RET_VAL(status);
+     }
 }
 
 void
