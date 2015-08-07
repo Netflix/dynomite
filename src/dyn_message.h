@@ -35,6 +35,8 @@
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
 typedef void (*msg_coalesce_t)(struct msg *r);
+typedef rstatus_t (*msg_reply_t)(struct msg *r);
+typedef bool (*msg_failure_t)(struct msg *r);
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -230,6 +232,8 @@ struct msg {
     msg_coalesce_t       post_coalesce;   /* message post-coalesce */
 
     msg_type_t           type;            /* message type */
+    msg_reply_t          reply;           /* generate message reply (example: ping) */
+    msg_failure_t        failure;         /* transient failure response? */
 
     uint8_t              *key_start;      /* key start */
     uint8_t              *key_end;        /* key end */
@@ -297,6 +301,10 @@ bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
 uint32_t msg_alloc_msgs(void);
+struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
+rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
