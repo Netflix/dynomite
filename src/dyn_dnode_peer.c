@@ -548,7 +548,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg*msg)
     rstatus_t status = conn_handle_response(c_conn, msg->parent_id, rsp);
     IGNORE_RET_VAL(status);
     if (msg->swallow)
-    	req_put(msg);
+        req_put(msg);
 }
 void
 dnode_peer_close(struct context *ctx, struct conn *conn)

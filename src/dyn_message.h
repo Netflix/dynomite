@@ -208,10 +208,11 @@ struct response_mgr {
     uint8_t     quorum_responses;   // responses expected to form a quorum
     uint8_t     error_responses;    // error responses received
     struct msg  *err_rsp;           // first error response
+    struct conn *conn;
 };
 
 void init_response_mgr(struct response_mgr *rspmgr, bool is_read,
-                       uint8_t max_responses);
+                       uint8_t max_responses, struct conn *conn);
 // DN_OK if response was accepted
 rstatus_t rspmgr_submit_response(struct response_mgr *rspmgr, struct msg *rsp);
 bool rspmgr_is_done(struct response_mgr *rspmgr);
