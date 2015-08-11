@@ -31,7 +31,7 @@ enum {
         DYN_DONE,
         DYN_POST_DONE,
         DYN_UNKNOWN
-} state;
+} dyn_state;
 
 typedef enum dmsg_type {
     DMSG_UNKNOWN = 0,

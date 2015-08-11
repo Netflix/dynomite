@@ -37,6 +37,9 @@ typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
 typedef void (*msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef uint64_t msgid_t;
+typedef rstatus_t (*msg_reply_t)(struct msg *r);
+typedef bool (*msg_failure_t)(struct msg *r);
+
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -82,6 +85,8 @@ typedef enum msg_type {
     MSG_REQ_REDIS_PEXPIREAT,
     MSG_REQ_REDIS_PERSIST,
     MSG_REQ_REDIS_PTTL,
+    MSG_REQ_REDIS_SCAN,
+    MSG_REQ_REDIS_SORT,
     MSG_REQ_REDIS_TTL,
     MSG_REQ_REDIS_TYPE,
     MSG_REQ_REDIS_APPEND,                 /* redis requests - string */
@@ -96,6 +101,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_INCR,
     MSG_REQ_REDIS_INCRBY,
     MSG_REQ_REDIS_INCRBYFLOAT,
+    MSG_REQ_REDIS_MSET,
     MSG_REQ_REDIS_MGET,
     MSG_REQ_REDIS_PSETEX,
     MSG_REQ_REDIS_RESTORE,
@@ -117,6 +123,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_HMSET,
     MSG_REQ_REDIS_HSET,
     MSG_REQ_REDIS_HSETNX,
+    MSG_REQ_REDIS_HSCAN,
     MSG_REQ_REDIS_HVALS,
     MSG_REG_REDIS_KEYS,
     MSG_REG_REDIS_INFO,
@@ -131,6 +138,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_LSET,
     MSG_REQ_REDIS_LTRIM,
     MSG_REQ_REDIS_PING,
+    MSG_REQ_REDIS_QUIT,                                                                         \
     MSG_REQ_REDIS_RPOP,
     MSG_REQ_REDIS_RPOPLPUSH,
     MSG_REQ_REDIS_RPUSH,
@@ -150,6 +158,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_SREM,
     MSG_REQ_REDIS_SUNION,
     MSG_REQ_REDIS_SUNIONSTORE,
+    MSG_REQ_REDIS_SSCAN,
     MSG_REQ_REDIS_ZADD,                   /* redis requests - sorted sets */
     MSG_REQ_REDIS_ZCARD,
     MSG_REQ_REDIS_ZCOUNT,
@@ -166,13 +175,27 @@ typedef enum msg_type {
     MSG_REQ_REDIS_ZREVRANK,
     MSG_REQ_REDIS_ZSCORE,
     MSG_REQ_REDIS_ZUNIONSTORE,
+    MSG_REQ_REDIS_ZSCAN,
     MSG_REQ_REDIS_EVAL,                   /* redis requests - eval */
     MSG_REQ_REDIS_EVALSHA,
     MSG_RSP_REDIS_STATUS,                 /* redis response */
-    MSG_RSP_REDIS_ERROR,
     MSG_RSP_REDIS_INTEGER,
     MSG_RSP_REDIS_BULK,
     MSG_RSP_REDIS_MULTIBULK,
+    MSG_RSP_REDIS_ERROR,
+    MSG_RSP_REDIS_ERROR_ERR,
+    MSG_RSP_REDIS_ERROR_OOM,
+    MSG_RSP_REDIS_ERROR_BUSY,
+    MSG_RSP_REDIS_ERROR_NOAUTH,
+    MSG_RSP_REDIS_ERROR_LOADING,
+    MSG_RSP_REDIS_ERROR_BUSYKEY,
+    MSG_RSP_REDIS_ERROR_MISCONF,
+    MSG_RSP_REDIS_ERROR_NOSCRIPT,
+    MSG_RSP_REDIS_ERROR_READONLY,
+    MSG_RSP_REDIS_ERROR_WRONGTYPE,
+    MSG_RSP_REDIS_ERROR_EXECABORT,
+    MSG_RSP_REDIS_ERROR_MASTERDOWN,
+    MSG_RSP_REDIS_ERROR_NOREPLICAS,
     MSG_SENTINEL
 } msg_type_t;
 
@@ -246,6 +269,8 @@ struct msg {
     msg_coalesce_t       post_coalesce;   /* message post-coalesce */
 
     msg_type_t           type;            /* message type */
+    msg_reply_t          reply;           /* generate message reply (example: ping) */
+    msg_failure_t        failure;         /* transient failure response? */
 
     uint8_t              *key_start;      /* key start */
     uint8_t              *key_end;        /* key end */
@@ -324,6 +349,11 @@ rstatus_t msg_send(struct context *ctx, struct conn *conn);
 uint32_t msg_alloc_msgs(void);
 uint32_t msg_payload_crc32(struct msg *msg);
 struct msg *msg_get_rsp_integer(int data_store);
+struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
+rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
+
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
