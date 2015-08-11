@@ -336,6 +336,8 @@ msg_get(struct conn *conn, bool request, int data_store)
         }
         msg->pre_splitcopy = redis_pre_splitcopy;
         msg->post_splitcopy = redis_post_splitcopy;
+        msg->reply = redis_reply;
+        msg->failure = redis_failure;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
     } else if (data_store == DATA_MEMCACHE) {
@@ -1121,6 +1123,107 @@ msg_send(struct context *ctx, struct conn *conn)
         }
 
     } while (conn->send_ready);
+
+    return DN_OK;
+}
+
+struct mbuf *
+msg_ensure_mbuf(struct msg *msg, size_t len)
+{
+    struct mbuf *mbuf;
+
+    if (STAILQ_EMPTY(&msg->mhdr) ||
+        mbuf_size(STAILQ_LAST(&msg->mhdr, mbuf, next)) < len) {
+        mbuf = mbuf_get();
+        if (mbuf == NULL) {
+            return NULL;
+        }
+        mbuf_insert(&msg->mhdr, mbuf);
+    } else {
+        mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    }
+
+    return mbuf;
+}
+
+
+/*
+ * Append n bytes of data, with n <= mbuf_size(mbuf)
+ * into mbuf
+ */
+rstatus_t
+msg_append(struct msg *msg, uint8_t *pos, size_t n)
+{
+    struct mbuf *mbuf;
+
+    ASSERT(n <= mbuf_data_size());
+
+    mbuf = msg_ensure_mbuf(msg, n);
+    if (mbuf == NULL) {
+        return DN_ENOMEM;
+    }
+
+    ASSERT(n <= mbuf_size(mbuf));
+
+    mbuf_copy(mbuf, pos, n);
+    msg->mlen += (uint32_t)n;
+
+    return DN_OK;
+}
+
+/*
+ * Prepend n bytes of data, with n <= mbuf_size(mbuf)
+ * into mbuf
+ */
+rstatus_t
+msg_prepend(struct msg *msg, uint8_t *pos, size_t n)
+{
+    struct mbuf *mbuf;
+
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+        return DN_ENOMEM;
+    }
+
+    ASSERT(n <= mbuf_size(mbuf));
+
+    mbuf_copy(mbuf, pos, n);
+    msg->mlen += (uint32_t)n;
+
+    STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+
+    return DN_OK;
+}
+
+/*
+ * Prepend a formatted string into msg. Returns an error if the formatted
+ * string does not fit in a single mbuf.
+ */
+rstatus_t
+msg_prepend_format(struct msg *msg, const char *fmt, ...)
+{
+    struct mbuf *mbuf;
+    int n;
+    uint32_t size;
+    va_list args;
+
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+        return DN_ENOMEM;
+    }
+
+    size = mbuf_size(mbuf);
+
+    va_start(args, fmt);
+    n = dn_vscnprintf(mbuf->last, size, fmt, args);
+    va_end(args);
+    if (n <= 0 || n >= (int)size) {
+        return DN_ERROR;
+    }
+
+    mbuf->last += n;
+    msg->mlen += (uint32_t)n;
+    STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
 
     return DN_OK;
 }
