@@ -435,7 +435,7 @@ msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? strerror(err) : "unknown";
-    char *protstr = data_store ? "-ERR" : "SERVER_ERROR"; //Yannis: something wrong is here
+    char *protstr = data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source;
 
     if (dyn_err == PEER_CONNECTION_REFUSE) {

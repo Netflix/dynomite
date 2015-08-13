@@ -66,20 +66,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(pmsg->peer == NULL);
     ASSERT(pmsg->request && !pmsg->done);
 
-	if (pmsg->swallow) {
-		conn->dequeue_outq(ctx, conn, pmsg);
-		pmsg->done = 1;
-
-		log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
-				"%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
-				conn->sd);
-
-		dnode_rsp_put(msg);
-		req_put(pmsg);
-		return true;
-	}
-
-	return false;
+    return false;
 }
 
 static void
@@ -90,62 +77,101 @@ dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *
     stats_pool_incr_by(ctx, server->owner, peer_response_bytes, msg->mlen);
 }
 
+static void
+dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
+                  struct msg *req, struct msg *rsp)
+{
+    peer_conn->dequeue_outq(ctx, peer_conn, req);
+    req->done = 1;
+    log_debug(LOG_VERB, "conn %p swallow %p", peer_conn, req);
+    log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
+            "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
+            peer_conn->sd);
+
+    dnode_rsp_put(rsp);
+    req_put(req);
+}
 
 /* Description: link data from a peer connection to a client-facing connection
  * peer_conn: a peer connection
  * msg      : msg with data from the peer connection after parsing
  */
 static void
-dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *msg)
+dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 {
-	rstatus_t status;
-	struct msg *pmsg;
-	struct conn *c_conn;
+    rstatus_t status;
+    struct msg *req;
+    struct conn *c_conn;
 
-	log_debug(LOG_VERB, "dnode_rsp_forward entering ...");
-	ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
+    ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
 
-	/* response from a peer implies that peer is ok and heartbeating */
-	dnode_peer_ok(ctx, peer_conn);
+    /* response from a peer implies that peer is ok and heartbeating */
+    dnode_peer_ok(ctx, peer_conn);
 
-	/* dequeue peer message (request) from peer conn */
-	pmsg = TAILQ_FIRST(&peer_conn->omsg_q);
-	ASSERT(pmsg != NULL && pmsg->peer == NULL);
-	ASSERT(pmsg->request && !pmsg->done);
+    /* dequeue peer message (request) from peer conn */
+    req = TAILQ_FIRST(&peer_conn->omsg_q);
+    log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
+    c_conn = req->owner;
 
-	if (log_loggable(LOG_VVERB)) {
-	   loga("Dumping content for msg:   ");
-	   msg_dump(msg);
-
-	   loga("msg id %d", msg->id);
-
-	   loga("Dumping content for pmsg :");
-	   msg_dump(pmsg);
-
-	   loga("pmsg id %d", pmsg->id);
+    /* if client consistency is local_one forward the response from only the
+       local node. Since dyn_dnode_peer is always a remote node, drop the rsp */
+    if (req->consistency == LOCAL_ONE) {
+        if (req->swallow) {
+            dnode_rsp_swallow(ctx, peer_conn, req, rsp);
+            return;
+        }
+        log_warn("req %d:%d with LOCAL_ONE consistency is not being swallowed");
     }
 
-	peer_conn->dequeue_outq(ctx, peer_conn, pmsg);
-	pmsg->done = 1;
+    /* if client consistency is local_quorum, forward the response from only the
+       local region/DC. */
+    if ((req->consistency == LOCAL_QUORUM) && !peer_conn->same_dc) {
+        if (req->swallow) {
+            dnode_rsp_swallow(ctx, peer_conn, req, rsp);
+            return;
+        }
+        log_warn("req %d:%d with LOCAL_QUORUM consistency is not being swallowed");
+    }
 
-	/* establish msg <-> pmsg (response <-> request) link */
-	pmsg->peer = msg;
-	msg->peer = pmsg;
+    ASSERT(req != NULL && req->peer == NULL);
+    ASSERT(req->request && !req->done);
 
-	msg->pre_coalesce(msg);
+    if (log_loggable(LOG_VVERB)) {
+       loga("Dumping content for msg:   ");
+       msg_dump(rsp);
 
+       loga("msg id %d", rsp->id);
 
-	c_conn = pmsg->owner;
-	ASSERT((c_conn->client && !c_conn->proxy) || (c_conn->dnode_client && !c_conn->dnode_server));
+       loga("Dumping content for pmsg :");
+       msg_dump(req);
 
-	if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-		status = event_add_out(ctx->evb, c_conn);
-		if (status != DN_OK) {
-			c_conn->err = errno;
-		}
-	}
+       loga("pmsg id %d", req->id);
+    }
 
-	dnode_rsp_forward_stats(ctx, peer_conn->owner, msg);
+    peer_conn->dequeue_outq(ctx, peer_conn, req);
+    req->done = 1;
+
+    log_debug(LOG_VERB, "%p <-> %p", req, rsp);
+    /* establish rsp <-> req (response <-> request) link */
+    req->peer = rsp;
+    rsp->peer = req;
+
+    rsp->pre_coalesce(rsp);
+
+    ASSERT((c_conn->client && !c_conn->proxy) || (c_conn->dnode_client && !c_conn->dnode_server));
+
+    dnode_rsp_forward_stats(ctx, peer_conn->owner, rsp);
+    if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, req)) {
+        log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p",
+                   rsp->id, rsp->parent_id, req->id, req->parent_id, c_conn);
+        // c_conn owns respnse now
+        ASSERT(c_conn->type == CONN_CLIENT);
+        rstatus_t status = conn_handle_response(c_conn, req->parent_id, rsp);
+        if (req->swallow) {
+            log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
+            req_put(req);
+        }
+    }
 }
 
 
@@ -330,7 +356,7 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(conn->dnode_client && !conn->dnode_server);
     ASSERT(conn->smsg == NULL);
 
-	log_debug(LOG_VVERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    log_debug(LOG_VERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
 
     pmsg = msg->peer;
 

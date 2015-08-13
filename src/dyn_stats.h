@@ -37,6 +37,8 @@
     ACTION( client_read_requests,         STATS_COUNTER,      "# client read requests")                                   \
     ACTION( client_write_requests,        STATS_COUNTER,      "# client write responses")                                 \
     ACTION( client_dropped_requests,      STATS_COUNTER,      "# client dropped requests")                                \
+    ACTION( client_non_quorum_w_responses,STATS_COUNTER,      "# client non quorum write responses")                      \
+    ACTION( client_non_quorum_r_responses,STATS_COUNTER,      "# client non quorum read responses")                       \
     /* pool behavior */                                                                                                   \
     ACTION( server_ejects,                STATS_COUNTER,      "# times backend server was ejected")                       \
     /* dnode client behavior */                                                                                           \
