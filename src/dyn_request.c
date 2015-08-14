@@ -633,7 +633,9 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
-    req_redis_stats(ctx, s_conn->owner, msg);
+    if(msg->data_store==DATA_REDIS){
+    	req_redis_stats(ctx, s_conn->owner, msg);
+	}
 
 
     if (log_loggable(LOG_VERB)) {
