@@ -93,7 +93,23 @@
     ACTION( in_queue_bytes,               STATS_GAUGE,             "current request bytes in incoming queue")                  \
     ACTION( out_queue,                    STATS_GAUGE,             "# requests in outgoing queue")                             \
     ACTION( out_queue_bytes,              STATS_GAUGE,             "current request bytes in outgoing queue")                  \
-
+    /* Redis */																											  \
+	ACTION( redis_req_get,				  STATS_COUNTER,	  "# Redis get")											  \
+	ACTION( redis_req_set,				  STATS_COUNTER,	  "# Redis set")											  \
+	ACTION( redis_req_del,				  STATS_COUNTER,	  "# Redis del")											  \
+	ACTION( redis_req_incr_decr,		  STATS_COUNTER,	  "# Redis incr or decr")									  \
+	ACTION( redis_req_keys,				  STATS_COUNTER,	  "# Redis keys")											  \
+	ACTION( redis_req_mget,				  STATS_COUNTER,	  "# Redis mget")											  \
+	ACTION( redis_req_scan,				  STATS_COUNTER,	  "# Redis scan")											  \
+	ACTION( redis_req_sort,				  STATS_COUNTER,	  "# Redis sort")											  \
+	ACTION( redis_req_lreqm,			  STATS_COUNTER,	  "# Redis lreqm")											  \
+	ACTION( redis_req_sunion,			  STATS_COUNTER,	  "# Redis sunion")											  \
+	ACTION( redis_req_ping,				  STATS_COUNTER,	  "# Redis ping")											  \
+	ACTION( redis_req_lists,			  STATS_COUNTER,	  "# Redis lists")											  \
+	ACTION( redis_req_sets,				  STATS_COUNTER,	  "# Redis sets")											  \
+	ACTION( redis_req_hashes,			  STATS_COUNTER,	  "# Redis hashes")											  \
+	ACTION( redis_req_sortedsets,		  STATS_COUNTER,	  "# Redis sortedsets")										  \
+	ACTION( redis_req_other,			  STATS_COUNTER,	  "# Redis other")											  \
 
 #define STATS_ADDR      "0.0.0.0"
 #define STATS_PORT      22222
@@ -366,3 +382,4 @@ void stats_histo_add_payloadsize(struct context *ctx, uint64_t val);
 
 
 #endif
+
