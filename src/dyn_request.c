@@ -472,6 +472,97 @@ req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
     }
 }
 
+static void
+req_redis_stats(struct context *ctx, struct server *server, struct msg *msg)
+{
+
+    switch (msg->type) {
+
+    case MSG_REQ_REDIS_GET:
+    	 stats_server_incr(ctx, server, redis_req_get);
+    	 break;
+    case MSG_REQ_REDIS_SET:
+    	 stats_server_incr(ctx, server, redis_req_set);
+         break;
+    case MSG_REQ_REDIS_DEL:
+         stats_server_incr(ctx, server, redis_req_del);
+    	 break;
+    case MSG_REQ_REDIS_INCR:
+    case MSG_REQ_REDIS_DECR:
+         stats_server_incr(ctx, server, redis_req_incr_decr);
+         break;
+    case MSG_REG_REDIS_KEYS:
+         stats_server_incr(ctx, server, redis_req_keys);
+         break;
+    case MSG_REQ_REDIS_MGET:
+         stats_server_incr(ctx, server, redis_req_mget);
+         break;
+    case MSG_REQ_REDIS_SCAN:
+         stats_server_incr(ctx, server, redis_req_scan);
+         break;
+    case MSG_REQ_REDIS_SORT:
+          stats_server_incr(ctx, server, redis_req_sort);
+          break;
+    case MSG_REQ_REDIS_PING:
+         stats_server_incr(ctx, server, redis_req_ping);
+         break;
+    case MSG_REQ_REDIS_LREM:
+          stats_server_incr(ctx, server, redis_req_lreqm);
+          /* do not break as this is a list operation as the following.
+           * We count twice the LREM because it is an intensive operation/
+           *  */
+    case MSG_REQ_REDIS_LRANGE:
+    case MSG_REQ_REDIS_LSET:
+    case MSG_REQ_REDIS_LTRIM:
+    case MSG_REQ_REDIS_LINDEX:
+    case MSG_REQ_REDIS_LPUSHX:
+    	 stats_server_incr(ctx, server, redis_req_lists);
+    	 break;
+    case MSG_REQ_REDIS_SUNION:
+         stats_server_incr(ctx, server, redis_req_sunion);
+         /* do not break as this is a set operation as the following.
+          * We count twice the SUNION because it is an intensive operation/
+          *  */
+    case MSG_REQ_REDIS_SETBIT:
+    case MSG_REQ_REDIS_SETEX:
+    case MSG_REQ_REDIS_SETRANGE:
+    case MSG_REQ_REDIS_SADD:
+    case MSG_REQ_REDIS_SDIFF:
+    case MSG_REQ_REDIS_SDIFFSTORE:
+    case MSG_REQ_REDIS_SINTER:
+    case MSG_REQ_REDIS_SINTERSTORE:
+    case MSG_REQ_REDIS_SREM:
+    case MSG_REQ_REDIS_SUNIONSTORE:
+    case MSG_REQ_REDIS_SSCAN:
+    	stats_server_incr(ctx, server, redis_req_set);
+    	break;
+    case MSG_REQ_REDIS_ZADD:
+    case MSG_REQ_REDIS_ZINTERSTORE:
+    case MSG_REQ_REDIS_ZRANGE:
+    case MSG_REQ_REDIS_ZRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZREM:
+    case MSG_REQ_REDIS_ZREVRANGE:
+    case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZUNIONSTORE:
+    case MSG_REQ_REDIS_ZSCAN:
+    case MSG_REQ_REDIS_ZCOUNT:
+    case MSG_REQ_REDIS_ZINCRBY:
+    case MSG_REQ_REDIS_ZREMRANGEBYRANK:
+    case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
+    	stats_server_incr(ctx, server, redis_req_sortedsets);
+    	break;
+    case MSG_REQ_REDIS_HINCRBY:
+    case MSG_REQ_REDIS_HINCRBYFLOAT:
+    case MSG_REQ_REDIS_HSET:
+    case MSG_REQ_REDIS_HSETNX:
+    	stats_server_incr(ctx, server, redis_req_hashes);
+    	break;
+    default:
+        stats_server_incr(ctx, server, redis_req_other);
+        break;
+    }
+}
+
 void
 local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
                   uint8_t *key, uint32_t keylen)
@@ -542,6 +633,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     s_conn->enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
+    req_redis_stats(ctx, s_conn->owner, msg);
 
 
     if (log_loggable(LOG_VERB)) {
