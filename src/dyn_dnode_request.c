@@ -388,8 +388,6 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
         return;
     }
 
-    uint64_t msg_id = peer_msg_id++;
-
     struct mbuf *header_buf = mbuf_get();
     if (header_buf == NULL) {
         loga("Unable to obtain an mbuf for dnode msg's header!");
@@ -420,17 +418,17 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                log_debug(LOG_VERB, "#encrypted bytes : %d", status);
             }
 
-            dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
+            dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
         } else {
             if (log_loggable(LOG_VVERB)) {
                log_debug(LOG_VERB, "no encryption on the msg payload");
             }
-            dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
+            dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
         }
 
     } else {
         //write dnode header
-        dmsg_write(header_buf, msg_id, msg_type, p_conn, msg_length(msg));
+        dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
     }
 
     mbuf_insert_head(&msg->mhdr, header_buf);

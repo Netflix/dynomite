@@ -540,6 +540,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg*msg)
     rsp->error = msg->error = 1;
     rsp->err = msg->err = conn->err;
     rsp->dyn_error = msg->dyn_error = PEER_CONNECTION_REFUSE;
+    rsp->dmsg = dmsg_get();
+    rsp->dmsg->id = msg->id;
 
     log_debug(LOG_INFO, "dyn: close s %d schedule error for req %"PRIu64" "
               "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,

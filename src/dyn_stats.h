@@ -66,6 +66,7 @@
     ACTION( peer_in_queue_bytes,          STATS_GAUGE,        "current peer request bytes in incoming queue")             \
     ACTION( peer_out_queue,               STATS_GAUGE,        "# peer requests in outgoing queue")                        \
     ACTION( peer_out_queue_bytes,         STATS_GAUGE,        "current peer request bytes in outgoing queue")             \
+    ACTION( peer_mismatch_requests,       STATS_COUNTER,      "current dnode peer mismatched messages")                   \
     /* forwarder behavior */                                                                                              \
     ACTION( forward_error,                STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,                    STATS_COUNTER,      "# fragments created from a multi-vector request")          \
