@@ -747,7 +747,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
     uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
     uint8_t rack_index;
     msg->rsp_handler = msg_get_rsp_handler(msg);
-    init_response_mgr(&msg->rspmgr, msg->is_read, rack_cnt, c_conn);
+    init_response_mgr(&msg->rspmgr, msg, msg->is_read, rack_cnt, c_conn);
     log_debug(LOG_INFO, "msg %d:%d same DC racks:%d expect replies %d",
               msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
     for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
@@ -1087,7 +1087,7 @@ msg_write_local_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 }
 
 void
-init_response_mgr(struct response_mgr *rspmgr, bool is_read,
+init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
                   uint8_t max_responses, struct conn *conn)
 {
     memset(rspmgr, 0, sizeof(struct response_mgr));
@@ -1095,6 +1095,7 @@ init_response_mgr(struct response_mgr *rspmgr, bool is_read,
     rspmgr->max_responses = max_responses;
     rspmgr->quorum_responses = max_responses/2 + 1;
     rspmgr->conn = conn;
+    rspmgr->msg = msg;
 }
 
 static bool
@@ -1102,10 +1103,10 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
 {
     // do the required calculation and tell if we are done here
     // TODO:Optimize HERE>> return once quorum is achieved.
-    //if (rspmgr->received_responses >= rspmgr->quorum_responses)
+    //if (rspmgr->good_responses >= rspmgr->quorum_responses)
         //rspmgr->done = true;
     uint8_t pending_responses = rspmgr->max_responses -
-                                rspmgr->received_responses -
+                                rspmgr->good_responses -
                                 rspmgr->error_responses;
     if (pending_responses) {
         rspmgr->done = false;
@@ -1113,7 +1114,7 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
     } else
         rspmgr->done = true;
     // This is required*********
-    /*if ((pending_responses + rspmgr->received_responses) <
+    /*if ((pending_responses + rspmgr->good_responses) <
                                                     rspmgr->quorum_responses)
         rspmgr->done = true;// decision is done. no quorum possible*/
     return rspmgr->done;
@@ -1131,7 +1132,7 @@ static struct msg*
 rspmgr_get_write_response(struct response_mgr *rspmgr)
 {
     struct msg *rsp;
-    if (rspmgr->received_responses >= rspmgr->quorum_responses) {
+    if (rspmgr->good_responses >= rspmgr->quorum_responses) {
         rsp = rspmgr->responses[0];
         log_debug(LOG_VVERB, "return quorum rsp %p", rsp);
     } else {
@@ -1147,19 +1148,19 @@ static struct msg*
 rspmgr_get_read_response(struct response_mgr *rspmgr)
 {
     // no quorum possible
-    if (rspmgr->received_responses < rspmgr->quorum_responses) {
+    if (rspmgr->good_responses < rspmgr->quorum_responses) {
         stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
                         client_non_quorum_r_responses);
-        log_error("return non quorum error rsp %p", rspmgr->err_rsp);
         ASSERT(rspmgr->err_rsp);
+        log_error("return non quorum error rsp %p", rspmgr->err_rsp);
         return rspmgr->err_rsp;
     }
     // try and get the quorum number of responses:
     /* I would have done a better job here but we are having only three replicas.
      * Added a Static assert here just in case */
     STATIC_ASSERT(MAX_REPLICAS_PER_DC == 3, "This code should change");
-    if (rspmgr->received_responses < 3) { //doesnt matter if responses are same
-        log_debug(LOG_VERB, "only %d responses, returning first", rspmgr->received_responses);
+    if (rspmgr->good_responses < 3) { //doesnt matter if responses are same
+        log_debug(LOG_VERB, "only %d responses, returning first", rspmgr->good_responses);
         return rspmgr->responses[0];
     }
 
@@ -1178,6 +1179,16 @@ rspmgr_get_read_response(struct response_mgr *rspmgr)
     stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
                     client_non_quorum_r_responses);
     log_error("none of the responses match, returning first");
+    if (log_loggable(LOG_INFO)) {
+        log_error("Message: ");
+        msg_dump(rspmgr->msg);
+        log_error("Respone 0: ");
+        msg_dump(rspmgr->responses[0]);
+        log_error("Respone 1: ");
+        msg_dump(rspmgr->responses[1]);
+        log_error("Respone 2: ");
+        msg_dump(rspmgr->responses[2]);
+    }
     return rspmgr->responses[0];
 }
 
@@ -1193,7 +1204,7 @@ void
 rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
 {
     int i;
-    for (i = 0; i < rspmgr->received_responses; i++) {
+    for (i = 0; i < rspmgr->good_responses; i++) {
         if (dont_free && (rspmgr->responses[i] == dont_free))
             continue;
         rsp_put(rspmgr->responses[i]);
@@ -1216,8 +1227,8 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
         else
             rsp_put(rsp);
     } else {
-        log_debug(LOG_VERB, "Received response %d:%d", rsp->id, rsp->parent_id);
-        rspmgr->responses[rspmgr->received_responses++] =  rsp;
+        log_debug(LOG_VERB, "Good response %d:%d", rsp->id, rsp->parent_id);
+        rspmgr->responses[rspmgr->good_responses++] =  rsp;
     }
     return DN_OK;
 }
