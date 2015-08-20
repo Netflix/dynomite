@@ -212,6 +212,9 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
     if (log_loggable(LOG_DEBUG)) {
        log_debug(LOG_DEBUG, "dnode_req_forward entering ");
     }
+    log_debug(LOG_DEBUG, "DNODE REQ RECEIVED %c %d dmsg->id %u",
+             conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'),
+             conn->sd, msg->dmsg->id);
 
     ASSERT(conn->dnode_client && !conn->dnode_server);
 
@@ -342,6 +345,9 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
        log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
     }
     ASSERT(!conn->dnode_client && !conn->dnode_server);
+    log_debug(LOG_DEBUG, "DNODE REQ SEND %c %d dmsg->id %u",
+             conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'),
+             conn->sd, msg->dmsg->id);
     req_send_done(ctx, conn, msg);
 }
 

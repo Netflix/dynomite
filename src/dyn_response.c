@@ -287,15 +287,15 @@ struct msg *
 rsp_send_next(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-    struct msg *msg, *pmsg; /* response and it's peer request */
+    struct msg *rsp, *req; /* response and it's peer request */
 
     ASSERT((conn->client && !conn->proxy) ||
            (conn->dnode_client && !conn->dnode_server));
 
-    pmsg = TAILQ_FIRST(&conn->omsg_q);
-    if (pmsg == NULL || !req_done(conn, pmsg)) {
+    req = TAILQ_FIRST(&conn->omsg_q);
+    if (req == NULL || !req_done(conn, req)) {
         /* nothing is outstanding, initiate close? */
-        if (pmsg == NULL && conn->eof) {
+        if (req == NULL && conn->eof) {
             conn->done = 1;
             log_debug(LOG_INFO, "c %d is done", conn->sd);
         }
@@ -308,44 +308,44 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         return NULL;
     }
 
-    msg = conn->smsg;
-    if (msg != NULL) {
-        ASSERT(!msg->request && msg->peer != NULL);
-        ASSERT(req_done(conn, msg->peer));
-        pmsg = TAILQ_NEXT(msg->peer, c_tqe);
+    rsp = conn->smsg;
+    if (rsp != NULL) {
+        ASSERT(!rsp->request && rsp->peer != NULL);
+        ASSERT(req_done(conn, rsp->peer));
+        req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
-    if (pmsg == NULL || !req_done(conn, pmsg)) {
+    if (req == NULL || !req_done(conn, req)) {
         conn->smsg = NULL;
         return NULL;
     }
-    ASSERT(pmsg->request && !pmsg->swallow);
+    ASSERT(req->request && !req->swallow);
 
-    if (req_error(conn, pmsg)) {
-        msg = rsp_make_error(ctx, conn, pmsg);
-        if (msg == NULL) {
+    if (req_error(conn, req)) {
+        rsp = rsp_make_error(ctx, conn, req);
+        if (rsp == NULL) {
             conn->err = errno;
             return NULL;
         }
-        msg->peer = pmsg;
-        pmsg->peer = msg;
+        rsp->peer = req;
+        req->peer = rsp;
         if (conn->dyn_mode) {
       	  stats_pool_incr(ctx, conn->owner, peer_forward_error);
         } else {
       	  stats_pool_incr(ctx, conn->owner, forward_error);
         }
     } else {
-        msg = pmsg->peer;
+        rsp = req->peer;
     }
-    ASSERT(!msg->request);
+    ASSERT(!rsp->request);
 
-    conn->smsg = msg;
+    conn->smsg = rsp;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", msg->id, conn->sd);
+       log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", rsp->id, conn->sd);
     }
 
-    return msg;
+    return rsp;
 }
 
 void

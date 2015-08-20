@@ -110,6 +110,8 @@ conn_to_ctx(struct conn *conn)
         pool = conn->owner;
     } else {
         struct server *server = conn->owner;
+        if (!server)
+            return NULL;
         pool = server->owner;
     }
 

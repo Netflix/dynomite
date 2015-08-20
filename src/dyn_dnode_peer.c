@@ -541,13 +541,15 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg*msg)
     rsp->err = msg->err = conn->err;
     rsp->dyn_error = msg->dyn_error = PEER_CONNECTION_REFUSE;
     rsp->dmsg = dmsg_get();
-    rsp->dmsg->id = msg->id;
+    rsp->dmsg->id =  msg->id;
 
-    log_debug(LOG_INFO, "dyn: close s %d schedule error for req %"PRIu64" "
-              "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
-               msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
-               conn->err ? strerror(conn->err): " ");
-    rstatus_t status = conn_handle_response(c_conn, msg->parent_id, rsp);
+    log_warn("dyn: close s %d schedule error for req %u:%u "
+             "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id, msg->parent_id,
+             msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
+             conn->err ? strerror(conn->err): " ");
+    rstatus_t status =
+            conn_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
+                                 rsp);
     IGNORE_RET_VAL(status);
     if (msg->swallow)
         req_put(msg);
@@ -1023,9 +1025,6 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
         return DN_OK;
     }
 
-    log_debug(LOG_WARN, "dyn: connect to peer '%.*s'", server->pname.len,
-            server->pname.data);
-
     conn->sd = socket(conn->family, SOCK_STREAM, 0);
     if (conn->sd < 0) {
         log_error("dyn: socket for peer '%.*s' failed: %s", server->pname.len,
@@ -1033,6 +1032,8 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
         status = DN_ERROR;
         goto error;
     }
+    log_debug(LOG_WARN, "dnode: connected to peer '%.*s' on p %d", server->pname.len,
+            server->pname.data, conn->sd);
 
 
     status = dn_set_nonblocking(conn->sd);
