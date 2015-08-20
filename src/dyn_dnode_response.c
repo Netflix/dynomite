@@ -155,6 +155,15 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
     /* establish rsp <-> req (response <-> request) link */
     req->peer = rsp;
     rsp->peer = req;
+    if (req->id != rsp->dmsg->id) {
+        log_error("MISMATCH: dnode %c %d rsp_dmsg_id %d req %u:%u dnode rsp %u:%u",
+                  peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
+                  peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
+                  rsp->parent_id);
+        if (conn_to_ctx(c_conn))
+            stats_pool_incr(conn_to_ctx(c_conn), c_conn->owner,
+                            peer_mismatch_requests);
+    }
 
     rsp->pre_coalesce(rsp);
 
@@ -165,8 +174,9 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p",
                    rsp->id, rsp->parent_id, req->id, req->parent_id, c_conn);
         // c_conn owns respnse now
-        ASSERT(c_conn->type == CONN_CLIENT);
-        rstatus_t status = conn_handle_response(c_conn, req->parent_id, rsp);
+        rstatus_t status = conn_handle_response(c_conn,
+                                                req->parent_id ? req->parent_id : req->id,
+                                                rsp);
         if (req->swallow) {
             log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
             req_put(req);
@@ -288,7 +298,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
     struct msg *msg = rsp_send_next(ctx, conn);
 
     if (msg != NULL && conn->dyn_mode) {
-        struct msg *pmsg = TAILQ_FIRST(&conn->omsg_q); //peer request's msg
+        struct msg *pmsg = msg->peer;
 
         //need to deal with multi-block later
         uint64_t msg_id = pmsg->dmsg->id;
