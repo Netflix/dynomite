@@ -851,7 +851,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     keylen = 0;
 
     // add the message to the dict
-    log_debug(LOG_VERB, "conn %p adding message %d:%d", c_conn, msg->id, msg->parent_id);
+    log_debug(LOG_DEBUG, "conn %p adding message %d:%d", c_conn, msg->id, msg->parent_id);
     dictAdd(c_conn->outstanding_msgs_dict, &msg->id, msg);
 
     if (!string_empty(&pool->hash_tag)) {
@@ -1139,7 +1139,8 @@ rspmgr_get_write_response(struct response_mgr *rspmgr)
         rsp = rspmgr->err_rsp;
         stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
                         client_non_quorum_w_responses);
-        log_warn("return non quorum error rsp %p", rsp);
+        log_error("return non quorum error rsp %p good rsp:%u quorum: %u",
+                  rspmgr->err_rsp, rspmgr->good_responses, rspmgr->quorum_responses);
     }
     return rsp;
 }
@@ -1152,7 +1153,10 @@ rspmgr_get_read_response(struct response_mgr *rspmgr)
         stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
                         client_non_quorum_r_responses);
         ASSERT(rspmgr->err_rsp);
-        log_error("return non quorum error rsp %p", rspmgr->err_rsp);
+        log_error("return non quorum error rsp %p good rsp:%u quorum: %u",
+                  rspmgr->err_rsp, rspmgr->good_responses, rspmgr->quorum_responses);
+        if (log_loggable(LOG_INFO))
+            msg_dump(rspmgr->err_rsp);
         return rspmgr->err_rsp;
     }
     // try and get the quorum number of responses:
@@ -1179,7 +1183,7 @@ rspmgr_get_read_response(struct response_mgr *rspmgr)
     stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
                     client_non_quorum_r_responses);
     log_error("none of the responses match, returning first");
-    if (log_loggable(LOG_INFO)) {
+    if (log_loggable(LOG_ERR)) {
         log_error("Message: ");
         msg_dump(rspmgr->msg);
         log_error("Respone 0: ");

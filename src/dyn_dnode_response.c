@@ -84,11 +84,12 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
     peer_conn->dequeue_outq(ctx, peer_conn, req);
     req->done = 1;
     log_debug(LOG_VERB, "conn %p swallow %p", peer_conn, req);
-    log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
-            "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
-            peer_conn->sd);
-
-    dnode_rsp_put(rsp);
+    if (rsp) {
+        log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
+                  "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
+                  peer_conn->sd);
+        dnode_rsp_put(rsp);
+    }
     req_put(req);
 }
 
@@ -97,20 +98,13 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
  * msg      : msg with data from the peer connection after parsing
  */
 static void
-dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
+dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 {
     rstatus_t status;
     struct msg *req;
     struct conn *c_conn;
 
-    ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
-
-    /* response from a peer implies that peer is ok and heartbeating */
-    dnode_peer_ok(ctx, peer_conn);
-
-    /* dequeue peer message (request) from peer conn */
     req = TAILQ_FIRST(&peer_conn->omsg_q);
-    log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
     c_conn = req->owner;
 
     /* if client consistency is local_one forward the response from only the
@@ -133,19 +127,23 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         log_warn("req %d:%d with LOCAL_QUORUM consistency is not being swallowed");
     }
 
+    log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %c %d dmsg->id %u req %u:%u rsp %u:%u, ",
+              peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
+              peer_conn->sd, rsp->dmsg->id,
+              req->id, req->parent_id, rsp->id, rsp->parent_id);
     ASSERT(req != NULL && req->peer == NULL);
     ASSERT(req->request && !req->done);
 
     if (log_loggable(LOG_VVERB)) {
-       loga("Dumping content for msg:   ");
-       msg_dump(rsp);
+        loga("Dumping content for response:   ");
+        msg_dump(rsp);
 
-       loga("msg id %d", rsp->id);
+        loga("rsp id %d", rsp->id);
 
-       loga("Dumping content for pmsg :");
-       msg_dump(req);
+        loga("Dumping content for request:");
+        msg_dump(req);
 
-       loga("pmsg id %d", req->id);
+        loga("req id %d", req->id);
     }
 
     peer_conn->dequeue_outq(ctx, peer_conn, req);
@@ -155,15 +153,6 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
     /* establish rsp <-> req (response <-> request) link */
     req->peer = rsp;
     rsp->peer = req;
-    if (req->id != rsp->dmsg->id) {
-        log_error("MISMATCH: dnode %c %d rsp_dmsg_id %d req %u:%u dnode rsp %u:%u",
-                  peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
-                  peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
-                  rsp->parent_id);
-        if (conn_to_ctx(c_conn))
-            stats_pool_incr(conn_to_ctx(c_conn), c_conn->owner,
-                            peer_mismatch_requests);
-    }
 
     rsp->pre_coalesce(rsp);
 
@@ -172,13 +161,117 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
     dnode_rsp_forward_stats(ctx, peer_conn->owner, rsp);
     if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, req)) {
         log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p",
-                   rsp->id, rsp->parent_id, req->id, req->parent_id, c_conn);
+                rsp->id, rsp->parent_id, req->id, req->parent_id, c_conn);
         // c_conn owns respnse now
         rstatus_t status = conn_handle_response(c_conn,
-                                                req->parent_id ? req->parent_id : req->id,
-                                                rsp);
+                req->parent_id ? req->parent_id : req->id,
+                rsp);
         if (req->swallow) {
             log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
+            req_put(req);
+        }
+    }
+}
+
+/* There are chances that the request to the remote peer or its response got dropped.
+ * Hence we may not always receive a response to the request at the head of the FIFO.
+ * Hence what we do is we mark that request as errored and move on the next one
+ * in the outgoing queue. This works since we always have message ids in monotonically
+ * increasing order.
+ */
+static void
+dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
+{
+    rstatus_t status;
+    struct msg *req;
+    struct conn *c_conn;
+
+    ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
+
+    /* response from a peer implies that peer is ok and heartbeating */
+    dnode_peer_ok(ctx, peer_conn);
+
+    /* dequeue peer message (request) from peer conn */
+    while (true) {
+        req = TAILQ_FIRST(&peer_conn->omsg_q);
+        log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
+        c_conn = req->owner;
+        if (req->id == rsp->dmsg->id) {
+            dnode_rsp_forward_match(ctx, peer_conn, rsp);
+            return;
+        }
+        // Report a mismatch and try to rectify
+        log_error("MISMATCH: dnode %c %d rsp_dmsg_id %d req %u:%u dnode rsp %u:%u",
+                peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
+                peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
+                rsp->parent_id);
+        if (c_conn && conn_to_ctx(c_conn))
+            stats_pool_incr(conn_to_ctx(c_conn), c_conn->owner,
+                    peer_mismatch_requests);
+
+        // TODO : should you be worried about message id getting wrapped around to 0?
+        if (rsp->dmsg->id < req->id) {
+            // We received a response from the past. This indeed proves out of order
+            // responses. A blunder to the architecture. Log it and drop the response.
+            log_error("MISMATCH: received response from the past. Dropping it");
+            dnode_rsp_put(rsp);
+            return;
+        }
+
+        if (req->consistency == LOCAL_ONE) {
+            if (req->swallow) {
+                // swallow the request and move on the next one
+                dnode_rsp_swallow(ctx, peer_conn, req, NULL);
+                continue;
+            }
+            log_warn("req %d:%d with LOCAL_ONE consistency is not being swallowed");
+        }
+
+        if ((req->consistency == LOCAL_QUORUM) && !peer_conn->same_dc) {
+            if (req->swallow) {
+                // swallow the request and move on the next one
+                dnode_rsp_swallow(ctx, peer_conn, req, NULL);
+                continue;
+            }
+            log_warn("req %d:%d with LOCAL_QUORUM consistency is not being swallowed");
+        }
+
+        log_error("MISMATCHED DNODE RSP RECEIVED %c %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",
+                 peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
+                 peer_conn->sd, rsp->dmsg->id,
+                 req->id, req->parent_id, rsp->id, rsp->parent_id);
+        ASSERT(req != NULL && req->peer == NULL);
+        ASSERT(req->request && !req->done);
+
+        if (log_loggable(LOG_VVERB)) {
+            loga("skipping req:   ");
+            msg_dump(req);
+        }
+
+
+        peer_conn->dequeue_outq(ctx, peer_conn, req);
+        req->done = 1;
+
+        // Create an appropriate response for the request so its propagated up;
+        struct msg *err_rsp = msg_get(peer_conn, false, peer_conn->data_store);
+        err_rsp->error = req->error = 1;
+        err_rsp->err = req->err = BAD_FORMAT;
+        err_rsp->dyn_error = req->dyn_error = BAD_FORMAT;
+        err_rsp->dmsg = dmsg_get();
+        err_rsp->dmsg->id = req->id;
+        log_debug(LOG_VERB, "%p <-> %p", req, err_rsp);
+        /* establish err_rsp <-> req (response <-> request) link */
+        req->peer = err_rsp;
+        err_rsp->peer = req;
+
+        log_error("Peer connection s %d skipping request %u:%u, dummy err_rsp %u:%u",
+                 peer_conn->sd, req->id, req->parent_id, err_rsp->id, err_rsp->parent_id);
+        rstatus_t status =
+            conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
+                                err_rsp);
+        IGNORE_RET_VAL(status);
+        if (req->swallow) {
+                log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
             req_put(req);
         }
     }
@@ -295,10 +388,10 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
 
     ASSERT(conn->dnode_client && !conn->dnode_server);
-    struct msg *msg = rsp_send_next(ctx, conn);
+    struct msg *rsp = rsp_send_next(ctx, conn);
 
-    if (msg != NULL && conn->dyn_mode) {
-        struct msg *pmsg = msg->peer;
+    if (rsp != NULL && conn->dyn_mode) {
+        struct msg *pmsg = rsp->peer;
 
         //need to deal with multi-block later
         uint64_t msg_id = pmsg->dmsg->id;
@@ -317,11 +410,11 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
             }
 
             if (ENCRYPTION) {
-              status = dyn_aes_encrypt_msg(msg, conn->aes_key);
+              status = dyn_aes_encrypt_msg(rsp, conn->aes_key);
               if (status == DN_ERROR) {
                     loga("OOM to obtain an mbuf for encryption!");
                     mbuf_put(header_buf);
-                    req_put(msg);
+                    req_put(rsp);
                     return NULL;
               }
 
@@ -329,29 +422,30 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
                    log_debug(LOG_VERB, "#encrypted bytes : %d", status);
               }
 
-              dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
+              dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(rsp));
             } else {
                 if (log_loggable(LOG_VVERB)) {
-                   log_debug(LOG_VERB, "no encryption on the msg payload");
+                   log_debug(LOG_VERB, "no encryption on the rsp payload");
                 }
-                dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
+                dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(rsp));
             }
 
         } else {
             //write dnode header
-            dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(msg));
+            log_info("sending dnode response with msg_id %u", msg_id);
+            dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(rsp));
         }
 
-        mbuf_insert_head(&msg->mhdr, header_buf);
+        mbuf_insert_head(&rsp->mhdr, header_buf);
 
         if (log_loggable(LOG_VVERB)) {
             log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
-            msg_dump(msg);
+            msg_dump(rsp);
         }
 
     }
 
-    return msg;
+    return rsp;
 }
 
 void
@@ -373,6 +467,9 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(!msg->request && pmsg->request);
     ASSERT(pmsg->peer == msg);
     ASSERT(pmsg->done && !pmsg->swallow);
+    log_debug(LOG_DEBUG, "DNODE RSP SENT %c %d dmsg->id %u",
+             conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'),
+             conn->sd, pmsg->dmsg->id);
 
     /* dequeue request from client outq */
     conn->dequeue_outq(ctx, conn, pmsg);
