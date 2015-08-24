@@ -34,6 +34,7 @@
 #include "dyn_node_snitch.h"
 #include "dyn_ring_queue.h"
 #include "dyn_gossip.h"
+#include "dyn_connection.h"
 
 struct stats_desc {
     char *name; /* stats name */
@@ -973,6 +974,31 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                     return;
                 } else if (strcmp(reqline[1], "/cluster_describe") == 0) {
                     st_cmd->cmd = CMD_CL_DESCRIBE;
+                    return;
+                } else if (strncmp(reqline[1], "/set_consistency", 16) == 0) {
+                    st_cmd->cmd = CMD_SET_CONSISTENCY;
+                    log_notice("Setting consistency parameters: %s", reqline[1]);
+                    char* op = reqline[1] + 16;
+                    if (strncmp(op, "/read", 5) == 0) {
+                        char* type = op + 5;
+                        log_notice("op: %s", op);
+                        log_notice("type: %s", type);
+                        if (strcmp(type, "/local_one") == 0)
+                            g_read_consistency = LOCAL_ONE;
+                        else if (strcmp(type, "/local_quorum") == 0)
+                            g_read_consistency = LOCAL_QUORUM;
+                        else
+                            st_cmd->cmd = CMD_UNKNOWN;
+                    } else if (strncmp(op, "/write", 6) == 0) {
+                        char* type = op + 6;
+                        if (strcmp(type, "/local_one") == 0)
+                            g_write_consistency = LOCAL_ONE;
+                        else if (strcmp(type, "/local_quorum") == 0)
+                            g_write_consistency = LOCAL_QUORUM;
+                        else
+                            st_cmd->cmd = CMD_UNKNOWN;
+                    } else
+                        st_cmd->cmd = CMD_UNKNOWN;
                     return;
                 } else if (strncmp(reqline[1], "/peer", 5) == 0) {
                     log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
