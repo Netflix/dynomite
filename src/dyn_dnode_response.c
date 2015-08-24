@@ -201,7 +201,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             return;
         }
         // Report a mismatch and try to rectify
-        log_error("MISMATCH: dnode %c %d rsp_dmsg_id %d req %u:%u dnode rsp %u:%u",
+        log_error("MISMATCH: dnode %c %d rsp_dmsg_id %u req %u:%u dnode rsp %u:%u",
                 peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
                 peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
                 rsp->parent_id);
