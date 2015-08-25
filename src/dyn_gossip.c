@@ -29,7 +29,7 @@ static const struct string PEER_SSL_PORT = string("8103");
 
 
 static void gossip_debug(void);
-static struct gossip_node_pool gn_pool;
+struct gossip_node_pool gn_pool;
 static uint32_t node_count = 0;
 static struct node *current_node = NULL;
 static struct mbuf * seeds_buf = NULL;
@@ -450,6 +450,7 @@ gossip_add_node_to_rack(struct server_pool *sp, struct string *dc, struct gossip
 	status = string_copy(&gnode->rack, g_rack->name.data, g_rack->name.len);
 	status = string_copy(&gnode->name, ip->data, ip->len);
 	status = string_copy(&gnode->pname, address->data, address->len); //ignore the port for now
+    IGNORE_RET_VAL(status);
 	gnode->port = port_i;
 
 	struct dyn_token * gtoken = &gnode->token;
@@ -538,9 +539,6 @@ gossip_add_node_if_absent(struct server_pool *sp,
 		uint8_t state,
 		uint64_t timestamp)
 {
-	rstatus_t status;
-	bool rack_existed = false;
-
 	log_debug(LOG_VERB, "gossip_add_node_if_absent          : '%.*s'", address->len, address->data);
 
 	struct gossip_dc * g_dc = dictFetchValue(gn_pool.dict_dc, dc);
@@ -681,7 +679,7 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
 }
 
 
-static void
+/*static void
 gossip_metainfo(void)
 {
 		dictIterator *dc_it;
@@ -698,7 +696,6 @@ gossip_metainfo(void)
 
 				dictIterator *node_it = dictGetIterator(g_rack->dict_token_nodes);
 				dictEntry *node_de;
-				int i = 0;
 				while ((node_de = dictNext(node_it)) != NULL) {
 					struct node *gnode = dictGetVal(node_de);
 					log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
@@ -709,7 +706,7 @@ gossip_metainfo(void)
 			}
 		}
 
-}
+}*/
 
 static void *
 gossip_loop(void *arg)

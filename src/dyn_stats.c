@@ -31,7 +31,10 @@
 #include "dyn_core.h"
 #include "dyn_histogram.h"
 #include "dyn_server.h"
+#include "dyn_node_snitch.h"
 #include "dyn_ring_queue.h"
+#include "dyn_gossip.h"
+#include "dyn_connection.h"
 
 struct stats_desc {
     char *name; /* stats name */
@@ -62,11 +65,9 @@ static struct stats_desc stats_server_desc[] = {
 static struct string header_str = string("HTTP/1.1 200 OK \nContent-Type: application/json; charset=utf-8 \nContent-Length:");
 //static struct string endline = string("\r\n");
 static struct string ok = string("OK\r\n");
-//static struct string error = string("ERR");
+static struct string err_resp = string("ERR");
 
 static struct string all = string("all");
-
-static struct histogram latency_histo;
 
 void
 stats_describe(void)
@@ -131,13 +132,9 @@ stats_metric_reset(struct array *stats_metric)
 static rstatus_t
 stats_pool_metric_init(struct array *stats_metric)
 {
-    rstatus_t status;
     uint32_t i, nfield = STATS_POOL_NFIELD;
 
-    status = array_init(stats_metric, nfield, sizeof(struct stats_metric));
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(array_init(stats_metric, nfield, sizeof(struct stats_metric)));
 
     for (i = 0; i < nfield; i++) {
         struct stats_metric *stm = array_push(stats_metric);
@@ -155,13 +152,9 @@ stats_pool_metric_init(struct array *stats_metric)
 static rstatus_t
 stats_server_metric_init(struct stats_server *sts)
 {
-    rstatus_t status;
     uint32_t i, nfield = STATS_SERVER_NFIELD;
 
-    status = array_init(&sts->metric, nfield, sizeof(struct stats_metric));
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(array_init(&sts->metric, nfield, sizeof(struct stats_metric)));
 
     for (i = 0; i < nfield; i++) {
         struct stats_metric *stm = array_push(&sts->metric);
@@ -191,15 +184,10 @@ stats_metric_deinit(struct array *metric)
 static rstatus_t
 stats_server_init(struct stats_server *sts, struct server *s)
 {
-    rstatus_t status;
-
     sts->name = s->name;
     array_null(&sts->metric);
 
-    status = stats_server_metric_init(sts);
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(stats_server_metric_init(sts));
 
     log_debug(LOG_VVVERB, "init stats server '%.*s' with %"PRIu32" metric",
               sts->name.len, sts->name.data, array_n(&sts->metric));
@@ -211,25 +199,18 @@ stats_server_init(struct stats_server *sts, struct server *s)
 static rstatus_t
 stats_server_map(struct array *stats_server, struct array *server)
 {
-    rstatus_t status;
     uint32_t i, nserver;
 
     nserver = array_n(server);
     ASSERT(nserver != 0);
 
-    status = array_init(stats_server, nserver, sizeof(struct stats_server));
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(array_init(stats_server, nserver, sizeof(struct stats_server)));
 
     for (i = 0; i < nserver; i++) {
         struct server *s = array_get(server, i);
         struct stats_server *sts = array_push(stats_server);
 
-        status = stats_server_init(sts, s);
-        if (status != DN_OK) {
-            return status;
-        }
+        THROW_STATUS(stats_server_init(sts, s));
     }
 
     log_debug(LOG_VVVERB, "map %"PRIu32" stats servers", nserver);
@@ -262,10 +243,7 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
     array_null(&stp->metric);
     array_null(&stp->server);
 
-    status = stats_pool_metric_init(&stp->metric);
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(stats_pool_metric_init(&stp->metric));
 
     status = stats_server_map(&stp->server, &sp->server);
     if (status != DN_OK) {
@@ -304,25 +282,18 @@ stats_pool_reset(struct array *stats_pool)
 static rstatus_t
 stats_pool_map(struct array *stats_pool, struct array *server_pool)
 {
-    rstatus_t status;
     uint32_t i, npool;
 
     npool = array_n(server_pool);
     ASSERT(npool != 0);
 
-    status = array_init(stats_pool, npool, sizeof(struct stats_pool));
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(array_init(stats_pool, npool, sizeof(struct stats_pool)));
 
     for (i = 0; i < npool; i++) {
         struct server_pool *sp = array_get(server_pool, i);
         struct stats_pool *stp = array_push(stats_pool);
 
-        status = stats_pool_init(stp, sp);
-        if (status != DN_OK) {
-            return status;
-        }
+        THROW_STATUS(stats_pool_init(stp, sp));
     }
 
     log_debug(LOG_VVVERB, "map %"PRIu32" stats pools", npool);
@@ -348,7 +319,7 @@ stats_pool_unmap(struct array *stats_pool)
 }
 
 static rstatus_t
-stats_create_buf(struct stats *st)
+stats_create_bufs(struct stats *st)
 {
     uint32_t int64_max_digits = 20; /* INT64_MAX = 9223372036854775807 */
     uint32_t int32_max_digits = 10; /* INT32_MAX = 4294967294 */
@@ -483,37 +454,46 @@ stats_create_buf(struct stats *st)
         return DN_ENOMEM;
     }
     st->buf.size = size;
+    st->buf.len = 0;
 
-    log_debug(LOG_DEBUG, "stats buffer size %zu", size);
+    log_debug(LOG_DEBUG, "stats info buffer size %zu", size);
+
+    st->clus_desc_buf.len = 0;
+    st->clus_desc_buf.size = 0;
 
     return DN_OK;
 }
 
 static void
-stats_destroy_buf(struct stats *st)
+stats_destroy_buf(struct stats_buffer *buf)
 {
-    if (st->buf.size != 0) {
-        ASSERT(st->buf.data != NULL);
-        dn_free(st->buf.data);
-        st->buf.size = 0;
+    if (buf->size != 0) {
+        ASSERT(buf->data != NULL);
+        dn_free(buf->data);
+        buf->size = 0;
     }
 }
 
-static rstatus_t
-stats_add_string(struct stats *st, struct string *key, struct string *val)
+static void
+stats_reset_buf(struct stats_buffer *buf)
 {
-    struct stats_buffer *buf;
+    buf->len = 0;
+}
+
+static rstatus_t
+stats_add_string(struct stats_buffer *buf, struct string *key, struct string *val)
+{
     uint8_t *pos;
     size_t room;
     int n;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = dn_snprintf(pos, room, "\"%.*s\":\"%.*s\", ", key->len, key->data,
+    n = dn_snprintf(pos, room, "\"%.*s\":\"%.*s\",", key->len, key->data,
                     val->len, val->data);
     if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
         return DN_ERROR;
     }
 
@@ -523,20 +503,19 @@ stats_add_string(struct stats *st, struct string *key, struct string *val)
 }
 
 static rstatus_t
-stats_add_num(struct stats *st, struct string *key, int64_t val)
+stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
     size_t room;
     int n;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64", ", key->len, key->data,
+    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",", key->len, key->data,
                     val);
     if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
         return DN_ERROR;
     }
 
@@ -548,7 +527,6 @@ stats_add_num(struct stats *st, struct string *key, int64_t val)
 static rstatus_t
 stats_add_header(struct stats *st)
 {
-    rstatus_t status;
     struct stats_buffer *buf;
     int64_t cur_ts, uptime;
 
@@ -559,108 +537,45 @@ stats_add_header(struct stats *st)
     cur_ts = (int64_t)time(NULL);
     uptime = cur_ts - st->start_ts;
 
-    status = stats_add_string(st, &st->service_str, &st->service);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_string(st, &st->source_str, &st->source);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_string(st, &st->version_str, &st->version);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->uptime_str, uptime);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->timestamp_str, cur_ts);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_string(st, &st->rack_str, &st->rack);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_string(st, &st->dc_str, &st->dc);
-    if (status != DN_OK) {
-        return status;
-    }
-
+    THROW_STATUS(stats_add_string(&st->buf, &st->service_str, &st->service));
+    THROW_STATUS(stats_add_string(&st->buf, &st->source_str, &st->source));
+    THROW_STATUS(stats_add_string(&st->buf, &st->version_str, &st->version));
+    THROW_STATUS(stats_add_num(&st->buf, &st->uptime_str, uptime));
+    THROW_STATUS(stats_add_num(&st->buf, &st->timestamp_str, cur_ts));
+    THROW_STATUS(stats_add_string(&st->buf, &st->rack_str, &st->rack));
+    THROW_STATUS(stats_add_string(&st->buf, &st->dc_str, &st->dc));
     //latency histogram
-    status = stats_add_num(st, &st->latency_max_str, st->latency_histo.val_max);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->latency_999th_str, st->latency_histo.val_999th);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->latency_99th_str, st->latency_histo.val_99th);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->latency_95th_str, st->latency_histo.val_95th);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->latency_mean_str, st->latency_histo.mean);
-    if (status != DN_OK) {
-        return status;
-    }
-
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_max_str,
+                 (int64_t)st->latency_histo.val_max))
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_999th_str,
+                 (int64_t)st->latency_histo.val_999th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_99th_str,
+                 (int64_t)st->latency_histo.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_95th_str,
+                 (int64_t)st->latency_histo.val_95th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->latency_mean_str,
+                 (int64_t)st->latency_histo.mean));
     //payload size histogram
-    status = stats_add_num(st, &st->payload_size_max_str, st->payload_size_histo.val_max);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->payload_size_999th_str, st->payload_size_histo.val_999th);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->payload_size_99th_str, st->payload_size_histo.val_99th);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->payload_size_95th_str, st->payload_size_histo.val_95th);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->payload_size_mean_str, st->payload_size_histo.mean);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    status = stats_add_num(st, &st->alloc_msgs_str, st->alloc_msgs);
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_max_str,
+                 (int64_t)st->payload_size_histo.val_max));
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_999th_str,
+                 (int64_t)st->payload_size_histo.val_999th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_99th_str,
+                 (int64_t)st->payload_size_histo.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_95th_str,
+                 (int64_t)st->payload_size_histo.val_95th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_mean_str,
+                 (int64_t)st->payload_size_histo.mean));
+    THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
+                 (int64_t)st->alloc_msgs));
 
     return DN_OK;
 }
 
 static rstatus_t
-stats_add_footer(struct stats *st)
+stats_add_footer(struct stats_buffer *buf)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
-
-    buf = &st->buf;
 
     if (buf->len == buf->size) {
         return DN_ERROR;
@@ -676,19 +591,22 @@ stats_add_footer(struct stats *st)
 }
 
 static rstatus_t
-stats_begin_nesting(struct stats *st, struct string *key)
+stats_begin_nesting(struct stats_buffer *buf, struct string *key, bool arr)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
     size_t room;
     int n;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = dn_snprintf(pos, room, "\"%.*s\": {", key->len, key->data);
+    if (key)
+        n = dn_snprintf(pos, room, "\"%.*s\": %c", key->len, key->data,
+                        arr ? '[' : '{');
+    else
+        n = dn_snprintf(pos, room, "%c", arr ? '[' : '{');
     if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "failed, len:%u size %u", buf->len, buf->size);
         return DN_ERROR;
     }
 
@@ -698,38 +616,24 @@ stats_begin_nesting(struct stats *st, struct string *key)
 }
 
 static rstatus_t
-stats_end_nesting(struct stats *st)
+stats_end_nesting(struct stats_buffer *buf, bool arr)
 {
-    struct stats_buffer *buf;
     uint8_t *pos;
 
-    buf = &st->buf;
     pos = buf->data + buf->len;
 
-    pos -= 2; /* go back by 2 bytes */
-
-    switch (pos[0]) {
-    case ',':
-        /* overwrite last two bytes; len remains unchanged */
-        ASSERT(pos[1] == ' ');
-        pos[0] = '}';
-        pos[1] = ',';
-        break;
-
-    case '}':
-        if (buf->len == buf->size) {
-            return DN_ERROR;
-        }
-        /* overwrite the last byte and add a new byte */
-        ASSERT(pos[1] == ',');
-        pos[1] = '}';
-        pos[2] = ',';
-        buf->len += 1;
-        break;
-
-    default:
-        NOT_REACHED();
+    // eliminate the , if any
+    if (pos[-1] == ',') {
+        buf->len--;
+        pos--;
     }
+    // append "},"
+    if ((buf->len + 2) > buf->size) {
+        return DN_ERROR;
+    }
+    pos[0] = arr ? ']' : '}';
+    pos[1] = ',';
+    buf->len += 2;
 
     return DN_OK;
 }
@@ -737,16 +641,11 @@ stats_end_nesting(struct stats *st)
 static rstatus_t
 stats_copy_metric(struct stats *st, struct array *metric)
 {
-    rstatus_t status;
     uint32_t i;
 
     for (i = 0; i < array_n(metric); i++) {
         struct stats_metric *stm = array_get(metric, i);
-
-        status = stats_add_num(st, &stm->name, stm->value.counter);
-        if (status != DN_OK) {
-            return status;
-        }
+        THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
     }
 
     return DN_OK;
@@ -818,190 +717,342 @@ stats_aggregate(struct stats *st)
     }
 
     if (st->reset_histogram) {
-   	 st->reset_histogram = 0;
-   	 histo_reset(&st->latency_histo);
-   	 histo_reset(&st->payload_size_histo);
+        st->reset_histogram = 0;
+        histo_reset(&st->latency_histo);
+        histo_reset(&st->payload_size_histo);
     }
     st->aggregate = 0;
 }
 
-
 static rstatus_t
-stats_make_rsp(struct stats *st)
+stats_make_info_rsp(struct stats *st)
 {
-    rstatus_t status;
     uint32_t i;
 
-    status = stats_add_header(st);
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(stats_add_header(st));
 
     for (i = 0; i < array_n(&st->sum); i++) {
         struct stats_pool *stp = array_get(&st->sum, i);
         uint32_t j;
 
-        status = stats_begin_nesting(st, &stp->name);
-        if (status != DN_OK) {
-            return status;
-        }
-
+        THROW_STATUS(stats_begin_nesting(&st->buf, &stp->name, false));
         /* copy pool metric from sum(c) to buffer */
-        status = stats_copy_metric(st, &stp->metric);
-        if (status != DN_OK) {
-            return status;
-        }
+        THROW_STATUS(stats_copy_metric(st, &stp->metric));
 
         for (j = 0; j < array_n(&stp->server); j++) {
             struct stats_server *sts = array_get(&stp->server, j);
 
-            status = stats_begin_nesting(st, &sts->name);
-            if (status != DN_OK) {
-                return status;
-            }
-
+            THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
             /* copy server metric from sum(c) to buffer */
-            status = stats_copy_metric(st, &sts->metric);
-            if (status != DN_OK) {
-                return status;
-            }
-
-            status = stats_end_nesting(st);
-            if (status != DN_OK) {
-                return status;
-            }
+            THROW_STATUS(stats_copy_metric(st, &sts->metric));
+            THROW_STATUS(stats_end_nesting(&st->buf, false));
         }
 
-        status = stats_end_nesting(st);
-        if (status != DN_OK) {
-            return status;
-        }
+        THROW_STATUS(stats_end_nesting(&st->buf, false));
     }
 
-    status = stats_add_footer(st);
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(stats_add_footer(&st->buf));
 
     return DN_OK;
 }
 
-
-static void parse_request(int sd, struct stats_cmd *st_cmd)
+static void
+get_host_from_pname(struct string *host, struct string *pname)
 {
-	size_t max_buf_size = 99999;
-	char mesg[max_buf_size], *reqline[3];
-	int rcvd;
-
-	memset( (void*)mesg, (int)'\0', max_buf_size );
-
-	rcvd=recv(sd, mesg, max_buf_size, 0);
-
-	if (rcvd < 0) {
-		log_debug(LOG_VERB, "stats recv error");
-	} else if (rcvd == 0) {   // receive socket closed
-		log_debug(LOG_VERB, "Client disconnected upexpectedly");
-	} else  {  // message received
-		log_debug(LOG_VERB, "%s", mesg);
-		reqline[0] = strtok(mesg, " \t\n");
-		if ( strncmp(reqline[0], "GET\0", 4) == 0 ) {
-			reqline[1] = strtok (NULL, " \t");
-			reqline[2] = strtok (NULL, " \t\n");
-			log_debug(LOG_VERB, "0: %s\n", reqline[0]);
-			log_debug(LOG_VERB, "1: %s\n", reqline[1]);
-			log_debug(LOG_VERB, "2: %s\n", reqline[2]);
-
-			if (strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
-				write(sd, "HTTP/1.0 400 Bad Request\n", 25);
-				st_cmd->cmd = CMD_UNKNOWN;
-				return;
-			} else {
-				if (strncmp(reqline[1], "/\0", 2) == 0 ) {
-					reqline[1] = "/info";
-					return;
-				} else if (strcmp(reqline[1], "/info") == 0) {
-					st_cmd->cmd = CMD_INFO;
-					return;
-				} else if (strcmp(reqline[1], "/ping") == 0) {
-					st_cmd->cmd = CMD_PING;
-					return;
-				} else if (strcmp(reqline[1], "/describe") == 0) {
-					st_cmd->cmd = CMD_DESCRIBE;
-					return;
-				} else if (strcmp(reqline[1], "/loglevelup") == 0) {
-					st_cmd->cmd = CMD_LOG_LEVEL_UP;
-					return;
-				} else if (strcmp(reqline[1], "/logleveldown") == 0) {
-					st_cmd->cmd = CMD_LOG_LEVEL_DOWN;
-					return;
-				} else if (strcmp(reqline[1], "/historeset") == 0) {
-					st_cmd->cmd = CMD_HISTO_RESET;
-					return;
-				} else if (strncmp(reqline[1], "/peer", 5) == 0) {
-					log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
-					char* peer_state = reqline[1] + 5;
-					log_debug(LOG_VERB, "Peer : %s", peer_state);
-					if (strncmp(peer_state, "/down", 5) == 0) {
-						log_debug(LOG_VERB, "Peer's state is down!");
-						st_cmd->cmd = CMD_PEER_DOWN;
-						string_init(&st_cmd->req_data);
-						string_copy_c(&st_cmd->req_data, peer_state + 6);
-					} else if (strncmp(peer_state, "/up", 3) == 0) {
-						log_debug(LOG_VERB, "Peer's state is UP!");
-						st_cmd->cmd = CMD_PEER_UP;
-						string_init(&st_cmd->req_data);
-						string_copy_c(&st_cmd->req_data, peer_state + 4);
-					} else if (strncmp(peer_state, "/reset", 6) == 0) {
-						log_debug(LOG_VERB, "Peer's state is RESET!");
-						st_cmd->cmd = CMD_PEER_RESET;
-						string_init(&st_cmd->req_data);
-						string_copy_c(&st_cmd->req_data, peer_state + 7);
-					} else {
-						st_cmd->cmd = CMD_PING;
-					}
-
-					return;
-				}
-
-				if (strncmp(reqline[1], "/state", 6) == 0) {
-					log_debug(LOG_VERB, "Setting state - URL Parameters : %s", reqline[1]);
-					char* state = reqline[1] + 7;
-					log_debug(LOG_VERB, "cmd : %s", state);
-					if (strcmp(state, "standby") == 0) {
-						st_cmd->cmd = CMD_STANDBY;
-						return;
-					} else if (strcmp(state, "writes_only") == 0) {
-						st_cmd->cmd = CMD_WRITES_ONLY;
-						return;
-					} else if (strcmp(state, "normal") == 0) {
-						st_cmd->cmd = CMD_NORMAL;
-						return;
-					} else if (strcmp(state, "resuming") == 0) {
-						st_cmd->cmd = CMD_RESUMING;
-						return;
-					}
-				}
-
-				st_cmd->cmd = CMD_PING;
-				return;
-			}
-		}
-	}
-
+    uint8_t *found = dn_strchr(pname->data,
+                               &pname->data[pname->len], ':');
+    string_init(host);
+    if (found) {
+        size_t hostlen = found - pname->data;
+        THROW_STATUS(string_copy(host, pname->data, hostlen));
+        return;
+    }
+    THROW_STATUS(string_copy(host, pname->data, pname->len));
+    return;
 }
-
 
 static rstatus_t
-stats_msg_to_core(stats_cmd_t cmd, void *cb, void *post_cb)
+stats_add_node_host(struct stats *st, struct node *node)
 {
-    struct stat_msg *msg = dn_alloc(sizeof(*msg));
-    msg->cmd = cmd;
-    msg->data = NULL;
-    msg->cb = cb;
-    msg->post_cb = post_cb;
-    CBUF_Push(C2S_OutQ, msg);
-	return DN_OK;
+    struct string host_str;
+    string_set_text(&host_str, "host");
+    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    struct string host;
+    // pname is host:port. for local its 0.0.0.0:port
+    // so try to get the hostname if local otherwise use whats in pname
+    char *hn = NULL;
+    if (node->is_local && (hn = get_public_hostname(sp))) {
+        THROW_STATUS(string_copy(&host, hn, dn_strlen(hn)));
+    } else
+        get_host_from_pname(&host, &node->pname);
+
+    THROW_STATUS(stats_add_string(&st->clus_desc_buf, &host_str,
+                                 &host));
+    string_deinit(&host);
+    return DN_OK;
 }
+
+static rstatus_t
+stats_add_node_name(struct stats *st, struct node *node)
+{
+    struct string name_str;
+    string_set_text(&name_str, "name");
+    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    // name is the ip address
+    if (node->is_local) {
+        // get the ip aka name
+        struct string ip;
+        char * ip4 = get_public_ip4(sp);
+        if (ip4) {
+            string_set_raw(&ip, ip4);
+            THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str, &ip));
+        } else
+            THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str,
+                                          &node->name));
+    } else {
+        THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str,
+                                      &node->name));
+    }
+    return DN_OK;
+}
+
+static rstatus_t
+stats_add_node_details(struct stats *st, struct node *node)
+{
+    struct string port_str, token_str;
+    string_set_text(&port_str, "port");
+    string_set_text(&token_str, "token");
+    
+    THROW_STATUS(stats_add_node_name(st, node));
+    THROW_STATUS(stats_add_node_host(st, node));
+    THROW_STATUS(stats_add_num(&st->clus_desc_buf, &port_str, node->port));
+    THROW_STATUS(stats_add_num(&st->clus_desc_buf, &token_str, *(node->token.mag)));
+    return DN_OK;
+}
+
+static rstatus_t
+stats_add_rack_details(struct stats *st, struct gossip_rack *rack)
+{
+    struct string name_str, servers_str;
+    string_set_text(&name_str, "name");
+    string_set_text(&servers_str, "servers");
+    THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str, &rack->name));
+    // servers : [
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &servers_str, true));
+    uint32_t ni;
+    for(ni = 0; ni < array_n(&rack->nodes); ni++) {
+        struct node *node = array_get(&rack->nodes, ni);
+        THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
+        THROW_STATUS(stats_add_node_details(st, node));
+        THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
+    }
+    THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, true));
+    return DN_OK;
+}
+
+static rstatus_t
+stats_add_dc_details(struct stats *st, struct gossip_dc *dc)
+{
+    struct string name_str, racks_str;
+    string_set_text(&name_str, "name");
+    string_set_text(&racks_str, "racks");
+
+    THROW_STATUS(stats_add_string(&st->clus_desc_buf, &name_str, &dc->name));
+    // racks : [
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &racks_str, true));
+    uint32_t ri;
+    for(ri = 0; ri < array_n(&dc->racks); ri++) {
+        struct gossip_rack *rack = array_get(&dc->racks, ri);
+
+        THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
+        THROW_STATUS(stats_add_rack_details(st, rack));
+        THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
+    }
+    THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, true));
+    return DN_OK;
+}
+
+static rstatus_t
+stats_resize_clus_desc_buf(struct stats *st)
+{
+    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    ASSERT(sp);
+    size_t size = 1024 * array_n(&sp->peers);
+    size = DN_ALIGN(size, DN_ALIGNMENT);
+    if (st->clus_desc_buf.size < size) {
+        stats_destroy_buf(&st->clus_desc_buf);
+        st->clus_desc_buf.data = dn_alloc(size);
+        if (st->clus_desc_buf.data == NULL) {
+            log_error("create cluster desc buffer of size %zu failed: %s",
+                      size, strerror(errno));
+            return DN_ENOMEM;
+        }
+        st->clus_desc_buf.size = size;
+    }
+
+    stats_reset_buf(&st->clus_desc_buf);
+    return DN_OK;
+}
+
+static rstatus_t
+stats_make_cl_desc_rsp(struct stats *st)
+{
+    THROW_STATUS(stats_resize_clus_desc_buf(st));
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
+
+    struct string dcs_str;
+    string_set_text(&dcs_str, "dcs");
+    THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &dcs_str, true));
+    uint32_t di;
+    for(di = 0; di < array_n(&gn_pool.datacenters); di++) {
+        struct gossip_dc *dc = array_get(&gn_pool.datacenters, di);
+
+        THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
+        THROW_STATUS(stats_add_dc_details(st, dc));
+        THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
+
+    }
+
+    THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, true));
+    THROW_STATUS(stats_add_footer(&st->clus_desc_buf));
+    return DN_OK;
+}
+
+
+static void
+parse_request(int sd, struct stats_cmd *st_cmd)
+{
+    size_t max_buf_size = 99999;
+    char mesg[max_buf_size], *reqline[3];
+    int rcvd;
+
+    memset( (void*)mesg, (int)'\0', max_buf_size );
+
+    rcvd=recv(sd, mesg, max_buf_size, 0);
+
+    if (rcvd < 0) {
+        log_debug(LOG_VERB, "stats recv error");
+    } else if (rcvd == 0) {   // receive socket closed
+        log_debug(LOG_VERB, "Client disconnected upexpectedly");
+    } else  {  // message received
+        log_debug(LOG_VERB, "%s", mesg);
+        reqline[0] = strtok(mesg, " \t\n");
+        if ( strncmp(reqline[0], "GET\0", 4) == 0 ) {
+            reqline[1] = strtok (NULL, " \t");
+            reqline[2] = strtok (NULL, " \t\n");
+            log_debug(LOG_VERB, "0: %s\n", reqline[0]);
+            log_debug(LOG_VERB, "1: %s\n", reqline[1]);
+            log_debug(LOG_VERB, "2: %s\n", reqline[2]);
+
+            if (strncmp( reqline[2], "HTTP/1.0", 8)!=0 &&
+                strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
+                ssize_t wrote = write(sd, "HTTP/1.0 400 Bad Request\n", 25);
+                IGNORE_RET_VAL(wrote);
+                st_cmd->cmd = CMD_UNKNOWN;
+                return;
+            } else {
+                if (strncmp(reqline[1], "/\0", 2) == 0 ) {
+                    reqline[1] = "/info";
+                    return;
+                } else if (strcmp(reqline[1], "/info") == 0) {
+                    st_cmd->cmd = CMD_INFO;
+                    return;
+                } else if (strcmp(reqline[1], "/ping") == 0) {
+                    st_cmd->cmd = CMD_PING;
+                    return;
+                } else if (strcmp(reqline[1], "/describe") == 0) {
+                    st_cmd->cmd = CMD_DESCRIBE;
+                    return;
+                } else if (strcmp(reqline[1], "/loglevelup") == 0) {
+                    st_cmd->cmd = CMD_LOG_LEVEL_UP;
+                    return;
+                } else if (strcmp(reqline[1], "/logleveldown") == 0) {
+                    st_cmd->cmd = CMD_LOG_LEVEL_DOWN;
+                    return;
+                } else if (strcmp(reqline[1], "/historeset") == 0) {
+                    st_cmd->cmd = CMD_HISTO_RESET;
+                    return;
+                } else if (strcmp(reqline[1], "/cluster_describe") == 0) {
+                    st_cmd->cmd = CMD_CL_DESCRIBE;
+                    return;
+                } else if (strncmp(reqline[1], "/set_consistency", 16) == 0) {
+                    st_cmd->cmd = CMD_SET_CONSISTENCY;
+                    log_notice("Setting consistency parameters: %s", reqline[1]);
+                    char* op = reqline[1] + 16;
+                    if (strncmp(op, "/read", 5) == 0) {
+                        char* type = op + 5;
+                        log_notice("op: %s", op);
+                        log_notice("type: %s", type);
+                        if (strcmp(type, "/local_one") == 0)
+                            g_read_consistency = LOCAL_ONE;
+                        else if (strcmp(type, "/local_quorum") == 0)
+                            g_read_consistency = LOCAL_QUORUM;
+                        else
+                            st_cmd->cmd = CMD_UNKNOWN;
+                    } else if (strncmp(op, "/write", 6) == 0) {
+                        char* type = op + 6;
+                        if (strcmp(type, "/local_one") == 0)
+                            g_write_consistency = LOCAL_ONE;
+                        else if (strcmp(type, "/local_quorum") == 0)
+                            g_write_consistency = LOCAL_QUORUM;
+                        else
+                            st_cmd->cmd = CMD_UNKNOWN;
+                    } else
+                        st_cmd->cmd = CMD_UNKNOWN;
+                    return;
+                } else if (strncmp(reqline[1], "/peer", 5) == 0) {
+                    log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
+                    char* peer_state = reqline[1] + 5;
+                    log_debug(LOG_VERB, "Peer : %s", peer_state);
+                    if (strncmp(peer_state, "/down", 5) == 0) {
+                        log_debug(LOG_VERB, "Peer's state is down!");
+                        st_cmd->cmd = CMD_PEER_DOWN;
+                        string_init(&st_cmd->req_data);
+                        string_copy_c(&st_cmd->req_data, peer_state + 6);
+                    } else if (strncmp(peer_state, "/up", 3) == 0) {
+                        log_debug(LOG_VERB, "Peer's state is UP!");
+                        st_cmd->cmd = CMD_PEER_UP;
+                        string_init(&st_cmd->req_data);
+                        string_copy_c(&st_cmd->req_data, peer_state + 4);
+                    } else if (strncmp(peer_state, "/reset", 6) == 0) {
+                        log_debug(LOG_VERB, "Peer's state is RESET!");
+                        st_cmd->cmd = CMD_PEER_RESET;
+                        string_init(&st_cmd->req_data);
+                        string_copy_c(&st_cmd->req_data, peer_state + 7);
+                    } else {
+                        st_cmd->cmd = CMD_PING;
+                    }
+
+                    return;
+                }
+
+                if (strncmp(reqline[1], "/state", 6) == 0) {
+                    log_debug(LOG_VERB, "Setting state - URL Parameters : %s", reqline[1]);
+                    char* state = reqline[1] + 7;
+                    log_debug(LOG_VERB, "cmd : %s", state);
+                    if (strcmp(state, "standby") == 0) {
+                        st_cmd->cmd = CMD_STANDBY;
+                        return;
+                    } else if (strcmp(state, "writes_only") == 0) {
+                        st_cmd->cmd = CMD_WRITES_ONLY;
+                        return;
+                    } else if (strcmp(state, "normal") == 0) {
+                        st_cmd->cmd = CMD_NORMAL;
+                        return;
+                    } else if (strcmp(state, "resuming") == 0) {
+                        st_cmd->cmd = CMD_RESUMING;
+                        return;
+                    }
+                }
+
+                st_cmd->cmd = CMD_PING;
+                return;
+            }
+        }
+    }
+
+}
+
 
 static rstatus_t
 stats_http_rsp(int sd, uint8_t *content, size_t len)
@@ -1039,93 +1090,95 @@ stats_http_rsp(int sd, uint8_t *content, size_t len)
 static rstatus_t
 stats_send_rsp(struct stats *st)
 {
-	rstatus_t status;
-	int sd;
+    int sd;
 
-	//TODO: move this to an appropriate place that need it.
-	status = stats_make_rsp(st);
-	if (status != DN_OK) {
-		return status;
-	}
+    sd = accept(st->sd, NULL, NULL);
+    if (sd < 0) {
+        log_error("accept on m %d failed: %s", st->sd, strerror(errno));
+        return DN_ERROR;
+    }
 
-	sd = accept(st->sd, NULL, NULL);
-	if (sd < 0) {
-		log_error("accept on m %d failed: %s", st->sd, strerror(errno));
-		return DN_ERROR;
-	}
+    struct stats_cmd st_cmd;
 
-	struct stats_cmd st_cmd;
+    parse_request(sd, &st_cmd);
+    stats_cmd_t cmd = st_cmd.cmd;
 
-	parse_request(sd, &st_cmd);
-	stats_cmd_t cmd = st_cmd.cmd;
+    log_debug(LOG_VERB, "cmd %d", cmd);
 
-	log_debug(LOG_VERB, "cmd %d", cmd);
+    if (cmd == CMD_INFO) {
+        if (stats_make_info_rsp(st) != DN_OK)
+            return stats_http_rsp(sd, err_resp.data, err_resp.len);
+        else  {
+            log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
+            return stats_http_rsp(sd, st->buf.data, st->buf.len);
+        }
+    } else if (cmd == CMD_NORMAL) {
+        st->ctx->dyn_state = NORMAL;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_CL_DESCRIBE) {
+        if (stats_make_cl_desc_rsp(st) != DN_OK)
+            return stats_http_rsp(sd, err_resp.data, err_resp.len);
+        else
+            return stats_http_rsp(sd, st->clus_desc_buf.data, st->clus_desc_buf.len);
+    } else if (cmd == CMD_STANDBY) {
+        st->ctx->dyn_state = STANDBY;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_WRITES_ONLY) {
+        st->ctx->dyn_state = WRITES_ONLY;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_RESUMING) {
+        st->ctx->dyn_state = RESUMING;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_LOG_LEVEL_UP) {
+        log_level_up();
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_LOG_LEVEL_DOWN) {
+        log_level_down();
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_HISTO_RESET) {
+        st->reset_histogram = 1;
+        st->updated = 1;
+        return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
+        log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
+        struct server_pool *sp = array_get(&st->ctx->pool, 0);
+        uint32_t i, len;
 
-	if (cmd == CMD_INFO) {
-		log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
-		return stats_http_rsp(sd, st->buf.data, st->buf.len);
-	} else if (cmd == CMD_NORMAL) {
-		st->ctx->dyn_state = NORMAL;
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_STANDBY) {
-		st->ctx->dyn_state = STANDBY;
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_WRITES_ONLY) {
-		st->ctx->dyn_state = WRITES_ONLY;
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_RESUMING) {
-		st->ctx->dyn_state = RESUMING;
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_LOG_LEVEL_UP) {
-		log_level_up();
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_LOG_LEVEL_DOWN) {
-		log_level_down();
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_HISTO_RESET) {
-		st->reset_histogram = 1;
-		st->updated = 1;
-		return stats_http_rsp(sd, ok.data, ok.len);
-	} else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
-		log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
-		struct server_pool *sp = array_get(&st->ctx->pool, 0);
-		int i, len;
+        //I think it is ok to keep this simple without a synchronization
+        for (i = 0, len = array_n(&sp->peers); i < len; i++) {
+            struct server *peer = array_get(&sp->peers, i);
+            log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
 
-		//I think it is ok to keep this simple without a synchronization
-		for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-			struct server *peer = array_get(&sp->peers, i);
-			log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
+            if (string_compare(&st_cmd.req_data, &all) == 0) {
+                log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET/ALL command", st_cmd.req_data, cmd);
+                peer->state = RESET;
+            } else if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
+                log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to a new state due to command %d", st_cmd.req_data, cmd);
+                switch (cmd) {
+                case CMD_PEER_UP:
+                    peer->state = NORMAL;
+                    break;
+                case CMD_PEER_RESET:
+                    peer->state = RESET;
+                    break;
+                case CMD_PEER_DOWN:
+                    peer->state = DOWN;
+                    break;
+                default:
+                    peer->state = NORMAL;
+                }
+                break;
+            }
+        }
+        string_deinit(&st_cmd.req_data);
+    } else {
+        log_debug(LOG_VERB, "Unsupported cmd");
+    }
 
-			if (string_compare(&st_cmd.req_data, &all) == 0) {
-				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to state %d due to RESET/ALL command", st_cmd.req_data, cmd);
-				peer->state = RESET;
-			} else if (string_compare(&peer->name, &st_cmd.req_data) == 0) {
-				log_debug(LOG_VERB, "\t\tSetting peer '%.*s' to a new state due to command %d", st_cmd.req_data, cmd);
-				switch (cmd) {
-				case CMD_PEER_UP:
-					peer->state = NORMAL;
-					break;
-				case CMD_PEER_RESET:
-					peer->state = RESET;
-					break;
-				case CMD_PEER_DOWN:
-					peer->state = DOWN;
-					break;
-				default:
-					peer->state = NORMAL;
-				}
-				break;
-			}
-		}
-		string_deinit(&st_cmd.req_data);
-	} else {
-		log_debug(LOG_VERB, "Unsupported cmd");
-	}
+    stats_http_rsp(sd, ok.data, ok.len);
+    close(sd);
 
-	stats_http_rsp(sd, ok.data, ok.len);
-	close(sd);
-
-	return DN_OK;
+    return DN_OK;
 }
 
 static void
@@ -1203,10 +1256,7 @@ stats_start_aggregator(struct stats *st)
         return DN_OK;
     }
 
-    status = stats_listen(st);
-    if (status != DN_OK) {
-        return status;
-    }
+    THROW_STATUS(stats_listen(st));
 
     status = pthread_create(&st->tid, NULL, stats_loop, st);
     if (status < 0) {
@@ -1319,7 +1369,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
         goto error;
     }
 
-    status = stats_create_buf(st);
+    status = stats_create_bufs(st);
     if (status != DN_OK) {
         goto error;
     }
@@ -1344,7 +1394,8 @@ stats_destroy(struct stats *st)
     stats_pool_unmap(&st->sum);
     stats_pool_unmap(&st->shadow);
     stats_pool_unmap(&st->current);
-    stats_destroy_buf(st);
+    stats_destroy_buf(&st->buf);
+    stats_destroy_buf(&st->clus_desc_buf);
     dn_free(st);
 }
 
@@ -1524,7 +1575,7 @@ _stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
 }
 
 uint64_t _stats_server_get_ts(struct context *ctx, struct server *server,
-      stats_server_field_t fidx)
+                     stats_server_field_t fidx)
 {
    struct stats *st;
    struct stats_pool *stp;
@@ -1546,7 +1597,7 @@ uint64_t _stats_server_get_ts(struct context *ctx, struct server *server,
 
 void
 _stats_pool_set_val(struct context *ctx, struct server_pool *pool,
-		              stats_pool_field_t fidx, int64_t val)
+                      stats_pool_field_t fidx, int64_t val)
 {
    struct stats_metric *stm;
 
@@ -1693,14 +1744,14 @@ _stats_server_set_ts(struct context *ctx, struct server *server,
 //should use macro or something else to make this more elegant
 void stats_histo_add_latency(struct context *ctx, uint64_t val)
 {
-	struct stats *st = ctx->stats;
-	histo_add(&st->latency_histo, val);
-	ctx->stats->updated = 1;
+    struct stats *st = ctx->stats;
+    histo_add(&st->latency_histo, val);
+    ctx->stats->updated = 1;
 }
 
 void stats_histo_add_payloadsize(struct context *ctx, uint64_t val)
 {
-	struct stats *st = ctx->stats;
-	histo_add(&st->payload_size_histo, val);
-	ctx->stats->updated = 1;
+    struct stats *st = ctx->stats;
+    histo_add(&st->payload_size_histo, val);
+    ctx->stats->updated = 1;
 }

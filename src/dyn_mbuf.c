@@ -93,7 +93,7 @@ mbuf_get(void)
 
     mbuf = _mbuf_get();
     if (mbuf == NULL) {
-   	  loga("mbuf is Null");
+         loga("mbuf is Null");
         return NULL;
     }
 
@@ -102,7 +102,7 @@ mbuf_get(void)
     mbuf->end = buf + mbuf_offset - MBUF_ESIZE;
     mbuf->end_extra = buf + mbuf_offset;
 
-    ASSERT(mbuf->end - mbuf->start == (int)mbuf_offset);
+    //ASSERT(mbuf->end - mbuf->start == (int)mbuf_offset);
     ASSERT(mbuf->start < mbuf->end);
 
     mbuf->pos = mbuf->start;
@@ -129,22 +129,22 @@ mbuf_free(struct mbuf *mbuf)
     dn_free(buf);
 }
 
-uint32_t mbuf_free_queue_size()
+uint32_t mbuf_free_queue_size(void)
 {
-    return 	nfree_mbufq;
+    return     nfree_mbufq;
 }
 
 
 void mbuf_dump(struct mbuf *mbuf)
 {
-	 long int len;
-	 uint8_t *p, *q;
+     long int len;
+     uint8_t *p, *q;
 
-	 p = mbuf->start;
-	 q = mbuf->last;
-	 len = q - p;
+     p = mbuf->start;
+     q = mbuf->last;
+     len = q - p;
 
-	 loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+     loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
 }
 
 void
@@ -282,7 +282,7 @@ mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg)
 
     //ASSERT(pos >= mbuf->pos && pos <= mbuf->last);
     if (pos < mbuf->pos || pos > mbuf->last)
-   	 return NULL;
+        return NULL;
 
     nbuf = mbuf_get();
     if (nbuf == NULL) {
@@ -352,12 +352,12 @@ mbuf_write_string(struct mbuf *mbuf, struct string *s)
 
 void mbuf_write_mbuf(struct mbuf *mbuf, struct mbuf *data)
 {
-	mbuf_copy(mbuf, data->pos, data->last - data->pos);
+    mbuf_copy(mbuf, data->pos, data->last - data->pos);
 }
 
 void mbuf_write_bytes(struct mbuf *mbuf, char *data, int len)
 {
-	mbuf_copy(mbuf, data, len);
+    mbuf_copy(mbuf, data, len);
 }
 
 void

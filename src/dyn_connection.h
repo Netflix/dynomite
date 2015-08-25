@@ -20,10 +20,10 @@
  * limitations under the License.
  */
 
-#include "dyn_core.h"
 
 #ifndef _DYN_CONNECTION_H_
 #define _DYN_CONNECTION_H_
+#include "dyn_core.h"
 
 #define MAX_CONN_QUEUE_SIZE           20000
 #define MAX_CONN_ALLOWABLE_NON_RECV   5
@@ -44,6 +44,17 @@ typedef void (*conn_ref_t)(struct conn *, void *);
 typedef void (*conn_unref_t)(struct conn *);
 
 typedef void (*conn_msgq_t)(struct context *, struct conn *, struct msg *);
+typedef rstatus_t (*conn_response_handler)(struct conn *, msgid_t reqid,
+                                           struct msg *rsp);
+typedef enum connection_type {
+    CONN_UNSPECIFIED,
+    CONN_PROXY, // a dynomite proxy (listening) connection 
+    CONN_CLIENT, // this is connected to a client connection
+    CONN_DNODE_PEER_CLIENT, // this is connected to a dnode peer client
+    CONN_DNODE_PEER_SERVER, // this is connected to a dnode peer server
+    CONN_DNODE_SERVER, // this is a dnode (listening) connection...default 8101
+    CONN_SERVER, // this is connected to underlying datastore ...redis/memcache
+} connection_type_t;
 
 struct conn {
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
@@ -96,7 +107,6 @@ struct conn {
     unsigned           connected:1;   /* connected? */
     unsigned           eof:1;         /* eof? aka passive close? */
     unsigned           done:1;        /* done? aka close? */
-    unsigned           redis:1;       /* redis? */
     unsigned           dnode_server:1;       /* dnode server connection? */
     unsigned           dnode_client:1;       /* dnode client? */
     unsigned           dyn_mode:1;           /* is a dyn connection? */
@@ -104,6 +114,7 @@ struct conn {
     unsigned           dnode_crypto_state:1; /* crypto state */
     unsigned char      aes_key[50]; //aes_key[34];              /* a place holder for AES key */
 
+    int				   data_store;
     unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
@@ -111,22 +122,30 @@ struct conn {
     uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
     uint32_t           non_bytes_recv;        /* #times or epoll triggers we receive no bytes */
     //uint32_t           non_bytes_send;        /* #times or epoll triggers that we are not able to send any bytes */
+    consistency_t      read_consistency;
+    consistency_t      write_consistency;
+    dict               *outstanding_msgs_dict;
+    connection_type_t  type;
+    conn_response_handler rsp_handler;
 };
+
+static inline rstatus_t
+conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
+{
+    return conn->rsp_handler(conn, msgid, rsp);
+}
 
 TAILQ_HEAD(conn_tqh, conn);
 
-void conn_add_in_queue_msg(struct conn *conn, struct msg *msg);
-void conn_remove_in_queue_msg(struct conn *conn, struct msg *msg);
-
-void conn_add_out_queue_msg(struct conn *conn, struct msg *msg);
-void conn_remove_out_queue_msg(struct conn *conn, struct msg *msg);
-
-
+void conn_set_write_consistency(struct conn *conn, consistency_t cons);
+consistency_t conn_get_write_consistency(struct conn *conn);
+void conn_set_read_consistency(struct conn *conn, consistency_t cons);
+consistency_t conn_get_read_consistency(struct conn *conn);
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *test_conn_get(void);
-struct conn *conn_get(void *owner, bool client, bool redis);
+struct conn *conn_get(void *owner, bool client, int data_store);
 struct conn *conn_get_proxy(void *owner);
-struct conn *conn_get_peer(void *owner, bool client, bool redis);
+struct conn *conn_get_peer(void *owner, bool client, int data_store);
 struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 ssize_t conn_recv(struct conn *conn, void *buf, size_t size);

@@ -4,4 +4,4 @@ dyn_o_mite:
   tokens: '101134286'
   servers:
   - 127.0.0.1:22122:1
-  redis: true
+  data_store: 0

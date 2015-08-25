@@ -466,7 +466,8 @@ int _dictClear(dict *d, dictht *ht, void(callback)(void *)) {
     }
     /* Free the table and the allocated cache structure */
     //zfree(ht->table);
-    dn_free(ht->table);
+    if (ht->size && ht->table)
+        dn_free(ht->table);
     /* Re-initialize the table */
     _dictReset(ht);
     return DICT_OK; /* never fails */

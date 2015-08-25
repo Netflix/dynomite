@@ -28,10 +28,10 @@ static int show_help;
 static int test_conf;
 
 static char *data = "$2014$ 1 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo1\r\n$4\r\nbar1\r\n"
-		              "$2014$ 2 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo2\r\n$413\r\nbar01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567892222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222\r\n"
-		              "$2014$ 3 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo3\r\n$4\r\nbar3\r\n";
+                    "$2014$ 2 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo2\r\n$413\r\nbar01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567892222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222\r\n"
+                    "$2014$ 3 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo3\r\n$4\r\nbar3\r\n";
 
-static char *position;
+static size_t position = 0;
 static size_t test_mbuf_chunk_size;
 
 static unsigned char aes_key[AES_KEYLEN];
@@ -239,7 +239,7 @@ init_server(struct server *s)
 
     struct sockinfo *info = malloc(sizeof(struct sockinfo));
 
-    memset(info, 0, sizeof(info));
+    memset(info, 0, sizeof(*info));
     dn_resolve(&name, s->port, info);
 
     s->family = info->family;
@@ -263,259 +263,244 @@ init_server(struct server *s)
 }
 
 
-static int fill_buffer(struct mbuf *mbuf)
+static size_t fill_buffer(struct mbuf *mbuf)
 {
-	loga("total data size: %d", dn_strlen(data));
-   loga("mbuf size: %d", mbuf_size(mbuf));
-	int data_size = data + dn_strlen(data) - position;
+    loga("total data size: %d", dn_strlen(data));
+    loga("mbuf size: %d", mbuf_size(mbuf));
+    size_t data_size = dn_strlen(data) - position;
 
-	loga("data left-over size: %d", data_size);
-	if (data_size <= 0) {
-		return 0;
-	}
+    loga("data left-over size: %d", data_size);
+    if (data_size <= 0) {
+        return 0;
+    }
 
-	int min_len = data_size > mbuf_size(mbuf)? mbuf_size(mbuf) : data_size;
-	mbuf_copy(mbuf, position, min_len);
-	position += min_len;
+    size_t min_len = data_size > mbuf_size(mbuf) ? mbuf_size(mbuf) : data_size;
+    mbuf_copy(mbuf, &data[position], min_len);
+    position += min_len;
 
-	return min_len;
+    return min_len;
 }
 
 static rstatus_t
 test_msg_recv_chain(struct conn *conn, struct msg *msg)
 {
-	rstatus_t status;
-	struct msg *nmsg;
-	struct mbuf *mbuf, *nbuf;
-	size_t msize;
-	ssize_t n;
+    struct msg *nmsg;
+    struct mbuf *mbuf, *nbuf;
 
-	mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
-	mbuf = mbuf_get();
-	mbuf_insert(&msg->mhdr, mbuf);
-	msg->pos = mbuf->pos;
+    mbuf = mbuf_get();
+    mbuf_insert(&msg->mhdr, mbuf);
+    msg->pos = mbuf->pos;
 
-	ASSERT(mbuf->end - mbuf->last > 0);
+    ASSERT(mbuf->end - mbuf->last > 0);
 
 
-	int data_n = fill_buffer(mbuf);
-   msg->mlen += data_n;
+    uint32_t data_n = (uint32_t)fill_buffer(mbuf);
+    msg->mlen += data_n;
 
 
-	loga("msg->mlen = %d", + msg->mlen);
-	loga("mbuf_length = %d", mbuf_length(mbuf));
+    loga("msg->mlen = %d", + msg->mlen);
+    loga("mbuf_length = %d", mbuf_length(mbuf));
 
 
-	bool is_done = false;
+    bool is_done = false;
 
-	for(;!is_done;) {
-		msg->parser(msg);
+    for(;!is_done;) {
+        msg->parser(msg);
 
-		switch (msg->result) {
-		case MSG_PARSE_OK:
-			log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK");
-			if (msg->pos == mbuf->last) {
-				log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - done - no more data to parse!");
-				is_done = true;
-			}
+        switch (msg->result) {
+        case MSG_PARSE_OK:
+            log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK");
+            if (msg->pos == mbuf->last) {
+                log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - done - no more data to parse!");
+                is_done = true;
+            }
 
-			nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
-			if (nbuf == NULL) {
-				log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - more data but can't split!");
-			}
+            nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
+            if (nbuf == NULL) {
+                log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - more data but can't split!");
+            }
 
-			nmsg = msg_get(msg->owner, msg->request, conn->redis);
-			mbuf_insert(&nmsg->mhdr, nbuf);
-			nmsg->pos = nbuf->pos;
+            nmsg = msg_get(msg->owner, msg->request, conn->data_store);
+            mbuf_insert(&nmsg->mhdr, nbuf);
+            nmsg->pos = nbuf->pos;
 
-			/* update length of current (msg) and new message (nmsg) */
-			nmsg->mlen = mbuf_length(nbuf);
-			msg->mlen -= nmsg->mlen;
+            /* update length of current (msg) and new message (nmsg) */
+            nmsg->mlen = mbuf_length(nbuf);
+            msg->mlen -= nmsg->mlen;
 
-			int data_n = fill_buffer(nbuf);
-		   nmsg->mlen += data_n;
+            data_n = (uint32_t)fill_buffer(nbuf);
+            nmsg->mlen += data_n;
 
-			msg = nmsg;
-         mbuf = nbuf;
+            msg = nmsg;
+            mbuf = nbuf;
 
-			break;
+            break;
 
-		case MSG_PARSE_REPAIR:
-			//status = msg_repair(ctx, conn, msg);
-			log_debug(LOG_VVERB, "Parsing MSG_PARSE_REPAIR");
-			msg = NULL;
-			break;
+        case MSG_PARSE_REPAIR:
+            //status = msg_repair(ctx, conn, msg);
+            log_debug(LOG_VVERB, "Parsing MSG_PARSE_REPAIR");
+            msg = NULL;
+            break;
 
-		case MSG_PARSE_AGAIN:
-			log_debug(LOG_VVERB, "Parsing MSG_PARSE_AGAIN");
+        case MSG_PARSE_AGAIN:
+            log_debug(LOG_VVERB, "Parsing MSG_PARSE_AGAIN");
 
-		    nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
-		    mbuf_insert(&msg->mhdr, nbuf);
-		    msg->pos = nbuf->pos;
-		    data_n = fill_buffer(nbuf);
-		    msg->mlen += data_n;
-		    mbuf = nbuf;
+            nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
+            mbuf_insert(&msg->mhdr, nbuf);
+            msg->pos = nbuf->pos;
+            data_n = (uint32_t)fill_buffer(nbuf);
+            msg->mlen += data_n;
+            mbuf = nbuf;
 
-			break;
+            break;
 
-		default:
-			log_debug(LOG_VVERB, "Parsing error in dyn_mode");
-			msg = NULL;
-			break;
-		}
+        default:
+            log_debug(LOG_VVERB, "Parsing error in dyn_mode");
+            msg = NULL;
+            break;
+        }
 
-	}
+    }
 
-	loga("Done parsing .........!");
-	return DN_OK;
+    loga("Done parsing .........!");
+    return DN_OK;
 }
 
 
 static rstatus_t
-rsa_test()
+rsa_test(void)
 {
-	static unsigned char encrypted_buf[256];
-	static unsigned char decrypted_buf[AES_KEYLEN + 1];
-	static unsigned char *msg;
+    static unsigned char encrypted_buf[256];
+    static unsigned char decrypted_buf[AES_KEYLEN + 1];
+    static unsigned char *msg;
 
-	int i=0;
-	for(; i<3; i++) {
-		msg = generate_aes_key();
+    int i=0;
+    for(; i<3; i++) {
+        msg = generate_aes_key();
 
-		log_debug(LOG_VERB, "i = %d", i);
-		log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
+        log_debug(LOG_VERB, "i = %d", i);
+        log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
 
 
-		dyn_rsa_encrypt(msg, encrypted_buf);
+        dyn_rsa_encrypt(msg, encrypted_buf);
 
-		dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
+        dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
 
-		log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
-	}
+        log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
+    }
 
-	return DN_OK;
+    return DN_OK;
 }
 
 
 static rstatus_t
-rsa_test2()
+aes_test(void)
 {
-	static unsigned char encrypted_buf[256];
-	static unsigned char decrypted_buf[AES_KEYLEN + 1];
-	static unsigned char msg[12] = "10aaaaaaaaaa";
+    log_debug(LOG_VERB, "aesKey is %s\n",
+              base64_encode(aes_key, strlen((char*)aes_key)));
 
-	log_debug(LOG_VERB, "msg           : %s \n", msg);
+    const char *msg0 = "01234567890123";
+    const char *msg1 = "0123456789012345678901234567890123456789012345";
+    const char *msg2 = "01234567890123456789012345678901234567890123456789012345678901";
+    const char *msg3 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567";
+    const char *msg4 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
+    const char *msg5 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
 
-	dyn_rsa_encrypt(msg, encrypted_buf);
-	loga("encrypted_buf length %d: ", strlen(encrypted_buf));
+    const char *msgs[6];
 
-	dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
-	log_debug(LOG_VERB, "Decrypted message : %s \n", decrypted_buf);
+    msgs[0] = msg0;
+    msgs[1] = msg1;
+    msgs[2] = msg2;
+    msgs[3] = msg3;
+    msgs[4] = msg4;
+    msgs[5] = msg5;
 
-	return DN_OK;
-}
+    unsigned char *enc_msg = NULL;
+    char *dec_msg          = NULL;
+    size_t enc_msg_len;
+    int dec_msg_len;
 
+    loga("=======================AES======================");
+    int i=0;
+    int count = 6;
+    for(;i<count;i++) {
+        const char *msg = msgs[i];
+        log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
 
-static rstatus_t
-aes_test()
-{
-	log_debug(LOG_VERB, "aesKey is %s\n", base64_encode(aes_key, strlen(aes_key)));
+        size_t expected_output_len = 16*((strlen(msg)/16) + 1);
+        //loga("expected_output_len  = %lu", expected_output_len);
+        // Encrypt the message with AES
+        rstatus_t ret = DN_OK;
+        ret = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key);
+        if (ret == DN_ERROR) {
+            log_debug(LOG_VERB, "AES encryption failed\n");
+            return ret;
+        }
+        enc_msg_len = (size_t)ret;/* if success, aes_encrypt returns len */
 
-	unsigned char *msg0 = "01234567890123";
-	unsigned char *msg1 = "0123456789012345678901234567890123456789012345";
-	unsigned char *msg2 = "01234567890123456789012345678901234567890123456789012345678901";
-	unsigned char *msg3 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567";
-	unsigned char *msg4 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
-	unsigned char *msg5 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
+        loga("enc_msg_len length %lu: ", enc_msg_len);
+        if (enc_msg_len != expected_output_len) {
+            return DN_ERROR;
+        }
+        // Print the encrypted message as a base64 string
+        char *b64_string = base64_encode((unsigned char*)enc_msg, enc_msg_len);
+        log_debug(LOG_VERB, "AES Encrypted message (base64): %s\n", b64_string);
 
-	const unsigned char *msgs[6];
+        // Decrypt the message
 
-	msgs[0] = msg0;
-	msgs[1] = msg1;
-	msgs[2] = msg2;
-	msgs[3] = msg3;
-	msgs[4] = msg4;
-	msgs[5] = msg5;
+        ret = aes_decrypt((unsigned char*)enc_msg, enc_msg_len, (unsigned char**) &dec_msg, aes_key);
+        if(ret == DN_ERROR) {
+            log_debug(LOG_VERB, "AES decryption failed\n");
+            return ret;
+        }
+        dec_msg_len = ret; /* if success aes_decrypt returns len */
 
-	unsigned char *enc_msg = NULL;
-	char *dec_msg          = NULL;
-	int enc_msg_len;
-	int dec_msg_len;
+        log_debug(LOG_VERB, "%lu bytes decrypted\n", dec_msg_len);
+        log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
 
-	loga("=======================AES======================");
-	int i=0;
-	int count = 6;
-	for(;i<count;i++) {
-		unsigned char *msg = msgs[i];
-		log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
-
-		int expected_output_len = 16*((strlen(msg)/16) + 1);
-		//loga("expected_output_len  = %d", expected_output_len);
-		// Encrypt the message with AES
-		if((enc_msg_len = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key)) == -1) {
-			log_debug(LOG_VERB, "AES encryption failed\n");
-			return -1;
-		}
-
-		loga("enc_msg_len length %d: ", enc_msg_len);
-		if (enc_msg_len != expected_output_len) {
-			return DN_ERROR;
-		}
-		// Print the encrypted message as a base64 string
-		char *b64_string = base64_encode(enc_msg, enc_msg_len);
-		log_debug(LOG_VERB, "AES Encrypted message (base64): %s\n", b64_string);
-
-		// Decrypt the message
-		if((dec_msg_len = aes_decrypt(enc_msg, (size_t)enc_msg_len, (unsigned char**) &dec_msg, aes_key)) == -1) {
-			log_debug(LOG_VERB, "AES decryption failed\n");
-			return -1;
-		}
-
-		log_debug(LOG_VERB, "%d bytes decrypted\n", dec_msg_len);
-		log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
-
-		free(enc_msg);
-		free(dec_msg);
-		free(b64_string);
-	}
-	return DN_OK;
+        free(enc_msg);
+        free(dec_msg);
+        free(b64_string);
+    }
+    return DN_OK;
 }
 
 /* Inspection test */
 static rstatus_t
 aes_msg_test(struct server *server)
 {
-	unsigned char* aes_key = generate_aes_key();
-	struct conn *conn = conn_get_peer(server, false, true);
-	struct msg *msg = msg_get(conn, true, conn->redis);
+    //unsigned char* aes_key = generate_aes_key();
+    struct conn *conn = conn_get_peer(server, false, true);
+    struct msg *msg = msg_get(conn, true, conn->data_store);
 
-	struct mbuf *mbuf1 = mbuf_get();
-	struct string s1 = string("abc");
-	mbuf_write_string(mbuf1, &s1);
-	STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
+    struct mbuf *mbuf1 = mbuf_get();
+    struct string s1 = string("abc");
+    mbuf_write_string(mbuf1, &s1);
+    STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
 
-	struct mbuf *mbuf2 = mbuf_get();
-	struct string s2 = string("abcabc");
-	mbuf_write_string(mbuf2, &s2);
-	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
+    struct mbuf *mbuf2 = mbuf_get();
+    struct string s2 = string("abcabc");
+    mbuf_write_string(mbuf2, &s2);
+    STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
 
-	/*
-	loga("dumping the content of the original msg: ");
-	msg_dump(msg);
+    /*
+    loga("dumping the content of the original msg: ");
+    msg_dump(msg);
 
-	dyn_aes_encrypt_msg(msg, aes_key);
+    dyn_aes_encrypt_msg(msg, aes_key);
 
-	loga("dumping the content of encrypted msg");
-	msg_dump(msg);
+    loga("dumping the content of encrypted msg");
+    msg_dump(msg);
 
-	dyn_aes_decrypt_msg(msg, aes_key);
+    dyn_aes_decrypt_msg(msg, aes_key);
 
-	loga("dumping the content of decrytped msg");
-	msg_dump(msg);
-	*/
+    loga("dumping the content of decrytped msg");
+    msg_dump(msg);
+    */
 
-	return DN_OK;
+    return DN_OK;
 }
 
 /*
@@ -523,61 +508,61 @@ aes_msg_test(struct server *server)
 static rstatus_t
 aes_msg_test2(struct server *server)
 {
-	unsigned char* aes_key = generate_aes_key();
-	struct conn *conn = conn_get_peer(server, false, true);
-	struct msg *msg = msg_get(conn, true, conn->redis);
+    unsigned char* aes_key = generate_aes_key();
+    struct conn *conn = conn_get_peer(server, false, true);
+    struct msg *msg = msg_get(conn, true, conn->redis);
 
-	struct mbuf *mbuf1 = mbuf_get();
-	mbuf_write_bytes(mbuf1, data, mbuf_size(mbuf1));
-	STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
+    struct mbuf *mbuf1 = mbuf_get();
+    mbuf_write_bytes(mbuf1, data, mbuf_size(mbuf1));
+    STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
 
-	struct mbuf *mbuf2 = mbuf_get();
-	mbuf_write_bytes(mbuf2, data + mbuf_size(mbuf2), strlen(data) - mbuf_size(mbuf2));
-	STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
+    struct mbuf *mbuf2 = mbuf_get();
+    mbuf_write_bytes(mbuf2, data + mbuf_size(mbuf2), strlen(data) - mbuf_size(mbuf2));
+    STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
 
-	loga("dumping the content of the original msg: ");
-	msg_dump(msg);
+    loga("dumping the content of the original msg: ");
+    msg_dump(msg);
 
-	dyn_aes_encrypt_msg(msg, aes_key);
+    dyn_aes_encrypt_msg(msg, aes_key);
 
-	loga("dumping the content of msg after encrypting it: ");
-	msg_dump(msg);
+    loga("dumping the content of msg after encrypting it: ");
+    msg_dump(msg);
 
-	dyn_aes_decrypt_msg(msg, aes_key);
+    dyn_aes_decrypt_msg(msg, aes_key);
 
-	loga("dumping the content after decrypting it: ");
-	msg_dump(msg);
+    loga("dumping the content after decrypting it: ");
+    msg_dump(msg);
 
-	return DN_OK;
+    return DN_OK;
 }
 */
 
 static void
 init_test(int argc, char **argv)
 {
-	rstatus_t status;
-	struct instance nci;
+    rstatus_t status;
+    struct instance nci;
 
-	test_set_default_options(&nci);
+    test_set_default_options(&nci);
 
-	status = test_get_options(argc, argv, &nci);
-	if (status != DN_OK) {
-		dn_show_usage();
-		exit(1);
-	}
+    status = test_get_options(argc, argv, &nci);
+    if (status != DN_OK) {
+        dn_show_usage();
+        exit(1);
+    }
 
-	test_pre_run(&nci);
+    test_pre_run(&nci);
 
-	test_mbuf_chunk_size = nci.mbuf_chunk_size;
-	position = data;
-	mbuf_init(&nci);
-	msg_init();
-	conn_init();
+    test_mbuf_chunk_size = nci.mbuf_chunk_size;
+    position = 0;
+    mbuf_init(&nci);
+    msg_init();
+    conn_init();
 
-	crypto_init_for_test();
+    crypto_init_for_test();
 }
 
-void
+int
 main(int argc, char **argv)
 {
     //rstatus_t status;
@@ -587,25 +572,34 @@ main(int argc, char **argv)
     init_server(server);
 
     struct conn *conn = conn_get_peer(server, false, true);
-    struct msg *msg = msg_get(conn, true, conn->redis);
+    struct msg *msg = msg_get(conn, true, conn->data_store);
 
     //test payload larger than mbuf_size
-    if (test_msg_recv_chain(conn, msg) != DN_OK) {
-   	 loga("Error in testing msg_recv_chain!!!");
+    rstatus_t ret = DN_OK;
+    ret = test_msg_recv_chain(conn, msg);
+    if (ret != DN_OK) {
+        loga("Error in testing msg_recv_chain!!!");
+        goto err_out;
+    }
+    ret = rsa_test();
+    if (ret != DN_OK) {
+        loga("Error in testing RSA !!!");
+        goto err_out;
     }
 
-    if (rsa_test() != DN_OK) {
-   	 loga("Error in testing RSA !!!");
+    ret = aes_test();
+    if (ret != DN_OK) {
+        loga("Error in testing AES !!!");
+        goto err_out;
     }
 
-    if (aes_test() != DN_OK) {
-   	 loga("Error in testing AES !!!");
+    ret = aes_msg_test(server);
+    if (ret != DN_OK) {
+        loga("Error in testing aes_msg_test !!!");
+        goto err_out;
     }
-
-    if (aes_msg_test(server) != DN_OK) {
-   	 loga("Error in testing aes_msg_test !!!");
-    }
-
 
     loga("Testing is done!!!");
+err_out:
+    return ret;
 }

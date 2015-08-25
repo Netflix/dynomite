@@ -20,21 +20,26 @@
  * limitations under the License.
  */
 
-#include "dyn_core.h"
-#include "dyn_dnode_msg.h"
-
-
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
+
+#include "dyn_core.h"
+#include "dyn_dnode_msg.h"
 
 #define ALLOWED_ALLOC_MSGS            200000
 #define MAX_ALLOC_MSGS                400000
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
+#define MAX_REPLICAS_PER_DC           3
 
 typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
 typedef void (*msg_coalesce_t)(struct msg *r);
+typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
+typedef uint64_t msgid_t;
+typedef rstatus_t (*msg_reply_t)(struct msg *r);
+typedef bool (*msg_failure_t)(struct msg *r);
+
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -80,6 +85,8 @@ typedef enum msg_type {
     MSG_REQ_REDIS_PEXPIREAT,
     MSG_REQ_REDIS_PERSIST,
     MSG_REQ_REDIS_PTTL,
+    MSG_REQ_REDIS_SCAN,
+    MSG_REQ_REDIS_SORT,
     MSG_REQ_REDIS_TTL,
     MSG_REQ_REDIS_TYPE,
     MSG_REQ_REDIS_APPEND,                 /* redis requests - string */
@@ -94,6 +101,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_INCR,
     MSG_REQ_REDIS_INCRBY,
     MSG_REQ_REDIS_INCRBYFLOAT,
+    MSG_REQ_REDIS_MSET,
     MSG_REQ_REDIS_MGET,
     MSG_REQ_REDIS_PSETEX,
     MSG_REQ_REDIS_RESTORE,
@@ -115,6 +123,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_HMSET,
     MSG_REQ_REDIS_HSET,
     MSG_REQ_REDIS_HSETNX,
+    MSG_REQ_REDIS_HSCAN,
     MSG_REQ_REDIS_HVALS,
     MSG_REG_REDIS_KEYS,
     MSG_REG_REDIS_INFO,
@@ -129,6 +138,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_LSET,
     MSG_REQ_REDIS_LTRIM,
     MSG_REQ_REDIS_PING,
+    MSG_REQ_REDIS_QUIT,                                                                         \
     MSG_REQ_REDIS_RPOP,
     MSG_REQ_REDIS_RPOPLPUSH,
     MSG_REQ_REDIS_RPUSH,
@@ -148,6 +158,7 @@ typedef enum msg_type {
     MSG_REQ_REDIS_SREM,
     MSG_REQ_REDIS_SUNION,
     MSG_REQ_REDIS_SUNIONSTORE,
+    MSG_REQ_REDIS_SSCAN,
     MSG_REQ_REDIS_ZADD,                   /* redis requests - sorted sets */
     MSG_REQ_REDIS_ZCARD,
     MSG_REQ_REDIS_ZCOUNT,
@@ -164,13 +175,27 @@ typedef enum msg_type {
     MSG_REQ_REDIS_ZREVRANK,
     MSG_REQ_REDIS_ZSCORE,
     MSG_REQ_REDIS_ZUNIONSTORE,
+    MSG_REQ_REDIS_ZSCAN,
     MSG_REQ_REDIS_EVAL,                   /* redis requests - eval */
     MSG_REQ_REDIS_EVALSHA,
     MSG_RSP_REDIS_STATUS,                 /* redis response */
-    MSG_RSP_REDIS_ERROR,
     MSG_RSP_REDIS_INTEGER,
     MSG_RSP_REDIS_BULK,
     MSG_RSP_REDIS_MULTIBULK,
+    MSG_RSP_REDIS_ERROR,
+    MSG_RSP_REDIS_ERROR_ERR,
+    MSG_RSP_REDIS_ERROR_OOM,
+    MSG_RSP_REDIS_ERROR_BUSY,
+    MSG_RSP_REDIS_ERROR_NOAUTH,
+    MSG_RSP_REDIS_ERROR_LOADING,
+    MSG_RSP_REDIS_ERROR_BUSYKEY,
+    MSG_RSP_REDIS_ERROR_MISCONF,
+    MSG_RSP_REDIS_ERROR_NOSCRIPT,
+    MSG_RSP_REDIS_ERROR_READONLY,
+    MSG_RSP_REDIS_ERROR_WRONGTYPE,
+    MSG_RSP_REDIS_ERROR_EXECABORT,
+    MSG_RSP_REDIS_ERROR_MASTERDOWN,
+    MSG_RSP_REDIS_ERROR_NOREPLICAS,
     MSG_SENTINEL
 } msg_type_t;
 
@@ -182,12 +207,48 @@ typedef enum dyn_error {
     BAD_FORMAT
 } dyn_error_t;
 
+/* This is a wrong place for this typedef. But adding to core has some
+ * dependency issues - FixIt someother day :(
+ */
+typedef enum consistency {
+    LOCAL_ONE = 0,
+    LOCAL_QUORUM = 1
+} consistency_t;
+
+#define DEFAULT_READ_CONSISTENCY LOCAL_ONE
+#define DEFAULT_WRITE_CONSISTENCY LOCAL_ONE
+extern consistency_t g_write_consistency;
+extern consistency_t g_read_consistency;
+
+struct response_mgr {
+    bool        is_read;
+    bool        done;
+    /* we could use the dynamic array
+       here. But we have only 3 ASGs */
+    struct msg  *responses[MAX_REPLICAS_PER_DC];
+    uint8_t     good_responses;     // non-error responses received
+    uint8_t     max_responses;      // max responses expected
+    uint8_t     quorum_responses;   // responses expected to form a quorum
+    uint8_t     error_responses;    // error responses received
+    struct msg  *err_rsp;           // first error response
+    struct conn *conn;
+    struct msg *msg;
+};
+
+void init_response_mgr(struct response_mgr *rspmgr, struct msg*, bool is_read,
+                       uint8_t max_responses, struct conn *conn);
+// DN_OK if response was accepted
+rstatus_t rspmgr_submit_response(struct response_mgr *rspmgr, struct msg *rsp);
+bool rspmgr_is_done(struct response_mgr *rspmgr);
+struct msg* rspmgr_get_response(struct response_mgr *rspmgr);
+void rspmgr_free_response(struct response_mgr *rspmgr, struct msg *dont_free);
+
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
     TAILQ_ENTRY(msg)     s_tqe;           /* link in server q */
     TAILQ_ENTRY(msg)     m_tqe;           /* link in send q / free q */
 
-    uint64_t             id;              /* message id */
+    msgid_t              id;              /* message id */
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
@@ -210,6 +271,8 @@ struct msg {
     msg_coalesce_t       post_coalesce;   /* message post-coalesce */
 
     msg_type_t           type;            /* message type */
+    msg_reply_t          reply;           /* generate message reply (example: ping) */
+    msg_failure_t        failure;         /* transient failure response? */
 
     uint8_t              *key_start;      /* key start */
     uint8_t              *key_end;        /* key end */
@@ -239,8 +302,8 @@ struct msg {
     unsigned             first_fragment:1;/* first fragment? */
     unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
-    unsigned             redis:1;         /* redis? */
-    
+
+    int					 data_store;
     //dynomite
     struct dmsg          *dmsg;          /* dyn message */
     int                  dyn_state;
@@ -253,10 +316,19 @@ struct msg {
                                           */
     unsigned             is_read:1;       /*  0 : write
                                               1 : read */
-
+    msg_response_handler_t rsp_handler;
+    consistency_t        consistency;
+    msgid_t              parent_id;       /* parent message id */
+    struct response_mgr  rspmgr;
 };
 
 TAILQ_HEAD(msg_tqh, msg);
+
+static inline rstatus_t
+msg_handle_response(struct msg *req, struct msg *rsp)
+{
+    return req->rsp_handler(req, rsp);
+}
 
 uint32_t msg_free_queue_size(void);
 
@@ -267,16 +339,23 @@ void msg_tmo_delete(struct msg *msg);
 void msg_init(void);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
-struct msg *msg_get(struct conn *conn, bool request, bool redis);
+struct msg *msg_get(struct conn *conn, bool request, int data_store);
 void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
-struct msg *msg_get_error(bool redis, dyn_error_t dyn_err, err_t err);
+struct msg *msg_get_error(int data_store, dyn_error_t dyn_err, err_t err);
 void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
-uint32_t msg_alloc_msgs();
+uint32_t msg_alloc_msgs(void);
+uint32_t msg_payload_crc32(struct msg *msg);
+struct msg *msg_get_rsp_integer(int data_store);
+struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
+rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
+
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
@@ -296,14 +375,13 @@ void req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 struct msg *rsp_get(struct conn *conn);
 void rsp_put(struct msg *msg);
 struct msg *rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
-void rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
+void server_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
 struct msg *rsp_send_next(struct context *ctx, struct conn *conn);
 void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
 /* for dynomite  */
 struct msg *dnode_req_get(struct conn *conn);
-void dnode_req_put(struct msg *msg);
 bool dnode_req_done(struct conn *conn, struct msg *msg);
 bool dnode_req_error(struct conn *conn, struct msg *msg);
 void dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
@@ -334,7 +412,7 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
 void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
 		                struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen);
 
-//void peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct string *data);
-void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, bool redis, struct mbuf *data);
+//void peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct string *data);
+void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data);
 
 #endif

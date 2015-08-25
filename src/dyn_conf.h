@@ -52,7 +52,7 @@
 #define CONF_DEFAULT_TIMEOUT                 500
 #define CONF_DEFAULT_LISTEN_BACKLOG          512
 #define CONF_DEFAULT_CLIENT_CONNECTIONS      0
-#define CONF_DEFAULT_REDIS                   false
+#define CONF_DEFAULT_DATASTORE				 0
 #define CONF_DEFAULT_PRECONNECT              true
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
@@ -117,7 +117,7 @@ struct conf_pool {
     int                timeout;               /* timeout: */
     int                backlog;               /* backlog: */
     int                client_connections;    /* client_connections: */
-    int                redis;                 /* redis: */
+    int                data_store;            /* data_store: */
     int                preconnect;            /* preconnect: */
     int                auto_eject_hosts;      /* auto_eject_hosts: */
     int                server_connections;    /* server_connections: */

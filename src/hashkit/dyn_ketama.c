@@ -32,7 +32,7 @@
 #define KETAMA_POINTS_PER_SERVER    160 /* 40 points per hash */
 #define KETAMA_MAX_HOSTLEN          86
 
-static uint32_t
+/*static uint32_t
 ketama_hash(const char *key, size_t key_length, uint32_t alignment)
 {
     unsigned char results[16];
@@ -57,7 +57,7 @@ ketama_item_cmp(const void *t1, const void *t2)
     } else {
         return -1;
     }
-}
+}*/
 
 rstatus_t
 ketama_update(struct server_pool *pool)

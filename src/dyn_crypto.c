@@ -149,7 +149,6 @@ aes_init(void)
 static rstatus_t
 crypto_pool_each_init(void *elem, void *data)
 {
-	rstatus_t status;
     struct server_pool *sp = elem;
 
 	//TODOs: check returned statuses

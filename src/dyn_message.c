@@ -28,6 +28,7 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "proto/dyn_proto.h"
+#include "hashkit/dyn_hashkit.h"
 
 #if (IOV_MAX > 128)
 #define DN_IOV_MAX 128
@@ -121,6 +122,12 @@ static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 
+static inline rstatus_t
+msg_cant_handle_response(struct msg *req, struct msg *rsp)
+{
+    return DN_ENO_IMPL;
+}
+
 static struct msg *
 msg_from_rbe(struct rbnode *node)
 {
@@ -212,13 +219,13 @@ _msg_get(bool force_alloc)
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
     if (alloc_msg_count >= ALLOWED_ALLOC_MSGS && !force_alloc) {
-   	  log_debug(LOG_WARN, "allocated #msgs %d hit max allowable limit", alloc_msg_count);
-   	  return NULL;
+         log_debug(LOG_WARN, "allocated #msgs %d hit max allowable limit", alloc_msg_count);
+         return NULL;
     }
 
     if (alloc_msg_count >= MAX_ALLOC_MSGS) {
-   	 log_debug(LOG_WARN, "allocated #msgs %d hit max hard limit", alloc_msg_count);
-   	 return NULL; //we hit the max limit
+        log_debug(LOG_WARN, "allocated #msgs %d hit max hard limit", alloc_msg_count);
+        return NULL; //we hit the max limit
     }
 
     alloc_msg_count++;
@@ -234,6 +241,7 @@ _msg_get(bool force_alloc)
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
     msg->id = ++msg_id;
+    msg->parent_id = 0;
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
@@ -285,7 +293,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
-    msg->redis = 0;
+    msg->data_store = DATA_REDIS;
 
     //dynomite
     msg->is_read = 1;
@@ -293,21 +301,23 @@ done:
     msg->dmsg = NULL;
     msg->msg_type = 0;
     msg->dyn_error = 0;
+    msg->rsp_handler = msg_cant_handle_response;
+    msg->consistency = LOCAL_ONE;
     return msg;
 }
 
 uint32_t msg_alloc_msgs()
 {
-	return alloc_msg_count;
+    return alloc_msg_count;
 }
 
 uint32_t msg_free_queue_size(void)
 {
-	return nfree_msgq;
+    return nfree_msgq;
 }
 
 struct msg *
-msg_get(struct conn *conn, bool request, bool redis)
+msg_get(struct conn *conn, bool request, int data_store)
 {
     struct msg *msg;
 
@@ -318,9 +328,9 @@ msg_get(struct conn *conn, bool request, bool redis)
 
     msg->owner = conn;
     msg->request = request ? 1 : 0;
-    msg->redis = redis ? 1 : 0;
+    msg->data_store = data_store;
 
-    if (redis) {
+    if (data_store == DATA_REDIS) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -336,9 +346,11 @@ msg_get(struct conn *conn, bool request, bool redis)
         }
         msg->pre_splitcopy = redis_pre_splitcopy;
         msg->post_splitcopy = redis_post_splitcopy;
+        msg->reply = redis_reply;
+        msg->failure = redis_failure;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
-    } else {
+    } else if (data_store == DATA_MEMCACHE) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -356,6 +368,9 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->post_splitcopy = memcache_post_splitcopy;
         msg->pre_coalesce = memcache_pre_coalesce;
         msg->post_coalesce = memcache_post_coalesce;
+    } else{
+    	log_debug(LOG_VVERB,"incorrect selection of data store %d", data_store);
+    	exit(0);
     }
 
     if (log_loggable(LOG_VVERB)) {
@@ -369,9 +384,10 @@ msg_get(struct conn *conn, bool request, bool redis)
 rstatus_t 
 msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 {
+    target->parent_id = src->id;
     target->owner = src->owner;
     target->request = src->request;
-    target->redis = src->redis;
+    target->data_store = src->data_store;
 
     target->parser = src->parser;
     target->pre_splitcopy = src->pre_splitcopy;
@@ -388,6 +404,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->pos = src->pos;
     target->vlen = src->vlen;
     target->is_read = src->is_read;
+    target->consistency = src->consistency;
 
     struct mbuf *mbuf, *nbuf;
     bool started = false;
@@ -412,19 +429,19 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 
 
 struct msg *
-msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
+msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
 {
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? strerror(err) : "unknown";
-    char *protstr = redis ? "-ERR" : "SERVER_ERROR";
+    char *protstr = data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source;
 
     if (dyn_err == PEER_CONNECTION_REFUSE) {
-    	source = "Peer:";
+        source = "Peer:";
     } else if (dyn_err == STORAGE_CONNECTION_REFUSE) {
-    	source = "Storage:";
+        source = "Storage:";
     }
 
     msg = _msg_get(1);
@@ -456,7 +473,7 @@ msg_get_error(bool redis, dyn_error_t dyn_err, err_t err)
 
 
 struct msg *
-msg_get_rsp_integer(bool redis)
+msg_get_rsp_integer(int data_store)
 {
     struct msg *msg;
     struct mbuf *mbuf;
@@ -514,8 +531,8 @@ msg_put(struct msg *msg)
 
     struct dmsg *dmsg = msg->dmsg;
     if (dmsg != NULL) {
-    	dmsg_put(dmsg);
-    	msg->dmsg = NULL;
+        dmsg_put(dmsg);
+        msg->dmsg = NULL;
     }
 
     while (!STAILQ_EMPTY(&msg->mhdr)) {
@@ -531,26 +548,26 @@ msg_put(struct msg *msg)
 
 uint32_t msg_mbuf_size(struct msg *msg)
 {
-	uint32_t count = 0;
-	struct mbuf *mbuf;
+    uint32_t count = 0;
+    struct mbuf *mbuf;
 
-	STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
-		count++;
-	}
+    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+        count++;
+    }
 
-	return count;
+    return count;
 }
 
 uint32_t msg_length(struct msg *msg)
 {
-	uint32_t count = 0;
-	struct mbuf *mbuf;
+    uint32_t count = 0;
+    struct mbuf *mbuf;
 
-	STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
-		count += mbuf->last - mbuf->start;
-	}
+    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+        count += mbuf->last - mbuf->start;
+    }
 
-	return count;
+    return count;
 }
 
 void
@@ -560,8 +577,8 @@ msg_dump(struct msg *msg)
     struct mbuf *mbuf;
 
     if (msg == NULL) {
-    	loga("msg is NULL - cannot display its info");
-    	return;
+        loga("msg is NULL - cannot display its info");
+        return;
     }
 
     loga("msg dump id %"PRIu64" request %d len %"PRIu32" type %d done %d "
@@ -612,6 +629,39 @@ msg_empty(struct msg *msg)
     return msg->mlen == 0 ? true : (msg->dyn_error == BAD_FORMAT? true : false);
 }
 
+uint32_t
+msg_payload_crc32(struct msg *msg)
+{
+    // take a continous buffer crc
+    uint32_t crc = 0;
+    struct mbuf *mbuf;
+    /* Since we want to checksum only the payload, we have to start from the
+       payload offset. which is somewhere in the mbufs. Skip the mbufs till we
+       find the start of the payload. If there is no dyno header, we start from
+       the beginning of the first mbuf */
+    bool start_found = msg->dmsg ? false : true;
+
+    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+        uint8_t *start = mbuf->start;
+        uint8_t *end = mbuf->last;
+        if (!start_found) {
+            // if payload start is within this mbuf
+            if ((mbuf->start <= msg->dmsg->payload) &&
+                (msg->dmsg->payload < mbuf->last)) {
+                start = msg->dmsg->payload;
+                start_found = true;
+            } else {
+                // else skip this mbuf
+                continue;
+            }
+        }
+
+        crc = crc32_sz(start, end - start, crc);
+    }
+    return crc;
+
+}
+
 static rstatus_t
 msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
 {
@@ -638,7 +688,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, conn->redis);
+    nmsg = msg_get(msg->owner, msg->request, conn->data_store);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -676,7 +726,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, msg->redis);
+    nmsg = msg_get(msg->owner, msg->request, msg->data_store);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -695,7 +745,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
      * last_fragment identify first and last fragment respectively.
      *
      * For example, a message vector given below is split into 3 fragments:
-     *  'get key1 key2 key3\r\n'
+     *  'mget key1 key2 key3\r\n'
      *  Or,
      *  '*4\r\n$4\r\nmget\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n'
      *
@@ -743,7 +793,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     if (!conn->dyn_mode) {
        stats_pool_incr(ctx, conn->owner, fragments);
     } else {
-    	
+        
     }
 
     if (log_loggable(LOG_VERB)) {
@@ -775,172 +825,173 @@ msg_repair(struct context *ctx, struct conn *conn, struct msg *msg)
 static rstatus_t
 msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	rstatus_t status;
+    rstatus_t status;
 
-	if (msg_empty(msg)) {
-		/* no data to parse */
-		conn->recv_done(ctx, conn, msg, NULL);
-		return DN_OK;
-	}
+    if (msg_empty(msg)) {
+        /* no data to parse */
+        conn->recv_done(ctx, conn, msg, NULL);
+        return DN_OK;
+    }
 
-	msg->parser(msg);
+    msg->parser(msg);
 
-	switch (msg->result) {
-	case MSG_PARSE_OK:
-		//log_debug(LOG_VVERB, "MSG_PARSE_OK");
-		status = msg_parsed(ctx, conn, msg);
-		break;
+    switch (msg->result) {
+    case MSG_PARSE_OK:
+        //log_debug(LOG_VVERB, "MSG_PARSE_OK");
+        status = msg_parsed(ctx, conn, msg);
+        break;
 
-	case MSG_PARSE_FRAGMENT:
-		//log_debug(LOG_VVERB, "MSG_PARSE_FRAGMENT");
-		status = msg_fragment(ctx, conn, msg);
-		break;
+    case MSG_PARSE_FRAGMENT:
+        //log_debug(LOG_VVERB, "MSG_PARSE_FRAGMENT");
+        status = msg_fragment(ctx, conn, msg);
+        break;
 
-	case MSG_PARSE_REPAIR:
-		//log_debug(LOG_VVERB, "MSG_PARSE_REPAIR");
-		status = msg_repair(ctx, conn, msg);
-		break;
+    case MSG_PARSE_REPAIR:
+        //log_debug(LOG_VVERB, "MSG_PARSE_REPAIR");
+        status = msg_repair(ctx, conn, msg);
+        break;
 
-	case MSG_PARSE_AGAIN:
-		//log_debug(LOG_VVERB, "MSG_PARSE_AGAIN");
-		status = DN_OK;
-		break;
+    case MSG_PARSE_AGAIN:
+        //log_debug(LOG_VVERB, "MSG_PARSE_AGAIN");
+        status = DN_OK;
+        break;
 
-	default:
-		/*
-		if (!conn->dyn_mode) {
-			status = DN_ERROR;
-			conn->err = errno;
-		} else {
-			log_debug(LOG_VVERB, "Parsing error in dyn_mode");
-			status = DN_OK;
-		}
-		*/
-		status = DN_ERROR;
-		conn->err = errno;
-		break;
-	}
+    default:
+        /*
+        if (!conn->dyn_mode) {
+            status = DN_ERROR;
+            conn->err = errno;
+        } else {
+            log_debug(LOG_VVERB, "Parsing error in dyn_mode");
+            status = DN_OK;
+        }
+        */
+        status = DN_ERROR;
+        conn->err = errno;
+        break;
+    }
 
-	return conn->err != 0 ? DN_ERROR : status;
+    return conn->err != 0 ? DN_ERROR : status;
 }
 
 
 static rstatus_t
 msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-	rstatus_t status;
-	struct msg *nmsg;
-	struct mbuf *mbuf;
-	size_t msize;
-	ssize_t n;
+    rstatus_t status;
+    struct msg *nmsg;
+    struct mbuf *mbuf;
+    size_t msize;
+    ssize_t n;
 
-	int expected_fill = ((msg->dyn_state == DYN_DONE || msg->dyn_state == DYN_POST_DONE) && msg->dmsg->bit_field == 1) ?
-			                    msg->dmsg->plen : -1;  //used in encryption case only
+    int expected_fill =
+        ((msg->dyn_state == DYN_DONE || msg->dyn_state == DYN_POST_DONE) &&
+         msg->dmsg->bit_field == 1) ? msg->dmsg->plen : -1;  //used in encryption case only
 
-	mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-	if (mbuf == NULL || mbuf_full(mbuf) ||
-			(expected_fill != -1 && mbuf->last == mbuf->end_extra)) {
-		mbuf = mbuf_get();
-		if (mbuf == NULL) {
-			return DN_ENOMEM;
-		}
-		mbuf_insert(&msg->mhdr, mbuf);
+    mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    if (mbuf == NULL || mbuf_full(mbuf) ||
+        (expected_fill != -1 && mbuf->last == mbuf->end_extra)) {
+        mbuf = mbuf_get();
+        if (mbuf == NULL) {
+            return DN_ENOMEM;
+        }
+        mbuf_insert(&msg->mhdr, mbuf);
 
-		msg->pos = mbuf->pos;
-	}
+        msg->pos = mbuf->pos;
+    }
 
-	ASSERT(mbuf->end_extra - mbuf->last > 0);
+    ASSERT(mbuf->end_extra - mbuf->last > 0);
 
-	if (expected_fill == -1) {
-		msize = mbuf_size(mbuf);
-	} else {
-		msize = (msg->dmsg->plen <= mbuf->end_extra - mbuf->last) ?
-				                     msg->dmsg->plen :
-				                     mbuf->end_extra - mbuf->last;
-	}
+    if (expected_fill == -1) {
+        msize = mbuf_size(mbuf);
+    } else {
+        msize = (msg->dmsg->plen <= mbuf->end_extra - mbuf->last) ?
+                                     msg->dmsg->plen :
+                                     mbuf->end_extra - mbuf->last;
+    }
 
-	n = conn_recv(conn, mbuf->last, msize);
+    n = conn_recv(conn, mbuf->last, msize);
 
-	if (n < 0) {
-		if (n == DN_EAGAIN) {
-			return DN_OK;
-		}
-		return DN_ERROR;
-	}
+    if (n < 0) {
+        if (n == DN_EAGAIN) {
+            return DN_OK;
+        }
+        return DN_ERROR;
+    }
 
-	ASSERT((mbuf->last + n) <= mbuf->end_extra);
-	mbuf->last += n;
-	msg->mlen += (uint32_t)n;
+    ASSERT((mbuf->last + n) <= mbuf->end_extra);
+    mbuf->last += n;
+    msg->mlen += (uint32_t)n;
 
-	//Only used in encryption case
-	if (expected_fill != -1) {
-		if ( n >=  msg->dmsg->plen  || mbuf->end_extra == mbuf->last) {
-			//log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or eligible!");
-			struct mbuf *nbuf = NULL;
+    //Only used in encryption case
+    if (expected_fill != -1) {
+        if ( n >=  msg->dmsg->plen  || mbuf->end_extra == mbuf->last) {
+            //log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or eligible!");
+            struct mbuf *nbuf = NULL;
 
-			if (n >=  msg->dmsg->plen) {
-				nbuf = mbuf_get();
+            if (n >=  msg->dmsg->plen) {
+                nbuf = mbuf_get();
 
-				if (nbuf == NULL) {
-					loga("Not enough memory error!!!");
-					return DN_ENOMEM;
-				}
+                if (nbuf == NULL) {
+                    loga("Not enough memory error!!!");
+                    return DN_ENOMEM;
+                }
 
-				status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
-				if (status == DN_OK) {
-					int remain = n - msg->dmsg->plen;
-					uint8_t *pos = mbuf->last - remain;
-					mbuf_copy(nbuf, pos, remain);
-				}
+                status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+                if (status == DN_OK) {
+                    int remain = n - msg->dmsg->plen;
+                    uint8_t *pos = mbuf->last - remain;
+                    mbuf_copy(nbuf, pos, remain);
+                }
 
-			} else if (mbuf->end_extra == mbuf->last) {
-				nbuf = mbuf_get();
+            } else if (mbuf->end_extra == mbuf->last) {
+                nbuf = mbuf_get();
 
-				if (nbuf == NULL) {
-					loga("Not enough memory error!!!");
-					return DN_ENOMEM;
-				}
+                if (nbuf == NULL) {
+                    loga("Not enough memory error!!!");
+                    return DN_ENOMEM;
+                }
 
-				status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
-			}
+                status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+            }
 
-			if (status != DN_ERROR && nbuf != NULL) {
-				nbuf->read_flip = 1;
-				mbuf_remove(&msg->mhdr, mbuf);
-				mbuf_insert(&msg->mhdr, nbuf);
-				msg->pos = nbuf->start;
+            if (status != DN_ERROR && nbuf != NULL) {
+                nbuf->read_flip = 1;
+                mbuf_remove(&msg->mhdr, mbuf);
+                mbuf_insert(&msg->mhdr, nbuf);
+                msg->pos = nbuf->start;
 
-				msg->mlen -= mbuf->last - mbuf->start;
-				msg->mlen += nbuf->last - nbuf->start;
+                msg->mlen -= mbuf->last - mbuf->start;
+                msg->mlen += nbuf->last - nbuf->start;
 
-				mbuf_put(mbuf);
-			} else { //clean up the mess and recover it
-				mbuf_insert(&msg->mhdr, nbuf);
-				msg->pos = nbuf->last;
-				msg->dyn_error = BAD_FORMAT;
-			}
-		}
+                mbuf_put(mbuf);
+            } else { //clean up the mess and recover it
+                mbuf_insert(&msg->mhdr, nbuf);
+                msg->pos = nbuf->last;
+                msg->dyn_error = BAD_FORMAT;
+            }
+        }
 
-		msg->dmsg->plen -= n;
-	}
+        msg->dmsg->plen -= n;
+    }
 
-	for (;;) {
-		status = msg_parse(ctx, conn, msg);
-		if (status != DN_OK) {
-			return status;
-		}
+    for (;;) {
+        status = msg_parse(ctx, conn, msg);
+        if (status != DN_OK) {
+            return status;
+        }
 
-		/* get next message to parse */
-		nmsg = conn->recv_next(ctx, conn, false);
-		if (nmsg == NULL || nmsg == msg) {
-			/* no more data to parse */
-			break;
-		}
+        /* get next message to parse */
+        nmsg = conn->recv_next(ctx, conn, false);
+        if (nmsg == NULL || nmsg == msg) {
+            /* no more data to parse */
+            break;
+        }
 
-		msg = nmsg;
-	}
+        msg = nmsg;
+    }
 
-	return DN_OK;
+    return DN_OK;
 }
 
 rstatus_t
@@ -981,7 +1032,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     size_t limit;                        /* bytes to send limit */
     ssize_t n;                           /* bytes sent by sendv */
 
- 	 if (log_loggable(LOG_VVERB)) {
+    if (log_loggable(LOG_VVERB)) {
        loga("About to dump out the content of msg");
        msg_dump(msg);
     }
@@ -1123,6 +1174,107 @@ msg_send(struct context *ctx, struct conn *conn)
         }
 
     } while (conn->send_ready);
+
+    return DN_OK;
+}
+
+struct mbuf *
+msg_ensure_mbuf(struct msg *msg, size_t len)
+{
+    struct mbuf *mbuf;
+
+    if (STAILQ_EMPTY(&msg->mhdr) ||
+        mbuf_size(STAILQ_LAST(&msg->mhdr, mbuf, next)) < len) {
+        mbuf = mbuf_get();
+        if (mbuf == NULL) {
+            return NULL;
+        }
+        mbuf_insert(&msg->mhdr, mbuf);
+    } else {
+        mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    }
+
+    return mbuf;
+}
+
+
+/*
+ * Append n bytes of data, with n <= mbuf_size(mbuf)
+ * into mbuf
+ */
+rstatus_t
+msg_append(struct msg *msg, uint8_t *pos, size_t n)
+{
+    struct mbuf *mbuf;
+
+    ASSERT(n <= mbuf_data_size());
+
+    mbuf = msg_ensure_mbuf(msg, n);
+    if (mbuf == NULL) {
+        return DN_ENOMEM;
+    }
+
+    ASSERT(n <= mbuf_size(mbuf));
+
+    mbuf_copy(mbuf, pos, n);
+    msg->mlen += (uint32_t)n;
+
+    return DN_OK;
+}
+
+/*
+ * Prepend n bytes of data, with n <= mbuf_size(mbuf)
+ * into mbuf
+ */
+rstatus_t
+msg_prepend(struct msg *msg, uint8_t *pos, size_t n)
+{
+    struct mbuf *mbuf;
+
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+        return DN_ENOMEM;
+    }
+
+    ASSERT(n <= mbuf_size(mbuf));
+
+    mbuf_copy(mbuf, pos, n);
+    msg->mlen += (uint32_t)n;
+
+    STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+
+    return DN_OK;
+}
+
+/*
+ * Prepend a formatted string into msg. Returns an error if the formatted
+ * string does not fit in a single mbuf.
+ */
+rstatus_t
+msg_prepend_format(struct msg *msg, const char *fmt, ...)
+{
+    struct mbuf *mbuf;
+    int n;
+    uint32_t size;
+    va_list args;
+
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+        return DN_ENOMEM;
+    }
+
+    size = mbuf_size(mbuf);
+
+    va_start(args, fmt);
+    n = dn_vscnprintf(mbuf->last, size, fmt, args);
+    va_end(args);
+    if (n <= 0 || n >= (int)size) {
+        return DN_ERROR;
+    }
+
+    mbuf->last += n;
+    msg->mlen += (uint32_t)n;
+    STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
 
     return DN_OK;
 }

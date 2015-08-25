@@ -13,4 +13,4 @@ dyn_o_mite:
   tokens: '1383429731'
   secure_server_option: datacenter
   pem_key_file: conf/dynomite.pem
-  redis: true
+  data_store: 0
