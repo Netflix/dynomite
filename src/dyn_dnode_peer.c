@@ -521,8 +521,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg*msg)
     bool drop = false;
 
     if ((msg->swallow && msg->noreply) ||
-        (msg->swallow && (msg->consistency == LOCAL_ONE)) ||
-        (msg->swallow && (msg->consistency == LOCAL_QUORUM)
+        (msg->swallow && (msg->consistency == DC_ONE)) ||
+        (msg->swallow && (msg->consistency == DC_QUORUM)
                       && (!conn->same_dc))) {
         log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
                   " type %d", conn->sd, msg->id, msg->mlen, msg->type);

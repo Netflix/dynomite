@@ -167,6 +167,14 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, conn_msg_rate)},
 
+    { string("read_consistency"),
+      conf_set_string,
+      offsetof(struct conf_pool, read_consistency) },
+
+    { string("write_consistency"),
+      conf_set_string,
+      offsetof(struct conf_pool, write_consistency) },
+
     null_command
 };
 
@@ -340,6 +348,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->dyn_listen.pname);
     string_init(&cp->dyn_listen.name);
     string_init(&cp->secure_server_option);
+    string_init(&cp->read_consistency);
+    string_init(&cp->write_consistency);
     string_init(&cp->pem_key_file);
     string_init(&cp->dc);
     string_init(&cp->env);
@@ -413,6 +423,8 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->dyn_listen.pname);
     string_deinit(&cp->dyn_listen.name);
     string_deinit(&cp->secure_server_option);
+    string_deinit(&cp->read_consistency);
+    string_deinit(&cp->write_consistency);
     string_deinit(&cp->pem_key_file);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
@@ -593,6 +605,14 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
                               cp->secure_server_option.len,
                               cp->secure_server_option.data);
+
+        log_debug(LOG_VVERB, "  read_consistency: \"%.*s\"",
+                              cp->read_consistency.len,
+                              cp->read_consistency.data);
+
+        log_debug(LOG_VVERB, "  write_consistency: \"%.*s\"",
+                              cp->write_consistency.len,
+                              cp->write_consistency.data);
 
         log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
     }
@@ -1540,12 +1560,44 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                 CONF_DEFAULT_SECURE_SERVER_OPTION);
     }
 
+    if (string_empty(&cp->read_consistency)) {
+        string_copy_c(&cp->read_consistency,
+                &CONF_STR_DC_ONE);
+        log_debug(LOG_INFO, "setting read_consistency to default value:%s",
+                CONF_STR_DC_ONE);
+    }
+
+    if (string_empty(&cp->write_consistency)) {
+        string_copy_c(&cp->write_consistency,
+                &CONF_STR_DC_ONE);
+        log_debug(LOG_INFO, "setting write_consistency to default value:%s",
+                CONF_STR_DC_ONE);
+    }
+
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
         dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK) &&
         dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
         dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL))
     {
         log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'rack' 'datacenter' 'all'");
+    }
+
+    if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_ONE))
+        g_read_consistency = DC_ONE;
+    else if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
+        g_read_consistency = DC_QUORUM;
+    else {
+        log_error("conf: directive \"read_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
+        return DN_ERROR;
+    }
+
+    if (!dn_strcmp(cp->write_consistency.data, CONF_STR_DC_ONE))
+        g_write_consistency = DC_ONE;
+    else if (!dn_strcmp(cp->write_consistency.data, CONF_STR_DC_QUORUM))
+        g_write_consistency = DC_QUORUM;
+    else {
+        log_error("conf: directive \"write_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
+        return DN_ERROR;
     }
 
     if (string_empty(&cp->env)) {

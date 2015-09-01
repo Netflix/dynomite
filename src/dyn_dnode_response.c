@@ -107,24 +107,24 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
     req = TAILQ_FIRST(&peer_conn->omsg_q);
     c_conn = req->owner;
 
-    /* if client consistency is local_one forward the response from only the
+    /* if client consistency is dc_one forward the response from only the
        local node. Since dyn_dnode_peer is always a remote node, drop the rsp */
-    if (req->consistency == LOCAL_ONE) {
+    if (req->consistency == DC_ONE) {
         if (req->swallow) {
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        log_warn("req %d:%d with LOCAL_ONE consistency is not being swallowed");
+        log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
     }
 
-    /* if client consistency is local_quorum, forward the response from only the
+    /* if client consistency is dc_quorum, forward the response from only the
        local region/DC. */
-    if ((req->consistency == LOCAL_QUORUM) && !peer_conn->same_dc) {
+    if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
         if (req->swallow) {
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        log_warn("req %d:%d with LOCAL_QUORUM consistency is not being swallowed");
+        log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
     }
 
     log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %c %d dmsg->id %u req %u:%u rsp %u:%u, ",
@@ -218,22 +218,22 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             return;
         }
 
-        if (req->consistency == LOCAL_ONE) {
+        if (req->consistency == DC_ONE) {
             if (req->swallow) {
                 // swallow the request and move on the next one
                 dnode_rsp_swallow(ctx, peer_conn, req, NULL);
                 continue;
             }
-            log_warn("req %d:%d with LOCAL_ONE consistency is not being swallowed");
+            log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
         }
 
-        if ((req->consistency == LOCAL_QUORUM) && !peer_conn->same_dc) {
+        if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
             if (req->swallow) {
                 // swallow the request and move on the next one
                 dnode_rsp_swallow(ctx, peer_conn, req, NULL);
                 continue;
             }
-            log_warn("req %d:%d with LOCAL_QUORUM consistency is not being swallowed");
+            log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
         }
 
         log_error("MISMATCHED DNODE RSP RECEIVED %c %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",
