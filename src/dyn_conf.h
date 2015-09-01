@@ -75,6 +75,9 @@
 #define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
 
+#define CONF_STR_LOCAL_QUORUM                "local_quorum"
+#define CONF_STR_LOCAL_ONE                   "local_one"
+
 #define CONF_DEFAULT_ENV                     "aws"
 
 #define CONF_DEFAULT_RACK                    "localrack"
@@ -138,6 +141,8 @@ struct conf_pool {
 
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
+    struct string      read_consistency;
+    struct string      write_consistency;
     struct string      pem_key_file;
     struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
