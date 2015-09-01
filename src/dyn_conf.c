@@ -1574,6 +1574,14 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                 CONF_STR_DC_ONE);
     }
 
+    if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL))
+    {
+        log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'rack' 'datacenter' 'all'");
+    }
+
     if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_ONE))
         g_read_consistency = DC_ONE;
     else if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
