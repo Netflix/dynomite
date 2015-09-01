@@ -211,12 +211,23 @@ typedef enum dyn_error {
  * dependency issues - FixIt someother day :(
  */
 typedef enum consistency {
-    LOCAL_ONE = 0,
-    LOCAL_QUORUM = 1
+    DC_ONE = 0,
+    DC_QUORUM = 1
 } consistency_t;
 
-#define DEFAULT_READ_CONSISTENCY LOCAL_ONE
-#define DEFAULT_WRITE_CONSISTENCY LOCAL_ONE
+static inline char*
+get_consistency_string(consistency_t cons)
+{
+    switch(cons)
+    {
+        case DC_ONE: return "DC_ONE";
+        case DC_QUORUM: return "DC_QUORUM";
+    }
+    return "INVALID CONSISTENCY";
+}
+
+#define DEFAULT_READ_CONSISTENCY DC_ONE
+#define DEFAULT_WRITE_CONSISTENCY DC_ONE
 extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
 

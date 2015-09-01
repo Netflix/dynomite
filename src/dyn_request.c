@@ -25,8 +25,8 @@
 #include "dyn_dnode_peer.h"
 
 static rstatus_t msg_write_one_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_write_local_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_read_local_quorum_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp);
 static rstatus_t msg_read_one_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
 
@@ -661,7 +661,7 @@ request_send_to_all_local_racks(struct msg *msg)
         return true;
     if (msg->type == MSG_REQ_REDIS_PING)
         return false;
-    if (msg->consistency == LOCAL_QUORUM)
+    if (msg->consistency == DC_QUORUM)
         return true;
     return false;
 }
@@ -1020,18 +1020,18 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 static msg_response_handler_t 
 msg_get_rsp_handler(struct msg *req)
 {
-    if ((req->consistency == LOCAL_ONE) || (req->type == MSG_REQ_REDIS_PING))
+    if ((req->consistency == DC_ONE) || (req->type == MSG_REQ_REDIS_PING))
         return req->is_read ? msg_read_one_rsp_handler :
                               msg_write_one_rsp_handler;
-    return req->is_read ? msg_read_local_quorum_rsp_handler :
-                          msg_write_local_quorum_rsp_handler;
+    return req->is_read ? msg_read_dc_quorum_rsp_handler :
+                          msg_write_dc_quorum_rsp_handler;
 }
 
 static rstatus_t
 msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
     if (req->peer)
-        log_warn("Received more than one response for local_one. req: %d:%d \
+        log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
     req->peer = rsp;
@@ -1043,7 +1043,7 @@ static rstatus_t
 msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
     if (req->peer)
-        log_warn("Received more than one response for local_one. req: %d:%d \
+        log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
     req->peer = rsp;
@@ -1052,7 +1052,7 @@ msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
 }
 
 static rstatus_t
-msg_read_local_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 {
     rspmgr_submit_response(&req->rspmgr, rsp);
     if (!rspmgr_is_done(&req->rspmgr))
@@ -1070,7 +1070,7 @@ msg_read_local_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 
 
 static rstatus_t
-msg_write_local_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 {
     rspmgr_submit_response(&req->rspmgr, rsp);
     if (!rspmgr_is_done(&req->rspmgr))
