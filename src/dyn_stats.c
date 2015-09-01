@@ -987,18 +987,18 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                         char* type = op + 5;
                         log_notice("op: %s", op);
                         log_notice("type: %s", type);
-                        if (strcmp(type, "/local_one") == 0)
-                            g_read_consistency = LOCAL_ONE;
-                        else if (strcmp(type, "/local_quorum") == 0)
-                            g_read_consistency = LOCAL_QUORUM;
+                        if (strcmp(type, "/dc_one") == 0)
+                            g_read_consistency = DC_ONE;
+                        else if (strcmp(type, "/dc_quorum") == 0)
+                            g_read_consistency = DC_QUORUM;
                         else
                             st_cmd->cmd = CMD_UNKNOWN;
                     } else if (strncmp(op, "/write", 6) == 0) {
                         char* type = op + 6;
-                        if (strcmp(type, "/local_one") == 0)
-                            g_write_consistency = LOCAL_ONE;
-                        else if (strcmp(type, "/local_quorum") == 0)
-                            g_write_consistency = LOCAL_QUORUM;
+                        if (strcmp(type, "/dc_one") == 0)
+                            g_write_consistency = DC_ONE;
+                        else if (strcmp(type, "/dc_quorum") == 0)
+                            g_write_consistency = DC_QUORUM;
                         else
                             st_cmd->cmd = CMD_UNKNOWN;
                     } else
@@ -1146,10 +1146,8 @@ stats_send_rsp(struct stats *st)
     } else if (cmd == CMD_GET_CONSISTENCY) {
         char cons_rsp[1024];
         dn_sprintf(cons_rsp, "Read Consistency: %s\r\nWrite Consistency: %s\r\n",
-                   g_read_consistency == LOCAL_ONE ? CONF_STR_LOCAL_ONE :
-                                                     CONF_STR_LOCAL_QUORUM,
-                   g_write_consistency == LOCAL_ONE ? CONF_STR_LOCAL_ONE :
-                                                      CONF_STR_LOCAL_QUORUM);
+                   get_consistency_string(g_read_consistency),
+                   get_consistency_string(g_write_consistency));
         return stats_http_rsp(sd, cons_rsp, dn_strlen(cons_rsp));
     } else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
         log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);

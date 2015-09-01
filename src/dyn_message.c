@@ -302,7 +302,7 @@ done:
     msg->msg_type = 0;
     msg->dyn_error = 0;
     msg->rsp_handler = msg_cant_handle_response;
-    msg->consistency = LOCAL_ONE;
+    msg->consistency = DC_ONE;
     return msg;
 }
 

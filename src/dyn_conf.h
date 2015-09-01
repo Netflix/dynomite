@@ -75,8 +75,8 @@
 #define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
 
-#define CONF_STR_LOCAL_QUORUM                "local_quorum"
-#define CONF_STR_LOCAL_ONE                   "local_one"
+#define CONF_STR_DC_QUORUM                   "dc_quorum"
+#define CONF_STR_DC_ONE                      "dc_one"
 
 #define CONF_DEFAULT_ENV                     "aws"
 

@@ -1562,33 +1562,33 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (string_empty(&cp->read_consistency)) {
         string_copy_c(&cp->read_consistency,
-                &CONF_STR_LOCAL_ONE);
+                &CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting read_consistency to default value:%s",
-                CONF_STR_LOCAL_ONE);
+                CONF_STR_DC_ONE);
     }
 
     if (string_empty(&cp->write_consistency)) {
         string_copy_c(&cp->write_consistency,
-                &CONF_STR_LOCAL_ONE);
+                &CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting write_consistency to default value:%s",
-                CONF_STR_LOCAL_ONE);
+                CONF_STR_DC_ONE);
     }
 
-    if (!dn_strcmp(cp->read_consistency.data, CONF_STR_LOCAL_ONE))
-        g_read_consistency = LOCAL_ONE;
-    else if (!dn_strcmp(cp->read_consistency.data, CONF_STR_LOCAL_QUORUM))
-        g_read_consistency = LOCAL_QUORUM;
+    if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_ONE))
+        g_read_consistency = DC_ONE;
+    else if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
+        g_read_consistency = DC_QUORUM;
     else {
-        log_error("conf: directive \"read_consistency:\"must be one of 'local_one' 'local_quorum'");
+        log_error("conf: directive \"read_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
         return DN_ERROR;
     }
 
-    if (!dn_strcmp(cp->write_consistency.data, CONF_STR_LOCAL_ONE))
-        g_write_consistency = LOCAL_ONE;
-    else if (!dn_strcmp(cp->write_consistency.data, CONF_STR_LOCAL_QUORUM))
-        g_write_consistency = LOCAL_QUORUM;
+    if (!dn_strcmp(cp->write_consistency.data, CONF_STR_DC_ONE))
+        g_write_consistency = DC_ONE;
+    else if (!dn_strcmp(cp->write_consistency.data, CONF_STR_DC_QUORUM))
+        g_write_consistency = DC_QUORUM;
     else {
-        log_error("conf: directive \"write_consistency:\"must be one of 'local_one' 'local_quorum'");
+        log_error("conf: directive \"write_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
         return DN_ERROR;
     }
 
