@@ -76,7 +76,7 @@ dn_show_usage(void)
         "  -o, --output=S         : set logging file (default: %s)" CRLF
         "  -c, --conf-file=S      : set configuration file (default: %s)" CRLF
         "  -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -M, --max-msgs=N       : set max size of allocated messages buffer (default: %d)" CRLF
+        "  -M, --max-msgs=N       : set max number of messages to allocate (default: %d)" CRLF
         "",
         TEST_LOG_DEFAULT, TEST_LOG_DEFAULT, TEST_LOG_DEFAULT,
         TEST_LOG_PATH != NULL ? TEST_LOG_PATH : "stderr",
@@ -184,7 +184,7 @@ test_get_options(int argc, char **argv, struct instance *nci)
                 return DN_ERROR;
             }
 
-            nci->alloc_msgs_size = (size_t)value;
+            nci->alloc_msgs_max = (size_t)value;
             break;
 
         case '?':

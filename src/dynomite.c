@@ -52,8 +52,8 @@
 #define DN_MBUF_MAX_SIZE    MBUF_MAX_SIZE
 
 #define DN_ALLOC_MSGS			ALLOC_MSGS
-#define DN_ALLOC_MSGS_MIN_SIZE	ALLOC_MSGS_MIN_SIZE
-#define DN_ALLOC_MSGS_MAX_SIZE	ALLOC_MSGS_MAX_SIZE
+#define DN_MIN_ALLOC_MSGS	MIN_ALLOC_MSGS
+#define DN_MAX_ALLOC_MSGS	MAX_ALLOC_MSGS
 
 static int show_help;
 static int show_version;
@@ -240,7 +240,7 @@ dn_show_usage(void)
         "  -i, --stats-interval=N       : set stats aggregation interval in msec (default: %d msec)" CRLF
         "  -p, --pid-file=S             : set pid file (default: %s)" CRLF
         "  -m, --mbuf-size=N            : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -M, --max-msgs=N             : set max size of allocated messages buffer (default: %d)" CRLF
+        "  -M, --max-msgs=N             : set max number of messages to allocate (default: %d)" CRLF
         "  -x, --admin-operation=N      : set size of admin operation (default: %d)" CRLF
         "",
         DN_LOG_DEFAULT, DN_LOG_MIN, DN_LOG_MAX,
@@ -443,13 +443,13 @@ dn_get_options(int argc, char **argv, struct instance *nci)
                 return DN_ERROR;
             }
 
-            if (value < DN_ALLOC_MSGS_MIN_SIZE || value > DN_ALLOC_MSGS_MAX_SIZE) {
+            if (value < DN_MIN_ALLOC_MSGS || value > DN_MAX_ALLOC_MSGS) {
                 log_stderr("dynomite: max allocated messages buffer must be between %zu and"
-                           " %zu bytes", DN_ALLOC_MSGS_MIN_SIZE, DN_ALLOC_MSGS_MAX_SIZE);
+                           " %zu messages", DN_MIN_ALLOC_MSGS, DN_MAX_ALLOC_MSGS);
                 return DN_ERROR;
             }
 
-            nci->alloc_msgs_size = (size_t)value;
+            nci->alloc_msgs_max = (size_t)value;
 
         	break;
 
