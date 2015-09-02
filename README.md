@@ -47,6 +47,7 @@ To build Dynomite in _debug mode_:
       -i, --stats-interval=N : set stats aggregation interval in msec (default: 30000 msec)
       -p, --pid-file=S       : set pid file (default: off)
       -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: 16384 bytes)
+      -l, --alloc_msgs=N     : set max size of allocated messages buffer (default: 2000000)
 
 
 ## Configuration
