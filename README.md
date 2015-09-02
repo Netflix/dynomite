@@ -32,6 +32,7 @@ To build Dynomite in _debug mode_:
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
                       [-c conf file] [-s stats port] [-a stats addr]
                       [-i stats interval] [-p pid file] [-m mbuf size]
+                      [-M max alloc messages]
 
     Options:
       -h, --help             : this help
@@ -47,7 +48,7 @@ To build Dynomite in _debug mode_:
       -i, --stats-interval=N : set stats aggregation interval in msec (default: 30000 msec)
       -p, --pid-file=S       : set pid file (default: off)
       -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: 16384 bytes)
-      -l, --alloc-msgs=N     : set max size of allocated messages buffer (default: 2000000)
+      -M, --max-msgs=N       : set max size of allocated messages buffer (default: 2000000)
 
 
 ## Configuration

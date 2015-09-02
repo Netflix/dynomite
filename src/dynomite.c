@@ -78,13 +78,13 @@ static struct option long_options[] = {
     { "stats-addr",           required_argument,  NULL,   'a' },
     { "pid-file",             required_argument,  NULL,   'p' },
     { "mbuf-size",            required_argument,  NULL,   'm' },
-    { "alloc-msgs",           required_argument,  NULL,   'l' },
+    { "max-msgs",             required_argument,  NULL,   'M' },
     { "admin-operation",      required_argument,  NULL,   'x' },
     { "admin-param",          required_argument,  NULL,   'y' },
     { NULL,             0,                  NULL,    0  }
 };
 
-static char short_options[] = "hVtdDgv:o:c:s:i:a:p:m:x:y:";
+static char short_options[] = "hVtdDgv:o:c:s:i:a:p:m:M:x:y";
 
 static rstatus_t
 dn_daemonize(int dump_core)
@@ -221,7 +221,7 @@ dn_show_usage(void)
         "Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]" CRLF
         "                  [-c conf file] [-s stats port] [-a stats addr]" CRLF
         "                  [-i stats interval] [-p pid file] [-m mbuf size]" CRLF
-        "                  [-l max alloc messages]" CRLF
+        "                  [-M max alloc messages]" CRLF
         "");
     log_stderr(
         "Options:" CRLF
@@ -240,7 +240,7 @@ dn_show_usage(void)
         "  -i, --stats-interval=N       : set stats aggregation interval in msec (default: %d msec)" CRLF
         "  -p, --pid-file=S             : set pid file (default: %s)" CRLF
         "  -m, --mbuf-size=N            : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -l, --alloc-msgs=N           : set max size of allocated messages buffer (default: %d)" CRLF
+        "  -M, --max-msgs=N             : set max size of allocated messages buffer (default: %d)" CRLF
         "  -x, --admin-operation=N      : set size of admin operation (default: %d)" CRLF
         "",
         DN_LOG_DEFAULT, DN_LOG_MIN, DN_LOG_MAX,
@@ -436,7 +436,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             nci->mbuf_chunk_size = (size_t)value;
             break;
 
-        case 'l':
+        case 'M':
             value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
                 log_stderr("dynomite: option -l requires a non-zero number");
@@ -444,7 +444,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             }
 
             if (value < DN_ALLOC_MSGS_MIN_SIZE || value > DN_ALLOC_MSGS_MAX_SIZE) {
-                log_stderr("dynomite: allocated messages buffer must be between %zu and"
+                log_stderr("dynomite: max allocated messages buffer must be between %zu and"
                            " %zu bytes", DN_ALLOC_MSGS_MIN_SIZE, DN_ALLOC_MSGS_MAX_SIZE);
                 return DN_ERROR;
             }
@@ -472,7 +472,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
                 break;
 
             case 'm':
-            case 'l':
+            case 'M':
             case 'v':
             case 's':
             case 'i':
