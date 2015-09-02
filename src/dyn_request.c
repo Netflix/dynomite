@@ -264,7 +264,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
        stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
     } else {
        struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-       stats_pool_incr(ctx, pool, peer_in_queue);
+       if (conn->same_dc)
+            stats_pool_incr(ctx, pool, peer_in_queue);
+        else
+            stats_pool_incr(ctx, pool, remote_peer_in_queue);
        stats_pool_incr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
     }
 }

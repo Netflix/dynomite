@@ -407,7 +407,10 @@ core_timeout(struct context *ctx)
 		if (conn->dyn_mode) {
 			if (!conn->dnode_client && !conn->dnode_server) { //outgoing peer requests
 		 	   struct server *server = conn->owner;
-			   stats_pool_incr(ctx, server->owner, peer_timedout_requests);
+                if (conn->same_dc)
+			        stats_pool_incr(ctx, server->owner, peer_timedout_requests);
+                else
+			        stats_pool_incr(ctx, server->owner, remote_peer_timedout_requests);
 			}
 		} else {
 			if (!conn->client && !conn->proxy) { //storage server requests
