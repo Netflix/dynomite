@@ -439,7 +439,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
         case 'M':
             value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
-                log_stderr("dynomite: option -l requires a non-zero number");
+                log_stderr("dynomite: option -M requires a non-zero number");
                 return DN_ERROR;
             }
 
