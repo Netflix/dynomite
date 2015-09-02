@@ -26,8 +26,9 @@
 #include "dyn_core.h"
 #include "dyn_dnode_msg.h"
 
-#define ALLOWED_ALLOC_MSGS            200000
-#define MAX_ALLOC_MSGS                400000
+#define ALLOC_MSGS					  200000
+#define ALLOC_MSGS_MIN_SIZE			  100000
+#define ALLOC_MSGS_MAX_SIZE			  1000000
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
 #define MAX_REPLICAS_PER_DC           3
@@ -347,7 +348,7 @@ struct msg *msg_tmo_min(void);
 void msg_tmo_insert(struct msg *msg, struct conn *conn);
 void msg_tmo_delete(struct msg *msg);
 
-void msg_init(void);
+void msg_init(struct instance *nci);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
 struct msg *msg_get(struct conn *conn, bool request, int data_store);

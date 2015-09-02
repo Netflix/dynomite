@@ -121,6 +121,8 @@ static uint32_t nfree_msgq;      /* # free msg q */
 static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
+static size_t alloc_msgs_size;	 /* maximum number of allowed allocated messages */
+
 
 static inline rstatus_t
 msg_cant_handle_response(struct msg *req, struct msg *rsp)
@@ -218,12 +220,12 @@ _msg_get(bool force_alloc)
 
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
-    if (alloc_msg_count >= ALLOWED_ALLOC_MSGS && !force_alloc) {
+    if (alloc_msg_count >= alloc_msgs_size && !force_alloc) {
          log_debug(LOG_WARN, "allocated #msgs %d hit max allowable limit", alloc_msg_count);
          return NULL;
     }
 
-    if (alloc_msg_count >= MAX_ALLOC_MSGS) {
+    if (alloc_msg_count >= ALLOC_MSGS_MAX_SIZE) {
         log_debug(LOG_WARN, "allocated #msgs %d hit max hard limit", alloc_msg_count);
         return NULL; //we hit the max limit
     }
@@ -594,12 +596,13 @@ msg_dump(struct msg *msg)
 }
 
 void
-msg_init(void)
+msg_init(struct instance *nci)
 {
     log_debug(LOG_DEBUG, "msg size %d", sizeof(struct msg));
     msg_id = 0;
     frag_id = 0;
     nfree_msgq = 0;
+    alloc_msgs_size = nci->alloc_msgs_size;
     TAILQ_INIT(&free_msgq);
     rbtree_init(&tmo_rbt, &tmo_rbs);
 }

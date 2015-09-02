@@ -218,7 +218,7 @@ core_start(struct instance *nci)
 	//last = dn_msec_now();
 
 	mbuf_init(nci);
-	msg_init();
+	msg_init(nci);
 	conn_init();
 
 	ctx = core_ctx_create(nci);
