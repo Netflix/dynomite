@@ -718,7 +718,9 @@ conf_push_scalar(struct conf *cf)
 
     scalar = cf->event.data.scalar.value;
     scalar_len = (uint32_t)cf->event.data.scalar.length;
-
+    if (scalar_len == 0) {
+    	return DYN_ERROR;
+    }
     log_debug(LOG_VVERB, "push '%.*s'", scalar_len, scalar);
 
     value = array_push(&cf->arg);
@@ -1769,6 +1771,7 @@ conf_create(char *filename)
     return cf;
 
 error:
+	log_stderr("configuration file '%s' syntax is invalid", filename);
     fclose(cf->fh);
     cf->fh = NULL;
     conf_destroy(cf);
