@@ -22,6 +22,7 @@
 #define TEST_LOG_DEFAULT       LOG_PVERB
 #define TEST_LOG_PATH          NULL
 #define TEST_MBUF_SIZE         512
+#define TEST_ALLOCS_MSGS	   200000
 
 
 static int show_help;
@@ -51,10 +52,11 @@ static struct option long_options[] = {
     { "stats-addr",     required_argument,  NULL,   'a' },
     { "pid-file",       required_argument,  NULL,   'p' },
     { "mbuf-size",      required_argument,  NULL,   'm' },
+    { "max_msgs",       required_argument,  NULL,   'M' },
     { NULL,             0,                  NULL,    0  }
 };
 
-static char short_options[] = "hVtDgv:o:c:s:i:a:p:m:";
+static char short_options[] = "hVtDgv:o:c:s:i:a:p:m:M";
 
 
 static void
@@ -62,7 +64,7 @@ dn_show_usage(void)
 {
     log_stderr(
         "Usage: test [-?hVdDt] [-v verbosity level] [-o output file]" CRLF
-        "                  [-c conf file] [-m mbuf size]" CRLF
+        "                  [-c conf file] [-m mbuf size] [-M max alloc messages]" CRLF
         "");
     log_stderr(
         "Options:" CRLF
@@ -74,11 +76,13 @@ dn_show_usage(void)
         "  -o, --output=S         : set logging file (default: %s)" CRLF
         "  -c, --conf-file=S      : set configuration file (default: %s)" CRLF
         "  -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
+        "  -M, --max-msgs=N       : set max number of messages to allocate (default: %d)" CRLF
         "",
         TEST_LOG_DEFAULT, TEST_LOG_DEFAULT, TEST_LOG_DEFAULT,
         TEST_LOG_PATH != NULL ? TEST_LOG_PATH : "stderr",
         TEST_CONF_PATH,
-        TEST_MBUF_SIZE);
+        TEST_MBUF_SIZE,
+		TEST_ALLOCS_MSGS);
 }
 
 
@@ -173,6 +177,16 @@ test_get_options(int argc, char **argv, struct instance *nci)
             nci->mbuf_chunk_size = (size_t)value;
             break;
 
+        case 'M':
+            value = dn_atoi(optarg, strlen(optarg));
+            if (value <= 0) {
+                log_stderr("test: option -M requires a non-zero number");
+                return DN_ERROR;
+            }
+
+            nci->alloc_msgs_max = (size_t)value;
+            break;
+
         case '?':
             switch (optopt) {
             case 'o':
@@ -183,6 +197,7 @@ test_get_options(int argc, char **argv, struct instance *nci)
                 break;
 
             case 'm':
+            case 'M':
             case 'v':
             case 's':
             case 'i':
@@ -556,7 +571,7 @@ init_test(int argc, char **argv)
     test_mbuf_chunk_size = nci.mbuf_chunk_size;
     position = 0;
     mbuf_init(&nci);
-    msg_init();
+    msg_init(&nci);
     conn_init();
 
     crypto_init_for_test();

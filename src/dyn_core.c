@@ -218,7 +218,7 @@ core_start(struct instance *nci)
 	//last = dn_msec_now();
 
 	mbuf_init(nci);
-	msg_init();
+	msg_init(nci);
 	conn_init();
 
 	ctx = core_ctx_create(nci);
@@ -407,7 +407,10 @@ core_timeout(struct context *ctx)
 		if (conn->dyn_mode) {
 			if (!conn->dnode_client && !conn->dnode_server) { //outgoing peer requests
 		 	   struct server *server = conn->owner;
-			   stats_pool_incr(ctx, server->owner, peer_timedout_requests);
+                if (conn->same_dc)
+			        stats_pool_incr(ctx, server->owner, peer_timedout_requests);
+                else
+			        stats_pool_incr(ctx, server->owner, remote_peer_timedout_requests);
 			}
 		} else {
 			if (!conn->client && !conn->proxy) { //storage server requests
