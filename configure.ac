@@ -1,7 +1,7 @@
 # Define the package version numbers and the bug reporting address
 m4_define([DN_MAJOR], 0)
 m4_define([DN_MINOR], 5)
-m4_define([DN_PATCH], 1)
+m4_define([DN_PATCH], 2)
 m4_define([DN_BUGS], [mdo@netflix.com])
 
 # Initialize autoconf
