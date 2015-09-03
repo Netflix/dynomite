@@ -446,21 +446,24 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 }
 
 static void
-dnode_peer_close_stats(struct context *ctx, struct server *server, err_t err,
-        unsigned eof, unsigned connected)
+dnode_peer_close_stats(struct context *ctx, struct conn *conn)
 {
-    if (connected) {
+    struct server *server = conn->owner;
+    if (conn->connected) {
         stats_pool_decr(ctx, server->owner, peer_connections);
     }
 
-    if (eof) {
+    if (conn->eof) {
         stats_pool_incr(ctx, server->owner, peer_eof);
         return;
     }
 
-    switch (err) {
+    switch (conn->err) {
     case ETIMEDOUT:
-        stats_pool_incr(ctx, server->owner, peer_timedout);
+        if (conn->same_dc)
+            stats_pool_incr(ctx, server->owner, peer_timedout);
+        else
+            stats_pool_incr(ctx, server->owner, remote_peer_timedout);
         break;
     case EPIPE:
     case ECONNRESET:
@@ -568,8 +571,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     ASSERT(!conn->dnode_server && !conn->dnode_client);
 
-    dnode_peer_close_stats(ctx, conn->owner, conn->err, conn->eof,
-            conn->connected);
+    dnode_peer_close_stats(ctx, conn);
 
     if (conn->sd < 0) {
         dnode_peer_failure(ctx, conn->owner);

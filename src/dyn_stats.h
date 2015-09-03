@@ -50,11 +50,13 @@
     ACTION( dnode_client_out_queue,       STATS_GAUGE,        "# dnode client requests in outgoing queue")                \
     ACTION( dnode_client_out_queue_bytes, STATS_GAUGE,        "current dnode client request bytes in outgoing queue")     \
     /* peer behavior */                                                                                                   \
-    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# peer dropped requests")                                  \
-    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# peer timedout requests")                                 \
+    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# local dc peer dropped requests")                                  \
+    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# local dc peer timedout requests")                                 \
+    ACTION( remote_peer_timedout_requests,STATS_COUNTER,      "# remote dc peer timedout requests")                                 \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
     ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
-    ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on peer connections")                           \
+    ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on local dc peer connections")                           \
+    ACTION( remote_peer_timedout,         STATS_COUNTER,      "# timeouts on remote dc peer connections")                           \
     ACTION( peer_connections,             STATS_GAUGE,        "# active peer connections")                                \
     ACTION( peer_forward_error,           STATS_GAUGE,        "# times we encountered a peer forwarding error")           \
     ACTION( peer_requests,                STATS_COUNTER,      "# peer requests")                                          \
@@ -62,9 +64,11 @@
     ACTION( peer_responses,               STATS_COUNTER,      "# peer respones")                                          \
     ACTION( peer_response_bytes,          STATS_COUNTER,      "total peer response bytes")                                \
     ACTION( peer_ejects,                  STATS_COUNTER,      "# times a peer was ejected")                               \
-    ACTION( peer_in_queue,                STATS_GAUGE,        "# peer requests in incoming queue")                        \
+    ACTION( peer_in_queue,                STATS_GAUGE,        "# local dc peer requests in incoming queue")                        \
+    ACTION( remote_peer_in_queue,         STATS_GAUGE,        "# remote dc peer requests in incoming queue")                        \
     ACTION( peer_in_queue_bytes,          STATS_GAUGE,        "current peer request bytes in incoming queue")             \
-    ACTION( peer_out_queue,               STATS_GAUGE,        "# peer requests in outgoing queue")                        \
+    ACTION( peer_out_queue,               STATS_GAUGE,        "# local dc peer requests in outgoing queue")                        \
+    ACTION( remote_peer_out_queue,        STATS_GAUGE,        "# remote dc peer requests in outgoing queue")                        \
     ACTION( peer_out_queue_bytes,         STATS_GAUGE,        "current peer request bytes in outgoing queue")             \
     ACTION( peer_mismatch_requests,       STATS_COUNTER,      "current dnode peer mismatched messages")                   \
     /* forwarder behavior */                                                                                              \
