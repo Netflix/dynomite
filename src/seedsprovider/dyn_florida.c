@@ -18,13 +18,11 @@
  ****************************************************************************/
 
 
-#define USERAGENT "HTMLGET 1.0"
-#define REQ_HEADER "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n\r\n"
+#define FLORIDA_IP "127.0.0.1"
+#define FLORIDA_PORT 8080
 
-#define IP "127.0.0.1"
-#define PAGE "REST/v1/admin/get_seeds"
-#define PORT 8080
-
+const char * request = "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: "\
+                       "127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
@@ -70,7 +68,8 @@ hash_seeds(uint8_t *seeds, size_t length)
     return value;
 }
 
-uint8_t florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
+uint8_t
+florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 	struct sockaddr_in *remote;
 	uint32_t sock;
 	uint32_t tmpres;
@@ -91,21 +90,22 @@ uint8_t florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 
 	remote = (struct sockaddr_in *) dn_alloc(sizeof(struct sockaddr_in *));
 	remote->sin_family = AF_INET;
-	tmpres = inet_pton(AF_INET, IP, (void *)(&(remote->sin_addr.s_addr)));
-	remote->sin_port = htons(PORT);
+	tmpres = inet_pton(AF_INET, FLORIDA_IP, (void *)(&(remote->sin_addr.s_addr)));
+	remote->sin_port = htons(FLORIDA_PORT);
 
 	if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
 		log_debug(LOG_VVERB, "Unable to connect the destination");
 		return DN_ERROR;
 	}
-	get = build_get_query((uint8_t*) IP, (uint8_t*) PAGE);
 
 	uint32_t sent = 0;
-	while(sent < dn_strlen(get))
+	while(sent < dn_strlen(request))
 	{
-		tmpres = send(sock, get+sent, dn_strlen(get)-sent, 0);
+		tmpres = send(sock, request+sent, dn_strlen(request)-sent, 0);
 		if(tmpres == -1){
 			log_debug(LOG_VVERB, "Unable to send query");
+            close(sock);
+            dn_free(remote);
 			return DN_ERROR;
 		}
 		sent += tmpres;
@@ -116,9 +116,21 @@ uint8_t florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 	memset(buf, 0, sizeof(buf));
 	uint32_t htmlstart = 0;
 	uint8_t * htmlcontent;
+    uint8_t *ok = NULL;
 
 	//assume that the respsone payload is under BUF_SIZE
 	while ((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
+
+        // Look for a OK response  in the first buffer output.
+        if (!ok)
+		    ok = (uint8_t *) strstr((char *)buf, "200 OK.\r\n");
+        if (ok == NULL) {
+            log_error("Received Error from Florida while getting seeds");
+            loga_hexdump(buf, tmpres, "Florida Response with %ld bytes of data", tmpres);
+            close(sock);
+            dn_free(remote);
+            return DN_ERROR;
+        }
 
 		if (htmlstart == 0) {
 			/* Under certain conditions this will not work.
@@ -145,9 +157,8 @@ uint8_t florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 		log_debug(LOG_VVERB, "Error receiving data");
 	}
 
-	dn_free(get);
-	dn_free(remote);
 	close(sock);
+	dn_free(remote);
 
 	uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
 
@@ -170,22 +181,3 @@ uint32_t create_tcp_socket()
 	}
 	return sock;
 }
-
-
-uint8_t *build_get_query(uint8_t *host, uint8_t *page)
-{
-	uint8_t *query;
-	uint8_t *getpage = page;
-
-	if(getpage[0] == '/'){
-		getpage = getpage + 1;
-		//fprintf(stderr,"Removing leading \"/\", converting %s to %s\n", page, getpage);
-	}
-
-	// -5 is to consider the %s %s %s in REQ_HEADER and the ending \0
-	query = (uint8_t *) dn_alloc(dn_strlen(host) + dn_strlen(getpage) + dn_strlen(USERAGENT) + dn_strlen(REQ_HEADER) - 5);
-
-	dn_sprintf(query, REQ_HEADER, getpage, host, USERAGENT);
-	return query;
-}
-
