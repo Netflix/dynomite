@@ -719,7 +719,7 @@ conf_push_scalar(struct conf *cf)
     scalar = cf->event.data.scalar.value;
     scalar_len = (uint32_t)cf->event.data.scalar.length;
     if (scalar_len == 0) {
-    	return DYN_ERROR;
+    	return DN_ERROR;
     }
     log_debug(LOG_VVERB, "push '%.*s'", scalar_len, scalar);
 
@@ -1771,7 +1771,7 @@ conf_create(char *filename)
     return cf;
 
 error:
-	log_stderr("configuration file '%s' syntax is invalid", filename);
+	log_stderr("dynomite: configuration file '%s' syntax is invalid", filename);
     fclose(cf->fh);
     cf->fh = NULL;
     conf_destroy(cf);
