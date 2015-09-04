@@ -718,7 +718,9 @@ conf_push_scalar(struct conf *cf)
 
     scalar = cf->event.data.scalar.value;
     scalar_len = (uint32_t)cf->event.data.scalar.length;
-
+    if (scalar_len == 0) {
+    	return DN_ERROR;
+    }
     log_debug(LOG_VVERB, "push '%.*s'", scalar_len, scalar);
 
     value = array_push(&cf->arg);
@@ -1582,18 +1584,18 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'rack' 'datacenter' 'all'");
     }
 
-    if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_ONE))
+    if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_ONE))
         g_read_consistency = DC_ONE;
-    else if (!dn_strcmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
+    else if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
         g_read_consistency = DC_QUORUM;
     else {
         log_error("conf: directive \"read_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
         return DN_ERROR;
     }
 
-    if (!dn_strcmp(cp->write_consistency.data, CONF_STR_DC_ONE))
+    if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_ONE))
         g_write_consistency = DC_ONE;
-    else if (!dn_strcmp(cp->write_consistency.data, CONF_STR_DC_QUORUM))
+    else if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_QUORUM))
         g_write_consistency = DC_QUORUM;
     else {
         log_error("conf: directive \"write_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
@@ -1769,6 +1771,7 @@ conf_create(char *filename)
     return cf;
 
 error:
+	log_stderr("dynomite: configuration file '%s' syntax is invalid", filename);
     fclose(cf->fh);
     cf->fh = NULL;
     conf_destroy(cf);

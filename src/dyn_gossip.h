@@ -13,7 +13,7 @@
 #define SIMPLE_PROVIDER           "simple_provider"
 #define FLORIDA_PROVIDER          "florida_provider"
 
-#define SEED_BUF_SIZE 1000000     //in bytes
+#define SEED_BUF_SIZE (1024*1024)     //in bytes
 
 
 typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
