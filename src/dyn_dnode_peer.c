@@ -19,7 +19,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
 {
     struct server *peer = owner;
 
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner == NULL);
 
     conn->family = peer->family;
@@ -42,7 +42,7 @@ dnode_peer_unref(struct conn *conn)
 {
     struct server *peer;
 
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner != NULL);
 
     peer = conn->owner;
@@ -64,7 +64,7 @@ dnode_peer_timeout(struct msg *msg, struct conn *conn)
     struct server *server;
     struct server_pool *pool;
 
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     server = conn->owner;
     pool = server->owner;
@@ -84,7 +84,7 @@ dnode_peer_timeout(struct msg *msg, struct conn *conn)
 bool
 dnode_peer_active(struct conn *conn)
 {
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     if (!TAILQ_EMPTY(&conn->imsg_q)) {
         log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
@@ -346,7 +346,7 @@ dnode_peer_conn(struct server *server)
      * it back into the tail of queue to maintain the lru order
      */
     conn = TAILQ_FIRST(&server->s_conn_q);
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
     TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
@@ -400,7 +400,7 @@ dnode_peer_each_disconnect(void *elem, void *data)
         ASSERT(server->ns_conn_q > 0);
 
         conn = TAILQ_FIRST(&server->s_conn_q);
-        conn->close(pool->ctx, conn);
+        conn_close(pool->ctx, conn);
     }
 
     return DN_OK;
@@ -533,7 +533,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg*msg)
         return;
     }
     struct conn *c_conn = msg->owner;
-    ASSERT(c_conn->client && !c_conn->proxy);
+    // At other connections, these responses would be swallowed.
+    ASSERT(c_conn->type == CONN_CLIENT);
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
@@ -569,13 +570,13 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", server->pname.len,
             server->pname.data);
 
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     dnode_peer_close_stats(ctx, conn);
 
     if (conn->sd < 0) {
         dnode_peer_failure(ctx, conn->owner);
-        conn->unref(conn);
+        conn_unref(conn);
         conn_put(conn);
         return;
     }
@@ -584,7 +585,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
         /* dequeue the message (request) from server inq */
-        conn->dequeue_inq(ctx, conn, msg);
+        conn_dequeue_inq(ctx, conn, msg);
         dnode_peer_ack_err(ctx, conn, msg);
 
         stats_pool_incr(ctx, server->owner, peer_dropped_requests);
@@ -596,7 +597,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
         /* dequeue the message (request) from server outq */
-        conn->dequeue_outq(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, msg);
         dnode_peer_ack_err(ctx, conn, msg);
     }
 
@@ -619,7 +620,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     dnode_peer_failure(ctx, conn->owner);
 
-    conn->unref(conn);
+    conn_unref(conn);
 
     status = close(conn->sd);
     if (status < 0) {
@@ -1020,7 +1021,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
     if (ctx->admin_opt > 0)
         return DN_OK;
 
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     if (conn->sd > 0) {
         /* already connected on peer connection */
@@ -1101,7 +1102,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 {
     struct server *server = conn->owner;
 
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connecting && !conn->connected);
 
     stats_pool_incr(ctx, server->owner, peer_connections);
@@ -1120,7 +1121,7 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
 {
     struct server *server = conn->owner;
 
-    ASSERT(!conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connected);
 
     if (server->failure_count != 0) {

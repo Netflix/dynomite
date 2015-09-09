@@ -35,7 +35,8 @@ req_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
 
     msg = msg_get(conn, true, conn->data_store);
     if (msg == NULL) {
@@ -79,7 +80,8 @@ req_done(struct conn *conn, struct msg *msg)
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
 
     if (msg == NULL || !msg->done) {
         return false;
@@ -242,7 +244,8 @@ void
 req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -276,7 +279,7 @@ void
 req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
@@ -289,7 +292,7 @@ void
 req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     msg->stime_in_microsec = dn_usec_now();
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
@@ -300,7 +303,7 @@ void
 req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
@@ -313,7 +316,7 @@ void
 req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
     stats_histo_add_latency(ctx, latency);
@@ -325,7 +328,7 @@ void
 req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     msg_tmo_delete(msg);
 
@@ -341,7 +344,8 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_DNODE_PEER_CLIENT) ||
+           (conn->type = CONN_CLIENT));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -375,7 +379,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          * half (by sending the second FIN) when the client has no
          * outstanding requests
          */
-        if (!conn->active(conn)) {
+        if (!conn_active(conn)) {
             conn->done = 1;
             log_debug(LOG_INFO, "c %d is done", conn->sd);
         }
@@ -404,7 +408,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 static bool
 req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
@@ -577,12 +581,12 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
        loga("local_req_forward entering ............");
     }
 
-    ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy &&
-           !c_conn->dnode_server);
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
-        c_conn->enqueue_outq(ctx, c_conn, msg);
+        conn_enqueue_outq(ctx, c_conn, msg);
     }
 
     s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
@@ -591,7 +595,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         req_forward_error(ctx, c_conn, msg);
         return;
     }
-    ASSERT(!s_conn->client && !s_conn->proxy);
+    ASSERT(s_conn->type == CONN_SERVER);
 
     if (log_loggable(LOG_DEBUG)) {
        log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
@@ -634,7 +638,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         }
     }
 
-    s_conn->enqueue_inq(ctx, s_conn, msg);
+    conn_enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
     if(msg->data_store==DATA_REDIS){
     	req_redis_stats(ctx, s_conn->owner, msg);
@@ -675,7 +679,7 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *msg)
     //do nothing
     struct msg *nmsg = msg_get_rsp_integer(true);
     if (!msg->noreply)
-        c_conn->enqueue_outq(ctx, c_conn, msg);
+        conn_enqueue_outq(ctx, c_conn, msg);
     msg->peer = nmsg;
     nmsg->peer = msg;
 
@@ -691,7 +695,8 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 {
     struct conn *p_conn;
 
-    ASSERT(c_conn->client || c_conn->dnode_client);
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
@@ -716,7 +721,8 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 {
     struct conn *p_conn;
 
-    ASSERT(c_conn->client || c_conn->dnode_client);
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
@@ -843,7 +849,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     uint8_t *key;
     uint32_t keylen;
 
-    ASSERT(c_conn->client && !c_conn->proxy);
+    ASSERT(c_conn->type == CONN_CLIENT);
 
     if (msg->is_read)
         stats_pool_incr(ctx, pool, client_read_requests);
@@ -920,7 +926,7 @@ void
 req_recv_done(struct context *ctx, struct conn *conn,
               struct msg *msg, struct msg *nmsg)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(msg->request);
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
@@ -944,12 +950,13 @@ req_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
 
     if (conn->connecting) {
-        if (!conn->dyn_mode && !conn->client) {
+        if (conn->type == CONN_SERVER) {
            server_connected(ctx, conn);
-        } else if (conn->dyn_mode && !conn->dnode_client) {
+        } else if (conn->type == CONN_DNODE_PEER_SERVER) {
            dnode_peer_connected(ctx, conn);
         }
     }
@@ -990,7 +997,8 @@ req_send_next(struct context *ctx, struct conn *conn)
 void
 req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
     //ASSERT(msg->owner == conn);
@@ -1001,23 +1009,17 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     }
 
     /* dequeue the message (request) from server inq */
-    conn->dequeue_inq(ctx, conn, msg);
+    conn_dequeue_inq(ctx, conn, msg);
 
     /*
      * noreply request instructs the server not to send any response. So,
      * enqueue message (request) in server outq, if response is expected.
      * Otherwise, free the noreply request
      */
-    if (!msg->noreply) {
-        conn->enqueue_outq(ctx, conn, msg);
-    } else {
-        if (!conn->dyn_mode && !conn->client && !conn->proxy) { //still enqueue if it is storage conn
-            conn->enqueue_outq(ctx, conn, msg);
-        } else {
-            req_put(msg);
-        }
-    }
-
+    if (!msg->noreply || (conn->type == CONN_SERVER))
+        conn_enqueue_outq(ctx, conn, msg);
+    else
+        req_put(msg);
 }
 
 static msg_response_handler_t 

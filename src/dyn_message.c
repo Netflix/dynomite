@@ -348,8 +348,6 @@ msg_get(struct conn *conn, bool request, int data_store)
         }
         msg->pre_splitcopy = redis_pre_splitcopy;
         msg->post_splitcopy = redis_post_splitcopy;
-        msg->reply = redis_reply;
-        msg->failure = redis_failure;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
     } else if (data_store == DATA_MEMCACHE) {
@@ -675,7 +673,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (msg->pos == mbuf->last) {
        /* no more data to parse */
-       conn->recv_done(ctx, conn, msg, NULL);
+       conn_recv_done(ctx, conn, msg, NULL);
        return DN_OK;
      }
 
@@ -703,7 +701,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
     nmsg->mlen = mbuf_length(nbuf);
     msg->mlen -= nmsg->mlen;
 
-    conn->recv_done(ctx, conn, msg, nmsg);
+    conn_recv_done(ctx, conn, msg, nmsg);
 
     return DN_OK;
 }
@@ -715,7 +713,8 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *nmsg;  /* new message */
     struct mbuf *nbuf; /* new mbuf */
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request);
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
@@ -804,7 +803,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
               "%"PRIu64"", msg->id, nmsg->id, msg->frag_id);
     }
 
-    conn->recv_done(ctx, conn, msg, nmsg);
+    conn_recv_done(ctx, conn, msg, nmsg);
 
     return DN_OK;
 }
@@ -832,7 +831,7 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (msg_empty(msg)) {
         /* no data to parse */
-        conn->recv_done(ctx, conn, msg, NULL);
+        conn_recv_done(ctx, conn, msg, NULL);
         return DN_OK;
     }
 
@@ -913,7 +912,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                                      mbuf->end_extra - mbuf->last;
     }
 
-    n = conn_recv(conn, mbuf->last, msize);
+    n = conn_recv_data(conn, mbuf->last, msize);
 
     if (n < 0) {
         if (n == DN_EAGAIN) {
@@ -985,7 +984,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         }
 
         /* get next message to parse */
-        nmsg = conn->recv_next(ctx, conn, false);
+        nmsg = conn_recv_next(ctx, conn, false);
         if (nmsg == NULL || nmsg == msg) {
             /* no more data to parse */
             break;
@@ -1007,7 +1006,7 @@ msg_recv(struct context *ctx, struct conn *conn)
     conn->recv_ready = 1;
 
     do {
-        msg = conn->recv_next(ctx, conn, true);
+        msg = conn_recv_next(ctx, conn, true);
         if (msg == NULL) {
             return DN_OK;
         }
@@ -1059,10 +1058,9 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
         TAILQ_INSERT_TAIL(&send_msgq, msg, m_tqe);
 
-        for (mbuf = STAILQ_FIRST(&msg->mhdr);
-             mbuf != NULL && array_n(&sendv) < DN_IOV_MAX && nsend < limit;
-             mbuf = nbuf) {
-            nbuf = STAILQ_NEXT(mbuf, next);
+        STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+            if (!(array_n(&sendv) < DN_IOV_MAX) && (nsend < limit))
+                break;
 
             if (mbuf_empty(mbuf)) {
                 continue;
@@ -1084,7 +1082,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             break;
         }
 
-        msg = conn->send_next(ctx, conn);
+        msg = conn_send_next(ctx, conn);
         if (msg == NULL) {
             break;
         }
@@ -1094,20 +1092,18 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     conn->smsg = NULL;
 
-    n = conn_sendv(conn, &sendv, nsend);
+    n = conn_sendv_data(conn, &sendv, nsend);
 
     nsent = n > 0 ? (size_t)n : 0;
 
     /* postprocess - process sent messages in send_msgq */
-
-    for (msg = TAILQ_FIRST(&send_msgq); msg != NULL; msg = nmsg) {
-        nmsg = TAILQ_NEXT(msg, m_tqe);
+    TAILQ_FOREACH_SAFE(msg, &send_msgq, m_tqe, nmsg) {
 
         TAILQ_REMOVE(&send_msgq, msg, m_tqe);
 
         if (nsent == 0) {
             if (msg->mlen == 0) {
-                conn->send_done(ctx, conn, msg);
+                conn_send_done(ctx, conn, msg);
             }
             continue;
         }
@@ -1136,7 +1132,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
         /* message has been sent completely, finalize it */
         if (mbuf == NULL) {
-            conn->send_done(ctx, conn, msg);
+            conn_send_done(ctx, conn, msg);
         }
     }
 
@@ -1159,7 +1155,7 @@ msg_send(struct context *ctx, struct conn *conn)
 
     conn->send_ready = 1;
     do {
-        msg = conn->send_next(ctx, conn);
+        msg = conn_send_next(ctx, conn);
         if (msg == NULL) {
             /* nothing to send */
             return DN_OK;

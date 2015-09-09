@@ -33,7 +33,7 @@ server_ref(struct conn *conn, void *owner)
 {
 	struct server *server = owner;
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->owner == NULL);
 
 	conn->family = server->family;
@@ -54,7 +54,7 @@ server_unref(struct conn *conn)
 {
 	struct server *server;
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->owner != NULL);
 
 	server = conn->owner;
@@ -74,7 +74,7 @@ server_timeout(struct conn *conn)
 	struct server *server;
 	struct server_pool *pool;
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
 	server = conn->owner;
 	pool = server->owner;
@@ -85,7 +85,7 @@ server_timeout(struct conn *conn)
 bool
 server_active(struct conn *conn)
 {
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
 	if (!TAILQ_EMPTY(&conn->imsg_q)) {
 		log_debug(LOG_VVERB, "s %d is active", conn->sd);
@@ -197,7 +197,7 @@ server_conn(struct server *server)
 	 * it back into the tail of queue to maintain the lru order
 	 */
 	conn = TAILQ_FIRST(&server->s_conn_q);
-	ASSERT(!conn->client && !conn->proxy);
+	ASSERT(conn->type == CONN_SERVER);
 
 	TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
 	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
@@ -246,7 +246,7 @@ server_each_disconnect(void *elem, void *data)
 		ASSERT(server->ns_conn_q > 0);
 
 		conn = TAILQ_FIRST(&server->s_conn_q);
-		conn->close(pool->ctx, conn);
+		conn_close(pool->ctx, conn);
 	}
 
 	return DN_OK;
@@ -338,14 +338,14 @@ server_close(struct context *ctx, struct conn *conn)
 	struct msg *msg, *nmsg; /* current and next message */
 	struct conn *c_conn;    /* peer client connection */
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
 	server_close_stats(ctx, conn->owner, conn->err, conn->eof,
 			conn->connected);
 
 	if (conn->sd < 0) {
 		server_failure(ctx, conn->owner);
-		conn->unref(conn);
+		conn_unref(conn);
 		conn_put(conn);
 		return;
 	}
@@ -354,7 +354,7 @@ server_close(struct context *ctx, struct conn *conn)
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server inq */
-		conn->dequeue_inq(ctx, conn, msg);
+		conn_dequeue_inq(ctx, conn, msg);
 
 		/*
 		 * Don't send any error response, if
@@ -392,7 +392,7 @@ server_close(struct context *ctx, struct conn *conn)
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server outq */
-		conn->dequeue_outq(ctx, conn, msg);
+		conn_dequeue_outq(ctx, conn, msg);
 
 		if (msg->swallow) {
 			log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
@@ -435,7 +435,7 @@ server_close(struct context *ctx, struct conn *conn)
 
 	server_failure(ctx, conn->owner);
 
-	conn->unref(conn);
+	conn_unref(conn);
 
 	status = close(conn->sd);
 	if (status < 0) {
@@ -451,7 +451,7 @@ server_connect(struct context *ctx, struct server *server, struct conn *conn)
 {
 	rstatus_t status;
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
 	if (conn->sd > 0) {
 		/* already connected on server connection */
@@ -530,7 +530,7 @@ server_connected(struct context *ctx, struct conn *conn)
 {
 	struct server *server = conn->owner;
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connecting && !conn->connected);
 
 	stats_server_incr(ctx, server, server_connections);
@@ -549,7 +549,7 @@ server_ok(struct context *ctx, struct conn *conn)
 {
 	struct server *server = conn->owner;
 
-	ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connected);
 
 	if (server->failure_count != 0) {
