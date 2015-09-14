@@ -60,8 +60,8 @@
 #endif
 
 #ifdef HAVE_BACKTRACE
-#endif
 # define DN_HAVE_BACKTRACE 1
+#endif
 
 #define DN_NOOPS     1
 #define DN_OK        0
