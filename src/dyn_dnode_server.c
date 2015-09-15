@@ -15,7 +15,7 @@ dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->type == CONN_DNODE_SERVER);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner == NULL);
 
     conn->family = pool->d_family;
@@ -36,7 +36,7 @@ dnode_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->type == CONN_DNODE_SERVER);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -53,7 +53,7 @@ dnode_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     
-    ASSERT(conn->type == CONN_DNODE_SERVER);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
 
     if (conn->sd < 0) {
         conn_unref(conn);
@@ -114,7 +114,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     rstatus_t status;
     struct server_pool *pool = p->owner;
 
-    ASSERT(p->type == CONN_DNODE_SERVER);
+    ASSERT(p->type == CONN_DNODE_PEER_PROXY);
 
     p->sd = socket(p->family, SOCK_STREAM, 0);
     if (p->sd < 0) {
@@ -263,7 +263,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     int client_len = 0;
     int sd = 0;
 
-    ASSERT(p->type == CONN_DNODE_SERVER);
+    ASSERT(p->type == CONN_DNODE_PEER_PROXY);
     ASSERT(p->sd > 0);
     ASSERT(p->recv_active && p->recv_ready);
 
@@ -353,7 +353,7 @@ dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->type == CONN_DNODE_SERVER);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->recv_active);
  
     conn->recv_ready = 1;

@@ -21,6 +21,19 @@
  */
 
 
+/**
+ * In twemproxy there are 3 types of connections:
+ * PROXY - listens for client connections (default: 8102)
+ * CLIENT - incoming connection from the client
+ * SERVER - outgoing connection to the underlying data store.
+ *
+ * Dynomite extended this same concept and added 3 other types of connections
+ * DNODE_PEER_PROXY - listens to connections from other dynomite node (default 8101)
+ * DNODE_PEER_CLIENT - incoming connection from other dnode
+ * DNODE_PEER_SERVER - outgoing connection to other dnode.
+ *
+ */
+ 
 #ifndef _DYN_CONNECTION_H_
 #define _DYN_CONNECTION_H_
 #include "dyn_core.h"
@@ -71,10 +84,10 @@ typedef enum connection_type {
     CONN_UNSPECIFIED,
     CONN_PROXY, // a dynomite proxy (listening) connection 
     CONN_CLIENT, // this is connected to a client connection
+    CONN_SERVER, // this is connected to underlying datastore ...redis/memcache
+    CONN_DNODE_PEER_PROXY, // this is a dnode (listening) connection...default 8101
     CONN_DNODE_PEER_CLIENT, // this is connected to a dnode peer client
     CONN_DNODE_PEER_SERVER, // this is connected to a dnode peer server
-    CONN_DNODE_SERVER, // this is a dnode (listening) connection...default 8101
-    CONN_SERVER, // this is connected to underlying datastore ...redis/memcache
 } connection_type_t;
 
 struct conn {
@@ -136,10 +149,10 @@ conn_get_type_string(struct conn *conn)
         case CONN_UNSPECIFIED: return "UNSPEC";
         case CONN_PROXY : return "PROXY";
         case CONN_CLIENT: return "CLIENT";
+        case CONN_SERVER: return "SERVER";
+        case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
         case CONN_DNODE_PEER_CLIENT: return "PEER_CLIENT";
         case CONN_DNODE_PEER_SERVER: return "PEER_SERVER";
-        case CONN_DNODE_SERVER: return "DNODE_SERVER";
-        case CONN_SERVER: return "SERVER";
     }
     return "INVALID";
 }

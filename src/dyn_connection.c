@@ -108,7 +108,7 @@ conn_to_ctx(struct conn *conn)
 
     if ((conn->type == CONN_PROXY) ||
         (conn->type == CONN_CLIENT) ||
-        (conn->type == CONN_DNODE_SERVER)||
+        (conn->type == CONN_DNODE_PEER_PROXY)||
         (conn->type == CONN_DNODE_PEER_CLIENT)) {
         pool = conn->owner;
     } else {
@@ -412,7 +412,7 @@ conn_get_dnode(void *owner)
     }
 
     conn->data_store = pool->data_store;
-    conn->type = CONN_DNODE_SERVER;
+    conn->type = CONN_DNODE_PEER_PROXY;
 
     conn->dyn_mode = 1;
     conn->ops = &dnode_server_ops;
