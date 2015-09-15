@@ -24,9 +24,6 @@
 #include "dyn_server.h"
 #include "dyn_client.h"
 
-static rstatus_t client_handle_response(struct conn *conn, msgid_t msg,
-                                        struct msg *rsp);
-
 static unsigned int
 dict_msg_id_hash(const void *key)
 {
@@ -57,7 +54,7 @@ client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -75,8 +72,6 @@ client_ref(struct conn *conn, void *owner)
     /* owner of the client connection is the server pool */
     conn->owner = owner;
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
-    conn->type = CONN_CLIENT;
-    conn->rsp_handler = client_handle_response;
 
     log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
@@ -87,7 +82,7 @@ client_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -104,7 +99,7 @@ client_unref(struct conn *conn)
 bool
 client_active(struct conn *conn)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -161,12 +156,12 @@ client_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
-        conn->unref(conn);
+        conn_unref(conn);
         conn_put(conn);
         return;
     }
@@ -192,7 +187,7 @@ client_close(struct context *ctx, struct conn *conn)
         nmsg = TAILQ_NEXT(msg, c_tqe);
 
         /* dequeue the message (request) from client outq */
-        conn->dequeue_outq(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, msg);
 
         if (msg->done) {
             log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
@@ -215,7 +210,7 @@ client_close(struct context *ctx, struct conn *conn)
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    conn->unref(conn);
+    conn_unref(conn);
 
     status = close(conn->sd);
     if (status < 0) {

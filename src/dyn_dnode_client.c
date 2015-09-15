@@ -7,15 +7,12 @@
 #include "dyn_server.h"
 #include "dyn_dnode_client.h"
 
-static rstatus_t dnode_client_handle_response(struct conn *conn, msgid_t msg,
-                                              struct msg *rsp);
-
 void
 dnode_client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -32,8 +29,6 @@ dnode_client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
-    conn->rsp_handler = dnode_client_handle_response;
-
     log_debug(LOG_VVERB, "dyn: ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
@@ -43,7 +38,7 @@ dnode_client_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -60,7 +55,7 @@ dnode_client_unref(struct conn *conn)
 bool
 dnode_client_active(struct conn *conn)
 {
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -119,12 +114,12 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
 
     dnode_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
-        conn->unref(conn);
+        conn_unref(conn);
         conn_put(conn);
         return;
     }
@@ -152,7 +147,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
         nmsg = TAILQ_NEXT(msg, c_tqe);
 
         /* dequeue the message (request) from client outq */
-        conn->dequeue_outq(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, msg);
 
         if (msg->done) {
             if (log_loggable(LOG_INFO)) {
@@ -177,7 +172,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    conn->unref(conn);
+    conn_unref(conn);
 
     status = close(conn->sd);
     if (status < 0) {
@@ -188,7 +183,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     conn_put(conn);
 }
 
-static rstatus_t
+rstatus_t
 dnode_client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp)
 {
     // Forward the response to the caller which is client connection.

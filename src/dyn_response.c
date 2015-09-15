@@ -28,7 +28,8 @@ rsp_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
+           (conn->type == CONN_SERVER));
 
     msg = msg_get(conn, false, conn->data_store);
     if (msg == NULL) {
@@ -56,7 +57,8 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     uint64_t id;
     err_t err;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request && req_error(conn, msg));
     ASSERT(msg->owner == conn);
 
@@ -68,7 +70,7 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
             nmsg = TAILQ_NEXT(cmsg, c_tqe);
 
             /* dequeue request (error fragment) from client outq */
-            conn->dequeue_outq(ctx, conn, cmsg);
+            conn_dequeue_outq(ctx, conn, cmsg);
             if (err == 0 && cmsg->err != 0) {
                 err = cmsg->err;
             }
@@ -95,7 +97,8 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
+           (conn->type == CONN_SERVER));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -131,7 +134,7 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          * it crashes
          */
         conn->done = 1;
-        log_debug(LOG_DEBUG, "s %d active %d is done", conn->sd, conn->active(conn));
+        log_debug(LOG_DEBUG, "s %d active %d is done", conn->sd, conn_active(conn));
 
         return NULL;
     }
@@ -159,7 +162,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg;
 
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
@@ -178,7 +181,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     }
 
     if (pmsg->noreply) {
-         conn->dequeue_outq(ctx, conn, pmsg);
+         conn_dequeue_outq(ctx, conn, pmsg);
          rsp_put(pmsg);
          rsp_put(msg);
          return true;
@@ -188,7 +191,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(pmsg->request && !pmsg->done);
 
     if (pmsg->swallow) {
-        conn->dequeue_outq(ctx, conn, pmsg);
+        conn_dequeue_outq(ctx, conn, pmsg);
         pmsg->done = 1;
 
         log_debug(LOG_DEBUG, "swallow rsp %"PRIu64" len %"PRIu32" of req "
@@ -225,7 +228,6 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     struct msg *req;
     struct conn *c_conn;
     ASSERT(s_conn->type == CONN_SERVER);
-    ASSERT(!s_conn->client && !s_conn->proxy);
 
     /* response from server implies that server is ok and heartbeating */
     server_ok(ctx, s_conn);
@@ -235,7 +237,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     ASSERT(req != NULL && req->peer == NULL);
     ASSERT(req->request && !req->done);
 
-    s_conn->dequeue_outq(ctx, s_conn, req);
+    conn_dequeue_outq(ctx, s_conn, req);
     req->done = 1;
 
     /* establish rsp <-> req (response <-> request) link */
@@ -268,7 +270,7 @@ void
 server_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
                      struct msg *nmsg)
 {
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
     ASSERT(msg != NULL && conn->rmsg == msg);
     ASSERT(!msg->request);
     ASSERT(msg->owner == conn);
@@ -289,8 +291,8 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *rsp, *req; /* response and it's peer request */
 
-    ASSERT((conn->client && !conn->proxy) ||
-           (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_DNODE_PEER_CLIENT) ||
+           (conn->type = CONN_CLIENT));
 
     req = TAILQ_FIRST(&conn->omsg_q);
     if (req == NULL || !req_done(conn, req)) {
@@ -353,7 +355,7 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg; /* peer message (request) */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(conn->smsg == NULL);
 
     if (log_loggable(LOG_VVERB)) {
@@ -368,7 +370,7 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(pmsg->done && !pmsg->swallow);
 
     /* dequeue request from client outq */
-    conn->dequeue_outq(ctx, conn, pmsg);
+    conn_dequeue_outq(ctx, conn, pmsg);
 
     // Remove it from the dict
     struct msg *req = msg->peer;

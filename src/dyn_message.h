@@ -33,13 +33,13 @@
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
 #define MAX_REPLICAS_PER_DC           3
 
-typedef void (*msg_parse_t)(struct msg *);
-typedef rstatus_t (*msg_post_splitcopy_t)(struct msg *);
-typedef void (*msg_coalesce_t)(struct msg *r);
+typedef void (*func_msg_parse_t)(struct msg *);
+typedef rstatus_t (*func_msg_post_splitcopy_t)(struct msg *);
+typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef uint64_t msgid_t;
-typedef rstatus_t (*msg_reply_t)(struct msg *r);
-typedef bool (*msg_failure_t)(struct msg *r);
+typedef rstatus_t (*func_msg_reply_t)(struct msg *r);
+typedef bool (*func_msg_failure_t)(struct msg *r);
 
 
 typedef enum msg_parse_result {
@@ -274,17 +274,15 @@ struct msg {
     uint8_t              *pos;            /* parser position marker */
     uint8_t              *token;          /* token marker */
 
-    msg_parse_t          parser;          /* message parser */
+    func_msg_parse_t     parser;          /* message parser */
     msg_parse_result_t   result;          /* message parsing result */
 
-    mbuf_copy_t          pre_splitcopy;   /* message pre-split copy */
-    msg_post_splitcopy_t post_splitcopy;  /* message post-split copy */
-    msg_coalesce_t       pre_coalesce;    /* message pre-coalesce */
-    msg_coalesce_t       post_coalesce;   /* message post-coalesce */
+    func_mbuf_copy_t     pre_splitcopy;   /* message pre-split copy */
+    func_msg_post_splitcopy_t post_splitcopy;  /* message post-split copy */
+    func_msg_coalesce_t  pre_coalesce;    /* message pre-coalesce */
+    func_msg_coalesce_t  post_coalesce;   /* message post-coalesce */
 
     msg_type_t           type;            /* message type */
-    msg_reply_t          reply;           /* generate message reply (example: ping) */
-    msg_failure_t        failure;         /* transient failure response? */
 
     uint8_t              *key_start;      /* key start */
     uint8_t              *key_end;        /* key end */
@@ -394,8 +392,6 @@ void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 /* for dynomite  */
 struct msg *dnode_req_get(struct conn *conn);
-bool dnode_req_done(struct conn *conn, struct msg *msg);
-bool dnode_req_error(struct conn *conn, struct msg *msg);
 void dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
@@ -426,5 +422,8 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 //void peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data);
+
+rstatus_t client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp);
+rstatus_t dnode_client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp);
 
 #endif
