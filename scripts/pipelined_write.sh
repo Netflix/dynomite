@@ -2,7 +2,7 @@
 
 socatopt="-t 1 -T 1 -b 16384"
 
-val=`echo 6^6^6 | bc`
+val=`echo 5^5^5 | bc`
 val=`printf "%s" "${val}"`
 vallen=`printf "%s" "${val}" | wc -c`
 set_command=""
@@ -16,8 +16,9 @@ for i in `seq 1 64`; do
         key="bar"
     fi
     key=`printf "%s%d" "${key}" "${i}"`
+    keylen=`printf "%s" "${key}" | wc -c`
 
-    set_command="set ${key} 0 0 ${vallen}\r\n${val}\r\n"
+    set_command="*3\r\n\$3\r\nset\r\n\$${keylen}\r\n${key}\r\n\$${vallen}\r\n${val}\r\n"
     set_commands=`printf "%s%s" "${set_commands}" "${set_command}"`
 done
 
@@ -25,5 +26,6 @@ printf "%b" "$set_commands" > /tmp/socat.input
 
 # write
 for i in `seq 1 16`; do
-    cat /tmp/socat.input | socat ${socatopt} - TCP:localhost:22123,nodelay,shut-down,nonblock=1 &
+    cat /tmp/socat.input | socat ${socatopt} - TCP:localhost:8102,nodelay,shut-down,nonblock=1 &
 done
+wait
