@@ -247,6 +247,7 @@ done:
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
+    msg->awaiting_rsps = 0;
 
     rbtree_node_init(&msg->tmo_rbe);
 
@@ -520,6 +521,10 @@ msg_free(struct msg *msg)
 void
 msg_put(struct msg *msg)
 {
+    if (msg->request && msg->awaiting_rsps != 0) {
+        log_error("freeing req %d, awaiting_rsps = %u",
+                  msg->id, msg->awaiting_rsps);
+    }
     if (msg == NULL) {
    	 log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
    	 return;

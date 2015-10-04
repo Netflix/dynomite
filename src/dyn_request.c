@@ -1035,6 +1035,7 @@ msg_get_rsp_handler(struct msg *req)
 static rstatus_t
 msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    req->awaiting_rsps = 0;
     if (req->peer)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
@@ -1047,6 +1048,7 @@ msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
 static rstatus_t
 msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    req->awaiting_rsps = 0;
     if (req->peer)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
@@ -1101,6 +1103,7 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
     rspmgr->quorum_responses = max_responses/2 + 1;
     rspmgr->conn = conn;
     rspmgr->msg = msg;
+    msg->awaiting_rsps = max_responses;
 }
 
 static bool
@@ -1239,5 +1242,6 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
         log_debug(LOG_VERB, "Good response %d:%d", rsp->id, rsp->parent_id);
         rspmgr->responses[rspmgr->good_responses++] =  rsp;
     }
+    msg_decr_awaiting_rsps(rspmgr->msg);
     return DN_OK;
 }

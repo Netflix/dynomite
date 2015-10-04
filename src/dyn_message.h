@@ -264,6 +264,7 @@ struct msg {
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
+    uint8_t              awaiting_rsps;
 
     struct rbnode        tmo_rbe;         /* entry in rbtree */
 
@@ -333,6 +334,22 @@ struct msg {
 };
 
 TAILQ_HEAD(msg_tqh, msg);
+
+static inline void
+msg_incr_awaiting_rsps(struct msg *req)
+{
+    log_error("req %d awaiting_rsps:%u", req->awaiting_rsps);
+    req->awaiting_rsps++;
+    return;
+}
+
+static inline void
+msg_decr_awaiting_rsps(struct msg *req)
+{
+    log_error("req %d awaiting_rsps:%u", req->awaiting_rsps);
+    req->awaiting_rsps--;
+    return;
+}
 
 static inline rstatus_t
 msg_handle_response(struct msg *req, struct msg *rsp)
