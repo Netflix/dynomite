@@ -1236,7 +1236,8 @@ rstatus_t
 rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
 {
     if (rsp->error) {
-        log_debug(LOG_VERB, "Received error response %d:%d", rsp->id, rsp->parent_id);
+        log_debug(LOG_VERB, "Received error response %d:%d for req %d:%d",
+                  rsp->id, rsp->parent_id, rspmgr->msg->id, rspmgr->msg->parent_id);
         rspmgr->error_responses++;
         if (rspmgr->err_rsp == NULL)
             rspmgr->err_rsp = rsp;

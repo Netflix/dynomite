@@ -332,11 +332,51 @@ server_close_stats(struct context *ctx, struct server *server, err_t err,
 }
 
 void
+server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
+{
+    if ((req->swallow && req->noreply) ||
+        (req->swallow && (req->consistency == DC_ONE)) ||
+        (req->swallow && (req->consistency == DC_QUORUM)
+                      && (!conn->same_dc))) {
+        log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
+                  " type %d", conn->sd, req->id, req->mlen, req->type);
+        req_put(req);
+        return;
+    }
+    struct conn *c_conn = req->owner;
+    // At other connections, these responses would be swallowed.
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+
+    // Create an appropriate response for the request so its propagated up;
+    // This response gets dropped in rsp_make_error anyways. But since this is
+    // an error path its ok with the overhead.
+    struct msg *rsp = msg_get(conn, false, conn->data_store);
+    req->done = 1;
+    req->peer = rsp;
+    rsp->peer = req;
+    rsp->error = req->error = 1;
+    rsp->err = req->err = conn->err;
+    rsp->dyn_error = req->dyn_error = STORAGE_CONNECTION_REFUSE;
+    rsp->dmsg = NULL;
+    log_warn("%d:%d <-> %d:%d", req->id, req->parent_id, rsp->id, rsp->parent_id);
+
+    log_warn("dyn: close s %d schedule error for req %u:%u "
+             "len %"PRIu32" type %d from c %d%c %s", conn->sd, req->id, req->parent_id,
+             req->mlen, req->type, c_conn->sd, conn->err ? ':' : ' ',
+             conn->err ? strerror(conn->err): " ");
+    rstatus_t status =
+            conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
+                                 rsp);
+    IGNORE_RET_VAL(status);
+    if (req->swallow)
+        req_put(req);
+}
+void
 server_close(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
 	struct msg *msg, *nmsg; /* current and next message */
-	struct conn *c_conn;    /* peer client connection */
 
     ASSERT(conn->type == CONN_SERVER);
 
@@ -355,34 +395,7 @@ server_close(struct context *ctx, struct conn *conn)
 
 		/* dequeue the message (request) from server inq */
 		conn_dequeue_inq(ctx, conn, msg);
-
-		/*
-		 * Don't send any error response, if
-		 * 1. request is tagged as noreply or,
-		 * 2. client has already closed its connection
-		 */
-		if (msg->swallow || msg->noreply) {
-			log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
-					" type %d", conn->sd, msg->id, msg->mlen, msg->type);
-			req_put(msg);
-		} else {
-			c_conn = msg->owner;
-			//ASSERT(c_conn->client && !c_conn->proxy);
-
-			msg->done = 1;
-			msg->error = 1;
-			msg->err = conn->err;
-			msg->dyn_error = STORAGE_CONNECTION_REFUSE;
-
-			if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-				event_add_out(ctx->evb, msg->owner);
-			}
-
-			log_debug(LOG_INFO, "close s %d schedule error for req %"PRIu64" "
-					"len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
-					msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
-							conn->err ? strerror(conn->err): " ");
-		}
+        server_ack_err(ctx, conn, msg);
 
 		stats_server_incr(ctx, conn->owner, server_dropped_requests);
 	}
@@ -393,28 +406,7 @@ server_close(struct context *ctx, struct conn *conn)
 
 		/* dequeue the message (request) from server outq */
 		conn_dequeue_outq(ctx, conn, msg);
-
-		if (msg->swallow) {
-			log_debug(LOG_INFO, "close s %d swallow req %"PRIu64" len %"PRIu32
-					" type %d", conn->sd, msg->id, msg->mlen, msg->type);
-			req_put(msg);
-		} else {
-			c_conn = msg->owner;
-			//ASSERT(c_conn->client && !c_conn->proxy);
-
-			msg->done = 1;
-			msg->error = 1;
-			msg->err = conn->err;
-
-			if (req_done(c_conn, TAILQ_FIRST(&c_conn->omsg_q))) {
-				event_add_out(ctx->evb, msg->owner);
-			}
-
-			log_debug(LOG_INFO, "close s %d schedule error for req %"PRIu64" "
-					"len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id,
-					msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
-							conn->err ? strerror(conn->err): " ");
-		}
+        server_ack_err(ctx, conn, msg);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 

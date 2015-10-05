@@ -156,8 +156,9 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     rsp->pre_coalesce(rsp);
 
-    ASSERT((c_conn->type == CONN_CLIENT) ||
-           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
+               (c_conn->type == CONN_DNODE_PEER_CLIENT),
+               "c_conn type %s", conn_get_type_string(c_conn));
 
     dnode_rsp_forward_stats(ctx, peer_conn->owner, rsp);
     if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && req_done(c_conn, req)) {

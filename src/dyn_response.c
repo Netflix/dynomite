@@ -309,11 +309,11 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 
         return NULL;
     }
-    //msg_dump(req);
 
     rsp = conn->smsg;
     if (rsp != NULL) {
-        ASSERT(!rsp->request && rsp->peer != NULL);
+        ASSERT(!rsp->request);
+        ASSERT(rsp->peer != NULL);
         ASSERT(req_done(conn, rsp->peer));
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
@@ -323,7 +323,6 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         return NULL;
     }
     ASSERT(req->request && !req->swallow);
-    //msg_dump(req);
 
     if (req_error(conn, req)) {
         rsp = rsp_make_error(ctx, conn, req);
@@ -335,7 +334,6 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         req->peer = rsp;
         req->selected_rsp = rsp;
         log_error("creating new error rsp %p", rsp);
-        //msg_dump(rsp);
         if (conn->dyn_mode) {
       	  stats_pool_incr(ctx, conn->owner, peer_forward_error);
         } else {

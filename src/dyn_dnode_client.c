@@ -189,7 +189,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp)
     // Forward the response to the caller which is client connection.
     rstatus_t status = DN_OK;
     struct context *ctx = conn_to_ctx(conn);
-    ASSERT(rsp->peer);
+    ASSERT_LOG(rsp->peer, "rsp %d:%d does not have a peer", rsp->id, rsp->parent_id);
     rsp->peer->selected_rsp = rsp;
     status = event_add_out(ctx->evb, conn);
     if (status != DN_OK) {
