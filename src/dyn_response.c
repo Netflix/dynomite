@@ -182,7 +182,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (pmsg->noreply) {
          conn_dequeue_outq(ctx, conn, pmsg);
-         rsp_put(pmsg);
+         req_put(pmsg);
          rsp_put(msg);
          return true;
     }
@@ -309,6 +309,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 
         return NULL;
     }
+    //msg_dump(req);
 
     rsp = conn->smsg;
     if (rsp != NULL) {
@@ -322,6 +323,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         return NULL;
     }
     ASSERT(req->request && !req->swallow);
+    //msg_dump(req);
 
     if (req_error(conn, req)) {
         rsp = rsp_make_error(ctx, conn, req);
@@ -331,13 +333,16 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         }
         rsp->peer = req;
         req->peer = rsp;
+        req->selected_rsp = rsp;
+        log_error("creating new error rsp %p", rsp);
+        //msg_dump(rsp);
         if (conn->dyn_mode) {
       	  stats_pool_incr(ctx, conn->owner, peer_forward_error);
         } else {
       	  stats_pool_incr(ctx, conn->owner, forward_error);
         }
     } else {
-        rsp = req->peer;
+        rsp = req->selected_rsp;
     }
     ASSERT(!rsp->request);
 
@@ -366,7 +371,7 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     pmsg = msg->peer;
 
     ASSERT(!msg->request && pmsg->request);
-    ASSERT(pmsg->peer == msg);
+    ASSERT(pmsg->selected_rsp == msg);
     ASSERT(pmsg->done && !pmsg->swallow);
 
     /* dequeue request from client outq */

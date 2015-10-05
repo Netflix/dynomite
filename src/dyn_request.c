@@ -1042,6 +1042,7 @@ msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
     req->peer = rsp;
     rsp->peer = req;
+    req->selected_rsp = rsp;
     return DN_OK;
 }
 
@@ -1055,6 +1056,7 @@ msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
     req->peer = rsp;
     rsp->peer = req;
+    req->selected_rsp = rsp;
     return DN_OK;
 }
 
@@ -1069,6 +1071,7 @@ msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rspmgr_free_other_responses(&req->rspmgr, rsp);
     req->peer = rsp;
     rsp->peer = req;
+    req->selected_rsp = rsp;
     req->err = rsp->err;
     req->error = rsp->error;
     req->dyn_error = rsp->dyn_error;
@@ -1087,6 +1090,7 @@ msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rspmgr_free_other_responses(&req->rspmgr, rsp);
     req->peer = rsp;
     rsp->peer = req;
+    req->selected_rsp = rsp;
     req->err = rsp->err;
     req->error = rsp->error;
     req->dyn_error = rsp->dyn_error;

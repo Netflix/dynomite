@@ -248,6 +248,7 @@ done:
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
     msg->awaiting_rsps = 0;
+    msg->selected_rsp = NULL;
 
     rbtree_node_init(&msg->tmo_rbe);
 

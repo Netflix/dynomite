@@ -466,7 +466,7 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     pmsg = msg->peer;
 
     ASSERT(!msg->request && pmsg->request);
-    ASSERT(pmsg->peer == msg);
+    ASSERT(pmsg->selected_rsp == msg);
     ASSERT(pmsg->done && !pmsg->swallow);
     log_debug(LOG_DEBUG, "DNODE RSP SENT %s %d dmsg->id %u",
               conn_get_type_string(conn),

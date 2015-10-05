@@ -335,8 +335,9 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
        log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
     }
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-    log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
-              conn_get_type_string(conn), conn->sd, msg->dmsg->id);
+    // crashes because dmsg is NULL :(
+    /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
+              conn_get_type_string(conn), conn->sd, msg->dmsg->id);*/
     req_send_done(ctx, conn, msg);
 }
 

@@ -265,6 +265,7 @@ struct msg {
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
     uint8_t              awaiting_rsps;
+    struct msg           *selected_rsp;
 
     struct rbnode        tmo_rbe;         /* entry in rbtree */
 
@@ -338,7 +339,7 @@ TAILQ_HEAD(msg_tqh, msg);
 static inline void
 msg_incr_awaiting_rsps(struct msg *req)
 {
-    log_error("req %d awaiting_rsps:%u", req->awaiting_rsps);
+    log_error("req %d awaiting_rsps:%u", req->id, req->awaiting_rsps);
     req->awaiting_rsps++;
     return;
 }
@@ -346,7 +347,7 @@ msg_incr_awaiting_rsps(struct msg *req)
 static inline void
 msg_decr_awaiting_rsps(struct msg *req)
 {
-    log_error("req %d awaiting_rsps:%u", req->awaiting_rsps);
+    log_error("req %d awaiting_rsps:%u", req->id, req->awaiting_rsps);
     req->awaiting_rsps--;
     return;
 }
