@@ -1,6 +1,6 @@
 # Build Image
 
-Create Dynomite with redis single image with docker
+Create Dynomite plus Redis single server image with docker
 
     # Example: sudo docker build -t [name] .
     $ sudo docker build -t my_dynomite .
