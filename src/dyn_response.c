@@ -318,7 +318,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
-    if (req == NULL || !req_done(conn, req)) {
+    if (req == NULL || !req_done(conn, req) || !req->selected_rsp) {
         conn->smsg = NULL;
         return NULL;
     }
