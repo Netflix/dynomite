@@ -143,6 +143,7 @@ _conn_get(void)
         if (conn == NULL) {
             return NULL;
         }
+        memset(conn, 0, sizeof(*conn));
     }
 
     conn->owner = NULL;

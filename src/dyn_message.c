@@ -297,6 +297,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
+    msg->rsp_sent = 0;
     msg->data_store = DATA_REDIS;
 
     //dynomite
@@ -522,13 +523,15 @@ msg_free(struct msg *msg)
 void
 msg_put(struct msg *msg)
 {
-    if (msg->request && msg->awaiting_rsps != 0) {
-        log_error("freeing req %d, awaiting_rsps = %u",
-                  msg->id, msg->awaiting_rsps);
-    }
     if (msg == NULL) {
    	 log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
    	 return;
+    }
+
+    if (msg->request && msg->awaiting_rsps != 0) {
+        log_error("Not freeing req %d, awaiting_rsps = %u",
+                  msg->id, msg->awaiting_rsps);
+        return;
     }
 
     if (log_loggable(LOG_VVERB)) {

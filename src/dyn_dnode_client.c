@@ -184,13 +184,17 @@ dnode_client_close(struct context *ctx, struct conn *conn)
 }
 
 rstatus_t
-dnode_client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp)
+dnode_client_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
 {
     // Forward the response to the caller which is client connection.
     rstatus_t status = DN_OK;
     struct context *ctx = conn_to_ctx(conn);
+    /* There is no hash table on the dnode client side. So we rely on rsp->peer
+       to get the corresponding request */
     ASSERT_LOG(rsp->peer, "rsp %d:%d does not have a peer", rsp->id, rsp->parent_id);
-    rsp->peer->selected_rsp = rsp;
+    struct msg *req = rsp->peer;
+    req->peer = NULL;
+    req->selected_rsp = rsp;
     status = event_add_out(ctx->evb, conn);
     if (status != DN_OK) {
         conn->err = errno;

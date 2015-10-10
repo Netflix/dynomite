@@ -241,7 +241,15 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
         return DN_OK;
     }
     rstatus_t status = msg_handle_response(req, rsp);
-    if (status == DN_OK) {
+    if (status == DN_NOOPS) {
+        // by now the response is dropped
+        if (!req->awaiting_rsps) {
+            if (req->rsp_sent) {
+                dictDelete(conn->outstanding_msgs_dict, &reqid);
+                req_put(req);
+            }
+        }
+    } else if (status == DN_OK) {
         struct context *ctx = conn_to_ctx(conn);
         status = event_add_out(ctx->evb, conn);
         if (status != DN_OK) {

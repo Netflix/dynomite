@@ -334,6 +334,8 @@ server_close_stats(struct context *ctx, struct server *server, err_t err,
 void
 server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
+    // I want to make sure we do not have swallow here.
+    ASSERT_LOG(!req->swallow, "req %d:%d has swallow set??", req->id, req->parent_id);
     if ((req->swallow && req->noreply) ||
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)
@@ -345,13 +347,18 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     }
     struct conn *c_conn = req->owner;
     // At other connections, these responses would be swallowed.
-    ASSERT((c_conn->type == CONN_CLIENT) ||
-           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
+               (c_conn->type == CONN_DNODE_PEER_CLIENT), "c_conn type %s",
+               conn_get_type_string(c_conn));
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, conn->data_store);
+    if (rsp == NULL) {
+        log_warn("Could not allocate msg.");
+        return;
+    }
     req->done = 1;
     req->peer = rsp;
     rsp->peer = req;

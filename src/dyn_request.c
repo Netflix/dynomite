@@ -60,6 +60,15 @@ req_put(struct msg *msg)
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }
+    if (pmsg != msg->selected_rsp) {
+        pmsg = msg->selected_rsp;
+        if (pmsg != NULL) {
+            ASSERT(!pmsg->request && pmsg->peer == msg);
+            msg->selected_rsp = NULL;
+            pmsg->peer = NULL;
+            rsp_put(pmsg);
+        }
+    }
 
     msg_tmo_delete(msg);
 
@@ -1035,12 +1044,14 @@ msg_get_rsp_handler(struct msg *req)
 static rstatus_t
 msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    ASSERT_LOG(!req->selected_rsp, "req %d already has a rsp %d, adding new rsp %d",
+               req->id, req->selected_rsp->id, rsp->id);
     req->awaiting_rsps = 0;
     if (req->peer)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    req->peer = rsp;
+    req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
     return DN_OK;
@@ -1049,27 +1060,42 @@ msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
 static rstatus_t
 msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    ASSERT_LOG(!req->selected_rsp, "req %d already has a rsp %d, adding new rsp %d",
+               req->id, req->selected_rsp->id, rsp->id);
     req->awaiting_rsps = 0;
     if (req->peer)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    req->peer = rsp;
+    req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
     return DN_OK;
 }
 
 static rstatus_t
-msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
+    log_error("req %d swallowing response %d", req->id, rsp->id);
+    ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
+               req->id, req->parent_id, rsp->id);
+    // drop this response.
+    rsp_put(rsp);
+    msg_decr_awaiting_rsps(req);
+    return DN_NOOPS;
+}
+
+static rstatus_t msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+{
+    if (rspmgr_is_done(&req->rspmgr))
+        return swallow_extra_rsp(req, rsp);
     rspmgr_submit_response(&req->rspmgr, rsp);
     if (!rspmgr_is_done(&req->rspmgr))
         return DN_EAGAIN;
     // rsp is absorbed by rspmgr. so we can use that variable
     rsp = rspmgr_get_response(&req->rspmgr);
     rspmgr_free_other_responses(&req->rspmgr, rsp);
-    req->peer = rsp;
+    req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
     req->err = rsp->err;
@@ -1082,13 +1108,15 @@ msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 static rstatus_t
 msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    if (rspmgr_is_done(&req->rspmgr))
+        return swallow_extra_rsp(req, rsp);
     rspmgr_submit_response(&req->rspmgr, rsp);
     if (!rspmgr_is_done(&req->rspmgr))
         return DN_EAGAIN;
     // rsp is absorbed by rspmgr. so we can use that variable
     rsp = rspmgr_get_response(&req->rspmgr);
     rspmgr_free_other_responses(&req->rspmgr, rsp);
-    req->peer = rsp;
+    req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
     req->err = rsp->err;
@@ -1115,20 +1143,22 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
 {
     // do the required calculation and tell if we are done here
     // TODO:Optimize HERE>> return once quorum is achieved.
-    //if (rspmgr->good_responses >= rspmgr->quorum_responses)
-        //rspmgr->done = true;
+    if (rspmgr->good_responses >= rspmgr->quorum_responses) {
+        rspmgr->done = true;
+        return rspmgr->done;
+    }
     uint8_t pending_responses = rspmgr->max_responses -
                                 rspmgr->good_responses -
                                 rspmgr->error_responses;
-    if (pending_responses) {
+    /*if (pending_responses) {
         rspmgr->done = false;
         return false;
     } else
-        rspmgr->done = true;
+        rspmgr->done = true;*/
     // This is required*********
-    /*if ((pending_responses + rspmgr->good_responses) <
+    if ((pending_responses + rspmgr->good_responses) <
                                                     rspmgr->quorum_responses)
-        rspmgr->done = true;// decision is done. no quorum possible*/
+        rspmgr->done = true;// decision is done. no quorum possible
     return rspmgr->done;
 }
 
@@ -1235,6 +1265,8 @@ rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
 rstatus_t
 rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
 {
+    log_error("req %d submitting response %d awaiting_rsps %d",
+              rspmgr->msg->id, rsp->id, rspmgr->msg->awaiting_rsps);
     if (rsp->error) {
         log_debug(LOG_VERB, "Received error response %d:%d for req %d:%d",
                   rsp->id, rsp->parent_id, rspmgr->msg->id, rspmgr->msg->parent_id);

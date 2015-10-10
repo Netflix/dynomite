@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 
 #include "dyn_core.h"
@@ -83,9 +84,10 @@ void
 log_level_up(void)
 {
     struct logger *l = &logger;
+    l->level = 9;
 
     if (l->level < LOG_PVERB) {
-        l->level++;
+        //l->level++;
         loga("up log level to %d", l->level);
     }
 }
@@ -94,9 +96,10 @@ void
 log_level_down(void)
 {
     struct logger *l = &logger;
+    l->level = 5;
 
     if (l->level > LOG_EMERG) {
-        l->level--;
+        //l->level--;
         loga("down log level to %d", l->level);
     }
 }
@@ -141,12 +144,18 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
-    t = time(NULL);
+    /*t = time(NULL);
     local = localtime(&t);
-    timestr = asctime(local);
+    timestr = asctime(local);*/
+    struct timeval curTime;
+    gettimeofday(&curTime, NULL);
 
-    len += dn_scnprintf(buf + len, size - len, "[%.*s] %s:%d ",
-                        strlen(timestr) - 1, timestr, file, line);
+    char buffer [80];
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", localtime(&curTime.tv_sec));
+
+    len += dn_scnprintf(buf + len, size - len, "[%.*s.%03d] %s:%d ",
+                        strlen(buffer) - 1, buffer, (int64_t)curTime.tv_usec / 1000,
+                        file, line);
 
     va_start(args, fmt);
     len += dn_vscnprintf(buf + len, size - len, fmt, args);

@@ -523,7 +523,10 @@ core_loop(struct context *ctx)
 	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
 	core_process_messages();
+	log_debug(LOG_VERB, "event_wait = %d", ctx->timeout);
+
 	nsd = event_wait(ctx->evb, ctx->timeout);
+	log_debug(LOG_VERB, "event_wait done ");
 	if (nsd < 0) {
 		return nsd;
 	}

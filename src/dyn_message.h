@@ -314,6 +314,7 @@ struct msg {
     unsigned             first_fragment:1;/* first fragment? */
     unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
+    unsigned             rsp_sent:1;      /* is a response sent for this request?*/
 
     int					 data_store;
     //dynomite

@@ -37,7 +37,7 @@
 #define DN_CONF_PATH        "conf/dynomite.yml"
 
 #define DN_LOG_DEFAULT      LOG_NOTICE
-#define DN_LOG_MIN          LOG_EMERG
+#define DN_LOG_MIN          LOG_VVERB /*LOG_EMERG*/
 #define DN_LOG_MAX          LOG_PVERB
 #define DN_LOG_PATH         NULL
 
@@ -371,7 +371,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
                 log_stderr("dynomite: option -v requires a number");
                 return DN_ERROR;
             }
-            nci->log_level = value;
+            nci->log_level = 9;//value;
             break;
 
         case 'o':
