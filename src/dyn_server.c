@@ -335,7 +335,7 @@ void
 server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
     // I want to make sure we do not have swallow here.
-    ASSERT_LOG(!req->swallow, "req %d:%d has swallow set??", req->id, req->parent_id);
+    //ASSERT_LOG(!req->swallow, "req %d:%d has swallow set??", req->id, req->parent_id);
     if ((req->swallow && req->noreply) ||
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)
@@ -397,7 +397,16 @@ server_close(struct context *ctx, struct conn *conn)
 		return;
 	}
 
-	for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
+	for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
+		nmsg = TAILQ_NEXT(msg, s_tqe);
+
+		/* dequeue the message (request) from server outq */
+		conn_dequeue_outq(ctx, conn, msg);
+        server_ack_err(ctx, conn, msg);
+	}
+	ASSERT(TAILQ_EMPTY(&conn->omsg_q));
+
+    for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server inq */
@@ -408,14 +417,6 @@ server_close(struct context *ctx, struct conn *conn)
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
-	for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
-		nmsg = TAILQ_NEXT(msg, s_tqe);
-
-		/* dequeue the message (request) from server outq */
-		conn_dequeue_outq(ctx, conn, msg);
-        server_ack_err(ctx, conn, msg);
-	}
-	ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
 	msg = conn->rmsg;
 	if (msg != NULL) {

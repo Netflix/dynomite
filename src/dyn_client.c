@@ -118,6 +118,11 @@ client_active(struct conn *conn)
         return true;
     }
 
+    if (dictSize(conn->outstanding_msgs_dict) != 0) {
+        log_debug(LOG_WARN, "c %d is active, has outstanding messages", conn->sd);
+        return true;
+    }
+
     log_debug(LOG_VVERB, "c %d is inactive", conn->sd);
 
     return false;
@@ -246,6 +251,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
         if (!req->awaiting_rsps) {
             if (req->rsp_sent) {
                 dictDelete(conn->outstanding_msgs_dict, &reqid);
+                log_warn("Putting req %d", req->id);
                 req_put(req);
             }
         }

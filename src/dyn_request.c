@@ -24,10 +24,8 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
-static rstatus_t msg_write_one_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_read_one_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
 
 struct msg *
@@ -766,7 +764,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
     uint8_t rack_index;
     msg->rsp_handler = msg_get_rsp_handler(msg);
     init_response_mgr(&msg->rspmgr, msg, msg->is_read, rack_cnt, c_conn);
-    log_debug(LOG_INFO, "msg %d:%d same DC racks:%d expect replies %d",
+    log_debug(LOG_WARN, "msg %d:%d same DC racks:%d expect replies %d",
               msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
     for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
         struct rack *rack = array_get(&dc->racks, rack_index);
@@ -787,7 +785,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
             }
 
             msg_clone(msg, orig_mbuf, rack_msg);
-            log_debug(LOG_VERB, "msg (%d:%d) clone to rack msg (%d:%d)",
+            log_debug(LOG_WARN, "msg (%d:%d) clone to rack msg (%d:%d)",
                     msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
             rack_msg->swallow = true;
         }
@@ -1035,30 +1033,12 @@ static msg_response_handler_t
 msg_get_rsp_handler(struct msg *req)
 {
     if ((req->consistency == DC_ONE) || (req->type == MSG_REQ_REDIS_PING))
-        return req->is_read ? msg_read_one_rsp_handler :
-                              msg_write_one_rsp_handler;
-    return req->is_read ? msg_read_dc_quorum_rsp_handler :
-                          msg_write_dc_quorum_rsp_handler;
+        return msg_local_one_rsp_handler;
+    return msg_quorum_rsp_handler;
 }
 
 static rstatus_t
-msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
-{
-    ASSERT_LOG(!req->selected_rsp, "req %d already has a rsp %d, adding new rsp %d",
-               req->id, req->selected_rsp->id, rsp->id);
-    req->awaiting_rsps = 0;
-    if (req->peer)
-        log_warn("Received more than one response for dc_one. req: %d:%d \
-                 prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
-                 req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    req->peer = NULL;
-    rsp->peer = req;
-    req->selected_rsp = rsp;
-    return DN_OK;
-}
-
-static rstatus_t
-msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
+msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
     ASSERT_LOG(!req->selected_rsp, "req %d already has a rsp %d, adding new rsp %d",
                req->id, req->selected_rsp->id, rsp->id);
@@ -1085,7 +1065,7 @@ swallow_extra_rsp(struct msg *req, struct msg *rsp)
     return DN_NOOPS;
 }
 
-static rstatus_t msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 {
     if (rspmgr_is_done(&req->rspmgr))
         return swallow_extra_rsp(req, rsp);
@@ -1104,26 +1084,6 @@ static rstatus_t msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp
     return DN_OK;
 }
 
-
-static rstatus_t
-msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
-{
-    if (rspmgr_is_done(&req->rspmgr))
-        return swallow_extra_rsp(req, rsp);
-    rspmgr_submit_response(&req->rspmgr, rsp);
-    if (!rspmgr_is_done(&req->rspmgr))
-        return DN_EAGAIN;
-    // rsp is absorbed by rspmgr. so we can use that variable
-    rsp = rspmgr_get_response(&req->rspmgr);
-    rspmgr_free_other_responses(&req->rspmgr, rsp);
-    req->peer = NULL;
-    rsp->peer = req;
-    req->selected_rsp = rsp;
-    req->err = rsp->err;
-    req->error = rsp->error;
-    req->dyn_error = rsp->dyn_error;
-    return DN_OK;
-}
 
 void
 init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
@@ -1138,11 +1098,25 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
     msg->awaiting_rsps = max_responses;
 }
 
+/* Wait for all responses before responding 
+static bool
+rspmgr_check_is_done(struct response_mgr *rspmgr)
+{
+    uint8_t pending_responses = rspmgr->max_responses -
+                                rspmgr->good_responses -
+                                rspmgr->error_responses;
+    if (pending_responses) {
+        rspmgr->done = false;
+    } else
+        rspmgr->done = true;
+    return rspmgr->done;
+}*/
+
+/* Wait for only quorum number of responses before responding */
 static bool
 rspmgr_check_is_done(struct response_mgr *rspmgr)
 {
     // do the required calculation and tell if we are done here
-    // TODO:Optimize HERE>> return once quorum is achieved.
     if (rspmgr->good_responses >= rspmgr->quorum_responses) {
         rspmgr->done = true;
         return rspmgr->done;
@@ -1150,12 +1124,6 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
     uint8_t pending_responses = rspmgr->max_responses -
                                 rspmgr->good_responses -
                                 rspmgr->error_responses;
-    /*if (pending_responses) {
-        rspmgr->done = false;
-        return false;
-    } else
-        rspmgr->done = true;*/
-    // This is required*********
     if ((pending_responses + rspmgr->good_responses) <
                                                     rspmgr->quorum_responses)
         rspmgr->done = true;// decision is done. no quorum possible
