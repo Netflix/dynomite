@@ -180,6 +180,7 @@ _conn_get(void)
     conn->connected = 0;
     conn->eof = 0;
     conn->done = 0;
+    conn->waiting_to_unref = 0;
     conn->data_store = DATA_REDIS;
 
     /* for dynomite */

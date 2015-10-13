@@ -583,6 +583,16 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         return;
     }
 
+    for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
+        nmsg = TAILQ_NEXT(msg, s_tqe);
+
+        /* dequeue the message (request) from server outq */
+        conn_dequeue_outq(ctx, conn, msg);
+        dnode_peer_ack_err(ctx, conn, msg);
+    }
+
+    ASSERT(TAILQ_EMPTY(&conn->omsg_q));
+
     for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
@@ -594,16 +604,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     }
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
-
-    for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
-        nmsg = TAILQ_NEXT(msg, s_tqe);
-
-        /* dequeue the message (request) from server outq */
-        conn_dequeue_outq(ctx, conn, msg);
-        dnode_peer_ack_err(ctx, conn, msg);
-    }
-
-    ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
     msg = conn->rmsg;
     if (msg != NULL) {

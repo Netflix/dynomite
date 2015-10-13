@@ -764,8 +764,8 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
     uint8_t rack_index;
     msg->rsp_handler = msg_get_rsp_handler(msg);
     init_response_mgr(&msg->rspmgr, msg, msg->is_read, rack_cnt, c_conn);
-    log_debug(LOG_WARN, "msg %d:%d same DC racks:%d expect replies %d",
-              msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
+    log_info("msg %d:%d same DC racks:%d expect replies %d",
+             msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
     for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
         struct rack *rack = array_get(&dc->racks, rack_index);
         //log_debug(LOG_DEBUG, "rack name '%.*s'",
@@ -785,8 +785,8 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
             }
 
             msg_clone(msg, orig_mbuf, rack_msg);
-            log_debug(LOG_WARN, "msg (%d:%d) clone to rack msg (%d:%d)",
-                    msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
+            log_info("msg (%d:%d) clone to rack msg (%d:%d)",
+                     msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
             rack_msg->swallow = true;
         }
 
@@ -1056,7 +1056,7 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 static rstatus_t
 swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
-    log_error("req %d swallowing response %d", req->id, rsp->id);
+    log_info("req %d swallowing response %d", req->id, rsp->id);
     ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
                req->id, req->parent_id, rsp->id);
     // drop this response.
@@ -1233,7 +1233,7 @@ rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
 rstatus_t
 rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
 {
-    log_error("req %d submitting response %d awaiting_rsps %d",
+    log_info("req %d submitting response %d awaiting_rsps %d",
               rspmgr->msg->id, rsp->id, rspmgr->msg->awaiting_rsps);
     if (rsp->error) {
         log_debug(LOG_VERB, "Received error response %d:%d for req %d:%d",

@@ -241,7 +241,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     req->done = 1;
 
     /* establish rsp <-> req (response <-> request) link */
-    log_warn("%d:%d <-> %d:%d", req->id, req->parent_id,
+    log_info("%d:%d <-> %d:%d", req->id, req->parent_id,
                rsp->id, rsp->parent_id);
     req->peer = rsp;
     rsp->peer = req;
@@ -257,8 +257,8 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     // this should really be the message's response handler be doing it
     if (req_done(c_conn, req)) {
         // handler owns the response now
-        log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p", rsp->id,
-                   rsp->parent_id, req->id, req->parent_id, c_conn);
+        log_info("handle rsp %d:%d for req %d:%d conn %p", rsp->id,
+                 rsp->parent_id, req->id, req->parent_id, c_conn);
         status = conn_handle_response(c_conn, c_conn->type == CONN_CLIENT ?
                                       req->id : req->parent_id, rsp);
         IGNORE_RET_VAL(status);
@@ -382,7 +382,7 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
         dictDelete(conn->outstanding_msgs_dict, &req->id);
         req_put(req);
     } else {
-        log_error("req %d:%d still awaiting rsps %d", req->id, req->parent_id,
+        log_info("req %d:%d still awaiting rsps %d", req->id, req->parent_id,
                   req->awaiting_rsps);
     }
 }

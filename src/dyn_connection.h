@@ -122,6 +122,7 @@ struct conn {
     unsigned           connecting:1;  /* connecting? */
     unsigned           connected:1;   /* connected? */
     unsigned           eof:1;         /* eof? aka passive close? */
+    unsigned           waiting_to_unref:1; /* eof? aka passive close? */
     unsigned           done:1;        /* done? aka close? */
     unsigned           dyn_mode:1;           /* is a dyn connection? */
     unsigned           dnode_secured:1;      /* is a secured connection? */

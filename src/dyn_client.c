@@ -72,28 +72,51 @@ client_ref(struct conn *conn, void *owner)
     /* owner of the client connection is the server pool */
     conn->owner = owner;
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
+    conn->waiting_to_unref = 0;
 
     log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
 
-void
-client_unref(struct conn *conn)
+static void
+client_unref_internal_try_put(struct conn *conn)
 {
+    ASSERT(conn->waiting_to_unref);
+    unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
+    if (msgs != 0) {
+        log_warn("conn %p Waiting for %lu outstanding messages", conn, msgs);
+        return;
+    }
     struct server_pool *pool;
-
-    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(conn->owner != NULL);
-
     pool = conn->owner;
     conn->owner = NULL;
+    dictRelease(conn->outstanding_msgs_dict);
+    conn->waiting_to_unref = 0;
+    log_warn("unref conn %p owner %p from pool '%.*s'", conn,
+             pool, pool->name.len, pool->name.data);
+    conn_put(conn);
+}
 
+static void
+client_unref_and_try_put(struct conn *conn)
+{
+    ASSERT(conn->type == CONN_CLIENT);
+
+    struct server_pool *pool;
+    pool = conn->owner;
+    ASSERT(conn->owner != NULL);
     ASSERT(pool->dn_conn_q != 0);
     pool->dn_conn_q--;
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
-    dictRelease(conn->outstanding_msgs_dict);
-    log_debug(LOG_VVERB, "unref conn %p owner %p from pool '%.*s'", conn,
-              pool, pool->name.len, pool->name.data);
+    conn->waiting_to_unref = 1;
+    client_unref_internal_try_put(conn);
+}
+
+void
+client_unref(struct conn *conn)
+{
+    client_unref_and_try_put(conn);
 }
 
 bool
@@ -115,11 +138,6 @@ client_active(struct conn *conn)
 
     if (conn->smsg != NULL) {
         log_debug(LOG_VVERB, "c %d is active", conn->sd);
-        return true;
-    }
-
-    if (dictSize(conn->outstanding_msgs_dict) != 0) {
-        log_debug(LOG_WARN, "c %d is active, has outstanding messages", conn->sd);
         return true;
     }
 
@@ -166,8 +184,7 @@ client_close(struct context *ctx, struct conn *conn)
     client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
-        conn_unref(conn);
-        conn_put(conn);
+        client_unref_and_try_put(conn);
         return;
     }
 
@@ -215,15 +232,12 @@ client_close(struct context *ctx, struct conn *conn)
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    conn_unref(conn);
-
     status = close(conn->sd);
     if (status < 0) {
         log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
-
-    conn_put(conn);
+    client_unref_and_try_put(conn);
 }
 
 // A response handler first deletes the link between the response and the
@@ -249,10 +263,14 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     if (status == DN_NOOPS) {
         // by now the response is dropped
         if (!req->awaiting_rsps) {
-            if (req->rsp_sent) {
+            // if we have sent the response for this request or the connection
+            // is closed and we are just waiting to drain off the messages.
+            if (req->rsp_sent || conn->waiting_to_unref) {
                 dictDelete(conn->outstanding_msgs_dict, &reqid);
-                log_warn("Putting req %d", req->id);
+                log_info("Putting req %d", req->id);
                 req_put(req);
+                if (conn->waiting_to_unref)
+                    client_unref_internal_try_put(conn);
             }
         }
     } else if (status == DN_OK) {
