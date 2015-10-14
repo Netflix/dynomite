@@ -62,9 +62,10 @@ dynomite_SOURCES =			                          \
         dyn_string.c dyn_string.h		                  \
         dyn_array.c dyn_array.h		                          \
         dyn_util.c dyn_util.h		                          \
-        dyn_queue.h			                          \
+        dyn_queue.h			                                      \
         dyn_gossip.c dyn_gossip.h                                 \
         dyn_dict.c dyn_dict.h                                     \
+        dyn_asciilogo.h                                           \ 
         dynomite.c 
 
 
@@ -110,6 +111,7 @@ test_SOURCES =                                                \
         dyn_queue.h                                               \
         dyn_gossip.c dyn_gossip.h                                 \
         dyn_dict.c dyn_dict.h                                     \
+        dyn_asciilogo.h                                           \
         dyn_test.c
 
 

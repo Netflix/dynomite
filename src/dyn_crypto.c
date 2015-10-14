@@ -41,7 +41,7 @@ static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
    file_name[pem_key_file->len] = '\0';
 
    if( access(file_name, F_OK ) < 0 ) {
-   	log_error("Error: file %s not exists", file_name);
+   	log_error("Error: file %s does not exist", file_name);
        return DN_ERROR;
    }
 
