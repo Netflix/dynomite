@@ -259,18 +259,28 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
         rsp_put(rsp);
         return DN_OK;
     }
+    // we have to submit the response irrespective of the unref status.
     rstatus_t status = msg_handle_response(req, rsp);
+    if (conn->waiting_to_unref) {
+        // dont care about the status.
+        if (req->awaiting_rsps)
+            return;
+        // all responses received
+        dictDelete(conn->outstanding_msgs_dict, &reqid);
+        log_info("Putting req %d", req->id);
+        req_put(req);
+        client_unref_internal_try_put(conn);
+        return;
+    }
     if (status == DN_NOOPS) {
         // by now the response is dropped
         if (!req->awaiting_rsps) {
             // if we have sent the response for this request or the connection
             // is closed and we are just waiting to drain off the messages.
-            if (req->rsp_sent || conn->waiting_to_unref) {
+            if (req->rsp_sent) {
                 dictDelete(conn->outstanding_msgs_dict, &reqid);
                 log_info("Putting req %d", req->id);
                 req_put(req);
-                if (conn->waiting_to_unref)
-                    client_unref_internal_try_put(conn);
             }
         }
     } else if (status == DN_OK) {
