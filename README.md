@@ -26,6 +26,10 @@ To build Dynomite in _debug mode_:
     $ make
     $ sudo make install
     
+To build on Mac, use feature/mac-port branch:
+
+    $ git checkout feature/mac-port
+    
 ## Help
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
