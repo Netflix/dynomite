@@ -84,7 +84,6 @@ void
 log_level_up(void)
 {
     struct logger *l = &logger;
-    l->level = 9;
 
     if (l->level < LOG_PVERB) {
         l->level++;
@@ -96,7 +95,6 @@ void
 log_level_down(void)
 {
     struct logger *l = &logger;
-    l->level = 5;
 
     if (l->level > LOG_EMERG) {
         l->level--;
