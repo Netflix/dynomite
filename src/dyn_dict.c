@@ -243,7 +243,6 @@ int dictRehash(dict *d, int n) {
     if (!dictIsRehashing(d)) return 0;
 
     while(n--) {
-        log_warn("Rehashing: n %d", n);
         dictEntry *de, *nextde;
 
         /* Check if we already rehashed the whole table... */
