@@ -1065,7 +1065,8 @@ swallow_extra_rsp(struct msg *req, struct msg *rsp)
     return DN_NOOPS;
 }
 
-static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+static rstatus_t
+msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 {
     if (rspmgr_is_done(&req->rspmgr))
         return swallow_extra_rsp(req, rsp);

@@ -340,7 +340,6 @@ TAILQ_HEAD(msg_tqh, msg);
 static inline void
 msg_incr_awaiting_rsps(struct msg *req)
 {
-    //log_error("req %d awaiting_rsps:%u", req->id, req->awaiting_rsps);
     req->awaiting_rsps++;
     return;
 }
@@ -348,7 +347,6 @@ msg_incr_awaiting_rsps(struct msg *req)
 static inline void
 msg_decr_awaiting_rsps(struct msg *req)
 {
-    //log_error("req %d awaiting_rsps:%u", req->id, req->awaiting_rsps);
     req->awaiting_rsps--;
     return;
 }

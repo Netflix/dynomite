@@ -149,7 +149,8 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
     conn_dequeue_outq(ctx, peer_conn, req);
     req->done = 1;
 
-    log_info("%d:%d <-> %d:%d", req->id, req->parent_id, rsp->id, rsp->parent_id);
+    log_info("c_conn:%p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
+             rsp->id, rsp->parent_id);
     /* establish rsp <-> req (response <-> request) link */
     req->peer = rsp;
     rsp->peer = req;
@@ -161,14 +162,12 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
                "c_conn type %s", conn_get_type_string(c_conn));
 
     dnode_rsp_forward_stats(ctx, peer_conn->owner, rsp);
-    log_info("handle rsp %d:%d for req %d:%d conn %p",
-             rsp->id, rsp->parent_id, req->id, req->parent_id, c_conn);
     // c_conn owns respnse now
     status = conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
                                   rsp);
     IGNORE_RET_VAL(status);
     if (req->swallow) {
-        log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
+        log_info("swallow request %d:%d", req->id, req->parent_id);
         req_put(req);
     }
 }

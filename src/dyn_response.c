@@ -241,14 +241,14 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     req->done = 1;
 
     /* establish rsp <-> req (response <-> request) link */
-    log_info("%d:%d <-> %d:%d", req->id, req->parent_id,
-               rsp->id, rsp->parent_id);
     req->peer = rsp;
     rsp->peer = req;
 
     rsp->pre_coalesce(rsp);
 
     c_conn = req->owner;
+    log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
+               rsp->id, rsp->parent_id);
     
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));

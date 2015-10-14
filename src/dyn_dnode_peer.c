@@ -500,7 +500,8 @@ dnode_peer_attemp_reconnect_or_close(struct context *ctx, struct conn *conn)
     }
 }
 
-void dnode_peer_close_socket(struct context *ctx, struct conn *conn)
+static void
+dnode_peer_close_socket(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
         if (log_loggable(LOG_VERB)) {
@@ -518,11 +519,9 @@ void dnode_peer_close_socket(struct context *ctx, struct conn *conn)
     conn->sd = -1;
 }
 
-void
+static void
 dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    bool drop = false;
-
     if ((req->swallow && req->noreply) ||
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)

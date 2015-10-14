@@ -87,7 +87,7 @@ log_level_up(void)
     l->level = 9;
 
     if (l->level < LOG_PVERB) {
-        //l->level++;
+        l->level++;
         loga("up log level to %d", l->level);
     }
 }
@@ -99,7 +99,7 @@ log_level_down(void)
     l->level = 5;
 
     if (l->level > LOG_EMERG) {
-        //l->level--;
+        l->level--;
         loga("down log level to %d", l->level);
     }
 }
@@ -130,10 +130,8 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
 {
     struct logger *l = &logger;
     int len, size, errno_save;
-    char buf[LOG_MAX_LEN], *timestr;
+    char buf[LOG_MAX_LEN];
     va_list args;
-    struct tm *local;
-    time_t t;
     ssize_t n;
 
     if (l->fd < 0) {
@@ -144,9 +142,6 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
-    /*t = time(NULL);
-    local = localtime(&t);
-    timestr = asctime(local);*/
     struct timeval curTime;
     gettimeofday(&curTime, NULL);
 

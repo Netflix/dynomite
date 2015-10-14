@@ -331,7 +331,7 @@ server_close_stats(struct context *ctx, struct server *server, err_t err,
 	}
 }
 
-void
+static void
 server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
     // I want to make sure we do not have swallow here.
@@ -401,7 +401,7 @@ server_close(struct context *ctx, struct conn *conn)
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server outq */
-		conn_dequeue_outq(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, msg);
         server_ack_err(ctx, conn, msg);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->omsg_q));

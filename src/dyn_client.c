@@ -20,6 +20,28 @@
  * limitations under the License.
  */
 
+/**
+ * This is the client connection. It receives requests from the client, and
+ * forwards it to the corresponding peers and local data store server (if this
+ * node owns the token.
+ * There is fair amount of machinery involved here mainly for consistency feature
+ * It acts more of a co-ordinator than a mere client connection handler.
+ * - outstanding_msgs_dict : This is a hash table (HT) of request id to request
+ *   mapping. When it receives a request, it adds the message to the HT, and
+ *   removes it when it finished responding. We need a hash table mainly for
+ *   implementing consistency. When a response is received from a peer, it is 
+ *   handed over to the client connection. It uses this HT to get the request &
+ *   calls the request's response handler.
+ * - waiting_to_unref: Now that we distribute messages to multiple nodes and that
+ *   we have consistency, there is a need for the responses to refer back to the
+ *   original requests. This makes cleaning up and connection tear down fairly
+ *   complex. The client connection has to wait for all responses (either a good
+ *   response or a error response due to timeout). Hence the client connection
+ *   should wait for the above HT outstanding_msgs_dict to get empty. This flag
+ *   waiting_to_unref indicates that the client connection is ready to close and
+ *   just waiting for the outstanding messages to finish.
+ */
+
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_client.h"
