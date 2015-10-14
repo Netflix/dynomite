@@ -598,6 +598,9 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
         /* dequeue the message (request) from server inq */
         conn_dequeue_inq(ctx, conn, msg);
+        // We should also remove the msg from the timeout rbtree.
+        // for outq, its already taken care of
+        msg_tmo_delete(msg);
         dnode_peer_ack_err(ctx, conn, msg);
 
         stats_pool_incr(ctx, server->owner, peer_dropped_requests);

@@ -411,6 +411,8 @@ server_close(struct context *ctx, struct conn *conn)
 
 		/* dequeue the message (request) from server inq */
 		conn_dequeue_inq(ctx, conn, msg);
+        // We should also remove the msg from the timeout rbtree.
+        msg_tmo_delete(msg);
         server_ack_err(ctx, conn, msg);
 
 		stats_server_incr(ctx, conn->owner, server_dropped_requests);
