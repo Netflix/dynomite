@@ -523,6 +523,7 @@ core_loop(struct context *ctx)
 	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
 	core_process_messages();
+
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;

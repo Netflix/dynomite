@@ -264,6 +264,8 @@ struct msg {
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
+    uint8_t              awaiting_rsps;
+    struct msg           *selected_rsp;
 
     struct rbnode        tmo_rbe;         /* entry in rbtree */
 
@@ -312,6 +314,7 @@ struct msg {
     unsigned             first_fragment:1;/* first fragment? */
     unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
+    unsigned             rsp_sent:1;      /* is a response sent for this request?*/
 
     int					 data_store;
     //dynomite
@@ -333,6 +336,20 @@ struct msg {
 };
 
 TAILQ_HEAD(msg_tqh, msg);
+
+static inline void
+msg_incr_awaiting_rsps(struct msg *req)
+{
+    req->awaiting_rsps++;
+    return;
+}
+
+static inline void
+msg_decr_awaiting_rsps(struct msg *req)
+{
+    req->awaiting_rsps--;
+    return;
+}
 
 static inline rstatus_t
 msg_handle_response(struct msg *req, struct msg *rsp)
