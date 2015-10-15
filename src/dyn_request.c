@@ -300,7 +300,6 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 {
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_CLIENT);
-    msg->stime_in_microsec = dn_usec_now();
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
@@ -325,8 +324,10 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_CLIENT);
 
-    uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
-    stats_histo_add_latency(ctx, latency);
+    if (msg->stime_in_microsec) {
+        uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
+        stats_histo_add_latency(ctx, latency);
+    }
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
 }
@@ -948,6 +949,7 @@ req_recv_done(struct context *ctx, struct conn *conn,
         return;
     }
 
+    msg->stime_in_microsec = dn_usec_now();
     req_forward(ctx, conn, msg);
 }
 
