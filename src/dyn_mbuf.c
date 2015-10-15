@@ -271,7 +271,7 @@ mbuf_copy(struct mbuf *mbuf, uint8_t *pos, size_t n)
  * Return new mbuf t, if the split was successful.
  */
 struct mbuf *
-mbuf_split(struct mhdr *h, uint8_t *pos, mbuf_copy_t cb, void *cbarg)
+mbuf_split(struct mhdr *h, uint8_t *pos, func_mbuf_copy_t cb, void *cbarg)
 {
     struct mbuf *mbuf, *nbuf;
     size_t size;

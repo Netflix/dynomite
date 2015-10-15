@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 
 #include "dyn_core.h"
@@ -127,10 +128,8 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
 {
     struct logger *l = &logger;
     int len, size, errno_save;
-    char buf[LOG_MAX_LEN], *timestr;
+    char buf[LOG_MAX_LEN];
     va_list args;
-    struct tm *local;
-    time_t t;
     ssize_t n;
 
     if (l->fd < 0) {
@@ -141,12 +140,15 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
-    t = time(NULL);
-    local = localtime(&t);
-    timestr = asctime(local);
+    struct timeval curTime;
+    gettimeofday(&curTime, NULL);
 
-    len += dn_scnprintf(buf + len, size - len, "[%.*s] %s:%d ",
-                        strlen(timestr) - 1, timestr, file, line);
+    char buffer [80];
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", localtime(&curTime.tv_sec));
+
+    len += dn_scnprintf(buf + len, size - len, "[%.*s.%03d] %s:%d ",
+                        strlen(buffer) - 1, buffer, (int64_t)curTime.tv_usec / 1000,
+                        file, line);
 
     va_start(args, fmt);
     len += dn_vscnprintf(buf + len, size - len, fmt, args);

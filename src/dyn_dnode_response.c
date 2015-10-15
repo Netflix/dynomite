@@ -12,7 +12,7 @@ dnode_rsp_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     msg = msg_get(conn, false, conn->data_store);
     if (msg == NULL) {
@@ -34,7 +34,7 @@ dnode_rsp_put(struct msg *msg)
 struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     conn->last_received = time(NULL);
 
@@ -46,7 +46,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg;
 
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
@@ -81,7 +81,7 @@ static void
 dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
                   struct msg *req, struct msg *rsp)
 {
-    peer_conn->dequeue_outq(ctx, peer_conn, req);
+    conn_dequeue_outq(ctx, peer_conn, req);
     req->done = 1;
     log_debug(LOG_VERB, "conn %p swallow %p", peer_conn, req);
     if (rsp) {
@@ -127,8 +127,8 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
         log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
     }
 
-    log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %c %d dmsg->id %u req %u:%u rsp %u:%u, ",
-              peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
+    log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
+              conn_get_type_string(peer_conn),
               peer_conn->sd, rsp->dmsg->id,
               req->id, req->parent_id, rsp->id, rsp->parent_id);
     ASSERT(req != NULL && req->peer == NULL);
@@ -146,30 +146,29 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
         loga("req id %d", req->id);
     }
 
-    peer_conn->dequeue_outq(ctx, peer_conn, req);
+    conn_dequeue_outq(ctx, peer_conn, req);
     req->done = 1;
 
-    log_debug(LOG_VERB, "%p <-> %p", req, rsp);
+    log_info("c_conn:%p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
+             rsp->id, rsp->parent_id);
     /* establish rsp <-> req (response <-> request) link */
     req->peer = rsp;
     rsp->peer = req;
 
     rsp->pre_coalesce(rsp);
 
-    ASSERT((c_conn->client && !c_conn->proxy) || (c_conn->dnode_client && !c_conn->dnode_server));
+    ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
+               (c_conn->type == CONN_DNODE_PEER_CLIENT),
+               "c_conn type %s", conn_get_type_string(c_conn));
 
     dnode_rsp_forward_stats(ctx, peer_conn->owner, rsp);
-    if (TAILQ_FIRST(&c_conn->omsg_q) != NULL && dnode_req_done(c_conn, req)) {
-        log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p",
-                rsp->id, rsp->parent_id, req->id, req->parent_id, c_conn);
-        // c_conn owns respnse now
-        rstatus_t status = conn_handle_response(c_conn,
-                req->parent_id ? req->parent_id : req->id,
-                rsp);
-        if (req->swallow) {
-            log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
-            req_put(req);
-        }
+    // c_conn owns respnse now
+    status = conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
+                                  rsp);
+    IGNORE_RET_VAL(status);
+    if (req->swallow) {
+        log_info("swallow request %d:%d", req->id, req->parent_id);
+        req_put(req);
     }
 }
 
@@ -186,7 +185,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
     struct msg *req;
     struct conn *c_conn;
 
-    ASSERT(!peer_conn->dnode_client && !peer_conn->dnode_server);
+    ASSERT(peer_conn->type == CONN_DNODE_PEER_SERVER);
 
     /* response from a peer implies that peer is ok and heartbeating */
     dnode_peer_ok(ctx, peer_conn);
@@ -201,10 +200,10 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             return;
         }
         // Report a mismatch and try to rectify
-        log_error("MISMATCH: dnode %c %d rsp_dmsg_id %u req %u:%u dnode rsp %u:%u",
-                peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
-                peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
-                rsp->parent_id);
+        log_error("MISMATCH: dnode %s %d rsp_dmsg_id %u req %u:%u dnode rsp %u:%u",
+                  conn_get_type_string(peer_conn),
+                  peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
+                  rsp->parent_id);
         if (c_conn && conn_to_ctx(c_conn))
             stats_pool_incr(conn_to_ctx(c_conn), c_conn->owner,
                     peer_mismatch_requests);
@@ -236,8 +235,8 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
         }
 
-        log_error("MISMATCHED DNODE RSP RECEIVED %c %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",
-                 peer_conn->dnode_client ? 'c' : (peer_conn->dnode_server ? 's' : 'p'),
+        log_error("MISMATCHED DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",
+                  conn_get_type_string(peer_conn),
                  peer_conn->sd, rsp->dmsg->id,
                  req->id, req->parent_id, rsp->id, rsp->parent_id);
         ASSERT(req != NULL && req->peer == NULL);
@@ -249,7 +248,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         }
 
 
-        peer_conn->dequeue_outq(ctx, peer_conn, req);
+        conn_dequeue_outq(ctx, peer_conn, req);
         req->done = 1;
 
         // Create an appropriate response for the request so its propagated up;
@@ -288,7 +287,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
     rstatus_t status;
     struct msg *pmsg;
 
-    //ASSERT(p_conn->dnode_client && !p_conn->dnode_server);
+    //ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
 
     //add messsage
     struct mbuf *nbuf = mbuf_get();
@@ -323,12 +322,12 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 
     //dnode_rsp_recv_done(ctx, p_conn, msg, pmsg);
     //should we do this?
-    //s_conn->dequeue_outq(ctx, s_conn, pmsg);
+    //conn_dequeue_outq(ctx, s_conn, pmsg);
 
 
 
      //p_conn->enqueue_outq(ctx, p_conn, pmsg);
-     //if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+     //if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
      //   status = event_add_out(ctx->evb, p_conn);
      //   if (status != DN_OK) {
      //      p_conn->err = errno;
@@ -336,7 +335,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
      //}
 
 
-    if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && dnode_req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+    if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
         status = event_add_out(ctx->evb, p_conn);
         if (status != DN_OK) {
             p_conn->err = errno;
@@ -354,7 +353,7 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 {
     log_debug(LOG_VERB, "dnode_rsp_recv_done entering ...");
 
-    ASSERT(!conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(msg != NULL && conn->rmsg == msg);
     ASSERT(!msg->request);
     ASSERT(msg->owner == conn);
@@ -386,8 +385,8 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
     struct msg *rsp = rsp_send_next(ctx, conn);
 
     if (rsp != NULL && conn->dyn_mode) {
@@ -449,32 +448,32 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 }
 
 void
-dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 {
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dnode_rsp_send_done entering");
    }
 
-    struct msg *pmsg; /* peer message (request) */
+    struct msg *req; /* peer message (request) */
 
-    ASSERT(conn->dnode_client && !conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->smsg == NULL);
 
-    log_debug(LOG_VERB, "dyn: send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+    log_debug(LOG_VERB, "dyn: send done rsp %"PRIu64" on c %d", rsp->id, conn->sd);
 
-    pmsg = msg->peer;
+    req = rsp->peer;
 
-    ASSERT(!msg->request && pmsg->request);
-    ASSERT(pmsg->peer == msg);
-    ASSERT(pmsg->done && !pmsg->swallow);
-    log_debug(LOG_DEBUG, "DNODE RSP SENT %c %d dmsg->id %u",
-             conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'),
-             conn->sd, pmsg->dmsg->id);
+    ASSERT(!rsp->request && req->request);
+    ASSERT(req->selected_rsp == rsp);
+    ASSERT(req->done && !req->swallow);
+    log_debug(LOG_DEBUG, "DNODE RSP SENT %s %d dmsg->id %u",
+              conn_get_type_string(conn),
+             conn->sd, req->dmsg->id);
 
     /* dequeue request from client outq */
-    conn->dequeue_outq(ctx, conn, pmsg);
+    conn_dequeue_outq(ctx, conn, req);
 
-    req_put(pmsg);
+    req_put(req);
 }
 
 

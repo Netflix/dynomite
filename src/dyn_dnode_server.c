@@ -15,7 +15,7 @@ dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner == NULL);
 
     conn->family = pool->d_family;
@@ -36,7 +36,7 @@ dnode_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -53,10 +53,10 @@ dnode_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     
-    ASSERT(conn->dnode_server);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
 
     if (conn->sd < 0) {
-        conn->unref(conn);
+        conn_unref(conn);
         conn_put(conn);
         return;
     }
@@ -66,7 +66,7 @@ dnode_close(struct context *ctx, struct conn *conn)
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    conn->unref(conn);
+    conn_unref(conn);
 
     status = close(conn->sd);
     if (status < 0) {
@@ -114,7 +114,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     rstatus_t status;
     struct server_pool *pool = p->owner;
 
-    ASSERT(p->dnode_server);
+    ASSERT(p->type == CONN_DNODE_PEER_PROXY);
 
     p->sd = socket(p->family, SOCK_STREAM, 0);
     if (p->sd < 0) {
@@ -184,7 +184,7 @@ dnode_each_init(void *elem, void *data)
 
     status = dnode_listen(pool->ctx, p);
     if (status != DN_OK) {
-        p->close(pool->ctx, p);
+        conn_close(pool->ctx, p);
         return status;
     }
 
@@ -232,7 +232,7 @@ dnode_each_deinit(void *elem, void *data)
 
     p = pool->d_conn;
     if (p != NULL) {
-        p->close(pool->ctx, p);
+        conn_close(pool->ctx, p);
     }
 
     return DN_OK;
@@ -263,7 +263,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     int client_len = 0;
     int sd = 0;
 
-    ASSERT(p->dnode_server);
+    ASSERT(p->type == CONN_DNODE_PEER_PROXY);
     ASSERT(p->sd > 0);
     ASSERT(p->recv_active && p->recv_ready);
 
@@ -322,7 +322,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     if (status < 0) {
         log_error("dyn: set nonblock on c %d from p %d failed: %s", c->sd, p->sd,
                   strerror(errno));
-        c->close(ctx, c);
+        conn_close(ctx, c);
         return status;
     }
 
@@ -338,7 +338,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     if (status < 0) {
         log_error("dyn: event add conn from p %d failed: %s", p->sd,
                   strerror(errno));
-        c->close(ctx, c);
+        conn_close(ctx, c);
         return status;
     }
 
@@ -353,7 +353,7 @@ dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->dnode_server && !conn->dnode_client);
+    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->recv_active);
  
     conn->recv_ready = 1;
