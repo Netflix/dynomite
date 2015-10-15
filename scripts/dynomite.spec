@@ -1,11 +1,11 @@
 Name:           dynomite
-Version:        0.3.0
+Version:        0.5.4
 Release:        1%{?dist}
 Summary:        Netflix Dynomite
 
 License:       Apache 2.0
 URL:           https://github.com/Netflix/dynomite
-Source0:       https://github.com/Netflix/dynomite/archive/v0.3.0.tar.gz
+Source0:       https://github.com/Netflix/dynomite/archive/v0.5.4.tar.gz
 Patch0:	dynomite-aa
 Patch1: dynomite-ab
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -15,7 +15,7 @@ BuildRequires: gcc gcc-c++ make openssl-devel git
 Requires:      make
 
 %description
-Netflix Dynomite.  Helps build redundant and cross-datacenter redis and memcache replication rings.
+Netflix Dynomite.  A thin distributed dynamo layer for different storage engines and protocols.
 
 %prep
 %setup -q -n %{name}-%{version}
