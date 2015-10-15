@@ -113,12 +113,10 @@ conn_to_ctx(struct conn *conn)
         pool = conn->owner;
     } else {
         struct server *server = conn->owner;
-        if (!server)
-            return NULL;
-        pool = server->owner;
+        pool = server ? server->owner : NULL;
     }
 
-    return pool->ctx;
+    return pool ? pool->ctx : NULL;
 }
 
 static rstatus_t
