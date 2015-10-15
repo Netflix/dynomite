@@ -113,12 +113,10 @@ conn_to_ctx(struct conn *conn)
         pool = conn->owner;
     } else {
         struct server *server = conn->owner;
-        if (!server)
-            return NULL;
-        pool = server->owner;
+        pool = server ? server->owner : NULL;
     }
 
-    return pool->ctx;
+    return pool ? pool->ctx : NULL;
 }
 
 static rstatus_t
@@ -143,6 +141,7 @@ _conn_get(void)
         if (conn == NULL) {
             return NULL;
         }
+        memset(conn, 0, sizeof(*conn));
     }
 
     conn->owner = NULL;
@@ -179,6 +178,7 @@ _conn_get(void)
     conn->connected = 0;
     conn->eof = 0;
     conn->done = 0;
+    conn->waiting_to_unref = 0;
     conn->data_store = DATA_REDIS;
 
     /* for dynomite */

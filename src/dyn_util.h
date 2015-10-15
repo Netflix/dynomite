@@ -187,6 +187,13 @@ ssize_t _dn_recvn(int sd, void *vptr, size_t n);
     }                                           \
 } while (0)
 
+#define ASSERT_LOG(_x, _M, ...) do {            \
+    if (!(_x)) {                                \
+        log_error("Assertion Failed: "_M, ##__VA_ARGS__);            \
+        dn_assert(#_x, __FILE__, __LINE__, 1);  \
+    }                                           \
+} while (0)
+
 #define NOT_REACHED() ASSERT(0)
 
 #elif DN_ASSERT_LOG
@@ -197,11 +204,19 @@ ssize_t _dn_recvn(int sd, void *vptr, size_t n);
     }                                           \
 } while (0)
 
+#define ASSERT_LOG(_x, _M, ...) do {            \
+    if (!(_x)) {                                \
+        log_error("ASSERTION FAILED: "_M, ##__VA_ARGS__);            \
+        dn_assert(#_x, __FILE__, __LINE__, 0);  \
+    }                                           \
+} while (0)
+
 #define NOT_REACHED() ASSERT(0)
 
 #else
 
 #define ASSERT(_x)
+#define ASSERT_LOG(_x, _M, ...)
 
 #define NOT_REACHED()
 

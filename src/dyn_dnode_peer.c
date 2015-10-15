@@ -500,7 +500,8 @@ dnode_peer_attemp_reconnect_or_close(struct context *ctx, struct conn *conn)
     }
 }
 
-void dnode_peer_close_socket(struct context *ctx, struct conn *conn)
+static void
+dnode_peer_close_socket(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
         if (log_loggable(LOG_VERB)) {
@@ -518,45 +519,45 @@ void dnode_peer_close_socket(struct context *ctx, struct conn *conn)
     conn->sd = -1;
 }
 
-void
-dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg*msg)
+static void
+dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    bool drop = false;
-
-    if ((msg->swallow && msg->noreply) ||
-        (msg->swallow && (msg->consistency == DC_ONE)) ||
-        (msg->swallow && (msg->consistency == DC_QUORUM)
+    if ((req->swallow && req->noreply) ||
+        (req->swallow && (req->consistency == DC_ONE)) ||
+        (req->swallow && (req->consistency == DC_QUORUM)
                       && (!conn->same_dc))) {
         log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
-                  " type %d", conn->sd, msg->id, msg->mlen, msg->type);
-        req_put(msg);
+                  " type %d", conn->sd, req->id, req->mlen, req->type);
+        req_put(req);
         return;
     }
-    struct conn *c_conn = msg->owner;
+    struct conn *c_conn = req->owner;
     // At other connections, these responses would be swallowed.
-    ASSERT(c_conn->type == CONN_CLIENT);
+    ASSERT_LOG(c_conn->type == CONN_CLIENT,
+               "conn:%s c_conn:%s, req %d:%d", conn_get_type_string(conn),
+               conn_get_type_string(c_conn), req->id, req->parent_id);
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, conn->data_store);
-    msg->done = 1;
-    rsp->error = msg->error = 1;
-    rsp->err = msg->err = conn->err;
-    rsp->dyn_error = msg->dyn_error = PEER_CONNECTION_REFUSE;
+    req->done = 1;
+    rsp->error = req->error = 1;
+    rsp->err = req->err = conn->err;
+    rsp->dyn_error = req->dyn_error = PEER_CONNECTION_REFUSE;
     rsp->dmsg = dmsg_get();
-    rsp->dmsg->id =  msg->id;
+    rsp->dmsg->id =  req->id;
 
     log_warn("dyn: close s %d schedule error for req %u:%u "
-             "len %"PRIu32" type %d from c %d%c %s", conn->sd, msg->id, msg->parent_id,
-             msg->mlen, msg->type, c_conn->sd, conn->err ? ':' : ' ',
+             "len %"PRIu32" type %d from c %d%c %s", conn->sd, req->id, req->parent_id,
+             req->mlen, req->type, c_conn->sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rstatus_t status =
-            conn_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
+            conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
                                  rsp);
     IGNORE_RET_VAL(status);
-    if (msg->swallow)
-        req_put(msg);
+    if (req->swallow)
+        req_put(req);
 }
 void
 dnode_peer_close(struct context *ctx, struct conn *conn)
@@ -581,18 +582,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         return;
     }
 
-    for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
-        nmsg = TAILQ_NEXT(msg, s_tqe);
-
-        /* dequeue the message (request) from server inq */
-        conn_dequeue_inq(ctx, conn, msg);
-        dnode_peer_ack_err(ctx, conn, msg);
-
-        stats_pool_incr(ctx, server->owner, peer_dropped_requests);
-    }
-
-    ASSERT(TAILQ_EMPTY(&conn->imsg_q));
-
     for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
@@ -602,6 +591,21 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     }
 
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
+
+    for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
+        nmsg = TAILQ_NEXT(msg, s_tqe);
+
+        /* dequeue the message (request) from server inq */
+        conn_dequeue_inq(ctx, conn, msg);
+        // We should also remove the msg from the timeout rbtree.
+        // for outq, its already taken care of
+        msg_tmo_delete(msg);
+        dnode_peer_ack_err(ctx, conn, msg);
+
+        stats_pool_incr(ctx, server->owner, peer_dropped_requests);
+    }
+
+    ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     msg = conn->rmsg;
     if (msg != NULL) {

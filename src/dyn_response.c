@@ -45,7 +45,7 @@ rsp_put(struct msg *msg)
     if (!msg)
         return;
     ASSERT(!msg->request);
-    ASSERT(msg->peer == NULL);
+    //ASSERT(msg->peer == NULL);
     msg_put(msg);
 }
 
@@ -81,10 +81,10 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
         err = msg->err;
     }
 
-    pmsg = msg->peer;
+    pmsg = msg->selected_rsp;
     if (pmsg != NULL) {
         ASSERT(!pmsg->request && pmsg->peer == msg);
-        msg->peer = NULL;
+        msg->selected_rsp = NULL;
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }
@@ -182,7 +182,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (pmsg->noreply) {
          conn_dequeue_outq(ctx, conn, pmsg);
-         rsp_put(pmsg);
+         req_put(pmsg);
          rsp_put(msg);
          return true;
     }
@@ -241,14 +241,14 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     req->done = 1;
 
     /* establish rsp <-> req (response <-> request) link */
-    log_debug(LOG_VERB, "%d:%d <-> %d:%d", req->id, req->parent_id,
-               rsp->id, rsp->parent_id);
     req->peer = rsp;
     rsp->peer = req;
 
     rsp->pre_coalesce(rsp);
 
     c_conn = req->owner;
+    log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
+               rsp->id, rsp->parent_id);
     
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
@@ -257,9 +257,8 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     // this should really be the message's response handler be doing it
     if (req_done(c_conn, req)) {
         // handler owns the response now
-        log_debug(LOG_INFO, "handle rsp %d:%d for req %d:%d conn %p", rsp->id,
-                   rsp->parent_id, req->id, req->parent_id, c_conn);
-        rstatus_t status = DN_OK;
+        log_info("handle rsp %d:%d for req %d:%d conn %p", rsp->id,
+                 rsp->parent_id, req->id, req->parent_id, c_conn);
         status = conn_handle_response(c_conn, c_conn->type == CONN_CLIENT ?
                                       req->id : req->parent_id, rsp);
         IGNORE_RET_VAL(status);
@@ -291,8 +290,8 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *rsp, *req; /* response and it's peer request */
 
-    ASSERT((conn->type == CONN_DNODE_PEER_CLIENT) ||
-           (conn->type = CONN_CLIENT));
+    ASSERT_LOG((conn->type == CONN_DNODE_PEER_CLIENT) ||
+               (conn->type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
 
     req = TAILQ_FIRST(&conn->omsg_q);
     if (req == NULL || !req_done(conn, req)) {
@@ -312,12 +311,13 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 
     rsp = conn->smsg;
     if (rsp != NULL) {
-        ASSERT(!rsp->request && rsp->peer != NULL);
+        ASSERT(!rsp->request);
+        ASSERT(rsp->peer != NULL);
         ASSERT(req_done(conn, rsp->peer));
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
-    if (req == NULL || !req_done(conn, req)) {
+    if (req == NULL || !req_done(conn, req) || !req->selected_rsp) {
         conn->smsg = NULL;
         return NULL;
     }
@@ -330,14 +330,15 @@ rsp_send_next(struct context *ctx, struct conn *conn)
             return NULL;
         }
         rsp->peer = req;
-        req->peer = rsp;
+        req->selected_rsp = rsp;
+        log_error("creating new error rsp %p", rsp);
         if (conn->dyn_mode) {
       	  stats_pool_incr(ctx, conn->owner, peer_forward_error);
         } else {
       	  stats_pool_incr(ctx, conn->owner, forward_error);
         }
     } else {
-        rsp = req->peer;
+        rsp = req->selected_rsp;
     }
     ASSERT(!rsp->request);
 
@@ -351,31 +352,38 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 }
 
 void
-rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
+rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 {
-    struct msg *pmsg; /* peer message (request) */
 
     ASSERT(conn->type == CONN_CLIENT);
     ASSERT(conn->smsg == NULL);
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", msg->id, conn->sd);
+       log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", rsp->id, conn->sd);
     }
 
-    log_debug(LOG_VERB, "conn %p msg %p done", conn, msg);
-    pmsg = msg->peer;
+    log_debug(LOG_VERB, "conn %p rsp %p done", conn, rsp);
+    struct msg *req = rsp->peer;
+    ASSERT_LOG(req, "response %d does not have a corresponding request", rsp->id);
+    ASSERT_LOG(!req->rsp_sent, "request %d:%d already had a response sent",
+               req->id, req->parent_id);
 
-    ASSERT(!msg->request && pmsg->request);
-    ASSERT(pmsg->peer == msg);
-    ASSERT(pmsg->done && !pmsg->swallow);
+    ASSERT(!rsp->request && req->request);
+    ASSERT(req->selected_rsp == rsp);
+    ASSERT(req->done && !req->swallow);
+    req->rsp_sent = 1;
 
     /* dequeue request from client outq */
-    conn_dequeue_outq(ctx, conn, pmsg);
+    conn_dequeue_outq(ctx, conn, req);
 
     // Remove it from the dict
-    struct msg *req = msg->peer;
-    log_debug(LOG_VERB, "conn %p removing message %d:%d", conn, req->id, req->parent_id);
-    dictDelete(conn->outstanding_msgs_dict, &req->id);
-    req_put(pmsg);
+    if (!req->awaiting_rsps) {
+        log_debug(LOG_VERB, "conn %p removing message %d:%d", conn, req->id, req->parent_id);
+        dictDelete(conn->outstanding_msgs_dict, &req->id);
+        req_put(req);
+    } else {
+        log_info("req %d:%d still awaiting rsps %d", req->id, req->parent_id,
+                  req->awaiting_rsps);
+    }
 }
 

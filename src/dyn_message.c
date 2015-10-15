@@ -115,6 +115,32 @@
  * server.
  */
 
+/* Changes to message for consistency:
+ * In order to implement consistency, following changes have been made to message
+ * peer: Previously there was a one to one relation between request and a response
+ *      both of which is struct message unfortunately. And due to the fact that
+ *      some requests are forwarded as is to the underlying server while some
+ *      are copied, the notion of 'peer' gets complicated. hence I changed its
+ *      meaning somewhat. response->peer points to request that this response belongs
+ *      to. Right now request->peer does not have any meaning other than some
+ *      code in redis which does coalescing etc, and some other code just for
+ *      the sake of it.
+ * awaiting_rsps: This is a counter of the number of responses that a request is
+ *      still expecting. For DC_ONE consistency this is immaterial. For DC_QUORUM,
+ *      this is the total number of responses expected. We wait for them to arrive
+ *      before we free the request. A client connection in turn waits for all the
+ *      requests to finish before freeing itself. (Look for waiting_to_unref).
+ * selected_rsp : A request->selected_rsp is the response selected for a given
+ *      request. All code related to sending response should look at selected_rsp.
+ * rsp_sent : Due to consistency DC_QUORUM, we would have sent the response for
+ *      a request even before all the responses arrive. The responses coming after
+ *      rsp_sent are extra and can be swallowed. Also at this time we know that
+ *      the response is sent and the request can be deleted from the client hash
+ *      table outstanding_msgs_dict.
+ *
+ * So generally request->selected_rsp & response->peer is valid. Eventually it
+ * will be good to have different structures for request and response.
+ */
 static uint64_t msg_id;          /* message id counter */
 static uint64_t frag_id;         /* fragment id counter */
 static uint32_t nfree_msgq;      /* # free msg q */
@@ -247,6 +273,8 @@ done:
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
+    msg->awaiting_rsps = 0;
+    msg->selected_rsp = NULL;
 
     rbtree_node_init(&msg->tmo_rbe);
 
@@ -295,6 +323,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
+    msg->rsp_sent = 0;
     msg->data_store = DATA_REDIS;
 
     //dynomite
@@ -521,8 +550,14 @@ void
 msg_put(struct msg *msg)
 {
     if (msg == NULL) {
-   	 log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
-   	 return;
+   	    log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
+   	    return;
+    }
+
+    if (msg->request && msg->awaiting_rsps != 0) {
+        log_info("Not freeing req %d, awaiting_rsps = %u",
+                  msg->id, msg->awaiting_rsps);
+        return;
     }
 
     if (log_loggable(LOG_VVERB)) {
