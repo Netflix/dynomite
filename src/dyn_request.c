@@ -24,10 +24,8 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 
-static rstatus_t msg_write_one_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_read_one_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
+static rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
 
 struct msg *
@@ -35,7 +33,8 @@ req_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
 
     msg = msg_get(conn, true, conn->data_store);
     if (msg == NULL) {
@@ -59,6 +58,15 @@ req_put(struct msg *msg)
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }
+    if (pmsg != msg->selected_rsp) {
+        pmsg = msg->selected_rsp;
+        if (pmsg != NULL) {
+            ASSERT(!pmsg->request && pmsg->peer == msg);
+            msg->selected_rsp = NULL;
+            pmsg->peer = NULL;
+            rsp_put(pmsg);
+        }
+    }
 
     msg_tmo_delete(msg);
 
@@ -79,7 +87,8 @@ req_done(struct conn *conn, struct msg *msg)
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
 
     if (msg == NULL || !msg->done) {
         return false;
@@ -242,7 +251,8 @@ void
 req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -276,7 +286,7 @@ void
 req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
@@ -289,7 +299,7 @@ void
 req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     msg->stime_in_microsec = dn_usec_now();
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
@@ -300,7 +310,7 @@ void
 req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
@@ -313,7 +323,7 @@ void
 req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
     stats_histo_add_latency(ctx, latency);
@@ -325,7 +335,7 @@ void
 req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(!conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_SERVER);
 
     msg_tmo_delete(msg);
 
@@ -341,7 +351,8 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_DNODE_PEER_CLIENT) ||
+           (conn->type = CONN_CLIENT));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -375,7 +386,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          * half (by sending the second FIN) when the client has no
          * outstanding requests
          */
-        if (!conn->active(conn)) {
+        if (!conn_active(conn)) {
             conn->done = 1;
             log_debug(LOG_INFO, "c %d is done", conn->sd);
         }
@@ -404,7 +415,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 static bool
 req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
@@ -577,12 +588,12 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
        loga("local_req_forward entering ............");
     }
 
-    ASSERT((c_conn->client || c_conn->dnode_client) && !c_conn->proxy &&
-           !c_conn->dnode_server);
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
-        c_conn->enqueue_outq(ctx, c_conn, msg);
+        conn_enqueue_outq(ctx, c_conn, msg);
     }
 
     s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
@@ -591,7 +602,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         req_forward_error(ctx, c_conn, msg);
         return;
     }
-    ASSERT(!s_conn->client && !s_conn->proxy);
+    ASSERT(s_conn->type == CONN_SERVER);
 
     if (log_loggable(LOG_DEBUG)) {
        log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
@@ -634,7 +645,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         }
     }
 
-    s_conn->enqueue_inq(ctx, s_conn, msg);
+    conn_enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
     if(msg->data_store==DATA_REDIS){
     	req_redis_stats(ctx, s_conn->owner, msg);
@@ -675,7 +686,7 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *msg)
     //do nothing
     struct msg *nmsg = msg_get_rsp_integer(true);
     if (!msg->noreply)
-        c_conn->enqueue_outq(ctx, c_conn, msg);
+        conn_enqueue_outq(ctx, c_conn, msg);
     msg->peer = nmsg;
     nmsg->peer = msg;
 
@@ -691,7 +702,8 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 {
     struct conn *p_conn;
 
-    ASSERT(c_conn->client || c_conn->dnode_client);
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
@@ -716,7 +728,8 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 {
     struct conn *p_conn;
 
-    ASSERT(c_conn->client || c_conn->dnode_client);
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
@@ -751,8 +764,8 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
     uint8_t rack_index;
     msg->rsp_handler = msg_get_rsp_handler(msg);
     init_response_mgr(&msg->rspmgr, msg, msg->is_read, rack_cnt, c_conn);
-    log_debug(LOG_INFO, "msg %d:%d same DC racks:%d expect replies %d",
-              msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
+    log_info("msg %d:%d same DC racks:%d expect replies %d",
+             msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
     for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
         struct rack *rack = array_get(&dc->racks, rack_index);
         //log_debug(LOG_DEBUG, "rack name '%.*s'",
@@ -772,8 +785,8 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
             }
 
             msg_clone(msg, orig_mbuf, rack_msg);
-            log_debug(LOG_VERB, "msg (%d:%d) clone to rack msg (%d:%d)",
-                    msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
+            log_info("msg (%d:%d) clone to rack msg (%d:%d)",
+                     msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
             rack_msg->swallow = true;
         }
 
@@ -843,7 +856,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     uint8_t *key;
     uint32_t keylen;
 
-    ASSERT(c_conn->client && !c_conn->proxy);
+    ASSERT(c_conn->type == CONN_CLIENT);
 
     if (msg->is_read)
         stats_pool_incr(ctx, pool, client_read_requests);
@@ -920,7 +933,7 @@ void
 req_recv_done(struct context *ctx, struct conn *conn,
               struct msg *msg, struct msg *nmsg)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(msg->request);
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
@@ -944,12 +957,13 @@ req_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
 
     if (conn->connecting) {
-        if (!conn->dyn_mode && !conn->client) {
+        if (conn->type == CONN_SERVER) {
            server_connected(ctx, conn);
-        } else if (conn->dyn_mode && !conn->dnode_client) {
+        } else if (conn->type == CONN_DNODE_PEER_SERVER) {
            dnode_peer_connected(ctx, conn);
         }
     }
@@ -990,7 +1004,8 @@ req_send_next(struct context *ctx, struct conn *conn)
 void
 req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT((!conn->client && !conn->proxy) || (!conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
     //ASSERT(msg->owner == conn);
@@ -1001,93 +1016,75 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     }
 
     /* dequeue the message (request) from server inq */
-    conn->dequeue_inq(ctx, conn, msg);
+    conn_dequeue_inq(ctx, conn, msg);
 
     /*
      * noreply request instructs the server not to send any response. So,
      * enqueue message (request) in server outq, if response is expected.
      * Otherwise, free the noreply request
      */
-    if (!msg->noreply) {
-        conn->enqueue_outq(ctx, conn, msg);
-    } else {
-        if (!conn->dyn_mode && !conn->client && !conn->proxy) { //still enqueue if it is storage conn
-            conn->enqueue_outq(ctx, conn, msg);
-        } else {
-            req_put(msg);
-        }
-    }
-
+    if (!msg->noreply || (conn->type == CONN_SERVER))
+        conn_enqueue_outq(ctx, conn, msg);
+    else
+        req_put(msg);
 }
 
 static msg_response_handler_t 
 msg_get_rsp_handler(struct msg *req)
 {
     if ((req->consistency == DC_ONE) || (req->type == MSG_REQ_REDIS_PING))
-        return req->is_read ? msg_read_one_rsp_handler :
-                              msg_write_one_rsp_handler;
-    return req->is_read ? msg_read_dc_quorum_rsp_handler :
-                          msg_write_dc_quorum_rsp_handler;
+        return msg_local_one_rsp_handler;
+    return msg_quorum_rsp_handler;
 }
 
 static rstatus_t
-msg_read_one_rsp_handler(struct msg *req, struct msg *rsp)
+msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    ASSERT_LOG(!req->selected_rsp, "req %d already has a rsp %d, adding new rsp %d",
+               req->id, req->selected_rsp->id, rsp->id);
+    req->awaiting_rsps = 0;
     if (req->peer)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    req->peer = rsp;
+    req->peer = NULL;
     rsp->peer = req;
+    req->selected_rsp = rsp;
     return DN_OK;
 }
 
 static rstatus_t
-msg_write_one_rsp_handler(struct msg *req, struct msg *rsp)
+swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
-    if (req->peer)
-        log_warn("Received more than one response for dc_one. req: %d:%d \
-                 prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
-                 req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    req->peer = rsp;
-    rsp->peer = req;
-    return DN_OK;
+    log_info("req %d swallowing response %d", req->id, rsp->id);
+    ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
+               req->id, req->parent_id, rsp->id);
+    // drop this response.
+    rsp_put(rsp);
+    msg_decr_awaiting_rsps(req);
+    return DN_NOOPS;
 }
 
 static rstatus_t
-msg_read_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
+msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
 {
+    if (rspmgr_is_done(&req->rspmgr))
+        return swallow_extra_rsp(req, rsp);
     rspmgr_submit_response(&req->rspmgr, rsp);
     if (!rspmgr_is_done(&req->rspmgr))
         return DN_EAGAIN;
     // rsp is absorbed by rspmgr. so we can use that variable
     rsp = rspmgr_get_response(&req->rspmgr);
     rspmgr_free_other_responses(&req->rspmgr, rsp);
-    req->peer = rsp;
+    req->peer = NULL;
     rsp->peer = req;
+    req->selected_rsp = rsp;
     req->err = rsp->err;
     req->error = rsp->error;
     req->dyn_error = rsp->dyn_error;
     return DN_OK;
 }
 
-
-static rstatus_t
-msg_write_dc_quorum_rsp_handler(struct msg *req, struct msg *rsp)
-{
-    rspmgr_submit_response(&req->rspmgr, rsp);
-    if (!rspmgr_is_done(&req->rspmgr))
-        return DN_EAGAIN;
-    // rsp is absorbed by rspmgr. so we can use that variable
-    rsp = rspmgr_get_response(&req->rspmgr);
-    rspmgr_free_other_responses(&req->rspmgr, rsp);
-    req->peer = rsp;
-    rsp->peer = req;
-    req->err = rsp->err;
-    req->error = rsp->error;
-    req->dyn_error = rsp->dyn_error;
-    return DN_OK;
-}
 
 void
 init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
@@ -1099,27 +1096,38 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
     rspmgr->quorum_responses = max_responses/2 + 1;
     rspmgr->conn = conn;
     rspmgr->msg = msg;
+    msg->awaiting_rsps = max_responses;
 }
 
+/* Wait for all responses before responding 
 static bool
 rspmgr_check_is_done(struct response_mgr *rspmgr)
 {
-    // do the required calculation and tell if we are done here
-    // TODO:Optimize HERE>> return once quorum is achieved.
-    //if (rspmgr->good_responses >= rspmgr->quorum_responses)
-        //rspmgr->done = true;
     uint8_t pending_responses = rspmgr->max_responses -
                                 rspmgr->good_responses -
                                 rspmgr->error_responses;
     if (pending_responses) {
         rspmgr->done = false;
-        return false;
     } else
         rspmgr->done = true;
-    // This is required*********
-    /*if ((pending_responses + rspmgr->good_responses) <
+    return rspmgr->done;
+}*/
+
+/* Wait for only quorum number of responses before responding */
+static bool
+rspmgr_check_is_done(struct response_mgr *rspmgr)
+{
+    // do the required calculation and tell if we are done here
+    if (rspmgr->good_responses >= rspmgr->quorum_responses) {
+        rspmgr->done = true;
+        return rspmgr->done;
+    }
+    uint8_t pending_responses = rspmgr->max_responses -
+                                rspmgr->good_responses -
+                                rspmgr->error_responses;
+    if ((pending_responses + rspmgr->good_responses) <
                                                     rspmgr->quorum_responses)
-        rspmgr->done = true;// decision is done. no quorum possible*/
+        rspmgr->done = true;// decision is done. no quorum possible
     return rspmgr->done;
 }
 
@@ -1226,8 +1234,11 @@ rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
 rstatus_t
 rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
 {
+    log_info("req %d submitting response %d awaiting_rsps %d",
+              rspmgr->msg->id, rsp->id, rspmgr->msg->awaiting_rsps);
     if (rsp->error) {
-        log_debug(LOG_VERB, "Received error response %d:%d", rsp->id, rsp->parent_id);
+        log_debug(LOG_VERB, "Received error response %d:%d for req %d:%d",
+                  rsp->id, rsp->parent_id, rspmgr->msg->id, rspmgr->msg->parent_id);
         rspmgr->error_responses++;
         if (rspmgr->err_rsp == NULL)
             rspmgr->err_rsp = rsp;
@@ -1237,5 +1248,6 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
         log_debug(LOG_VERB, "Good response %d:%d", rsp->id, rsp->parent_id);
         rspmgr->responses[rspmgr->good_responses++] =  rsp;
     }
+    msg_decr_awaiting_rsps(rspmgr->msg);
     return DN_OK;
 }

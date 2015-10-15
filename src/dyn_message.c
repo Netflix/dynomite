@@ -115,6 +115,32 @@
  * server.
  */
 
+/* Changes to message for consistency:
+ * In order to implement consistency, following changes have been made to message
+ * peer: Previously there was a one to one relation between request and a response
+ *      both of which is struct message unfortunately. And due to the fact that
+ *      some requests are forwarded as is to the underlying server while some
+ *      are copied, the notion of 'peer' gets complicated. hence I changed its
+ *      meaning somewhat. response->peer points to request that this response belongs
+ *      to. Right now request->peer does not have any meaning other than some
+ *      code in redis which does coalescing etc, and some other code just for
+ *      the sake of it.
+ * awaiting_rsps: This is a counter of the number of responses that a request is
+ *      still expecting. For DC_ONE consistency this is immaterial. For DC_QUORUM,
+ *      this is the total number of responses expected. We wait for them to arrive
+ *      before we free the request. A client connection in turn waits for all the
+ *      requests to finish before freeing itself. (Look for waiting_to_unref).
+ * selected_rsp : A request->selected_rsp is the response selected for a given
+ *      request. All code related to sending response should look at selected_rsp.
+ * rsp_sent : Due to consistency DC_QUORUM, we would have sent the response for
+ *      a request even before all the responses arrive. The responses coming after
+ *      rsp_sent are extra and can be swallowed. Also at this time we know that
+ *      the response is sent and the request can be deleted from the client hash
+ *      table outstanding_msgs_dict.
+ *
+ * So generally request->selected_rsp & response->peer is valid. Eventually it
+ * will be good to have different structures for request and response.
+ */
 static uint64_t msg_id;          /* message id counter */
 static uint64_t frag_id;         /* fragment id counter */
 static uint32_t nfree_msgq;      /* # free msg q */
@@ -247,6 +273,8 @@ done:
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
+    msg->awaiting_rsps = 0;
+    msg->selected_rsp = NULL;
 
     rbtree_node_init(&msg->tmo_rbe);
 
@@ -295,6 +323,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
+    msg->rsp_sent = 0;
     msg->data_store = DATA_REDIS;
 
     //dynomite
@@ -348,8 +377,6 @@ msg_get(struct conn *conn, bool request, int data_store)
         }
         msg->pre_splitcopy = redis_pre_splitcopy;
         msg->post_splitcopy = redis_post_splitcopy;
-        msg->reply = redis_reply;
-        msg->failure = redis_failure;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
     } else if (data_store == DATA_MEMCACHE) {
@@ -523,8 +550,14 @@ void
 msg_put(struct msg *msg)
 {
     if (msg == NULL) {
-   	 log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
-   	 return;
+   	    log_debug(LOG_ERR, "Unable to put a null msg - probably due to memory hard-set limit");
+   	    return;
+    }
+
+    if (msg->request && msg->awaiting_rsps != 0) {
+        log_info("Not freeing req %d, awaiting_rsps = %u",
+                  msg->id, msg->awaiting_rsps);
+        return;
     }
 
     if (log_loggable(LOG_VVERB)) {
@@ -675,7 +708,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (msg->pos == mbuf->last) {
        /* no more data to parse */
-       conn->recv_done(ctx, conn, msg, NULL);
+       conn_recv_done(ctx, conn, msg, NULL);
        return DN_OK;
      }
 
@@ -703,7 +736,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
     nmsg->mlen = mbuf_length(nbuf);
     msg->mlen -= nmsg->mlen;
 
-    conn->recv_done(ctx, conn, msg, nmsg);
+    conn_recv_done(ctx, conn, msg, nmsg);
 
     return DN_OK;
 }
@@ -715,7 +748,8 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *nmsg;  /* new message */
     struct mbuf *nbuf; /* new mbuf */
 
-    ASSERT((conn->client && !conn->proxy) || (conn->dnode_client && !conn->dnode_server));
+    ASSERT((conn->type == CONN_CLIENT) ||
+           (conn->type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request);
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
@@ -804,7 +838,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
               "%"PRIu64"", msg->id, nmsg->id, msg->frag_id);
     }
 
-    conn->recv_done(ctx, conn, msg, nmsg);
+    conn_recv_done(ctx, conn, msg, nmsg);
 
     return DN_OK;
 }
@@ -832,7 +866,7 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (msg_empty(msg)) {
         /* no data to parse */
-        conn->recv_done(ctx, conn, msg, NULL);
+        conn_recv_done(ctx, conn, msg, NULL);
         return DN_OK;
     }
 
@@ -913,7 +947,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                                      mbuf->end_extra - mbuf->last;
     }
 
-    n = conn_recv(conn, mbuf->last, msize);
+    n = conn_recv_data(conn, mbuf->last, msize);
 
     if (n < 0) {
         if (n == DN_EAGAIN) {
@@ -985,7 +1019,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         }
 
         /* get next message to parse */
-        nmsg = conn->recv_next(ctx, conn, false);
+        nmsg = conn_recv_next(ctx, conn, false);
         if (nmsg == NULL || nmsg == msg) {
             /* no more data to parse */
             break;
@@ -1007,7 +1041,7 @@ msg_recv(struct context *ctx, struct conn *conn)
     conn->recv_ready = 1;
 
     do {
-        msg = conn->recv_next(ctx, conn, true);
+        msg = conn_recv_next(ctx, conn, true);
         if (msg == NULL) {
             return DN_OK;
         }
@@ -1059,10 +1093,9 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
         TAILQ_INSERT_TAIL(&send_msgq, msg, m_tqe);
 
-        for (mbuf = STAILQ_FIRST(&msg->mhdr);
-             mbuf != NULL && array_n(&sendv) < DN_IOV_MAX && nsend < limit;
-             mbuf = nbuf) {
-            nbuf = STAILQ_NEXT(mbuf, next);
+        STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+            if (!(array_n(&sendv) < DN_IOV_MAX) && (nsend < limit))
+                break;
 
             if (mbuf_empty(mbuf)) {
                 continue;
@@ -1084,7 +1117,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             break;
         }
 
-        msg = conn->send_next(ctx, conn);
+        msg = conn_send_next(ctx, conn);
         if (msg == NULL) {
             break;
         }
@@ -1094,20 +1127,18 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     conn->smsg = NULL;
 
-    n = conn_sendv(conn, &sendv, nsend);
+    n = conn_sendv_data(conn, &sendv, nsend);
 
     nsent = n > 0 ? (size_t)n : 0;
 
     /* postprocess - process sent messages in send_msgq */
-
-    for (msg = TAILQ_FIRST(&send_msgq); msg != NULL; msg = nmsg) {
-        nmsg = TAILQ_NEXT(msg, m_tqe);
+    TAILQ_FOREACH_SAFE(msg, &send_msgq, m_tqe, nmsg) {
 
         TAILQ_REMOVE(&send_msgq, msg, m_tqe);
 
         if (nsent == 0) {
             if (msg->mlen == 0) {
-                conn->send_done(ctx, conn, msg);
+                conn_send_done(ctx, conn, msg);
             }
             continue;
         }
@@ -1136,7 +1167,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
         /* message has been sent completely, finalize it */
         if (mbuf == NULL) {
-            conn->send_done(ctx, conn, msg);
+            conn_send_done(ctx, conn, msg);
         }
     }
 
@@ -1159,7 +1190,7 @@ msg_send(struct context *ctx, struct conn *conn)
 
     conn->send_ready = 1;
     do {
-        msg = conn->send_next(ctx, conn);
+        msg = conn_send_next(ctx, conn);
         if (msg == NULL) {
             /* nothing to send */
             return DN_OK;
