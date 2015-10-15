@@ -23,7 +23,7 @@
 /**
  * This is the client connection. It receives requests from the client, and
  * forwards it to the corresponding peers and local data store server (if this
- * node owns the token.
+ * node owns the token).
  * There is fair amount of machinery involved here mainly for consistency feature
  * It acts more of a co-ordinator than a mere client connection handler.
  * - outstanding_msgs_dict : This is a hash table (HT) of request id to request

@@ -116,19 +116,19 @@
  */
 
 /* Changes to message for consistency:
- * Inorder to implement consistency, following changes have been made to message
+ * In order to implement consistency, following changes have been made to message
  * peer: Previously there was a one to one relation between request and a response
- *      both of which is struct messgae unfortunately. And due to the fact that
+ *      both of which is struct message unfortunately. And due to the fact that
  *      some requests are forwarded as is to the underlying server while some
  *      are copied, the notion of 'peer' gets complicated. hence I changed its
- *      meaning somewhat. response->peer is the request that this response belong
+ *      meaning somewhat. response->peer points to request that this response belongs
  *      to. Right now request->peer does not have any meaning other than some
  *      code in redis which does coalescing etc, and some other code just for
  *      the sake of it.
  * awaiting_rsps: This is a counter of the number of responses that a request is
  *      still expecting. For DC_ONE consistency this is immaterial. For DC_QUORUM,
  *      this is the total number of responses expected. We wait for them to arrive
- *      before we free the request. A client connection inturn waits for all the
+ *      before we free the request. A client connection in turn waits for all the
  *      requests to finish before freeing itself. (Look for waiting_to_unref).
  * selected_rsp : A request->selected_rsp is the response selected for a given
  *      request. All code related to sending response should look at selected_rsp.
