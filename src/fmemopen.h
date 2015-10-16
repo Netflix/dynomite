@@ -15,6 +15,8 @@
 // limitations under the License.
 //
 
+#ifdef __APPLE__
+
 #ifndef FMEMOPEN_H_
 #define FMEMOPEN_H_
 
@@ -50,3 +52,5 @@ FILE *fmemopen(void *buf, size_t size, const char *mode);
 #endif
 
 #endif // #ifndef FMEMOPEN_H_
+
+#endif

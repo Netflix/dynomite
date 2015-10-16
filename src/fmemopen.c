@@ -15,6 +15,8 @@
 // limitations under the License.
 //
 
+#ifdef __APPLE__
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,3 +106,5 @@ FILE *fmemopen(void *buf, size_t size, const char *mode) {
   // funopen's man page: https://developer.apple.com/library/mac/#documentation/Darwin/Reference/ManPages/man3/funopen.3.html
   return funopen(mem, readfn, writefn, seekfn, closefn);
 }
+
+#endif
