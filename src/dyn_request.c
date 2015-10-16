@@ -27,6 +27,8 @@
 static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
 static rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
+void
+rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free);
 
 struct msg *
 req_get(struct conn *conn)
