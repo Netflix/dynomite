@@ -353,7 +353,7 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     ASSERT(!conn->dnode_client && !conn->dnode_server);
     log_debug(LOG_DEBUG, "DNODE REQ SEND %c %d dmsg->id %u",
              conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'),
-             conn->sd, msg->dmsg->id);
+             conn->sd, msg->dmsg ? msg->dmsg->id : 0);
     req_send_done(ctx, conn, msg);
 }
 
