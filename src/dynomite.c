@@ -317,6 +317,7 @@ dn_set_default_options(struct instance *nci)
     nci->hostname[DN_MAXHOSTNAMELEN - 1] = '\0';
 
     nci->mbuf_chunk_size = DN_MBUF_SIZE;
+    nci->alloc_msgs_max = DN_ALLOC_MSGS;
 
     nci->pid = (pid_t)-1;
     nci->pid_filename = NULL;

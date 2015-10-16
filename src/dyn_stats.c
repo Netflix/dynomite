@@ -757,7 +757,7 @@ stats_make_info_rsp(struct stats *st)
     return DN_OK;
 }
 
-static void
+static rstatus_t
 get_host_from_pname(struct string *host, struct string *pname)
 {
     uint8_t *found = dn_strchr(pname->data,
@@ -766,10 +766,10 @@ get_host_from_pname(struct string *host, struct string *pname)
     if (found) {
         size_t hostlen = found - pname->data;
         THROW_STATUS(string_copy(host, pname->data, hostlen));
-        return;
+        return DN_OK;
     }
     THROW_STATUS(string_copy(host, pname->data, pname->len));
-    return;
+    return DN_OK;
 }
 
 static rstatus_t
