@@ -15,6 +15,7 @@
 #include "dyn_core.h"
 #include "dyn_crypto.h"
 #include "dyn_server.h"
+#include "fmemopen.h"
 
 static EVP_CIPHER *aes_cipher;
 static RSA *rsa;

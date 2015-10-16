@@ -65,6 +65,7 @@ dynomite_SOURCES =			                          \
         dyn_queue.h			                          \
         dyn_gossip.c dyn_gossip.h                                 \
         dyn_dict.c dyn_dict.h                                     \
+        fmemopen.c fmemopen.h                           \
         dynomite.c 
 
 
@@ -110,6 +111,7 @@ test_SOURCES =                                                \
         dyn_queue.h                                               \
         dyn_gossip.c dyn_gossip.h                                 \
         dyn_dict.c dyn_dict.h                                     \
+        fmemopen.c fmemopen.h                           \
         dyn_test.c
 
 
