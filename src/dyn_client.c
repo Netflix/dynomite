@@ -20,12 +20,31 @@
  * limitations under the License.
  */
 
+/**
+ * This is the client connection. It receives requests from the client, and
+ * forwards it to the corresponding peers and local data store server (if this
+ * node owns the token).
+ * There is fair amount of machinery involved here mainly for consistency feature
+ * It acts more of a co-ordinator than a mere client connection handler.
+ * - outstanding_msgs_dict : This is a hash table (HT) of request id to request
+ *   mapping. When it receives a request, it adds the message to the HT, and
+ *   removes it when it finished responding. We need a hash table mainly for
+ *   implementing consistency. When a response is received from a peer, it is 
+ *   handed over to the client connection. It uses this HT to get the request &
+ *   calls the request's response handler.
+ * - waiting_to_unref: Now that we distribute messages to multiple nodes and that
+ *   we have consistency, there is a need for the responses to refer back to the
+ *   original requests. This makes cleaning up and connection tear down fairly
+ *   complex. The client connection has to wait for all responses (either a good
+ *   response or a error response due to timeout). Hence the client connection
+ *   should wait for the above HT outstanding_msgs_dict to get empty. This flag
+ *   waiting_to_unref indicates that the client connection is ready to close and
+ *   just waiting for the outstanding messages to finish.
+ */
+
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_client.h"
-
-static rstatus_t client_handle_response(struct conn *conn, msgid_t msg,
-                                        struct msg *rsp);
 
 static unsigned int
 dict_msg_id_hash(const void *key)
@@ -57,7 +76,7 @@ client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -75,36 +94,57 @@ client_ref(struct conn *conn, void *owner)
     /* owner of the client connection is the server pool */
     conn->owner = owner;
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
-    conn->type = CONN_CLIENT;
-    conn->rsp_handler = client_handle_response;
+    conn->waiting_to_unref = 0;
 
     log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
 
-void
-client_unref(struct conn *conn)
+static void
+client_unref_internal_try_put(struct conn *conn)
 {
+    ASSERT(conn->waiting_to_unref);
+    unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
+    if (msgs != 0) {
+        log_warn("conn %p Waiting for %lu outstanding messages", conn, msgs);
+        return;
+    }
     struct server_pool *pool;
-
-    ASSERT(conn->client && !conn->proxy);
     ASSERT(conn->owner != NULL);
-
     pool = conn->owner;
     conn->owner = NULL;
+    dictRelease(conn->outstanding_msgs_dict);
+    conn->waiting_to_unref = 0;
+    log_warn("unref conn %p owner %p from pool '%.*s'", conn,
+             pool, pool->name.len, pool->name.data);
+    conn_put(conn);
+}
 
+static void
+client_unref_and_try_put(struct conn *conn)
+{
+    ASSERT(conn->type == CONN_CLIENT);
+
+    struct server_pool *pool;
+    pool = conn->owner;
+    ASSERT(conn->owner != NULL);
     ASSERT(pool->dn_conn_q != 0);
     pool->dn_conn_q--;
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
-    dictRelease(conn->outstanding_msgs_dict);
-    log_debug(LOG_VVERB, "unref conn %p owner %p from pool '%.*s'", conn,
-              pool, pool->name.len, pool->name.data);
+    conn->waiting_to_unref = 1;
+    client_unref_internal_try_put(conn);
+}
+
+void
+client_unref(struct conn *conn)
+{
+    client_unref_and_try_put(conn);
 }
 
 bool
 client_active(struct conn *conn)
 {
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -161,13 +201,12 @@ client_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->client && !conn->proxy);
+    ASSERT(conn->type == CONN_CLIENT);
 
     client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
-        conn->unref(conn);
-        conn_put(conn);
+        client_unref_and_try_put(conn);
         return;
     }
 
@@ -192,7 +231,7 @@ client_close(struct context *ctx, struct conn *conn)
         nmsg = TAILQ_NEXT(msg, c_tqe);
 
         /* dequeue the message (request) from client outq */
-        conn->dequeue_outq(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, msg);
 
         if (msg->done) {
             log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
@@ -215,15 +254,12 @@ client_close(struct context *ctx, struct conn *conn)
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    conn->unref(conn);
-
     status = close(conn->sd);
     if (status < 0) {
         log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
-
-    conn_put(conn);
+    client_unref_and_try_put(conn);
 }
 
 // A response handler first deletes the link between the response and the
@@ -245,8 +281,31 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
         rsp_put(rsp);
         return DN_OK;
     }
+    // we have to submit the response irrespective of the unref status.
     rstatus_t status = msg_handle_response(req, rsp);
-    if (status == DN_OK) {
+    if (conn->waiting_to_unref) {
+        // dont care about the status.
+        if (req->awaiting_rsps)
+            return;
+        // all responses received
+        dictDelete(conn->outstanding_msgs_dict, &reqid);
+        log_info("Putting req %d", req->id);
+        req_put(req);
+        client_unref_internal_try_put(conn);
+        return;
+    }
+    if (status == DN_NOOPS) {
+        // by now the response is dropped
+        if (!req->awaiting_rsps) {
+            // if we have sent the response for this request or the connection
+            // is closed and we are just waiting to drain off the messages.
+            if (req->rsp_sent) {
+                dictDelete(conn->outstanding_msgs_dict, &reqid);
+                log_info("Putting req %d", req->id);
+                req_put(req);
+            }
+        }
+    } else if (status == DN_OK) {
         struct context *ctx = conn_to_ctx(conn);
         status = event_add_out(ctx->evb, conn);
         if (status != DN_OK) {

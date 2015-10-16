@@ -2354,53 +2354,6 @@ error:
 }
 
 /*
- * Return true, if redis replies with a transient server failure response,
- * otherwise return false
- *
- * Transient failures on redis are scenarios when it is temporarily
- * unresponsive and responds with the following protocol specific error
- * reply:
- * -OOM, when redis is out-of-memory
- * -BUSY, when redis is busy
- * -LOADING when redis is loading dataset into memory
- *
- */
-bool
-redis_failure(struct msg *r)
-{
-    ASSERT(!r->request);
-
-    switch (r->type) {
-    case MSG_RSP_REDIS_ERROR_OOM:
-    case MSG_RSP_REDIS_ERROR_BUSY:
-    case MSG_RSP_REDIS_ERROR_LOADING:
-        return true;
-
-    default:
-        break;
-    }
-
-    return false;
-}
-
-rstatus_t
-redis_reply(struct msg *r)
-{
-    struct msg *response = r->peer;
-
-    ASSERT(response != NULL && response->owner != NULL);
-
-    switch (r->type) {
-    case MSG_REQ_REDIS_PING:
-        return msg_append(response, rsp_pong.data, rsp_pong.len);
-
-    default:
-        NOT_REACHED();
-        return DN_ERROR;
-    }
-}
-
-/*
  * Pre-split copy handler invoked when the request is a multi vector -
  * 'mget' or 'del' request and is about to be split into two requests
  */

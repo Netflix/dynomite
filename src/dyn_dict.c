@@ -247,7 +247,8 @@ int dictRehash(dict *d, int n) {
 
         /* Check if we already rehashed the whole table... */
         if (d->ht[0].used == 0) {
-            dn_free(d->ht[0].table);
+            if (d->ht[0].table)
+                dn_free(d->ht[0].table);
             d->ht[0] = d->ht[1];
             _dictReset(&d->ht[1]);
             d->rehashidx = -1;

@@ -1,7 +1,8 @@
 # Define the package version numbers and the bug reporting address
 m4_define([DN_MAJOR], 0)
 m4_define([DN_MINOR], 5)
-m4_define([DN_PATCH], 4)
+m4_define([DN_PATCH], 5)
+>>>>>>> origin/master
 m4_define([DN_BUGS], [dynomite@netflix.com])
 
 # Initialize autoconf

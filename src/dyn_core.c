@@ -250,11 +250,10 @@ core_recv(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
 
-	status = conn->recv(ctx, conn);
+	status = conn_recv(ctx, conn);
 	if (status != DN_OK) {
-		log_debug(LOG_INFO, "recv on %c %d failed: %s",
-				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd,
-						strerror(errno));
+		log_info("recv on %s %d failed: %s", conn_get_type_string(conn),
+				 conn->sd, strerror(errno));
 	}
 
 	return status;
@@ -265,51 +264,30 @@ core_send(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
 
-	status = conn->send(ctx, conn);
+	status = conn_send(ctx, conn);
 	if (status != DN_OK) {
-		log_debug(LOG_INFO, "send on %c %d failed: %s",
-				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd,
-						strerror(errno));
+		log_info("send on %s %d failed: %s", conn_get_type_string(conn),
+				 conn->sd, strerror(errno));
 	}
 
 	return status;
 }
 
 static void
-core_dnode_close_log(struct conn *conn)
-{
-	char type, *addrstr;
-
-	if (conn->dnode_client) {
-		type = 'c';
-		addrstr = dn_unresolve_peer_desc(conn->sd);
-	} else {
-		type = conn->dnode_server ? 's' : 'p';
-		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
-	}
-	log_debug(LOG_NOTICE, "dnode close %c %d '%s' on event %04"PRIX32" eof %d done "
-			"%d rb %zu sb %zu%c %s", type, conn->sd, addrstr, conn->events,
-			conn->eof, conn->done, conn->recv_bytes, conn->send_bytes,
-			conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
-
-}
-
-static void
 core_close_log(struct conn *conn)
 {
-	char type, *addrstr;
+	char *addrstr;
 
-	if (conn->client) {
-		type = 'c';
+	if ((conn->type == CONN_CLIENT) || (conn->type == CONN_DNODE_PEER_CLIENT)) {
 		addrstr = dn_unresolve_peer_desc(conn->sd);
 	} else {
-		type = conn->proxy ? 'p' : 's';
 		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
 	}
-	log_debug(LOG_NOTICE, "close %c %d '%s' on event %04"PRIX32" eof %d done "
-			"%d rb %zu sb %zu%c %s", type, conn->sd, addrstr, conn->events,
-			conn->eof, conn->done, conn->recv_bytes, conn->send_bytes,
-			conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
+	log_debug(LOG_NOTICE, "close %s %d '%s' on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", conn_get_type_string(conn), conn->sd,
+              addrstr, conn->events, conn->eof, conn->done, conn->recv_bytes,
+              conn->send_bytes,
+              conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
 }
 
@@ -320,12 +298,7 @@ core_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->sd > 0);
 
-
-	if (conn->dyn_mode) {
-		core_dnode_close_log(conn);
-	} else {
-		core_close_log(conn);
-	}
+    core_close_log(conn);
 
 	status = event_del_conn(ctx->evb, conn);
 	if (status < 0) {
@@ -333,7 +306,7 @@ core_close(struct context *ctx, struct conn *conn)
 		          conn->sd, strerror(errno));
 	}
 
-	conn->close(ctx, conn);
+	conn_close(ctx, conn);
 }
 
 static void
@@ -343,21 +316,8 @@ core_error(struct context *ctx, struct conn *conn)
 
 	status = dn_get_soerror(conn->sd);
 	if (status < 0) {
-		if (!conn->dyn_mode) {
-                        if (conn->client)
-		                log_warn("get soerr on client %d failed, ignored: %s", conn->sd, strerror(errno));
-			else if (conn->proxy)
-				log_warn("get soerr on proxy %d failed, ignored: %s", conn->sd, strerror(errno));
-			else
-				log_warn("get soerr on storage server %d failed, ignored: %s", conn->sd, strerror(errno));
-		} else {
-			if (conn->dnode_client)
-		                log_warn("get soerr on dnode client %d failed, ignored: %s", conn->sd, strerror(errno));
-			else if (conn->dnode_server)
-				log_warn("get soerr on dnode server %d failed, ignored: %s", conn->sd, strerror(errno));
-			else
-				log_warn("get soerr on peer %d failed, ignored: %s", conn->sd, strerror(errno));
-		}
+	log_warn("get soerr on %s client %d failed, ignored: %s",
+             conn_get_type_string(conn), conn->sd, strerror(errno));
 	}
 	conn->err = errno;
 
@@ -405,7 +365,7 @@ core_timeout(struct context *ctx)
 		msg_tmo_delete(msg);
 
 		if (conn->dyn_mode) {
-			if (!conn->dnode_client && !conn->dnode_server) { //outgoing peer requests
+			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
 		 	   struct server *server = conn->owner;
                 if (conn->same_dc)
 			        stats_pool_incr(ctx, server->owner, peer_timedout_requests);
@@ -413,7 +373,7 @@ core_timeout(struct context *ctx)
 			        stats_pool_incr(ctx, server->owner, remote_peer_timedout_requests);
 			}
 		} else {
-			if (!conn->client && !conn->proxy) { //storage server requests
+			if (conn->type == CONN_SERVER) { //storage server requests
 			   stats_server_incr(ctx, conn->owner, server_dropped_requests);
 			}
 		}
@@ -433,40 +393,8 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-
-	/*
-	if (!conn->dyn_mode) {
-		if (conn->client && !conn->proxy) {
-         struct server_pool *sp = conn->owner;
-         log_debug(LOG_VERB, "Client           : '%.*s'", sp->name);
-		} else if (!conn->client && !conn->proxy) {
-			struct server *server = conn->owner;
-			log_debug(LOG_VERB, "Storage server           : '%.*s'", server->name);
-		} else {
-			struct server_pool *sp = conn->owner;
-			log_debug(LOG_VERB, "Proxy           : '%.*s'", sp->name);
-		}
-	} else {
-      if (conn->dnode_client && !conn->dnode_server) {
-      	struct server_pool *sp = conn->owner;
-      	log_debug(LOG_VERB, "Dnode client           : '%.*s'", sp->name);
-      } else if (!conn->dnode_client && !conn->dnode_server) {
-			struct server *server = conn->owner;
-			log_debug(LOG_VERB, "Dnode peer           : '%.*s'", server->name);
-      } else {
-			struct server_pool *sp = conn->owner;
-			log_debug(LOG_VERB, "Dnode server           : '%.*s'", sp->name);
-      }
-	}
-	 */
-
-	if (conn->dyn_mode) {
-		log_debug(LOG_VVERB, "event %04"PRIX32" on d_%c %d", events,
-				conn->dnode_client ? 'c' : (conn->dnode_server ? 's' : 'p'), conn->sd);
-	} else {
-		log_debug(LOG_VVERB, "event %04"PRIX32" on %c %d", events,
-				conn->client ? 'c' : (conn->proxy ? 'p' : 's'), conn->sd);
-	}
+    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
+              conn_get_type_string(conn), conn->sd);
 
 	conn->events = events;
 
@@ -595,6 +523,7 @@ core_loop(struct context *ctx)
 	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
 	core_process_messages();
+
 	nsd = event_wait(ctx->evb, ctx->timeout);
 	if (nsd < 0) {
 		return nsd;
