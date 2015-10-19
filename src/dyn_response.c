@@ -317,7 +317,10 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
-    if (req == NULL || !req_done(conn, req) || !req->selected_rsp) {
+    if (req == NULL || // no more requests to be responded
+        !req_done(conn, req) || // this request is not yet done.
+        (!req_error(conn, req) && !req->selected_rsp) // req is neither error-ed nor a response is selected
+        ) {
         conn->smsg = NULL;
         return NULL;
     }

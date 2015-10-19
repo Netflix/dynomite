@@ -443,19 +443,20 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
+req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
+                  err_t err)
 {
     rstatus_t status;
 
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
                  "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
-                 strerror(errno));
+                 strerror(err));
     }
 
     msg->done = 1;
     msg->error = 1;
-    msg->err = errno;
+    msg->err = err;
 
     /* noreply request don't expect any response */
     if (msg->noreply) {
@@ -466,7 +467,7 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
     if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
         status = event_add_out(ctx->evb, conn);
         if (status != DN_OK) {
-            conn->err = errno;
+            conn->err = err;
         }
     }
 
@@ -599,7 +600,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
     log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
-        req_forward_error(ctx, c_conn, msg);
+        req_forward_error(ctx, c_conn, msg, errno);
         return;
     }
     ASSERT(s_conn->type == CONN_SERVER);
@@ -615,31 +616,31 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
             status = event_add_out(ctx->evb, s_conn);
 
             if (status != DN_OK) {
-                req_forward_error(ctx, c_conn, msg);
+                req_forward_error(ctx, c_conn, msg, errno);
                 s_conn->err = errno;
                 return;
             }
         }
     } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
         log_debug(LOG_INFO, "Node is in STANDBY state. Drop write/read requests");
-        req_forward_error(ctx, c_conn, msg);
+        req_forward_error(ctx, c_conn, msg, errno);
         return;
     } else if (ctx->dyn_state == WRITES_ONLY && msg->is_read) {
         //no reads from peers/clients but allow writes from peers/clients
         log_debug(LOG_INFO, "Node is in WRITES_ONLY state. Drop read requests");
-        req_forward_error(ctx, c_conn, msg);
+        req_forward_error(ctx, c_conn, msg, errno);
         return;
     } else if (ctx->dyn_state == RESUMING) {
         log_debug(LOG_INFO, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
         if (msg->is_read) {
-            req_forward_error(ctx, c_conn, msg);
+            req_forward_error(ctx, c_conn, msg, errno);
             return;
         }
 
         status = event_add_out(ctx->evb, s_conn);
 
         if (status != DN_OK) {
-            req_forward_error(ctx, c_conn, msg);
+            req_forward_error(ctx, c_conn, msg, errno);
             s_conn->err = errno;
             return;
         }
@@ -681,17 +682,18 @@ request_send_to_all_local_racks(struct msg *msg)
 }
 
 static void
-send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *msg)
+send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 {
     //do nothing
-    struct msg *nmsg = msg_get_rsp_integer(true);
-    if (!msg->noreply)
-        conn_enqueue_outq(ctx, c_conn, msg);
-    msg->peer = nmsg;
-    nmsg->peer = msg;
+    struct msg *rsp = msg_get_rsp_integer(true);
+    if (!req->noreply)
+        conn_enqueue_outq(ctx, c_conn, req);
+    req->peer = rsp;
+    rsp->peer = req;
+    req->selected_rsp = rsp;
 
-    msg->done = 1;
-    //msg->pre_coalesce(msg);
+    req->done = 1;
+    //req->pre_coalesce(req);
     rstatus_t status = event_add_out(ctx->evb, c_conn);
     IGNORE_RET_VAL(status);
 }
@@ -708,7 +710,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
         c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, msg);
+        req_forward_error(ctx, c_conn, msg, c_conn->err);
         return;
     }
 
@@ -734,7 +736,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
     if (p_conn == NULL) {
         c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, msg);
+        req_forward_error(ctx, c_conn, msg, c_conn->err);
         return;
     }
 
