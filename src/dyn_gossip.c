@@ -762,6 +762,7 @@ gossip_loop(void *arg)
 	} //end for loop
 
 	mbuf_dealloc(seeds_buf);
+    seeds_buf = NULL;
 
 	return NULL;
 }

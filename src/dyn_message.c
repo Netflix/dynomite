@@ -143,7 +143,7 @@
  */
 static uint64_t msg_id;          /* message id counter */
 static uint64_t frag_id;         /* fragment id counter */
-static uint32_t nfree_msgq;      /* # free msg q */
+static size_t nfree_msgq;        /* # free msg q */
 static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
@@ -228,7 +228,7 @@ msg_tmo_delete(struct msg *msg)
 }
 
 
-static uint32_t alloc_msg_count = 0;
+static size_t alloc_msg_count = 0;
 
 static struct msg *
 _msg_get(bool force_alloc)
@@ -236,7 +236,7 @@ _msg_get(bool force_alloc)
     struct msg *msg;
 
     if (!TAILQ_EMPTY(&free_msgq)) {
-        ASSERT(nfree_msgq > 0);
+        ASSERT(nfree_msgq);
 
         msg = TAILQ_FIRST(&free_msgq);
         nfree_msgq--;
@@ -247,19 +247,19 @@ _msg_get(bool force_alloc)
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
     if (alloc_msg_count >= alloc_msgs_max && !force_alloc) {
-         log_debug(LOG_WARN, "allocated #msgs %d hit max allowable limit", alloc_msg_count);
+         log_debug(LOG_WARN, "allocated #msgs %lu hit max allowable limit", alloc_msg_count);
          return NULL;
     }
 
     if (alloc_msg_count >= MAX_ALLOC_MSGS) {
-        log_debug(LOG_WARN, "allocated #msgs %d hit max hard limit", alloc_msg_count);
+        log_debug(LOG_WARN, "allocated #msgs %lu hit max hard limit", alloc_msg_count);
         return NULL; //we hit the max limit
     }
 
     alloc_msg_count++;
 
 
-    log_debug(LOG_WARN, "alloc_msg_count : %d", alloc_msg_count);
+    log_debug(LOG_WARN, "alloc_msg_count : %lu", alloc_msg_count);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -337,12 +337,12 @@ done:
     return msg;
 }
 
-uint32_t msg_alloc_msgs()
+size_t msg_alloc_msgs()
 {
     return alloc_msg_count;
 }
 
-uint32_t msg_free_queue_size(void)
+size_t msg_free_queue_size(void)
 {
     return nfree_msgq;
 }
@@ -555,14 +555,11 @@ msg_put(struct msg *msg)
     }
 
     if (msg->request && msg->awaiting_rsps != 0) {
-        log_info("Not freeing req %d, awaiting_rsps = %u",
+        log_error("Not freeing req %d, awaiting_rsps = %u",
                   msg->id, msg->awaiting_rsps);
         return;
     }
 
-    if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "put msg %p id %"PRIu64"", msg, msg->id);
-    }
 
     struct dmsg *dmsg = msg->dmsg;
     if (dmsg != NULL) {
@@ -652,7 +649,7 @@ msg_deinit(void)
 
     for (msg = TAILQ_FIRST(&free_msgq); msg != NULL;
          msg = nmsg, nfree_msgq--) {
-        ASSERT(nfree_msgq > 0);
+        ASSERT(nfree_msgq);
         nmsg = TAILQ_NEXT(msg, m_tqe);
         msg_free(msg);
     }

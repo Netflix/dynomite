@@ -233,7 +233,7 @@ struct stats {
     volatile bool             reset_histogram;
     volatile struct histogram latency_histo;
     volatile struct histogram payload_size_histo;
-    volatile uint32_t         alloc_msgs;
+    volatile size_t           alloc_msgs;
 
 };
 

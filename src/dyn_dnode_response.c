@@ -431,7 +431,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
         } else {
             //write dnode header
-            log_info("sending dnode response with msg_id %u", msg_id);
+            log_debug(LOG_VERB, "sending dnode response with msg_id %u", msg_id);
             dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(rsp));
         }
 
