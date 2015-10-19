@@ -357,7 +357,7 @@ msg_handle_response(struct msg *req, struct msg *rsp)
     return req->rsp_handler(req, rsp);
 }
 
-uint32_t msg_free_queue_size(void);
+size_t msg_free_queue_size(void);
 
 struct msg *msg_tmo_min(void);
 void msg_tmo_insert(struct msg *msg, struct conn *conn);
@@ -375,7 +375,7 @@ void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
-uint32_t msg_alloc_msgs(void);
+size_t msg_alloc_msgs(void);
 uint32_t msg_payload_crc32(struct msg *msg);
 struct msg *msg_get_rsp_integer(int data_store);
 struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
