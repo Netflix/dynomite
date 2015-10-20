@@ -59,9 +59,13 @@ RUN autoreconf -fvi \
 RUN echo 'Exposing peer port 8101'
 EXPOSE 8101
 
-# Expose the stat/admin port
-RUN echo 'Exposing stat/admin port 22122'
+# Expose the underlying Redis port
+RUN echo 'Exposing Redis port 22122'
 EXPOSE 22122
+
+# Expose the stats/admin port
+RUN echo 'Exposing stats/admin port 22222'
+EXPOSE 22222
 
 # Default port to acccess Dynomite
 RUN echo 'Exposing client port for Dynomite'
