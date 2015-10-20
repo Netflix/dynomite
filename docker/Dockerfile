@@ -68,7 +68,7 @@ RUN echo 'Exposing stats/admin port 22222'
 EXPOSE 22222
 
 # Default port to acccess Dynomite
-RUN echo 'Exposing client port for Dynomite'
+RUN echo 'Exposing client port for Dynomite 8102'
 EXPOSE 8102
 
 # Default port to execute the entrypoint (Dynomite)
