@@ -33,6 +33,7 @@
 #include "dyn_core.h"
 #include "dyn_conf.h"
 #include "dyn_signal.h"
+#include "dyn_asciilogo.h"
 
 #define DN_CONF_PATH        "conf/dynomite.yml"
 
@@ -206,6 +207,8 @@ dn_print_run(struct instance *nci)
     loga("run, rabbit run / dig that hole, forget the sun / "
          "and when at last the work is done / don't sit down / "
          "it's time to dig another one");
+
+    loga("%s",ascii_logo);
 }
 
 static void
