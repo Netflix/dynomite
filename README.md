@@ -1,6 +1,6 @@
-<!--
+
 # Dynomite
--->
+
 **Dynomite**, inspired by [Dynamo whitepaper](http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf), is a thin, distributed dynamo layer for different storage engines and protocols. Currently these include [Redis](http://redis.io) and [Memcached](http://www.memcached.org/).  Dynomite supports multi-datacenter replication and is designed for high availability.
 <center>![dynomite logo](images/dynomite-logo.png?raw=true =150x150)</center>
 
