@@ -525,17 +525,14 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     if ((req->swallow && req->noreply) ||
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)
-                      && (!conn->same_dc))) {
+                      && (!conn->same_dc)) || 
+        req->owner->type != CONN_CLIENT) {
         log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
                   " type %d", conn->sd, req->id, req->mlen, req->type);
         req_put(req);
         return;
     }
     struct conn *c_conn = req->owner;
-    // At other connections, these responses would be swallowed.
-    ASSERT_LOG(c_conn->type == CONN_CLIENT,
-               "conn:%s c_conn:%s, req %d:%d", conn_get_type_string(conn),
-               conn_get_type_string(c_conn), req->id, req->parent_id);
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
