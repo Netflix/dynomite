@@ -535,7 +535,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     }
     struct conn *c_conn = req->owner;
     // At other connections, these responses would be swallowed.
-    ASSERT_LOG(c_conn->type == CONN_CLIENT,
+    ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
+               (c_conn->type == CONN_DNODE_PEER_CLIENT),
                "conn:%s c_conn:%s, req %d:%d", conn_get_type_string(conn),
                conn_get_type_string(c_conn), req->id, req->parent_id);
 
