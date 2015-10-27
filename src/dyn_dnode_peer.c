@@ -522,10 +522,12 @@ dnode_peer_close_socket(struct context *ctx, struct conn *conn)
 static void
 dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    if ((req->swallow && req->noreply) ||
-        (req->swallow && (req->consistency == DC_ONE)) ||
-        (req->swallow && (req->consistency == DC_QUORUM)
-                      && (!conn->same_dc))) {
+    if ((req->swallow && req->noreply) || // no reply
+        (req->swallow && (req->consistency == DC_ONE)) || // dc one
+        (req->swallow && (req->consistency == DC_QUORUM) // remote dc request
+                      && (!conn->same_dc)) ||
+        (req->owner == conn)) // a gossip message that originated on this conn
+    {
         log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
                   " type %d", conn->sd, req->id, req->mlen, req->type);
         req_put(req);
