@@ -197,6 +197,7 @@ gossip_forward_state(struct server_pool *sp)
 	struct ring_msg *msg = create_ring_msg_with_data(256 * node_count);
 	uint8_t *data = msg->data; //dn_zalloc(sizeof(uint8_t) * 256 * node_count);//msg->data;
 	uint8_t *pos = data;
+    int i = 0;
 
 	dictIterator *dc_it;
 	dictEntry *dc_de;
@@ -212,7 +213,6 @@ gossip_forward_state(struct server_pool *sp)
 
 			dictIterator *node_it = dictGetIterator(g_rack->dict_token_nodes);
 			dictEntry *node_de;
-			int i = 0;
 			while ((node_de = dictNext(node_it)) != NULL) {
 				struct node *gnode = dictGetVal(node_de);
 				//log_debug(LOG_VERB, "\tNode name           : '%.*s'", gnode->name.len, gnode->name.data);
