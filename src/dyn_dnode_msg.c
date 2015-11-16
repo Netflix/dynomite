@@ -307,7 +307,6 @@ dyn_parse_core(struct msg *r)
          }
          if (*p == LF) {
             dyn_state = DYN_DONE;
-            r->pos = p;
          } else {
             token = NULL;
             dyn_state = DYN_START;
