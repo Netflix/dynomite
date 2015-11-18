@@ -221,6 +221,7 @@ struct stats {
     struct string             payload_size_max_str;
 
     struct string             alloc_msgs_str;
+    struct string             free_msgs_str;
 
     struct string             rack_str;
     struct string             rack;
@@ -234,6 +235,7 @@ struct stats {
     volatile struct histogram latency_histo;
     volatile struct histogram payload_size_histo;
     volatile size_t           alloc_msgs;
+    volatile size_t           free_msgs;
 
 };
 
