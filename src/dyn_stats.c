@@ -405,7 +405,11 @@ stats_create_bufs(struct stats *st)
     size += key_value_extra;
 
     size += st->alloc_msgs_str.len;
-    size += int32_max_digits;
+    size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->free_msgs_str.len;
+    size += int64_max_digits;
     size += key_value_extra;
 
     /* server pools */
@@ -569,6 +573,8 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.mean));
     THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
+    THROW_STATUS(stats_add_num(&st->buf, &st->free_msgs_str,
+                 (int64_t)st->free_msgs));
 
     return DN_OK;
 }
@@ -1343,6 +1349,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->payload_size_max_str, "payload_size_max");
 
     string_set_text(&st->alloc_msgs_str, "alloc_msgs");
+    string_set_text(&st->free_msgs_str, "free_msgs");
 
     //only display the first pool
     struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
@@ -1361,6 +1368,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     histo_init(&st->payload_size_histo);
     st->reset_histogram = 0;
     st->alloc_msgs = 0;
+    st->free_msgs = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 
@@ -1438,6 +1446,7 @@ stats_swap(struct stats *st)
     histo_compute(&st->payload_size_histo);
 
     st->alloc_msgs = msg_alloc_msgs();
+    st->free_msgs = msg_free_queue_size();
 
     array_swap(&st->current, &st->shadow);
 
