@@ -287,12 +287,14 @@ proxy_accept(struct context *ctx, struct conn *p)
         sd = accept(p->sd, NULL, NULL);
         if (sd < 0) {
             if (errno == EINTR) {
-                log_debug(LOG_VERB, "accept on p %d not ready - eintr", p->sd);
+                log_warn("accept on %s %d not ready - eintr",
+                         conn_get_type_string(p), p->sd);
                 continue;
             }
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                log_debug(LOG_VERB, "accept on p %d not ready - eagain", p->sd);
+                log_error("accept on %s %d not ready - eagain",
+                          conn_get_type_string(p), p->sd);
                 p->recv_ready = 0;
                 return DN_OK;
             }
@@ -302,7 +304,8 @@ proxy_accept(struct context *ctx, struct conn *p)
              * it back in when some existing connection gets closed
              */
 
-            log_error("accept on p %d failed: %s", p->sd, strerror(errno));
+            log_error("accept on %s %d failed: %s",
+                      conn_get_type_string(p), p->sd, strerror(errno));
             return DN_ERROR;
         }
 
@@ -311,8 +314,8 @@ proxy_accept(struct context *ctx, struct conn *p)
 
     c = conn_get(p->owner, true, p->data_store);
     if (c == NULL) {
-        log_error("get conn for c %d from p %d failed: %s", sd, p->sd,
-                  strerror(errno));
+        log_error("get conn for CLIENT %d from %s %d failed: %s", sd,
+                  conn_get_type_string(p), p->sd, strerror(errno));
         status = close(sd);
         if (status < 0) {
             log_error("close c %d failed, ignored: %s", sd, strerror(errno));
@@ -325,8 +328,8 @@ proxy_accept(struct context *ctx, struct conn *p)
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("set nonblock on c %d from p %d failed: %s", c->sd, p->sd,
-                  strerror(errno));
+        log_error("set nonblock on %s %d from p %d failed: %s",
+                  conn_get_type_string(c), c->sd, p->sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -334,21 +337,22 @@ proxy_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("set tcpnodelay on c %d from p %d failed, ignored: %s",
-                     c->sd, p->sd, strerror(errno));
+            log_warn("set tcpnodelay on %s %d from %s %d failed, ignored: %s",
+                     conn_get_type_string(c), c->sd, conn_get_type_string(p),
+                     p->sd, strerror(errno));
         }
     }
 
     status = event_add_conn(ctx->evb, c);
     if (status < 0) {
-        log_error("event add conn from p %d failed: %s", p->sd,
-                  strerror(errno));
+        log_error("event add conn from %s %d failed: %s",conn_get_type_string(p),
+                  p->sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
-    log_debug(LOG_NOTICE, "accepted c %d on p %d from '%s'", c->sd, p->sd,
-              dn_unresolve_peer_desc(c->sd));
+    log_notice("accepted %s %d on %s %d from '%s'", conn_get_type_string(c),
+               c->sd, conn_get_type_string(p), p->sd, dn_unresolve_peer_desc(c->sd));
 
     return DN_OK;
 }

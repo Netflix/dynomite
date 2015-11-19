@@ -354,7 +354,7 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
-    struct msg *rsp = msg_get(conn, false, conn->data_store);
+    struct msg *rsp = msg_get(conn, false, conn->data_store, __FUNCTION__);
     if (rsp == NULL) {
         log_warn("Could not allocate msg.");
         return;

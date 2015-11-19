@@ -12,29 +12,6 @@
 //static struct string client_request_dyn_msg = string("Client_request");
 static uint64_t peer_msg_id = 0;
 
-
-struct msg *
-dnode_req_get(struct conn *conn)
-{
-    struct msg *msg;
-
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
-
-    msg = msg_get(conn, true, conn->data_store);
-    if (msg == NULL) {
-        conn->err = errno;
-    }
-
-    return msg;
-}
-
-static void
-dnode_req_put(struct msg *msg)
-{
-    req_put(msg);
-}
-
-
 void
 dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
@@ -146,14 +123,14 @@ dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
            log_debug(LOG_VERB, "dyn: filter empty req %"PRIu64" from c %d", msg->id,
                        conn->sd);
         }
-        dnode_req_put(msg);
+        req_put(msg);
         return true;
     }
 
     /* dynomite handler */
     if (msg->dmsg != NULL) {
         if (dmsg_process(ctx, conn, msg->dmsg)) {
-            dnode_req_put(msg);
+            req_put(msg);
             return true;
         }
 
@@ -179,7 +156,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
     /* noreply request don't expect any response */
     if (msg->noreply || msg->swallow) {
-        dnode_req_put(msg);
+        req_put(msg);
         return;
     }
 
@@ -247,7 +224,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
             if (string_compare(rack->name, &pool->rack) == 0 ) {
                 rack_msg = msg;
             } else {
-                rack_msg = msg_get(conn, msg->request, msg->data_store);
+                rack_msg = msg_get(conn, msg->request, msg->data_store, __FUNCTION__);
                 if (rack_msg == NULL) {
                     log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
                     continue;
@@ -498,7 +475,7 @@ void
 dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data_buf)
 {
     rstatus_t status;
-    struct msg *msg = msg_get(conn, 1, data_store);
+    struct msg *msg = msg_get(conn, 1, data_store, __FUNCTION__);
 
     if (msg == NULL) {
         log_debug(LOG_DEBUG, "Unable to obtain a msg");
@@ -508,7 +485,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store
     struct mbuf *header_buf = mbuf_get();
     if (header_buf == NULL) {
         log_debug(LOG_DEBUG, "Unable to obtain a data_buf");
-        dnode_rsp_put(msg);
+        rsp_put(msg);
         return;
     }
 
