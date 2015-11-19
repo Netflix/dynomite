@@ -337,7 +337,7 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
                 log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - more data but can't split!");
             }
 
-            nmsg = msg_get(msg->owner, msg->request, conn->data_store);
+            nmsg = msg_get(msg->owner, msg->request, conn->data_store, __FUNCTION__);
             mbuf_insert(&nmsg->mhdr, nbuf);
             nmsg->pos = nbuf->pos;
 
@@ -488,7 +488,7 @@ aes_msg_test(struct server *server)
 {
     //unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get_peer(server, false, true);
-    struct msg *msg = msg_get(conn, true, conn->data_store);
+    struct msg *msg = msg_get(conn, true, conn->data_store, __FUNCTION__);
 
     struct mbuf *mbuf1 = mbuf_get();
     struct string s1 = string("abc");
@@ -587,7 +587,7 @@ main(int argc, char **argv)
     init_server(server);
 
     struct conn *conn = conn_get_peer(server, false, true);
-    struct msg *msg = msg_get(conn, true, conn->data_store);
+    struct msg *msg = msg_get(conn, true, conn->data_store, __FUNCTION__);
 
     //test payload larger than mbuf_size
     rstatus_t ret = DN_OK;

@@ -366,7 +366,7 @@ void msg_tmo_delete(struct msg *msg);
 void msg_init(struct instance *nci);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
-struct msg *msg_get(struct conn *conn, bool request, int data_store);
+struct msg *msg_get(struct conn *conn, bool request, int data_store, const char* const caller);
 void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
@@ -408,7 +408,6 @@ void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
 /* for dynomite  */
-struct msg *dnode_req_get(struct conn *conn);
 void dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
@@ -420,7 +419,6 @@ void dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg
 struct msg *dnode_req_send_next(struct context *ctx, struct conn *conn);
 void dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
-struct msg *dnode_rsp_get(struct conn *conn);
 void dnode_rsp_put(struct msg *msg);
 struct msg *dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
 void dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
