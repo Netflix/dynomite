@@ -6,6 +6,7 @@
 # author: Ioannis Papapanagiotou
 
 
+#Handle arguments
 function usage () {
     cat <<EOF
 Usage: $0 [options] [--] [file...]
@@ -15,8 +16,11 @@ Arguments:
   -h, --help
     Display this usage message and exit.
 
-  -f, --force
-    force install all packages
+  -f, -- free_memory
+    set the threshold for available node memory in KB
+
+  -r, --redis_rss
+    set the threshold for Redis RSS fragmentation
 
 EOF
 }
@@ -27,17 +31,42 @@ function error() { log "ERROR: $*" >&2; }
 function fatal() { error "$*"; exit 1; }
 function usage_fatal() { error "$*"; usage >&2; exit 1; }
 
-# Threshold for available node memory in KB
+# Default values for threshold for available node memory in KB
 THRESHOLD_MEMORY=5000000
-# Threshold for Redis RSS framgentation
+# Default value for threshold for Redis RSS framgentation
 THRESHOLD_REDIS_RSS=1.5
+
+parser=0;
+
+# parse options
+while [ "$#" -gt 0 ]; do
+    arg=$1
+    case $1 in
+        -f|--free_memory) shift;
+           THRESHOLD_MEMORY=$1; ((parser++));;
+        -r|--redis_rss) shift; THRESHOLD_REDIS_RSS=$1; ((parser++));;
+        -h|--help) usage; exit 0;;
+        -*) usage_fatal "unknown option: '$1'";;
+        *) break;; # reached the list of file names
+    esac
+    shift || usage_fatal "option '${arg}' requires a value"
+done
+
+if [[ ${parser} -eq 0 ]]; then
+   log "INFO: using the default values - memory threshold: 5GB and redis RSS ratio: 1.5"
+elif [[ ${parser} -eq 1 ]]; then
+   log "INFO: memory threshold set to: $THRESHOLD_MEMORY KB and redis RSS ratio set to: $THRESHOLD_REDIS_RSS"
+else
+   log "INFO: memory threshold set to: $THRESHOLD_MEMORY KB and redis RSS ratio default value: $THRESHOLD_REDIS_RSS"
+fi
+
 
 declare -i RESULT
 
 REDIS_UP=`redis-cli -p 22122 ping | grep -c PONG`
 if [[ ${REDIS_UP} -ne 1 ]]; then
     ((RESULT++))
-    echo "INFO: REDIS is not running" >&2
+    log "INFO: REDIS is not running"
     exit $RESULT
 fi
 
