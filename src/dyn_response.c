@@ -292,7 +292,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
                (conn->type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
 
     req = TAILQ_FIRST(&conn->omsg_q);
-    if (req == NULL || !req_done(conn, req)) {
+    if (req == NULL || !req->selected_rsp) {
         /* nothing is outstanding, initiate close? */
         if (req == NULL && conn->eof) {
             conn->done = 1;
@@ -311,12 +311,10 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     if (rsp != NULL) {
         ASSERT(!rsp->request);
         ASSERT(rsp->peer != NULL);
-        ASSERT(req_done(conn, rsp->peer));
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
     if (req == NULL || // no more requests to be responded
-        !req_done(conn, req) || // this request is not yet done.
         (!req_error(conn, req) && !req->selected_rsp) // req is neither error-ed nor a response is selected
         ) {
         conn->smsg = NULL;
