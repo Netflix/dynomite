@@ -21,8 +21,10 @@
 #define FLORIDA_IP "127.0.0.1"
 #define FLORIDA_PORT 8080
 
-const char * request = "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: "\
-                       "127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
+#define request "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n"
+
+//const char * request = "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: "\
+//                       "127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
@@ -181,3 +183,4 @@ uint32_t create_tcp_socket()
 	}
 	return sock;
 }
+
