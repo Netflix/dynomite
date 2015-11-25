@@ -13,7 +13,11 @@ if(typeof seeds_file_path_arg == 'undefined' || seeds_file_path_arg == null || s
 }
 
 var server = http.createServer(function(req, res) {
+  
   var path = url.parse(req.url).pathname;
+  console.log("Request: "+ path);
+
+
   res.writeHead(200, {"Content-Type": "application/json"});
   if (path == '/REST/v1/admin/get_seeds') {
     data = seeds_file.readFileSync(seeds_file_path).toString();
