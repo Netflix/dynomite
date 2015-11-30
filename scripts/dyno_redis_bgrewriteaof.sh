@@ -32,7 +32,7 @@ function fatal() { error "$*"; exit 1; }
 function usage_fatal() { error "$*"; usage >&2; exit 1; }
 
 # Default values for threshold for available node memory in KB
-THRESHOLD_MEMORY=5000000
+FREE_MIN_MEMORY=5000000
 # Default value for threshold for Redis RSS framgentation
 THRESHOLD_REDIS_RSS=1.5
 
@@ -43,7 +43,7 @@ while [ "$#" -gt 0 ]; do
     arg=$1
     case $1 in
         -f|--free_memory) shift;
-           THRESHOLD_MEMORY=$1; ((parser++));;
+           FREE_MIN_MEMORY=$1; ((parser++));;
         -r|--redis_rss) shift; THRESHOLD_REDIS_RSS=$1; ((parser++));;
         -h|--help) usage; exit 0;;
         -*) usage_fatal "unknown option: '$1'";;
@@ -55,9 +55,9 @@ done
 if [[ ${parser} -eq 0 ]]; then
    log "INFO: using the default values - memory threshold: 5GB and redis RSS ratio: 1.5"
 elif [[ ${parser} -eq 1 ]]; then
-   log "INFO: memory threshold set to: $THRESHOLD_MEMORY KB and redis RSS ratio set to: $THRESHOLD_REDIS_RSS"
+   log "INFO: memory threshold set to: $FREE_MIN_MEMORY KB and redis RSS ratio set to: $THRESHOLD_REDIS_RSS"
 else
-   log "INFO: memory threshold set to: $THRESHOLD_MEMORY KB and redis RSS ratio default value: $THRESHOLD_REDIS_RSS"
+   log "INFO: memory threshold set to: $FREE_MIN_MEMORY KB and redis RSS ratio default value: $THRESHOLD_REDIS_RSS"
 fi
 
 
@@ -75,7 +75,7 @@ FREE_MEMORY=`cat /proc/meminfo | sed -n 2p | awk -F ':        ' '{print $2}' | a
 log "OK: Free memory in MB:  $(($FREE_MEMORY/1000)) "
 
 # Check if available < 5GB
-if [[ ${FREE_MEMORY} -le ${THRESHOLD_MEMORY} ]]; then
+if [[ ${FREE_MEMORY} -le ${FREE_MIN_MEMORY} ]]; then
 
      # Determine the Redis RSS fragmentation ratio
      REDIS_RSS_FRAG=`redis-cli -p 22122 info | grep mem_fragmentation_ratio | awk -F ':' '{printf "%.2f\n",$2}'`
@@ -144,10 +144,10 @@ if [[ ${FREE_MEMORY} -le ${THRESHOLD_MEMORY} ]]; then
        log "INFO: Redis RSS fragmentation is $REDIS_RSS_RAM < $THRESHOLD_REDIS_RSS . Exiting..."
      fi
 else
-    if [[ ${THRESHOLD_MEMORY} -le 1000 ]]; then
-       log "INFO: Available memory is $FREE_MEMORY KB more than $THRESHOLD_MEMORY KB. Exiting..."
+    if [[ ${FREE_MIN_MEMORY} -le 1000 ]]; then
+       log "INFO: Available memory is $FREE_MEMORY KB more than $FREE_MIN_MEMORY KB. Exiting..."
     else
-       log "INFO: Available memory is $(($FREE_MEMORY/1000)) MB more than $(($THRESHOLD_MEMORY/1000)) MB. Exiting..."
+       log "INFO: Available memory is $(($FREE_MEMORY/1000)) MB more than $(($FREE_MIN_MEMORY/1000)) MB. Exiting..."
     fi
 fi
 exit $RESULT
