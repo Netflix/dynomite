@@ -78,24 +78,40 @@ log "OK: Free memory in MB:  $(($FREE_MEMORY/1000)) "
 if [[ ${FREE_MEMORY} -le ${THRESHOLD_MEMORY} ]]; then
 
      # Determine the Redis RSS fragmentation ratio
-     REDIS_RSS_FRAG=`redis-cli -p 22122 info | grep mem_fragmentation_ratio | awk -F ':' '{print $2}'`
+     REDIS_RSS_FRAG=`redis-cli -p 22122 info | grep mem_fragmentation_ratio | awk -F ':' '{printf "%.2f\n",$2}'`
      log "OK: Redis RSS fragmentation: $REDIS_RSS_FLAG"
 
      # check if fragmentation is above threshold.
-     # note the >, this is because we compare strings - bash does not support floating numbers
-     if [[ ${REDIS_RSS_FRAG} > ${THRESHOLD_REDIS_RSS} ]]; then
-          log "OK: bgrewrite aof starting"
+     if (( $(echo "scale=2; $REDIS_RSS_FRAG > $THRESHOLD_REDIS_RSS;" | bc -l) )); then
+          log "OK: bgrewrite AOF starting"
           redis-cli -p 22122 BGREWRITEAOF
-          log "OK: bgrewriteaof completed - sleeping 2 seconds"            
-          sleep 2
+          SLEEPING=2
+          log "OK: sleeping initial $SLEEPING post bgrewriteaof"
+          sleep $SLEEPING
+
+          # If bgrewriteaof is still running, we iterate inside a loop that waits for bg_rewrite_aof to finish.
+          # Exponential backoff adds 5 seconds to the sleeping time until the value aof_rewrite_in_progress is zero.
+          # If the sleep takes too long (1800 seconds = 30 min), the process quits.  
+          REDIS_AOF_REWRITE_IN_PROGRESS=`redis-cli -p 22122 INFO | grep aof_rewrite_in_progress | awk -F ':' '{printf "%d\n",$2}'`
+          while [[  ${REDIS_AOF_REWRITE_IN_PROGRESS} -gt 0 ]]; do
+             sleep $SLEEPING
+             log "OK: sleeping $SLEEPING because BGREWRITEAOF is pending"
+             REDIS_AOF_REWRITE_IN_PROGRESS=`redis-cli -p 22122 INFO | grep aof_rewrite_in_progress | awk -F ':' '{printf "%d\n",$2}'`
+             let SLEEPING=SLEEPING+5
+             if [[ ${SLEEPING} -ge 1800 ]]; then
+                log "ERROR: Redis BGREWRITEAOF takes more than 1800 seconds"
+                ((RESULT++))
+                quit $RESULT
+             fi
+          done
 
           pid=`ps -ef | grep  'redis-server' | awk ' {print $2}'`
 
  	  # check number of Redis jobs
           RUNNING_REDIS=`ps -ef | grep  'redis-server' | grep 22122 | awk ' {print $2}' | wc -l`
-          if [[ ${RUNNING_REDIS} -eq 1 ]]; then
-		  kill -9 $pid
-	          log "OK: killing redis"
+          if [[ ${RUNNING_REDIS} -eq 1 ]]; then      
+                  log "OK: killing redis"
+                  kill -9 $pid
         	  # check if Redis is still running after killing it
         	  REDIS_KILLED=`ps aux | grep redis-server | grep 22122 | wc -l`
         	  if [[ ${REDIS_KILLED} -eq 0 ]]; then
@@ -128,7 +144,11 @@ if [[ ${FREE_MEMORY} -le ${THRESHOLD_MEMORY} ]]; then
        log "INFO: Redis RSS fragmentation is $REDIS_RSS_RAM < $THRESHOLD_REDIS_RSS . Exiting..."
      fi
 else
-    log "INFO: Available memory is $(($FREE_MEMORY/1000))  more than $(($THRESHOLD_MEMORY/1000)) KB. Exiting..."
+    if [[ ${THRESHOLD_MEMORY} -le 1000 ]]; then
+       log "INFO: Available memory is $FREE_MEMORY KB more than $THRESHOLD_MEMORY KB. Exiting..."
+    else
+       log "INFO: Available memory is $(($FREE_MEMORY/1000)) MB more than $(($THRESHOLD_MEMORY/1000)) MB. Exiting..."
+    fi
 fi
 exit $RESULT
         
