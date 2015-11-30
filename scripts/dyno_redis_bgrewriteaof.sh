@@ -97,7 +97,7 @@ if [[ ${FREE_MEMORY} -le ${THRESHOLD_MEMORY} ]]; then
              sleep $SLEEPING
              log "OK: sleeping $SLEEPING because BGREWRITEAOF is pending"
              REDIS_AOF_REWRITE_IN_PROGRESS=`redis-cli -p 22122 INFO | grep aof_rewrite_in_progress | awk -F ':' '{printf "%d\n",$2}'`
-             let SLEEPING=SLEEPING+5
+             let SLEEPING=2*SLEEPING
              if [[ ${SLEEPING} -ge 1800 ]]; then
                 log "ERROR: Redis BGREWRITEAOF takes more than 1800 seconds"
                 ((RESULT++))
