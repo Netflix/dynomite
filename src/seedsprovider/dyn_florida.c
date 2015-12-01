@@ -17,16 +17,22 @@
  *   ec2-54-145-17-101.compute-1.amazonaws.com:8101:dyno_pds--useast1e:us-east-1:1383429731|ec2-54-101-51-17.eu-west-1.compute.amazonaws.com:8101:dyno_pds--euwest1c:eu-west-1:1383429731
  ****************************************************************************/
 
-
+#ifndef FLORIDA_IP
 #define FLORIDA_IP "127.0.0.1"
-#define FLORIDA_PORT 8080
+#endif
 
-const char * request = "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: "\
-                       "127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
+#ifndef FLORIDA_PORT
+#define FLORIDA_PORT 8080
+#endif
+
+#ifndef FLORIDA_REQUEST
+#define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
+#endif
+
+const char * request = FLORIDA_REQUEST;
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
-
 
 static int64_t last = 0; //storing last time for seeds check
 static uint32_t last_seeds_hash = 0;
@@ -104,8 +110,8 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 		tmpres = send(sock, request+sent, dn_strlen(request)-sent, 0);
 		if(tmpres == -1){
 			log_debug(LOG_VVERB, "Unable to send query");
-            close(sock);
-            dn_free(remote);
+                        close(sock);
+                        dn_free(remote);
 			return DN_ERROR;
 		}
 		sent += tmpres;
@@ -116,7 +122,7 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 	memset(buf, 0, sizeof(buf));
 	uint32_t htmlstart = 0;
 	uint8_t * htmlcontent;
-    uint8_t *ok = NULL;
+        uint8_t *ok = NULL;
 
 	//assume that the respsone payload is under BUF_SIZE
 	while ((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
@@ -181,3 +187,4 @@ uint32_t create_tcp_socket()
 	}
 	return sock;
 }
+
