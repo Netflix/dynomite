@@ -107,7 +107,7 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 	uint32_t sent = 0;
 	while(sent < dn_strlen(request))
 	{
-		tmpres = send(sock, request + sent, dn_strlen( request )-sent, 0);
+		tmpres = send(sock, request+sent, dn_strlen(request)-sent, 0);
 		if(tmpres == -1){
 			log_debug(LOG_VVERB, "Unable to send query");
                         close(sock);
