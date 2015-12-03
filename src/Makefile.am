@@ -44,10 +44,10 @@ dynomite_SOURCES =			                          \
         dyn_dnode_response.c                                      \
         dyn_dnode_server.c dyn_dnode_server.h                     \
         dyn_histogram.c dyn_histogram.h                           \
-        dyn_server.c dyn_server.h		                  \
-        dyn_proxy.c dyn_proxy.h		                          \
-        dyn_message.c dyn_message.h	                          \
-        dyn_request.c			                          \
+        dyn_server.c dyn_server.h		                          \
+        dyn_proxy.c dyn_proxy.h		                              \
+        dyn_message.c dyn_message.h	                              \
+        dyn_request.c dyn_response_mgr.c	                      \
         dyn_response.c			                          \
         dyn_ring_queue.h dyn_ring_queue.c                         \
         dyn_mbuf.c dyn_mbuf.h		                          \
@@ -93,7 +93,7 @@ test_SOURCES =                                                \
         dyn_server.c dyn_server.h                                 \
         dyn_proxy.c dyn_proxy.h                                   \
         dyn_message.c dyn_message.h                               \
-        dyn_request.c                                             \
+        dyn_request.c dyn_response_mgr.c	                      \
         dyn_response.c                                            \
         dyn_ring_queue.h dyn_ring_queue.c                         \
         dyn_mbuf.c dyn_mbuf.h                                     \
