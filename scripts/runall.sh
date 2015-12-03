@@ -16,6 +16,6 @@ echo "O=$O"
 
 for i in $( cat listnodes ); do
        echo 'processing: ' $i
-       python redis/dyn_redis_test.py -P 22122 -H $i  -o $O -n $N
+       python dynomite/dyn_redis_test.py -P 22122 -H $i  -o $O -n $N
        sleep 1
 done
