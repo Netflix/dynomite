@@ -17,12 +17,19 @@
  *   ec2-54-145-17-101.compute-1.amazonaws.com:8101:dyno_pds--useast1e:us-east-1:1383429731|ec2-54-101-51-17.eu-west-1.compute.amazonaws.com:8101:dyno_pds--euwest1c:eu-west-1:1383429731
  ****************************************************************************/
 
-
+#ifndef FLORIDA_IP
 #define FLORIDA_IP "127.0.0.1"
-#define FLORIDA_PORT 8080
+#endif
 
-const char * request = "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: "\
-                       "127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
+#ifndef FLORIDA_PORT
+#define FLORIDA_PORT 8080
+#endif
+
+#ifndef FLORIDA_REQUEST
+#define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
+#endif
+
+const char * request = FLORIDA_REQUEST;
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
