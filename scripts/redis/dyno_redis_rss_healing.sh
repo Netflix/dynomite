@@ -62,11 +62,13 @@ function restart_redis(){
                else
                    log "ERROR: redis could not be relaunched"
                    ((RESULT++))
+                   quit $RESULT
            fi
          else
              log "ERROR: redis could not be killed"
              log "ERROR: process running: `ps aux | grep redis-server | grep 22122`"
              ((RESULT++))
+             quit $RESULT
          fi
     else
       ((RESULT++))
