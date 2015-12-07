@@ -29,7 +29,7 @@
 #define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 #endif
 
-const char * request = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) > ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
+const char * request = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
