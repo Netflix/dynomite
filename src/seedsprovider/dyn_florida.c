@@ -33,7 +33,7 @@
 
 //FLORIDA_PORT = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL) ? getenv("DYNOMITE_FLORIDA_PORT") : FLORIDA_PORT;
 
-const char * request = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
+const char * request = getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
 
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
