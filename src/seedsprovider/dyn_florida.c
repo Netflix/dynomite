@@ -18,11 +18,11 @@
  ****************************************************************************/
 
 #ifndef FLORIDA_IP
-#define FLORIDA_IP "127.0.0.1";
+#define FLORIDA_IP "127.0.0.1"
 #endif
 
 #ifndef FLORIDA_PORT
-#define FLORIDA_PORT "8080";
+#define FLORIDA_PORT "8080"
 #endif
 
 #ifndef FLORIDA_REQUEST
