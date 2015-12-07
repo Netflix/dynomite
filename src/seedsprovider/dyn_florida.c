@@ -18,16 +18,20 @@
  ****************************************************************************/
 
 #ifndef FLORIDA_IP
-#define FLORIDA_IP (getenv("DYNOMITE_FLORIDA_IP")!=NULL) > ? getenv("DYNOMITE_FLORIDA_IP") : "127.0.0.1";
+#define FLORIDA_IP "127.0.0.1";
 #endif
 
 #ifndef FLORIDA_PORT
-#define FLORIDA_PORT (getenv("DYNOMITE_FLORIDA_PORT")!=NULL) > ? getenv("DYNOMITE_FLORIDA_PORT") : "8080";
+#define FLORIDA_PORT "8080";
 #endif
 
 #ifndef FLORIDA_REQUEST
 #define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 #endif
+
+FLORIDA_IP = (getenv("DYNOMITE_FLORIDA_IP")!=NULL) ? getenv("DYNOMITE_FLORIDA_IP") : FLORIDA_IP;
+
+FLORIDA_PORT = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL) ? getenv("DYNOMITE_FLORIDA_PORT") : FLORIDA_PORT;
 
 const char * request = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
 
