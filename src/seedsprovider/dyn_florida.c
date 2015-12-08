@@ -32,7 +32,7 @@
 char * floridaIp   = NULL;
 char * floridaPort = NULL;
 char * request     = NULL;
-bool isOsVarEval   = FALSE;
+bool isOsVarEval   = 1;
 
 static void evalOSVar(void);
 
@@ -47,7 +47,7 @@ static void evalOSVar(void){
   	 request     = getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
      floridaPort = getenv("DYNOMITE_FLORIDA_PORT")!=NULL)   ? getenv("DYNOMITE_FLORIDA_PORT")    : FLORIDA_PORT;
      floridaIp   = getenv("DYNOMITE_FLORIDA_IP")!=NULL)     ? getenv("DYNOMITE_FLORIDA_IP")      : FLORIDA_IP;	
-     isOsVarEval = TRUE;
+     isOsVarEval = 0;
   }
 }
 
