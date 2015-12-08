@@ -32,7 +32,7 @@
 char * floridaIp   = NULL;
 char * floridaPort = NULL;
 char * request     = NULL;
-bool isOsVarEval   = 1;
+bool isOsVarEval   = false;
 
 static void evalOSVar(void);
 
@@ -44,10 +44,10 @@ static uint32_t last_seeds_hash = 0;
 
 static void evalOSVar(void){
   if (!isOsVarEval)	{
-  	 request     = getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
-     floridaPort = getenv("DYNOMITE_FLORIDA_PORT")!=NULL)   ? getenv("DYNOMITE_FLORIDA_PORT")    : FLORIDA_PORT;
-     floridaIp   = getenv("DYNOMITE_FLORIDA_IP")!=NULL)     ? getenv("DYNOMITE_FLORIDA_IP")      : FLORIDA_IP;	
-     isOsVarEval = 0;
+  	 request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
+     floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? getenv("DYNOMITE_FLORIDA_PORT")    : FLORIDA_PORT;
+     floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")      : FLORIDA_IP;	
+     isOsVarEval = true;
   }
 }
 
