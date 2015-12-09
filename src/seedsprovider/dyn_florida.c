@@ -34,25 +34,18 @@ static char * floridaPort = NULL;
 static char * request     = NULL;
 static int  isOsVarEval   = 0;
 
-static void evalOSVar(void);
-
+static void evalOSVar();
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
 
 static int64_t last = 0; //storing last time for seeds check
 static uint32_t last_seeds_hash = 0;
 
-static void evalOSVar(void){
-  if (isOsVarEval==0)	{
-  	 request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
-     floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? getenv("DYNOMITE_FLORIDA_PORT")    : FLORIDA_PORT;
-     floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")      : FLORIDA_IP;	
-     isOsVarEval = 1;
-  }
-}
-
 static bool seeds_check()
 {
+	
+	evalOSVar();
+
 	int64_t now = dn_msec_now();
 
 	int64_t delta = (int64_t)(now - last);
@@ -95,7 +88,6 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 	uint8_t *get;
 	uint8_t buf[BUFSIZ + 1];
 
-	evalOSVar();
 	log_debug(LOG_VVERB, "Running florida_get_seeds!");
 
 	if (!seeds_check()) {
@@ -201,3 +193,13 @@ uint32_t create_tcp_socket()
 	}
 	return sock;
 }
+
+static void evalOSVar(){
+  if (isOsVarEval==0){
+  	 request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
+     floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? getenv("DYNOMITE_FLORIDA_PORT")    : FLORIDA_PORT;
+     floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")      : FLORIDA_IP;	
+     isOsVarEval = 1;
+  }
+}
+
