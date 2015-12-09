@@ -52,7 +52,7 @@ static void evalOSVar(){
    printf("ENV PORT %s\n", getenv("DYNOMITE_FLORIDA_PORT"));
    printf("ENV REQUEST %s\n ", getenv("DYNOMITE_FLORIDA_REQUEST") );
    printf("IP %s\n", floridaIp);
-   printf("PORT %s\n", floridaPort);
+   printf("PORT %d\n", floridaPort);
    printf("REQUEST %s\n ", request);
 }
 
