@@ -48,6 +48,12 @@ static void evalOSVar(){
      floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")         : FLORIDA_IP;	
      isOsVarEval = 1;
   }
+   printf("ENV IP %s\n", getenv("DYNOMITE_FLORIDA_IP") );
+   printf("ENV PORT %s\n", getenv("DYNOMITE_FLORIDA_PORT"));
+   printf("ENV REQUEST %s\n ", getenv("DYNOMITE_FLORIDA_REQUEST") );
+   printf("IP %s\n", floridaIp);
+   printf("PORT %s\n", floridaPort);
+   printf("REQUEST %s\n ", request);
 }
 
 static bool seeds_check()
