@@ -52,9 +52,6 @@ static void evalOSVar(){
 
 static bool seeds_check()
 {
-	
-	evalOSVar();
-
 	int64_t now = dn_msec_now();
 
 	int64_t delta = (int64_t)(now - last);
@@ -91,6 +88,9 @@ hash_seeds(uint8_t *seeds, size_t length)
 
 uint8_t
 florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
+	
+	evalOSVar();
+
 	struct sockaddr_in *remote;
 	uint32_t sock;
 	uint32_t tmpres;
