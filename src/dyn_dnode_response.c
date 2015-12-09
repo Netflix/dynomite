@@ -6,7 +6,6 @@
 #include "dyn_core.h"
 #include "dyn_dnode_peer.h"
 
-
 struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
@@ -171,6 +170,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         req = TAILQ_FIRST(&peer_conn->omsg_q);
         log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
         c_conn = req->owner;
+
+        if (!peer_conn->same_dc && req->remote_region_send_time) {
+            struct stats *st = ctx->stats;
+            uint64_t delay = dn_usec_now() - req->remote_region_send_time;
+            histo_add(&st->cross_region_histo, delay);
+        }
+
         if (req->id == rsp->dmsg->id) {
             dnode_rsp_forward_match(ctx, peer_conn, rsp);
             return;
