@@ -29,10 +29,10 @@
 #define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 #endif
 
-char * floridaIp   = NULL;
-char * floridaPort = NULL;
-char * request     = NULL;
-bool isOsVarEval   = false;
+static char * floridaIp   = NULL;
+static char * floridaPort = NULL;
+static char * request     = NULL;
+static bool isOsVarEval   = true;
 
 static void evalOSVar(void);
 
@@ -43,11 +43,11 @@ static int64_t last = 0; //storing last time for seeds check
 static uint32_t last_seeds_hash = 0;
 
 static void evalOSVar(void){
-  if (!isOsVarEval)	{
+  if (isOsVarEval==true)	{
   	 request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST") : FLORIDA_REQUEST;
      floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? getenv("DYNOMITE_FLORIDA_PORT")    : FLORIDA_PORT;
      floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")      : FLORIDA_IP;	
-     isOsVarEval = true;
+     isOsVarEval = false;
   }
 }
 
