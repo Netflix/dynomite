@@ -88,7 +88,7 @@ redis_arg0(struct msg *r)
 
     case MSG_REQ_REDIS_ZCARD:
 
-    case MSG_REG_REDIS_KEYS:
+    case MSG_REQ_REDIS_KEYS:
         return true;
 
     default:
@@ -618,14 +618,14 @@ redis_parse_req(struct msg *r)
                 }
 
                 if (str4icmp(m, 'k', 'e', 'y', 's')) { /* Yannis: Need to identify how this is defined in Redis protocol */
-                    r->type = MSG_REG_REDIS_KEYS;
+                    r->type = MSG_REQ_REDIS_KEYS;
                     r->msg_type = 1; //local only
                     r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'i', 'n', 'f', 'o')) { /* Yannis: Need to identify how this is defined in Redis protocol */
-                    r->type = MSG_REG_REDIS_INFO;
+                    r->type = MSG_REQ_REDIS_INFO;
                     r->msg_type = 1; //local only
                     p = p + 1;
                     r->is_read = 1;

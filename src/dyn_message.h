@@ -126,8 +126,8 @@ typedef enum msg_type {
     MSG_REQ_REDIS_HSETNX,
     MSG_REQ_REDIS_HSCAN,
     MSG_REQ_REDIS_HVALS,
-    MSG_REG_REDIS_KEYS,
-    MSG_REG_REDIS_INFO,
+    MSG_REQ_REDIS_KEYS,
+    MSG_REQ_REDIS_INFO,
     MSG_REQ_REDIS_LINDEX,                 /* redis requests - lists */
     MSG_REQ_REDIS_LINSERT,
     MSG_REQ_REDIS_LLEN,

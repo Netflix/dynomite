@@ -507,7 +507,7 @@ req_redis_stats(struct context *ctx, struct server *server, struct msg *msg)
     case MSG_REQ_REDIS_DECR:
          stats_server_incr(ctx, server, redis_req_incr_decr);
          break;
-    case MSG_REG_REDIS_KEYS:
+    case MSG_REQ_REDIS_KEYS:
          stats_server_incr(ctx, server, redis_req_keys);
          break;
     case MSG_REQ_REDIS_MGET:
@@ -675,7 +675,8 @@ request_send_to_all_local_racks(struct msg *msg)
 {
     if (!msg->is_read)
         return true;
-    if (msg->type == MSG_REQ_REDIS_PING)
+    if ((msg->type == MSG_REQ_REDIS_PING) ||
+        (msg->type == MSG_REQ_REDIS_INFO))
         return false;
     if (msg->consistency == DC_QUORUM)
         return true;
@@ -1037,7 +1038,9 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 static msg_response_handler_t 
 msg_get_rsp_handler(struct msg *req)
 {
-    if ((req->consistency == DC_ONE) || (req->type == MSG_REQ_REDIS_PING))
+    if ((req->consistency == DC_ONE) ||
+        (req->type == MSG_REQ_REDIS_PING) ||
+        (req->type == MSG_REQ_REDIS_INFO))
         return msg_local_one_rsp_handler;
     return msg_quorum_rsp_handler;
 }
