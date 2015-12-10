@@ -250,8 +250,6 @@ event_wait(struct event_base *evb, int timeout)
     ASSERT(event != NULL);
     ASSERT(nevent > 0);
 
-    log_debug(LOG_VVERB, "epoll ep %d", ep);
-
     for (;;) {
         int i, nsd;
 
@@ -261,7 +259,7 @@ event_wait(struct event_base *evb, int timeout)
                 struct epoll_event *ev = &evb->event[i];
                 uint32_t events = 0;
 
-                log_debug(LOG_VVERB, "epoll %04"PRIX32" triggered on conn %p",
+                log_debug(LOG_VVVERB, "epoll %04"PRIX32" triggered on conn %p",
                           ev->events, ev->data.ptr);
 
                 if (ev->events & (EPOLLERR | EPOLLRDHUP)) {
