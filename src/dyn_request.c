@@ -90,7 +90,7 @@ req_done(struct conn *conn, struct msg *msg)
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
 
-    if (msg == NULL || !msg->done) {
+    if (msg == NULL || (!msg->done && !msg->selected_rsp)) {
         return false;
     }
 

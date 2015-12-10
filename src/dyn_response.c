@@ -314,9 +314,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
-    if (req == NULL || // no more requests to be responded
-        (!req_error(conn, req) && !req->selected_rsp) // req is neither error-ed nor a response is selected
-        ) {
+    if (req == NULL || !req_done(conn, req)) {
         conn->smsg = NULL;
         return NULL;
     }
@@ -369,7 +367,6 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 
     ASSERT(!rsp->request && req->request);
     ASSERT(req->selected_rsp == rsp);
-    ASSERT(req->done && !req->swallow);
     req->rsp_sent = 1;
 
     /* dequeue request from client outq */
