@@ -315,6 +315,9 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     // crashes because dmsg is NULL :(
     /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->sd, msg->dmsg->id);*/
+
+    if (!conn->same_dc)
+        msg->remote_region_send_time = dn_usec_now();
     req_send_done(ctx, conn, msg);
 }
 
