@@ -241,6 +241,7 @@ struct msg {
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
+    int64_t              remote_region_send_time; /* time in microsec when message sent to remote region */
     uint8_t              awaiting_rsps;
     struct msg           *selected_rsp;
 
