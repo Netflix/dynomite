@@ -29,15 +29,26 @@
 #define FLORIDA_REQUEST "GET /REST/v1/admin/get_seeds HTTP/1.0\r\nHost: 127.0.0.1\r\nUser-Agent: HTMLGET 1.0\r\n\r\n";
 #endif
 
-const char * request = FLORIDA_REQUEST;
+static char * floridaIp   = NULL;
+static int    floridaPort = NULL;
+static char * request     = NULL;
+static int  isOsVarEval   = 0;
 
+static void evalOSVar();
 static uint32_t create_tcp_socket();
 static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
-
 
 static int64_t last = 0; //storing last time for seeds check
 static uint32_t last_seeds_hash = 0;
 
+static void evalOSVar(){
+  if (isOsVarEval==0){
+  	 request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST")    : FLORIDA_REQUEST;
+     floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? atoi(getenv("DYNOMITE_FLORIDA_PORT")) : FLORIDA_PORT;
+     floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")         : FLORIDA_IP;	
+     isOsVarEval = 1;
+  }
+}
 
 static bool seeds_check()
 {
@@ -77,6 +88,9 @@ hash_seeds(uint8_t *seeds, size_t length)
 
 uint8_t
 florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
+	
+	evalOSVar();
+
 	struct sockaddr_in *remote;
 	uint32_t sock;
 	uint32_t tmpres;
@@ -97,8 +111,8 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 
 	remote = (struct sockaddr_in *) dn_alloc(sizeof(struct sockaddr_in *));
 	remote->sin_family = AF_INET;
-	tmpres = inet_pton(AF_INET, FLORIDA_IP, (void *)(&(remote->sin_addr.s_addr)));
-	remote->sin_port = htons(FLORIDA_PORT);
+	tmpres = inet_pton(AF_INET, floridaIp, (void *)(&(remote->sin_addr.s_addr)));
+	remote->sin_port = htons(floridaPort);
 
 	if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
 		log_debug(LOG_VVERB, "Unable to connect the destination");
