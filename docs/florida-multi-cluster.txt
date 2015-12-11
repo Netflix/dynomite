@@ -1,0 +1,41 @@
+Florida Multi-Cluster Solution
+
+Let's say you want to have multiple clusters so you need have different Florida URLs providing different seeds for each cluster. Make (build with GCC) Dynomite all the time makes the build process slow, so now the code to look for ENV for like:
+
+    DYNOMITE_FLORIDA_IP
+    DYNOMITE_FLORIDA_PORT
+    DYNOMITE_FLRORIDA_REQUEST 
+
+We made this change be processed just once, so will read the ENV_VARS just one time. IF this OS_VARS are not present (NULL) the code will use the macros or CFLAGS values. This is great because allow to use the same binary all the time, and then later when I deploy the code into ASGARD I can have just different user data since is just a matter of export different values to the AMI/Linux. There is a minor FIX of YAML syntax as well.
+
+So for instance someone can have on the /etc/profile
+
+export DYNOMITE_FLORIDA_PORT=8080
+export DYNOMITE_FLORIDA_IP="127.0.0.1"
+export DYNOMITE_FLORIDA_REQUEST="GET /florida/cluster1/get_seeds.txt HTTP/1.0
+Host: 127.0.0.1
+User-Agent: HTMLGET 1.0
+
+"
+
+and for another box just
+
+export DYNOMITE_FLORIDA_PORT=8080
+export DYNOMITE_FLORIDA_IP="127.0.0.1"
+export DYNOMITE_FLORIDA_REQUEST="GET /florida/cluster2/get_seeds.txt HTTP/1.0
+Host: 127.0.0.1
+User-Agent: HTMLGET 1.0
+
+"
+
+Even pass this through ASGARD via user_data.
+
+Them build dynomite normaly like:
+
+sudo autoreconf -fvi ; sudo ./configure --enable-debug=log ; sudo make;
+
+And Run:
+
+ sudo --preserve-env src/dynomite -c conf/dynomite_florida_single.yml 
+
+And it works :-) 
