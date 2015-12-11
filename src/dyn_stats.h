@@ -220,7 +220,7 @@ struct stats {
     struct string             payload_size_mean_str;
     struct string             payload_size_max_str;
 
-    struct string             cross_region_avg_lat;
+    struct string             cross_region_avg_rtt;
 
     struct string             alloc_msgs_str;
     struct string             free_msgs_str;

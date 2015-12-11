@@ -571,7 +571,7 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.val_95th));
     THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_mean_str,
                  (int64_t)st->payload_size_histo.mean));
-    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_avg_lat,
+    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_avg_rtt,
                  (int64_t)st->cross_region_histo.mean));
     THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
@@ -1352,7 +1352,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->payload_size_max_str, "payload_size_max");
 
     // cross region average latency
-    string_set_text(&st->cross_region_avg_lat, "average_cross_region_lat");
+    string_set_text(&st->cross_region_avg_rtt, "average_cross_region_rtt");
 
     string_set_text(&st->alloc_msgs_str, "alloc_msgs");
     string_set_text(&st->free_msgs_str, "free_msgs");
