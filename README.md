@@ -6,6 +6,12 @@
 
 The ultimate goal with Dynomite is to be able to implement high availability and cross-datacenter replication on storage engines that do not inherently provide that functionality. The implementation is efficient, not complex (few moving parts), and highly performant.
 
+## Workflow
+
+The stable version of Dynomite is the [master]( https://github.com/Netflix/dynomite/tree/master ) branch. 
+
+For questions or contributions, please consider reading [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
 ## Build
 
 To build Dynomite from source with _debug logs enabled_ and _assertions disabled_:
@@ -76,9 +82,6 @@ For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 
 Finally, to make writing syntactically correct configuration files easier, dynomite provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
-## Questions or Contributing to Dynomite
-
-Please consider reading [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## License
 
