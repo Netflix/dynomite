@@ -10,9 +10,13 @@ The Dynomite team is following the Gitflow workflow. The active development bran
    following procedure to submit a patch:
 
     a. Fork Dynomite on github ( http://help.github.com/fork-a-repo/ )
+
     b. Create a topic branch (git checkout -b my_branch)
+
     c. Push to your branch (git push origin my_branch)
+
     d. Initiate a pull request on github ( http://help.github.com/send-pull-requests/ )
+
     e. Done :)
 
 For minor fixes just open a pull request to the [dev](https://github.com/Netflix/dynomite/tree/dev] branch on Github.
