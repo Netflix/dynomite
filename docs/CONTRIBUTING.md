@@ -22,7 +22,7 @@ The Dynomite team is following the Gitflow workflow. The active development bran
 
     e. Done :)
 
-For minor fixes just open a pull request to the [dev](https://github.com/Netflix/dynomite/tree/dev] branch on Github.
+For minor fixes just open a pull request to the [dev]( https://github.com/Netflix/dynomite/tree/dev ) branch on Github.
 
 ## Questions
 
