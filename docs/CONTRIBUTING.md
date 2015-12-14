@@ -1,10 +1,13 @@
 # Contributing to Dynomite
 
+Documentation for Dynomite is mainly kept at the [wiki]( https://github.com/Netflix/dynomite/wiki )
+
 The Dynomite team is following the Gitflow workflow. The active development branch is [dev](https://github.com/Netflix/dynomite/tree/dev), the stable branch is [master](https://github.com/Netflix/dynomite/tree/master).
+
 
 ## How to provide a patch for a new feature
 
-1. If it is a major feature, please create an [Issue](./issues) and discuss with the project leaders. 
+1. If it is a major feature, please create an [Issue]( https://github.com/Netflix/dynomite/issues ) and discuss with the project leaders. 
 
 2. If in step 1 you get an acknowledge from the project leaders, use the
    following procedure to submit a patch:
@@ -23,6 +26,6 @@ For minor fixes just open a pull request to the [dev](https://github.com/Netflix
 
 ## Questions
 
-If you have questions or want to report a bug please create an [Issue](./issues)
+If you have questions or want to report a bug please create an [Issue]( https://github.com/Netflix/dynomite/issues )
 
  
