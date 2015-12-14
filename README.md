@@ -78,7 +78,7 @@ Finally, to make writing syntactically correct configuration files easier, dynom
 
 ## Questions or Contributing to Dynomite
 
-Please consider reading [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md].
+Please consider reading [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## License
 
