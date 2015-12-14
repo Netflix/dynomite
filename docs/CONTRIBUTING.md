@@ -3,6 +3,7 @@
 Documentation for Dynomite is mainly kept at the [wiki]( https://github.com/Netflix/dynomite/wiki ).
 
 The Dynomite team is following the Gitflow workflow. The active development branch is [dev](https://github.com/Netflix/dynomite/tree/dev), the stable branch is [master](https://github.com/Netflix/dynomite/tree/master).
+Contributions will be accepted to the [dev](https://github.com/Netflix/dynomite/tree/dev) only.
 
 
 ## How to provide a patch for a new feature
