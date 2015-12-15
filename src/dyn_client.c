@@ -286,13 +286,13 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     if (conn->waiting_to_unref) {
         // dont care about the status.
         if (req->awaiting_rsps)
-            return;
+            return DN_OK;
         // all responses received
         dictDelete(conn->outstanding_msgs_dict, &reqid);
         log_info("Putting req %d", req->id);
         req_put(req);
         client_unref_internal_try_put(conn);
-        return;
+        return DN_OK;
     }
     if (status == DN_NOOPS) {
         // by now the response is dropped
