@@ -146,6 +146,7 @@ event_add_out(struct event_base *evb, struct conn *c)
     event.events = (uint32_t)(EPOLLIN | EPOLLOUT); // | EPOLLET);
     event.data.ptr = c;
 
+    log_debug(LOG_DEBUG, "adding conn %p(%s) to active", c, conn_get_type_string(c));
     status = epoll_ctl(ep, EPOLL_CTL_MOD, c->sd, &event);
     if (status < 0) {
         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
@@ -176,6 +177,7 @@ event_del_out(struct event_base *evb, struct conn *c)
     event.events = (uint32_t)(EPOLLIN | EPOLLET);
     event.data.ptr = c;
 
+    log_debug(LOG_DEBUG, "removing conn %p(%s) from active", c, conn_get_type_string(c));
     status = epoll_ctl(ep, EPOLL_CTL_MOD, c->sd, &event);
     if (status < 0) {
         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
@@ -201,6 +203,7 @@ event_add_conn(struct event_base *evb, struct conn *c)
     event.events = (uint32_t)(EPOLLIN | EPOLLOUT | EPOLLET);
     event.data.ptr = c;
 
+    log_debug(LOG_DEBUG, "adding conn %p(%s) to active", c, conn_get_type_string(c));
     status = epoll_ctl(ep, EPOLL_CTL_ADD, c->sd, &event);
     if (status < 0) {
         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
@@ -223,6 +226,7 @@ event_del_conn(struct event_base *evb, struct conn *c)
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
 
+    log_debug(LOG_DEBUG, "removing conn %p(%s) from active", c, conn_get_type_string(c));
     status = epoll_ctl(ep, EPOLL_CTL_DEL, c->sd, NULL);
     if (status < 0) {
         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
@@ -246,8 +250,6 @@ event_wait(struct event_base *evb, int timeout)
     ASSERT(event != NULL);
     ASSERT(nevent > 0);
 
-    log_debug(LOG_VVERB, "epoll ep %d", ep);
-
     for (;;) {
         int i, nsd;
 
@@ -257,7 +259,7 @@ event_wait(struct event_base *evb, int timeout)
                 struct epoll_event *ev = &evb->event[i];
                 uint32_t events = 0;
 
-                log_debug(LOG_VVERB, "epoll %04"PRIX32" triggered on conn %p",
+                log_debug(LOG_VVVERB, "epoll %04"PRIX32" triggered on conn %p",
                           ev->events, ev->data.ptr);
 
                 if (ev->events & (EPOLLERR | EPOLLRDHUP)) {

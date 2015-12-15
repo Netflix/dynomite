@@ -393,7 +393,7 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
+    log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
               conn_get_type_string(conn), conn->sd);
 
 	conn->events = events;
@@ -501,7 +501,7 @@ core_debug(struct context *ctx)
 static rstatus_t
 core_process_messages(void)
 {
-	log_debug(LOG_VERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
+	log_debug(LOG_VVVERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
 
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
@@ -519,8 +519,6 @@ rstatus_t
 core_loop(struct context *ctx)
 {
 	int nsd;
-
-	log_debug(LOG_VERB, "timeout = %d", ctx->timeout);
 
 	core_process_messages();
 

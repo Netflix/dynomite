@@ -231,7 +231,7 @@ msg_tmo_delete(struct msg *msg)
 static size_t alloc_msg_count = 0;
 
 static struct msg *
-_msg_get(bool force_alloc)
+_msg_get(bool force_alloc, const char *const caller)
 {
     struct msg *msg;
 
@@ -259,7 +259,7 @@ _msg_get(bool force_alloc)
     alloc_msg_count++;
 
 
-    log_debug(LOG_WARN, "alloc_msg_count : %lu", alloc_msg_count);
+    log_warn("alloc_msg_count : %lu caller %s", alloc_msg_count, caller);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -273,6 +273,7 @@ done:
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
+    msg->remote_region_send_time = 0L;
     msg->awaiting_rsps = 0;
     msg->selected_rsp = NULL;
 
@@ -348,11 +349,11 @@ size_t msg_free_queue_size(void)
 }
 
 struct msg *
-msg_get(struct conn *conn, bool request, int data_store)
+msg_get(struct conn *conn, bool request, int data_store, const char * const caller)
 {
     struct msg *msg;
 
-    msg = _msg_get(conn->dyn_mode);
+    msg = _msg_get(conn->dyn_mode, caller);
     if (msg == NULL) {
         return NULL;
     }
@@ -473,7 +474,7 @@ msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
         source = "Storage:";
     }
 
-    msg = _msg_get(1);
+    msg = _msg_get(1, __FUNCTION__);
     if (msg == NULL) {
         return NULL;
     }
@@ -508,7 +509,7 @@ msg_get_rsp_integer(int data_store)
     struct mbuf *mbuf;
     int n;
 
-    msg = _msg_get(1);
+    msg = _msg_get(1, __FUNCTION__);
     if (msg == NULL) {
         return NULL;
     }
@@ -721,7 +722,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, conn->data_store);
+    nmsg = msg_get(msg->owner, msg->request, conn->data_store, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -760,7 +761,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, msg->data_store);
+    nmsg = msg_get(msg->owner, msg->request, msg->data_store, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;

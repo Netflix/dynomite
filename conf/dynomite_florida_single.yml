@@ -1,0 +1,12 @@
+dyn_o_mite:
+ datacenter: dc
+  rack: rack1
+  dyn_listen: 0.0.0.0:8101
+  dyn_seed_provider: florida_provider
+  listen: 0.0.0.0:8102
+  servers:
+  - 127.0.0.1:6379:1
+  tokens: '0'
+  secure_server_option: datacenter
+  pem_key_file: conf/dynomite.pem
+  data_store: 0

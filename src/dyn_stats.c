@@ -571,6 +571,8 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.val_95th));
     THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_mean_str,
                  (int64_t)st->payload_size_histo.mean));
+    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_avg_rtt,
+                 (int64_t)st->cross_region_histo.mean));
     THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_msgs_str,
@@ -727,6 +729,7 @@ stats_aggregate(struct stats *st)
         st->reset_histogram = 0;
         histo_reset(&st->latency_histo);
         histo_reset(&st->payload_size_histo);
+        histo_reset(&st->cross_region_histo);
     }
     st->aggregate = 0;
 }
@@ -1348,6 +1351,9 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->payload_size_mean_str, "payload_size_mean");
     string_set_text(&st->payload_size_max_str, "payload_size_max");
 
+    // cross region average latency
+    string_set_text(&st->cross_region_avg_rtt, "average_cross_region_rtt");
+
     string_set_text(&st->alloc_msgs_str, "alloc_msgs");
     string_set_text(&st->free_msgs_str, "free_msgs");
 
@@ -1366,6 +1372,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     histo_init(&st->latency_histo);
     histo_init(&st->payload_size_histo);
+    histo_init(&st->cross_region_histo);
     st->reset_histogram = 0;
     st->alloc_msgs = 0;
     st->free_msgs = 0;
@@ -1444,6 +1451,7 @@ stats_swap(struct stats *st)
     histo_compute(&st->latency_histo);
 
     histo_compute(&st->payload_size_histo);
+    histo_compute(&st->cross_region_histo);
 
     st->alloc_msgs = msg_alloc_msgs();
     st->free_msgs = msg_free_queue_size();

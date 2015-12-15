@@ -6,31 +6,6 @@
 #include "dyn_core.h"
 #include "dyn_dnode_peer.h"
 
-
-struct msg *
-dnode_rsp_get(struct conn *conn)
-{
-    struct msg *msg;
-
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
-    msg = msg_get(conn, false, conn->data_store);
-    if (msg == NULL) {
-        conn->err = errno;
-    }
-
-    return msg;
-}
-
-void
-dnode_rsp_put(struct msg *msg)
-{
-    ASSERT(!msg->request);
-    ASSERT(msg->peer == NULL);
-    msg_put(msg);
-}
-
-
 struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
@@ -52,7 +27,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         ASSERT(conn->rmsg == NULL);
         log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
                 conn->sd);
-        dnode_rsp_put(msg);
+        rsp_put(msg);
         return true;
     }
 
@@ -60,7 +35,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     if (pmsg == NULL) {
         log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
                 msg->id, msg->mlen, conn->sd, msg->noreply);
-        dnode_rsp_put(msg);
+        rsp_put(msg);
         return true;
     }
     ASSERT(pmsg->peer == NULL);
@@ -88,7 +63,7 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
         log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
                   "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
                   peer_conn->sd);
-        dnode_rsp_put(rsp);
+        rsp_put(rsp);
     }
     req_put(req);
 }
@@ -195,6 +170,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         req = TAILQ_FIRST(&peer_conn->omsg_q);
         log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
         c_conn = req->owner;
+
+        if (!peer_conn->same_dc && req->remote_region_send_time) {
+            struct stats *st = ctx->stats;
+            uint64_t delay = dn_usec_now() - req->remote_region_send_time;
+            histo_add(&st->cross_region_histo, delay);
+        }
+
         if (req->id == rsp->dmsg->id) {
             dnode_rsp_forward_match(ctx, peer_conn, rsp);
             return;
@@ -213,7 +195,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             // We received a response from the past. This indeed proves out of order
             // responses. A blunder to the architecture. Log it and drop the response.
             log_error("MISMATCH: received response from the past. Dropping it");
-            dnode_rsp_put(rsp);
+            rsp_put(rsp);
             return;
         }
 
@@ -252,7 +234,8 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         req->done = 1;
 
         // Create an appropriate response for the request so its propagated up;
-        struct msg *err_rsp = msg_get(peer_conn, false, peer_conn->data_store);
+        struct msg *err_rsp = msg_get(peer_conn, false, peer_conn->data_store,
+                                      __FUNCTION__);
         err_rsp->error = req->error = 1;
         err_rsp->err = req->err = BAD_FORMAT;
         err_rsp->dyn_error = req->dyn_error = BAD_FORMAT;

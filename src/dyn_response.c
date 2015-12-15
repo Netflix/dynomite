@@ -31,7 +31,7 @@ rsp_get(struct conn *conn)
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
            (conn->type == CONN_SERVER));
 
-    msg = msg_get(conn, false, conn->data_store);
+    msg = msg_get(conn, false, conn->data_store, __FUNCTION__);
     if (msg == NULL) {
         conn->err = errno;
     }
@@ -292,7 +292,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
                (conn->type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
 
     req = TAILQ_FIRST(&conn->omsg_q);
-    if (req == NULL || !req_done(conn, req)) {
+    if (req == NULL || !req->selected_rsp) {
         /* nothing is outstanding, initiate close? */
         if (req == NULL && conn->eof) {
             conn->done = 1;
@@ -311,14 +311,10 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     if (rsp != NULL) {
         ASSERT(!rsp->request);
         ASSERT(rsp->peer != NULL);
-        ASSERT(req_done(conn, rsp->peer));
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
-    if (req == NULL || // no more requests to be responded
-        !req_done(conn, req) || // this request is not yet done.
-        (!req_error(conn, req) && !req->selected_rsp) // req is neither error-ed nor a response is selected
-        ) {
+    if (req == NULL || !req_done(conn, req)) {
         conn->smsg = NULL;
         return NULL;
     }
@@ -371,7 +367,6 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 
     ASSERT(!rsp->request && req->request);
     ASSERT(req->selected_rsp == rsp);
-    ASSERT(req->done && !req->swallow);
     req->rsp_sent = 1;
 
     /* dequeue request from client outq */

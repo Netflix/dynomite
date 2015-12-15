@@ -25,13 +25,13 @@
 
 #include "dyn_core.h"
 #include "dyn_dnode_msg.h"
+#include "dyn_response_mgr.h"
 
 #define ALLOC_MSGS					  200000
 #define MIN_ALLOC_MSGS		     	  100000
 #define MAX_ALLOC_MSGS			      1000000
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
-#define MAX_REPLICAS_PER_DC           3
 
 typedef void (*func_msg_parse_t)(struct msg *);
 typedef rstatus_t (*func_msg_post_splitcopy_t)(struct msg *);
@@ -126,8 +126,8 @@ typedef enum msg_type {
     MSG_REQ_REDIS_HSETNX,
     MSG_REQ_REDIS_HSCAN,
     MSG_REQ_REDIS_HVALS,
-    MSG_REG_REDIS_KEYS,
-    MSG_REG_REDIS_INFO,
+    MSG_REQ_REDIS_KEYS,
+    MSG_REQ_REDIS_INFO,
     MSG_REQ_REDIS_LINDEX,                 /* redis requests - lists */
     MSG_REQ_REDIS_LINSERT,
     MSG_REQ_REDIS_LLEN,
@@ -232,29 +232,6 @@ get_consistency_string(consistency_t cons)
 extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
 
-struct response_mgr {
-    bool        is_read;
-    bool        done;
-    /* we could use the dynamic array
-       here. But we have only 3 ASGs */
-    struct msg  *responses[MAX_REPLICAS_PER_DC];
-    uint8_t     good_responses;     // non-error responses received
-    uint8_t     max_responses;      // max responses expected
-    uint8_t     quorum_responses;   // responses expected to form a quorum
-    uint8_t     error_responses;    // error responses received
-    struct msg  *err_rsp;           // first error response
-    struct conn *conn;
-    struct msg *msg;
-};
-
-void init_response_mgr(struct response_mgr *rspmgr, struct msg*, bool is_read,
-                       uint8_t max_responses, struct conn *conn);
-// DN_OK if response was accepted
-rstatus_t rspmgr_submit_response(struct response_mgr *rspmgr, struct msg *rsp);
-bool rspmgr_is_done(struct response_mgr *rspmgr);
-struct msg* rspmgr_get_response(struct response_mgr *rspmgr);
-void rspmgr_free_response(struct response_mgr *rspmgr, struct msg *dont_free);
-
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
     TAILQ_ENTRY(msg)     s_tqe;           /* link in server q */
@@ -264,6 +241,7 @@ struct msg {
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
+    int64_t              remote_region_send_time; /* time in microsec when message sent to remote region */
     uint8_t              awaiting_rsps;
     struct msg           *selected_rsp;
 
@@ -366,7 +344,7 @@ void msg_tmo_delete(struct msg *msg);
 void msg_init(struct instance *nci);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
-struct msg *msg_get(struct conn *conn, bool request, int data_store);
+struct msg *msg_get(struct conn *conn, bool request, int data_store, const char* const caller);
 void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
@@ -408,7 +386,6 @@ void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
 /* for dynomite  */
-struct msg *dnode_req_get(struct conn *conn);
 void dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
@@ -420,7 +397,6 @@ void dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg
 struct msg *dnode_req_send_next(struct context *ctx, struct conn *conn);
 void dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
-struct msg *dnode_rsp_get(struct conn *conn);
 void dnode_rsp_put(struct msg *msg);
 struct msg *dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
 void dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);

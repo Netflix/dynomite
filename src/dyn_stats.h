@@ -220,6 +220,8 @@ struct stats {
     struct string             payload_size_mean_str;
     struct string             payload_size_max_str;
 
+    struct string             cross_region_avg_rtt;
+
     struct string             alloc_msgs_str;
     struct string             free_msgs_str;
 
@@ -234,6 +236,7 @@ struct stats {
     volatile bool             reset_histogram;
     volatile struct histogram latency_histo;
     volatile struct histogram payload_size_histo;
+    volatile struct histogram cross_region_histo;
     volatile size_t           alloc_msgs;
     volatile size_t           free_msgs;
 

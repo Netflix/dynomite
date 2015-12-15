@@ -272,12 +272,14 @@ dnode_accept(struct context *ctx, struct conn *p)
         sd = accept(p->sd, (struct sockaddr *)&client_address, &client_len);
         if (sd < 0) {
             if (errno == EINTR) {
-                log_debug(LOG_VERB, "dyn: accept on p %d not ready - eintr", p->sd);
+                log_warn("dyn: accept on %s %d not ready - eintr",
+                         conn_get_type_string(p), p->sd);
                 continue;
             }
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                log_debug(LOG_VERB, "dyn: accept on p %d not ready - eagain", p->sd);
+                log_warn("dyn: accept on %s %d not ready - eagain",
+                         conn_get_type_string(p), p->sd);
                 p->recv_ready = 0;
                 return DN_OK;
             }
@@ -287,14 +289,15 @@ dnode_accept(struct context *ctx, struct conn *p)
              * it back in when some existing connection gets closed
              */
 
-            log_error("dyn: accept on p %d failed: %s", p->sd, strerror(errno));
+            log_error("dyn: accept on %s %d failed: %s", conn_get_type_string(p),
+                      p->sd, strerror(errno));
             return DN_ERROR;
         }
 
         break;
     }
 
-    log_debug(LOG_NOTICE, "dyn: accept on sd  %d", sd);
+    log_notice("dyn: accept on sd %d", sd);
 
     char clntName[INET_ADDRSTRLEN];
 
@@ -306,8 +309,8 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     c = conn_get_peer(p->owner, true, p->data_store);
     if (c == NULL) {
-        log_error("dyn: get conn client peer for c %d from p %d failed: %s", sd, p->sd,
-                  strerror(errno));
+        log_error("dyn: get conn client peer for PEER_CLIENT %d from %s %d failed: %s",
+                  sd, conn_get_type_string(p), p->sd, strerror(errno));
         status = close(sd);
         if (status < 0) {
             log_error("dyn: close c %d failed, ignored: %s", sd, strerror(errno));
@@ -320,7 +323,8 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("dyn: set nonblock on c %d from p %d failed: %s", c->sd, p->sd,
+        log_error("dyn: set nonblock on %s %d from %s %d failed: %s",
+                  conn_get_type_string(c), c->sd, conn_get_type_string(p), p->sd,
                   strerror(errno));
         conn_close(ctx, c);
         return status;
@@ -329,21 +333,23 @@ dnode_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("dyn: set tcpnodelay on c %d from p %d failed, ignored: %s",
-                     c->sd, p->sd, strerror(errno));
+            log_warn("dyn: set tcpnodelay on %s %d from %s %d failed, ignored: %s",
+                     conn_get_type_string(c), c->sd, conn_get_type_string(p),
+                     p->sd, strerror(errno));
         }
     }
 
     status = event_add_conn(ctx->evb, c);
     if (status < 0) {
-        log_error("dyn: event add conn from p %d failed: %s", p->sd,
-                  strerror(errno));
+        log_error("dyn: event add conn from %s %d failed: %s",
+                  conn_get_type_string(p), p->sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
-    log_debug(LOG_NOTICE, "dyn: accepted c %d on p %d from '%s'", c->sd, p->sd,
-              dn_unresolve_peer_desc(c->sd));
+    log_notice("dyn: accepted %s %d on %s %d from '%s'",
+               conn_get_type_string(c), c->sd, conn_get_type_string(p), p->sd,
+               dn_unresolve_peer_desc(c->sd));
 
     return DN_OK;
 }
