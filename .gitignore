@@ -14,6 +14,7 @@
 *.gcda
 *.gcno
 *.gcov
+*.pyc
 
 # Packages
 *.tar.gz
@@ -34,7 +35,6 @@ TODO
 
 # Core and executable
 core*
-nutcracker
 dynomite
 
 # extracted yaml
@@ -72,3 +72,7 @@ Makefile.in
 /src/test
 cscope.out
 /src/cscope.out
+/test/*.pyc
+/test/_binaries/*
+/test/_binaries
+/test/conf
