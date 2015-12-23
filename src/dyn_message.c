@@ -666,6 +666,7 @@ msg_empty(struct msg *msg)
 uint32_t
 msg_payload_crc32(struct msg *msg)
 {
+    ASSERT(msg != NULL);
     // take a continous buffer crc
     uint32_t crc = 0;
     struct mbuf *mbuf;
