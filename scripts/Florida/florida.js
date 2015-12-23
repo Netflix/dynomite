@@ -1,31 +1,34 @@
 var http = require('http');
 var url = require('url');
+var fs = require('fs');
 
-var seeds_file_path_arg = process.argv.slice(2);
-var seeds_file = require('fs');
-var seeds_file_path = '/etc/dynomite/seeds.list';
+// Settings
+var port = 8080;
 
-if(typeof seeds_file_path_arg == 'undefined' || seeds_file_path_arg == null || seeds_file_path_arg  == ''){
-  seeds_file_path = '/etc/dynomite/seeds.list';
-} else{
-  seeds_file_path = seeds_file_path_arg;
-}
+// Parse command line options
+var seedsFilePath = process.argv[2] && process.argv[2].length > 0 ?
+        process.argv[2] : '/etc/dynomite/seeds.list';
+var enableDebug = process.argv[3] === 'debug' ? true : false;
 
-var server = http.createServer(function(req, res) {
-  
+http.createServer(function(req, res) {
   var path = url.parse(req.url).pathname;
-  console.log("Request: "+ path);
+  enableDebug && console.log('Request: ' + path);
 
+  res.writeHead(200, {'Content-Type': 'application/json'});
+  if (path === '/REST/v1/admin/get_seeds') {
+    fs.readFile(seedsFilePath, 'utf-8', function(err, data) {
+      if (err) console.log(err); 
 
-  res.writeHead(200, {"Content-Type": "application/json"});
-  if (path == '/REST/v1/admin/get_seeds') {
-    data = seeds_file.readFileSync(seeds_file_path).toString();
-    data_oneline = data.trim().replace(/\n/g, '|');
-    var now = new Date();
-    var jsonDate = now.toJSON();
-    console.log(jsonDate + " - get_seeds [" + data_oneline + "]");
-    res.write(data_oneline);
+      var now = (new Date()).toJSON();
+      var seeds = data.trim().replace(/\n/g, '|');
+
+      enableDebug && console.log(now + ' - get_seeds [' + seeds + ']');
+      res.write(seeds);
+      res.end();
+    });
+  } else {
+    res.end();
   }
-  res.end();
-});
-server.listen(8080);
+}).listen(port);
+
+console.log('Server is listening on ' + port);

@@ -1,0 +1,39 @@
+{
+  "name": "florida.js",
+  "version": "1.0.0",
+  "description": "Service that returns list of seeds.",
+  "keywords": [
+    "Dynomite",
+    "Florida",
+    "Netflix",
+    "Redis",
+    "Memcached",
+    "Dynamo"
+  ],
+  "main": "florida.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "debug": "node florida.js ./seeds.list debug"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Netflix/dynomite.git"
+  },
+  "contributors": [
+    {
+      "name": "Diego Pacheco",
+      "email": "diego.pacheco.it@gmail.com",
+      "url": "https://github.com/diegopacheco" 
+    }, 
+    {
+      "name": "Akbar S. Ahmed",
+      "email": "akbar501@gmail.com",
+      "url": "https://grockdoc.com/@akbar501" 
+    }
+  ],
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Netflix/dynomite/issues"
+  },
+  "homepage": "https://github.com/Netflix/dynomite#readme"
+}
