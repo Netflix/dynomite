@@ -320,10 +320,10 @@ dn_stacktrace(int skip_count)
         loga("[%d] %s", j, symbols[i]);
 
         char syscom[256];
-         sprintf(syscom,"addr2line %p -e src/dynomite", stack[i]); //last parameter is the name of this app
-         if(system(syscom) < 0 ){
-        	 loga("system command did not succeed to print filename");
-         }
+        snprintf(syscom, sizeof(syscom), "addr2line %p -e /proc/%d/exe >&2", stack[i], getpid());
+        if (system(syscom) < 0) {
+            loga("system command did not succeed to print filename");
+        }
     }
 
     free(symbols);
