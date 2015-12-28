@@ -189,6 +189,7 @@ memcache_parse_req(struct msg *r)
         ch = *p;
 
         switch (state) {
+
         case SW_START:
             if (ch == ' ') {
                 break;
@@ -210,6 +211,8 @@ memcache_parse_req(struct msg *r)
                 m = r->token;
                 r->token = NULL;
                 r->type = MSG_UNKNOWN;
+                r->narg++;
+
 
                 switch (p - m) {
 
@@ -347,23 +350,32 @@ memcache_parse_req(struct msg *r)
 
         case SW_SPACES_BEFORE_KEY:
             if (ch != ' ') {
-                r->token = p;
-                r->key_start = p;
+                p = p - 1; /* go back by 1 byte */
+                r->token = NULL;
                 state = SW_KEY;
             }
 
             break;
 
         case SW_KEY:
+            if (r->token == NULL) {
+                r->token = p;
+            }
             if (ch == ' ' || ch == CR) {
-                if ((p - r->key_start) > MEMCACHE_MAX_KEY_LENGTH) {
+                int keylen = p - r->token;
+                if (keylen > MEMCACHE_MAX_KEY_LENGTH) {
                     log_error("parsed bad req %"PRIu64" of type %d with key "
                               "prefix '%.*s...' and length %d that exceeds "
                               "maximum key length", r->id, r->type, 16,
-                              r->key_start, p - r->key_start);
+                              r->token, p - r->token);
+                    goto error;
+                } else if (keylen == 0) {
+                    log_error("parsed bad req %"PRIu64" of type %d with an "
+                              "empty key", r->id, r->type);
                     goto error;
                 }
-                r->key_end = p;
+
+                r->narg++;
                 r->token = NULL;
 
                 /* get next state */
@@ -400,8 +412,9 @@ memcache_parse_req(struct msg *r)
                 break;
 
             default:
-                r->token = p;
-                goto fragment;
+                r->token = NULL;
+                p = p - 1; /* go back by 1 byte */
+                state = SW_KEY;
             }
 
             break;
@@ -730,6 +743,16 @@ fragment:
                 r->state, r->pos - b->pos, b->last - b->pos);
     return;
 
+enomem:
+    r->result = MSG_PARSE_ERROR;
+    r->state = state;
+
+    log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "out of memory on parse req %"PRIu64" "
+                    "res %d type %d state %d", r->id, r->result, r->type, r->state);
+
+    return;
+
+
 done:
     ASSERT(r->type > MSG_UNKNOWN && r->type < MSG_SENTINEL);
     r->pos = p + 1;
@@ -970,21 +993,8 @@ memcache_parse_rsp(struct msg *r)
             break;
 
         case SW_KEY:
-            if (r->token == NULL) {
-                r->token = p;
-                r->key_start = p;
-            }
-
             if (ch == ' ') {
-                if ((p - r->key_start) > MEMCACHE_MAX_KEY_LENGTH) {
-                    log_error("parsed bad req %"PRIu64" of type %d with key "
-                              "prefix '%.*s...' and length %d that exceeds "
-                              "maximum key length", r->id, r->type, 16,
-                              r->key_start, p - r->key_start);
-                    goto error;
-                }
-                r->key_end = p;
-                r->token = NULL;
+                /* r->token = NULL; */
                 state = SW_SPACES_BEFORE_FLAGS;
             }
 
@@ -1004,7 +1014,7 @@ memcache_parse_rsp(struct msg *r)
         case SW_FLAGS:
             if (r->token == NULL) {
                 /* flags_start <- p */
-                r->token = p;
+                /* r->token = p; */
             }
 
             if (isdigit(ch)) {
@@ -1012,7 +1022,7 @@ memcache_parse_rsp(struct msg *r)
                 ;
             } else if (ch == ' ') {
                 /* flags_end <- p - 1 */
-                r->token = NULL;
+                /* r->token = NULL; */
                 state = SW_SPACES_BEFORE_VLEN;
             } else {
                 goto error;
@@ -1027,21 +1037,18 @@ memcache_parse_rsp(struct msg *r)
                 }
                 p = p - 1; /* go back by 1 byte */
                 state = SW_VLEN;
+                r->vlen = 0;
             }
 
             break;
 
         case SW_VLEN:
-            if (r->token == NULL) {
-                /* vlen_start <- p */
-                r->token = p;
-                r->vlen = (uint32_t)(ch - '0');
-            } else if (isdigit(ch)) {
+            if (isdigit(ch)) {
                 r->vlen = r->vlen * 10 + (uint32_t)(ch - '0');
             } else if (ch == ' ' || ch == CR) {
                 /* vlen_end <- p - 1 */
                 p = p - 1; /* go back by 1 byte */
-                r->token = NULL;
+                /* r->token = NULL; */
                 state = SW_RUNTO_CRLF;
             } else {
                 goto error;
@@ -1049,11 +1056,13 @@ memcache_parse_rsp(struct msg *r)
 
             break;
 
+
         case SW_RUNTO_VAL:
             switch (ch) {
             case LF:
                 /* val_start <- p + 1 */
                 state = SW_VAL;
+                r->token = NULL;
                 break;
 
             default:
@@ -1065,36 +1074,37 @@ memcache_parse_rsp(struct msg *r)
         case SW_VAL:
             m = p + r->vlen;
             if (m >= b->last) {
-                ASSERT(r->vlen >= (uint32_t)(b->last - p));
-                r->vlen -= (uint32_t)(b->last - p);
-                m = b->last - 1;
-                p = m; /* move forward by vlen bytes */
-                break;
+               ASSERT(r->vlen >= (uint32_t)(b->last - p));
+               r->vlen -= (uint32_t)(b->last - p);
+               m = b->last - 1;
+               p = m; /* move forward by vlen bytes */
+               break;
             }
             switch (*m) {
             case CR:
-                /* val_end <- p - 1 */
-                p = m; /* move forward by vlen bytes */
-                state = SW_VAL_LF;
-                break;
+               /* val_end <- p - 1 */
+               p = m; /* move forward by vlen bytes */
+               state = SW_VAL_LF;
+               break;
 
-            default:
-                goto error;
-            }
+               default:
+                  goto error;
+               }
 
-            break;
+               break;
 
-        case SW_VAL_LF:
-            switch (ch) {
-            case LF:
-                state = SW_END;
-                break;
+          case SW_VAL_LF:
+              switch (ch) {
+              case LF:
+                   /* state = SW_END; */
+                   state = SW_RSP_STR;
+                   break;
 
-            default:
-                goto error;
-            }
+               default:
+                   goto error;
+               }
 
-            break;
+               break;
 
         case SW_END:
             if (r->token == NULL) {
@@ -1180,6 +1190,9 @@ memcache_parse_rsp(struct msg *r)
     r->state = state;
 
     if (b->last == b->end && r->token != NULL) {
+        if (state <= SW_RUNTO_VAL || state == SW_CRLF || state == SW_ALMOST_DONE) {
+            r->state = SW_START;
+        }
         r->pos = r->token;
         r->token = NULL;
         r->result = MSG_PARSE_REPAIR;
@@ -1244,6 +1257,12 @@ memcache_pre_splitcopy(struct mbuf *mbuf, void *arg)
     }
 }
 
+bool
+memcache_failure(struct msg *r)
+{
+    return false;
+}
+
 /*
  * Post-split copy handler invoked when the request is a multi vector -
  * 'get' or 'gets' request and has already been split into two requests
@@ -1263,6 +1282,7 @@ memcache_post_splitcopy(struct msg *r)
 
     return DN_OK;
 }
+
 
 /*
  * Pre-coalesce handler is invoked when the message is a response to
@@ -1290,12 +1310,8 @@ memcache_pre_coalesce(struct msg *r)
 
         /*
          * Readjust responses of the fragmented message vector by not
-         * including the end marker for all but the last response
+         * including the end marker for all
          */
-
-        if (pr->last_fragment) {
-            break;
-        }
 
         ASSERT(r->end != NULL);
 
@@ -1347,6 +1363,28 @@ memcache_pre_coalesce(struct msg *r)
  * the fragmented request is consider to be done
  */
 void
-memcache_post_coalesce(struct msg *r)
+memcache_post_coalesce(struct msg *request)
 {
+    struct msg *response = request->peer;
+    struct msg *sub_msg;
+    uint32_t i;
+    rstatus_t status;
+
+    ASSERT(!response->request);
+    ASSERT(request->request && (request->frag_owner == request));
+    if (request->error || request->ferror) {
+        response->owner->err = 1;
+        return;
+    }
+
+    //TODO: need to get each key from each peer. This is the fragmented case.
+
+
+    /* append END\r\n */
+    status = msg_append(response, (uint8_t *)"END\r\n", 5);
+    if (status != DN_OK) {
+        response->owner->err = 1;
+        return;
+    }
 }
+
