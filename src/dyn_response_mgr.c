@@ -125,10 +125,12 @@ rspmgr_get_response(struct response_mgr *rspmgr)
             return rspmgr->responses[0];
     }
     rspmgr_incr_non_quorum_responses_stats(rspmgr);
-    log_error("none of the responses match, returning first");
-    if (log_loggable(LOG_ERR)) {
+    log_info("none of the responses match, returning first");
+    if (log_loggable(LOG_DEBUG)) {
         log_error("Message: ");
         msg_dump(rspmgr->msg);
+    }
+    if (log_loggable(LOG_VVERB)) {
         log_error("Respone 0: ");
         msg_dump(rspmgr->responses[0]);
         log_error("Respone 1: ");
