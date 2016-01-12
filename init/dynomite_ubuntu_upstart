@@ -1,0 +1,187 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:          dynomite
+# Required-Start:    $remote_fs $syslog $network $time redis
+# Required-Stop:     $remote_fs $syslog $network $time redis
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: dynamo layer for different k-v storage engines
+# Description:       dynomite is a thin dynamo proxy layer that provides
+#                    high availability (HA) and multi-datacenter replication
+#                    for Redis and MemCached.
+### END INIT INFO
+
+NAME=dynomite
+DESC="distributed cache layer"
+PATH=/sbin:/usr/sbin:/usr/local/sbin:/bin:/usr/bin
+PIDFILE=/var/run/${NAME}.pid
+CONFIG=/etc/dynomite/${NAME}.yml
+INIT_OPTIONS=/etc/default/${NAME}
+# RHEL specific file
+#SYSTEM_CONFIG=/etc/sysconfig/${NAME}
+DAEMON=/usr/local/sbin/${NAME}
+DAEMON_OPTS="-d -c ${CONFIG} -p ${PIDFILE}"
+# TODO: Runas USER
+#USER="dynomite"
+#GROUP="dynomite"
+RETVAL=0
+
+if [ ! -x $DAEMON ] ; then
+    echo "Executable '${DAEMON}' was not found."
+    exit 0
+fi
+
+if [ ! -f "$CONFIG" ] ; then
+    echo "Configuration file '${CONFIG}' was not found."
+    exit 0
+fi
+
+if [ -r $INIT_OPTIONS ]; then
+    . $INIT_OPTIONS
+fi
+
+. /lib/lsb/init-functions
+
+# RHEL system configuration
+#if [ -r $SYSTEM_CONFIG ];then
+#    . $SYSTEM_CONFIG
+#fi
+
+#
+# Start dynomite
+#
+# Return
+# 0 = daemon has been started
+# 1 = daemon was already running
+# 2 = daemon could not be started
+#
+start_dynomite () {
+    local IS_RUNNING=$(is_running)
+
+    if [ $IS_RUNNING = false ] ; then
+        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+            || return 1
+        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
+            $DAEMON_OPTS 2>/dev/null \
+            || return 2
+        # RHEL specific init.d script: touch /var/lock/subsys/${NAME}
+    else
+        return 1 # daemon already running
+    fi
+}
+
+#
+# Stop dynomite
+#
+# Return
+# 0 = daemon has been stopped
+# 1 = daemon was already stopped (so don't use --oknodo)
+# 2 = daemon could not be stopped
+# other status code = a failure occurred
+#
+stop_dynomite () {
+    local IS_RUNNING=$(is_running)
+
+    if [ $IS_RUNNING = true ] ; then
+        start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
+        RETVAL="$?"
+    else
+        RETVAL=1 # deamon already stopped
+        fi
+
+        sleep 1
+        return "$RETVAL"
+}
+
+#
+# Test the Dynomite configuration
+#
+test_dynomite_config () {
+    $DAEMON -t $DAEMON_OPTS >/dev/null 2>&1
+    RETVAL="$?"
+    return "$RETVAL"
+}
+
+#
+# Check if a Dynomite process exists
+#
+# Return via echo
+# true = PIDFILE exists and process is running
+# false = PIDFILE exists but process is not running
+# false = PIDFILE does not exist
+#
+is_running () {
+    if [ -s $PIDFILE ] ; then
+        PID=`head -n 1 $PIDFILE 2>/dev/null`;
+        if [ ! -z "`ps --no-heading $PID`" ] ; then
+            echo true # PIDFILE exists, process running
+        else
+            # RHEL specific init.d script: rm -r /var/lock/subsys/${NAME}
+            rm -f $PIDFILE;
+            echo false # PIDFILE exists, process not running
+        fi
+    else
+        echo false # PIDFILE does not exist
+    fi
+}
+
+case "$1" in
+    start)
+        log_daemon_msg "Starting ${DESC}..." "$NAME"
+        start_dynomite
+        case "$?" in
+            0|1) log_end_msg 0 ;;
+            2) log_end_msg 1 ;;
+        esac
+        ;;
+    stop)
+        log_daemon_msg "Stopping ${DESC}..." "$NAME"
+        stop_dynomite
+
+        case "$?" in
+            0|1) log_end_msg 0 ;;
+            2) log_end_msg 1 ;;
+        esac
+        ;;
+    status)
+        status_of_proc -p $PIDFILE "$DAEMON" "$NAME" && exit 0 || exit $?
+        ;;
+    restart|reload|force-reload)
+           log_daemon_msg "Restarting $DESC..." "$NAME"
+
+        # Do not stop the dynomite server if there is a configuration error as
+        # it will not start again. Notify the user if there is a configuration
+        # error.
+        if ! test_dynomite_config; then
+            log_end_msg 1 # Configuration error
+            exit 0
+        fi
+
+        stop_dynomite
+        sleep 1 # Hack to prevent failure of restart when dynomite is stopped
+        case "$?" in
+            0)
+                start_dynomite
+                case "$?" in
+                    0) log_end_msg 0 ;; # daemon started successfully; or already running
+                    *) log_end_msg 1 ;; # daemon failed to start
+                esac
+                ;;
+            *)
+                # stop() failed
+                log_end_msg 1
+                ;;
+        esac
+        ;;
+    configtest|testconfig|conftest|testconf)
+        log_daemon_msg "Testing $NAME configuration"
+        test_dynomite_config
+        log_end_msg $?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart|reload|testconf}"
+        exit 1
+        ;;
+esac
+exit $RETVAL
