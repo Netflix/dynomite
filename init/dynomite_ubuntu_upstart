@@ -60,7 +60,8 @@ start_dynomite () {
     local IS_RUNNING=$(is_running)
 
     if [ $IS_RUNNING = false ] ; then
-        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON \
+            --test > /dev/null \
             || return 1
         start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
             $DAEMON_OPTS 2>/dev/null \
@@ -84,7 +85,8 @@ stop_dynomite () {
     local IS_RUNNING=$(is_running)
 
     if [ $IS_RUNNING = true ] ; then
-        start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
+        start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 \
+            --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
         RETVAL="$?"
     else
         RETVAL=1 # deamon already stopped
@@ -164,7 +166,7 @@ case "$1" in
             0)
                 start_dynomite
                 case "$?" in
-                    0) log_end_msg 0 ;; # daemon started successfully; or already running
+                    0) log_end_msg 0 ;; # daemon started or already running
                     *) log_end_msg 1 ;; # daemon failed to start
                 esac
                 ;;
