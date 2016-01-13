@@ -2,8 +2,8 @@
 
 ### BEGIN INIT INFO
 # Provides:          dynomite
-# Required-Start:    $remote_fs $syslog $network $time redis
-# Required-Stop:     $remote_fs $syslog $network $time redis
+# Required-Start:    $remote_fs $syslog $network $time
+# Required-Stop:     $remote_fs $syslog $network $time
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: dynamo layer for different k-v storage engines
