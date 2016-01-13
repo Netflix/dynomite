@@ -13,7 +13,7 @@
 ### END INIT INFO
 
 NAME=dynomite
-DESC="distributed cache layer"
+DESC="distributed dynamo layer"
 PATH=/sbin:/usr/sbin:/usr/local/sbin:/bin:/usr/bin
 PIDFILE=/var/run/${NAME}.pid
 CONFIG=/etc/dynomite/${NAME}.yml
