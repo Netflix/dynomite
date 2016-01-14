@@ -111,6 +111,9 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
             #break
 
 def main(args):
+    # This test assumes for now that the nodes are running at the given ports.
+    # This is done by travis.sh. Please check that file and the corresponding
+    # yml files for each dynomite instance there to get an idea of the topology.
     r = RedisNode(host="localhost", ip="127.0.0.1", port=1212)
     d1 = DynoNode(host="127.0.0.1", ip="127.0.0.1", stats_port=22221,
                   data_store_port=22121)
