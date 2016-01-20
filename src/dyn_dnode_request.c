@@ -20,7 +20,24 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
               conn, msg->id, msg->parent_id);
-    req_server_enqueue_imsgq(ctx, conn, msg);
+    if (!msg->noreply) {
+        msg_tmo_insert(msg, conn);
+    }
+    TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
+
+    conn->imsg_count++;
+    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+    if (conn->same_dc) {
+        histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
+        stats_pool_incr(ctx, pool, peer_in_queue);
+        stats_pool_incr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
+    } else {
+        histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
+        stats_pool_incr(ctx, pool, remote_peer_in_queue);
+        stats_pool_incr_by(ctx, pool, remote_peer_in_queue_bytes, msg->mlen);
+    }
+
 }
 
 void
@@ -32,12 +49,17 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
 
+    conn->imsg_count--;
     struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    if (conn->same_dc)
+    if (conn->same_dc) {
+        histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
         stats_pool_decr(ctx, pool, peer_in_queue);
-    else
+        stats_pool_decr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
+    } else {
+        histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
         stats_pool_decr(ctx, pool, remote_peer_in_queue);
-    stats_pool_decr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
+        stats_pool_decr_by(ctx, pool, remote_peer_in_queue_bytes, msg->mlen);
+    }
 }
 
 void
@@ -50,6 +72,8 @@ dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct ms
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
 
     //use only the 1st pool
+    conn->omsg_count++;
+    histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
     struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     stats_pool_incr(ctx, pool, dnode_client_out_queue);
     stats_pool_incr_by(ctx, pool, dnode_client_out_queue_bytes, msg->mlen);
@@ -65,12 +89,17 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 
     //use only the 1st pool
+    conn->omsg_count++;
     struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    if (conn->same_dc)
+    if (conn->same_dc) {
+        histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
         stats_pool_incr(ctx, pool, peer_out_queue);
-    else
+        stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+    } else {
+        histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
         stats_pool_incr(ctx, pool, remote_peer_out_queue);
-   stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+        stats_pool_incr_by(ctx, pool, remote_peer_out_queue_bytes, msg->mlen);
+    }
 }
 
 void
@@ -83,6 +112,8 @@ dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct ms
     log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
 
     //use the 1st pool
+    conn->omsg_count--;
+    histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
     struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     stats_pool_decr(ctx, pool, dnode_client_out_queue);
     stats_pool_decr_by(ctx, pool, dnode_client_out_queue_bytes, msg->mlen);
@@ -100,9 +131,17 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     log_debug(LOG_VVERB, "conn %p dequeue outq %p", conn, msg);
 
     //use the 1st pool
+    conn->omsg_count--;
     struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    stats_pool_decr(ctx, pool, peer_out_queue);
-    stats_pool_decr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+    if (conn->same_dc) {
+        histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
+        stats_pool_decr(ctx, pool, peer_out_queue);
+        stats_pool_decr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+    } else {
+        histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
+        stats_pool_decr(ctx, pool, remote_peer_out_queue);
+        stats_pool_decr_by(ctx, pool, remote_peer_out_queue_bytes, msg->mlen);
+    }
 }
 
 struct msg *
