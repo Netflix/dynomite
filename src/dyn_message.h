@@ -231,6 +231,7 @@ get_consistency_string(consistency_t cons)
 #define DEFAULT_WRITE_CONSISTENCY DC_ONE
 extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
+extern int8_t g_timeout_factor;
 
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
