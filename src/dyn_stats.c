@@ -1013,6 +1013,19 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                     } else
                         st_cmd->cmd = CMD_UNKNOWN;
                     return;
+                } else if (strncmp(reqline[1], "/set_timeout_factor", 19) == 0) {
+                    st_cmd->cmd = CMD_TIMEOUT_FACTOR;
+                    log_notice("Setting timeout factor: %s", reqline[1]);
+                    char* val = reqline[1] + 19;
+                    if (*val != '/') {
+                        st_cmd->cmd = CMD_UNKNOWN;
+                        return;
+                    } else {
+                        val++;
+                        string_init(&st_cmd->req_data);
+                        string_copy_c(&st_cmd->req_data, val);
+                    }
+                    return;
                 } else if (strncmp(reqline[1], "/peer", 5) == 0) {
                     log_debug(LOG_VERB, "Setting peer - URL Parameters : %s", reqline[1]);
                     char* peer_state = reqline[1] + 5;
@@ -1158,6 +1171,19 @@ stats_send_rsp(struct stats *st)
                    get_consistency_string(g_read_consistency),
                    get_consistency_string(g_write_consistency));
         return stats_http_rsp(sd, cons_rsp, dn_strlen(cons_rsp));
+    } else if (cmd == CMD_TIMEOUT_FACTOR) {
+        int8_t timeout_factor = 0;
+        log_warn("st_cmd.req_data '%.*s' ", st_cmd.req_data);
+        sscanf(st_cmd.req_data.data, "%d", &timeout_factor);
+        log_warn("timeout factor = %d", timeout_factor);
+        // make sure timeout factor is within a range
+        if (timeout_factor < 1)
+            timeout_factor = 1;
+        if (timeout_factor > 4)
+            timeout_factor = 4;
+        g_timeout_factor = timeout_factor;
+        log_warn("setting timeout_factor to %d", g_timeout_factor);
+        return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
         log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
         struct server_pool *sp = array_get(&st->ctx->pool, 0);
