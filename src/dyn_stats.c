@@ -1358,7 +1358,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_raw(&st->source, source);
 
     string_set_text(&st->version_str, "version");
-    string_set_text(&st->version, DN_VERSION_STRING);
+    string_set_text(&st->version, VERSION);
 
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
