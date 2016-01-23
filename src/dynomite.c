@@ -197,10 +197,10 @@ dn_print_run(struct instance *nci)
 
     status = uname(&name);
     if (status < 0) {
-        loga("dynomite-%s started on pid %d", DN_VERSION_STRING, nci->pid);
+        loga("dynomite-%s started on pid %d", VERSION, nci->pid);
     } else {
         loga("dynomite-%s built for %s %s %s started on pid %d",
-             DN_VERSION_STRING, name.sysname, name.release, name.machine,
+             VERSION, name.sysname, name.release, name.machine,
              nci->pid);
     }
 
@@ -627,7 +627,7 @@ main(int argc, char **argv)
     }
 
     if (show_version) {
-        log_stderr("This is dynomite-%s" CRLF, DN_VERSION_STRING);
+        log_stderr("This is dynomite-%s" CRLF, VERSION);
         if (show_help) {
             dn_show_usage();
         }
