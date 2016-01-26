@@ -1179,8 +1179,8 @@ stats_send_rsp(struct stats *st)
         // make sure timeout factor is within a range
         if (timeout_factor < 1)
             timeout_factor = 1;
-        if (timeout_factor > 4)
-            timeout_factor = 4;
+        if (timeout_factor > 10)
+            timeout_factor = 10;
         g_timeout_factor = timeout_factor;
         log_warn("setting timeout_factor to %d", g_timeout_factor);
         return stats_http_rsp(sd, ok.data, ok.len);
