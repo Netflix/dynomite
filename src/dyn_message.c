@@ -148,7 +148,7 @@ static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
-
+int8_t g_timeout_factor = 1;
 
 static inline rstatus_t
 msg_cant_handle_response(struct msg *req, struct msg *rsp)
@@ -194,6 +194,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     if (timeout <= 0) {
         return;
     }
+    timeout = timeout * g_timeout_factor;
 
     node = &msg->tmo_rbe;
     node->key = dn_msec_now() + timeout;
