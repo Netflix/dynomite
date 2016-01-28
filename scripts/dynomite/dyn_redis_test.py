@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+
+#Requirement: 
+#  Install https://github.com/andymccurdy/redis-py
+
 from optparse import OptionParser
 import ConfigParser
 import logging
