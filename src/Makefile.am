@@ -65,7 +65,7 @@ dynomite_SOURCES =			                          \
         dyn_queue.h			                                      \
         dyn_gossip.c dyn_gossip.h                                 \
         dyn_dict.c dyn_dict.h                                     \
-        dyn_asciilogo.h                                           \ 
+        dyn_asciilogo.h                                           \
         dynomite.c 
 
 
