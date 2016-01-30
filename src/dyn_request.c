@@ -944,7 +944,8 @@ req_recv_done(struct context *ctx, struct conn *conn,
     ASSERT(conn->rmsg == msg);
     ASSERT(nmsg == NULL || nmsg->request);
 
-    stats_histo_add_payloadsize(ctx, msg->mlen);
+    if (!msg->is_read)
+        stats_histo_add_payloadsize(ctx, msg->mlen);
 
     /* enqueue next message (request), if any */
     conn->rmsg = nmsg;
