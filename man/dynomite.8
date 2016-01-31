@@ -65,6 +65,9 @@ Show dynomite version and exit.
 .BR \-t ", " \-\-test-conf
 Test configuration file for syntax errors and exit.
 .TP
+.BR \-g ", " \-\-gossip
+Enable gossip. (default: disable)
+.TP
 .BR \-d ", " \-\-daemonize
 Run dynomite as a daemon in the background.
 .TP
@@ -76,13 +79,13 @@ Set logging level to
 .IR N .
 (default: 5, min: 0, max: 11)
 .TP
-.BI \-o\  output-file \fR,\ \fB\-\-output= output-file
+.BI \-o\  file \fR,\ \fB\-\-output= file
 Set logging file to
-.IR output-file .
+.IR file .
 .TP
-.BI \-c\  conf-file \fR,\ \fB\-\-conf-file= conf-file
+.BI \-c\  file \fR,\ \fB\-\-conf-file= file
 Set the configuration file to
-.IR conf-file .
+.IR file .
 .TP
 .BI \-s\  port \fR,\ \fB\-\-stats-port= port
 Set the statistics monitoring port to
@@ -99,14 +102,14 @@ Set statistics aggregation interval to
 .IR N
 milliseconds. (default: 30000)
 .TP
-.BI \-p\  pid-file \fR,\ \fB\-\-pid-file= pid-file
+.BI \-p\  file \fR,\ \fB\-\-pid-file= file
 Set the pid file to
-.IR pid-file .
+.IR file .
 .TP
 .BI \-m\  N \fR,\ \fB\-\-mbuf-size= N
 Set mbuf chunk size to
 .IR N
-bytes. (default: 16384 bytes)
+bytes. (default: 16384)
 .TP
 .BI \-M\  N \fR,\ \fB\-\-max-msgx= N
 Set the maximum number of messages to allocate to
