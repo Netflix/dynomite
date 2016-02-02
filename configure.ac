@@ -1,3 +1,7 @@
+# Add support for m4_esyscmd_s to autoconf-2.63 (used in RHEL/CentOS 6.7)
+m4_ifndef([m4_esyscmd_s], [m4_define([m4_chomp_all], [m4_format([[%.*s]], m4_bregexp(m4_translit([[$1]], [/], [/ ]), [/*$]), [$1])])])
+m4_ifndef([m4_esyscmd_s], [m4_define([m4_esyscmd_s], [m4_chomp_all(m4_esyscmd([$1]))])])
+
 # Define the package version numbers and the bug reporting address
 m4_define([DN_BUGS], [dynomite@netflix.com])
 m4_define([DN_VERSION_STRING], m4_esyscmd_s([git describe --dirty --always --tags]))
