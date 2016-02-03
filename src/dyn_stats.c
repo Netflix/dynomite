@@ -517,7 +517,7 @@ stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",", key->len, key->data,
+    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
                     val);
     if (n < 0 || n >= (int)room) {
         log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
@@ -573,6 +573,24 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.mean));
     THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_avg_rtt,
                  (int64_t)st->cross_region_histo.mean));
+    THROW_STATUS(stats_add_num(&st->buf, &st->client_out_queue_99,
+                 (int64_t)st->client_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->server_in_queue_99,
+                 (int64_t)st->server_in_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->server_out_queue_99,
+                 (int64_t)st->server_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->dnode_client_out_queue_99,
+                 (int64_t)st->dnode_client_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->peer_in_queue_99,
+                 (int64_t)st->peer_in_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->peer_out_queue_99,
+                 (int64_t)st->peer_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->remote_peer_out_queue_99,
+                 (int64_t)st->remote_peer_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->remote_peer_in_queue_99,
+                 (int64_t)st->remote_peer_in_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_99_rtt,
+                 (int64_t)st->cross_region_histo.val_99th));
     THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_msgs_str,
@@ -679,7 +697,7 @@ stats_aggregate_metric(struct array *dst, struct array *src)
             break;
 
         case STATS_GAUGE:
-            stm2->value.counter += stm1->value.counter;
+            stm2->value.counter = stm1->value.counter;
             break;
 
         case STATS_TIMESTAMP:
@@ -730,6 +748,14 @@ stats_aggregate(struct stats *st)
         histo_reset(&st->latency_histo);
         histo_reset(&st->payload_size_histo);
         histo_reset(&st->cross_region_histo);
+        histo_reset(&st->server_in_queue);
+        histo_reset(&st->server_out_queue);
+        histo_reset(&st->client_out_queue);
+        histo_reset(&st->dnode_client_out_queue);
+        histo_reset(&st->peer_in_queue);
+        histo_reset(&st->peer_out_queue);
+        histo_reset(&st->remote_peer_in_queue);
+        histo_reset(&st->remote_peer_out_queue);
     }
     st->aggregate = 0;
 }
@@ -1379,6 +1405,16 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     // cross region average latency
     string_set_text(&st->cross_region_avg_rtt, "average_cross_region_rtt");
+    string_set_text(&st->cross_region_99_rtt, "99_cross_region_rtt");
+
+    string_set_text(&st->client_out_queue_99, "client_out_queue_99");
+    string_set_text(&st->server_in_queue_99, "server_in_queue_99");
+    string_set_text(&st->server_out_queue_99, "server_out_queue_99");
+    string_set_text(&st->dnode_client_out_queue_99, "dnode_client_out_queue_99");
+    string_set_text(&st->peer_in_queue_99, "peer_in_queue_99");
+    string_set_text(&st->peer_out_queue_99, "peer_out_queue_99");
+    string_set_text(&st->remote_peer_in_queue_99, "remote_peer_in_queue_99");
+    string_set_text(&st->remote_peer_out_queue_99, "remote_peer_out_queue_99");
 
     string_set_text(&st->alloc_msgs_str, "alloc_msgs");
     string_set_text(&st->free_msgs_str, "free_msgs");
@@ -1399,6 +1435,14 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     histo_init(&st->latency_histo);
     histo_init(&st->payload_size_histo);
     histo_init(&st->cross_region_histo);
+    histo_init(&st->client_out_queue);
+    histo_init(&st->server_in_queue);
+    histo_init(&st->server_out_queue);
+    histo_init(&st->dnode_client_out_queue);
+    histo_init(&st->peer_in_queue);
+    histo_init(&st->peer_out_queue);
+    histo_init(&st->remote_peer_in_queue);
+    histo_init(&st->remote_peer_out_queue);
     st->reset_histogram = 0;
     st->alloc_msgs = 0;
     st->free_msgs = 0;
@@ -1478,6 +1522,15 @@ stats_swap(struct stats *st)
 
     histo_compute(&st->payload_size_histo);
     histo_compute(&st->cross_region_histo);
+
+    histo_compute(&st->client_out_queue);
+    histo_compute(&st->server_in_queue);
+    histo_compute(&st->server_out_queue);
+    histo_compute(&st->dnode_client_out_queue);
+    histo_compute(&st->peer_in_queue);
+    histo_compute(&st->peer_out_queue);
+    histo_compute(&st->remote_peer_in_queue);
+    histo_compute(&st->remote_peer_out_queue);
 
     st->alloc_msgs = msg_alloc_msgs();
     st->free_msgs = msg_free_queue_size();

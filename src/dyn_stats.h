@@ -67,9 +67,11 @@
     ACTION( peer_in_queue,                STATS_GAUGE,        "# local dc peer requests in incoming queue")                        \
     ACTION( remote_peer_in_queue,         STATS_GAUGE,        "# remote dc peer requests in incoming queue")                        \
     ACTION( peer_in_queue_bytes,          STATS_GAUGE,        "current peer request bytes in incoming queue")             \
+    ACTION( remote_peer_in_queue_bytes,   STATS_GAUGE,        "current peer request bytes in incoming queue to remote DC")             \
     ACTION( peer_out_queue,               STATS_GAUGE,        "# local dc peer requests in outgoing queue")                        \
     ACTION( remote_peer_out_queue,        STATS_GAUGE,        "# remote dc peer requests in outgoing queue")                        \
     ACTION( peer_out_queue_bytes,         STATS_GAUGE,        "current peer request bytes in outgoing queue")             \
+    ACTION( remote_peer_out_queue_bytes,  STATS_GAUGE,        "current peer request bytes in outgoing queue to remote DC")             \
     ACTION( peer_mismatch_requests,       STATS_COUNTER,      "current dnode peer mismatched messages")                   \
     /* forwarder behavior */                                                                                              \
     ACTION( forward_error,                STATS_COUNTER,      "# times we encountered a forwarding error")                \
@@ -222,6 +224,16 @@ struct stats {
     struct string             payload_size_max_str;
 
     struct string             cross_region_avg_rtt;
+    struct string             cross_region_99_rtt;
+
+    struct string             client_out_queue_99;
+    struct string             server_in_queue_99;
+    struct string             server_out_queue_99;
+    struct string             dnode_client_out_queue_99;
+    struct string             peer_in_queue_99;
+    struct string             peer_out_queue_99;
+    struct string             remote_peer_in_queue_99;
+    struct string             remote_peer_out_queue_99;
 
     struct string             alloc_msgs_str;
     struct string             free_msgs_str;
@@ -238,6 +250,16 @@ struct stats {
     volatile struct histogram latency_histo;
     volatile struct histogram payload_size_histo;
     volatile struct histogram cross_region_histo;
+
+    volatile struct histogram client_out_queue;
+    volatile struct histogram server_in_queue;
+    volatile struct histogram server_out_queue;
+    volatile struct histogram dnode_client_out_queue;
+    volatile struct histogram peer_in_queue;
+    volatile struct histogram peer_out_queue;
+    volatile struct histogram remote_peer_in_queue;
+    volatile struct histogram remote_peer_out_queue;
+
     volatile size_t           alloc_msgs;
     volatile size_t           free_msgs;
 

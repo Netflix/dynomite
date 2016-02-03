@@ -251,8 +251,7 @@ void
 req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT((conn->type == CONN_SERVER) ||
-           (conn->type == CONN_DNODE_PEER_SERVER));
+    ASSERT(conn->type == CONN_SERVER)
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -269,17 +268,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
 
-    if (!conn->dyn_mode) {
-       stats_server_incr(ctx, conn->owner, in_queue);
-       stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
-    } else {
-       struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-       if (conn->same_dc)
-            stats_pool_incr(ctx, pool, peer_in_queue);
-        else
-            stats_pool_incr(ctx, pool, remote_peer_in_queue);
-       stats_pool_incr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
-    }
+    conn->imsg_count++;
+    histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
+    stats_server_incr(ctx, conn->owner, in_queue);
+    stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
 }
 
 void
@@ -291,6 +283,8 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
 
+    conn->imsg_count--;
+    histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
     stats_server_decr(ctx, conn->owner, in_queue);
     stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
 }
@@ -301,6 +295,8 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_CLIENT);
 
+    conn->omsg_count++;
+    histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 }
@@ -314,6 +310,8 @@ req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 
+    conn->omsg_count++;
+    histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
     stats_server_incr(ctx, conn->owner, out_queue);
     stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
 }
@@ -328,6 +326,8 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
         uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
         stats_histo_add_latency(ctx, latency);
     }
+    conn->omsg_count--;
+    histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
 }
@@ -343,6 +343,8 @@ req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, msg->id, msg->parent_id);
 
+    conn->omsg_count--;
+    histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
     stats_server_decr(ctx, conn->owner, out_queue);
     stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
 }
