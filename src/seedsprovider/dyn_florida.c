@@ -43,27 +43,27 @@ static uint32_t last_seeds_hash = 0;
 
 static void evalOSVar(){
   if (isOsVarEval==0){
-  	 request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST")    : FLORIDA_REQUEST;
+     request     = (getenv("DYNOMITE_FLORIDA_REQUEST")!=NULL) ? getenv("DYNOMITE_FLORIDA_REQUEST")    : FLORIDA_REQUEST;
      floridaPort = (getenv("DYNOMITE_FLORIDA_PORT")!=NULL)    ? atoi(getenv("DYNOMITE_FLORIDA_PORT")) : FLORIDA_PORT;
-     floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")         : FLORIDA_IP;	
+     floridaIp   = (getenv("DYNOMITE_FLORIDA_IP")!=NULL)      ? getenv("DYNOMITE_FLORIDA_IP")         : FLORIDA_IP;
      isOsVarEval = 1;
   }
 }
 
 static bool seeds_check()
 {
-	int64_t now = dn_msec_now();
+    int64_t now = dn_msec_now();
 
-	int64_t delta = (int64_t)(now - last);
-	log_debug(LOG_VERB, "Delta or elapsed time : %lu", delta);
-	log_debug(LOG_VERB, "Seeds check internal %d", SEEDS_CHECK_INTERVAL);
+    int64_t delta = (int64_t)(now - last);
+    log_debug(LOG_VERB, "Delta or elapsed time : %lu", delta);
+    log_debug(LOG_VERB, "Seeds check internal %d", SEEDS_CHECK_INTERVAL);
 
-	if (delta > SEEDS_CHECK_INTERVAL) {
-		last = now;
-		return true;
-	}
+    if (delta > SEEDS_CHECK_INTERVAL) {
+        last = now;
+        return true;
+    }
 
-	return false;
+    return false;
 }
 
 
@@ -88,63 +88,62 @@ hash_seeds(uint8_t *seeds, size_t length)
 
 uint8_t
 florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
-	
-	evalOSVar();
+    
+    evalOSVar();
 
-	struct sockaddr_in *remote;
-	uint32_t sock;
-	uint32_t tmpres;
-	uint8_t *get;
-	uint8_t buf[BUFSIZ + 1];
+    struct sockaddr_in *remote;
+    uint32_t sock;
+    uint32_t tmpres;
+    uint8_t buf[BUFSIZ + 1];
 
-	log_debug(LOG_VVERB, "Running florida_get_seeds!");
+    log_debug(LOG_VVERB, "Running florida_get_seeds!");
 
-	if (!seeds_check()) {
-		return DN_NOOPS;
-	}
+    if (!seeds_check()) {
+        return DN_NOOPS;
+    }
 
-	sock = create_tcp_socket();
-	if (sock == -1) {
-		log_debug(LOG_VVERB, "Unable to create a socket");
-		return DN_ERROR;
-	}
+    sock = create_tcp_socket();
+    if (sock == -1) {
+        log_debug(LOG_VVERB, "Unable to create a socket");
+        return DN_ERROR;
+    }
 
-	remote = (struct sockaddr_in *) dn_alloc(sizeof(struct sockaddr_in *));
-	remote->sin_family = AF_INET;
-	tmpres = inet_pton(AF_INET, floridaIp, (void *)(&(remote->sin_addr.s_addr)));
-	remote->sin_port = htons(floridaPort);
+    remote = (struct sockaddr_in *) dn_alloc(sizeof(struct sockaddr_in *));
+    remote->sin_family = AF_INET;
+    tmpres = inet_pton(AF_INET, floridaIp, (void *)(&(remote->sin_addr.s_addr)));
+    remote->sin_port = htons(floridaPort);
 
-	if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
-		log_debug(LOG_VVERB, "Unable to connect the destination");
-		return DN_ERROR;
-	}
+    if(connect(sock, (struct sockaddr *)remote, sizeof(struct sockaddr)) < 0) {
+        log_debug(LOG_VVERB, "Unable to connect the destination");
+        return DN_ERROR;
+    }
 
-	uint32_t sent = 0;
-	while(sent < dn_strlen(request))
-	{
-		tmpres = send(sock, request+sent, dn_strlen(request)-sent, 0);
-		if(tmpres == -1){
-			log_debug(LOG_VVERB, "Unable to send query");
+    uint32_t sent = 0;
+    while(sent < dn_strlen(request))
+    {
+        tmpres = send(sock, request+sent, dn_strlen(request)-sent, 0);
+        if(tmpres == -1){
+            log_debug(LOG_VVERB, "Unable to send query");
             close(sock);
             dn_free(remote);
-			return DN_ERROR;
-		}
-		sent += tmpres;
-	}
+            return DN_ERROR;
+        }
+        sent += tmpres;
+    }
 
-	mbuf_rewind(seeds_buf);
+    mbuf_rewind(seeds_buf);
 
-	memset(buf, 0, sizeof(buf));
-	uint32_t htmlstart = 0;
-	uint8_t * htmlcontent;
+    memset(buf, 0, sizeof(buf));
+    uint32_t htmlstart = 0;
+    uint8_t * htmlcontent;
     uint8_t *ok = NULL;
 
-	//assume that the respsone payload is under BUF_SIZE
-	while ((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
+    //assume that the respsone payload is under BUF_SIZE
+    while ((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
 
         // Look for a OK response  in the first buffer output.
         if (!ok)
-		    ok = (uint8_t *) strstr((char *)buf, "200 OK\r\n");
+            ok = (uint8_t *) strstr((char *)buf, "200 OK\r\n");
         if (ok == NULL) {
             log_error("Received Error from Florida while getting seeds");
             loga_hexdump(buf, tmpres, "Florida Response with %ld bytes of data", tmpres);
@@ -153,52 +152,52 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
             return DN_ERROR;
         }
 
-		if (htmlstart == 0) {
-			/* Under certain conditions this will not work.
-			 * If the \r\n\r\n part is splitted into two messages
-			 * it will fail to detect the beginning of HTML content
-			 */
-			htmlcontent = (uint8_t *) strstr((char *)buf, "\r\n\r\n");
-			if(htmlcontent != NULL) {
-				htmlstart = 1;
-				htmlcontent += 4;
-			}
-		} else {
-			htmlcontent = buf;
-		}
+        if (htmlstart == 0) {
+            /* Under certain conditions this will not work.
+             * If the \r\n\r\n part is splitted into two messages
+             * it will fail to detect the beginning of HTML content
+             */
+            htmlcontent = (uint8_t *) strstr((char *)buf, "\r\n\r\n");
+            if(htmlcontent != NULL) {
+                htmlstart = 1;
+                htmlcontent += 4;
+            }
+        } else {
+            htmlcontent = buf;
+        }
 
-		if(htmlstart) {
-			mbuf_copy(seeds_buf, htmlcontent, tmpres - (htmlcontent - buf));
-		}
+        if(htmlstart) {
+            mbuf_copy(seeds_buf, htmlcontent, tmpres - (htmlcontent - buf));
+        }
 
-		memset(buf, 0, tmpres);
-	}
+        memset(buf, 0, tmpres);
+    }
 
-	if(tmpres < 0) {
-		log_debug(LOG_VVERB, "Error receiving data");
-	}
+    if(tmpres < 0) {
+        log_debug(LOG_VVERB, "Error receiving data");
+    }
 
-	close(sock);
-	dn_free(remote);
+    close(sock);
+    dn_free(remote);
 
-	uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
+    uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
 
-	if (last_seeds_hash != seeds_hash) {
-		last_seeds_hash = seeds_hash;
-	} else {
-		return DN_NOOPS;
-	}
+    if (last_seeds_hash != seeds_hash) {
+        last_seeds_hash = seeds_hash;
+    } else {
+        return DN_NOOPS;
+    }
 
-	return DN_OK;
+    return DN_OK;
 }
 
 
 uint32_t create_tcp_socket()
 {
-	uint32_t sock;
-	if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0){
-		log_debug(LOG_VVERB, "Unable to create TCP socket");
-		return DN_ERROR;
-	}
-	return sock;
+    uint32_t sock;
+    if((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        log_debug(LOG_VVERB, "Unable to create TCP socket");
+        return DN_ERROR;
+    }
+    return sock;
 }
