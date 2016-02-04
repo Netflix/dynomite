@@ -156,7 +156,6 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 static void
 dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 {
-    rstatus_t status;
     struct msg *req;
     struct conn *c_conn;
 

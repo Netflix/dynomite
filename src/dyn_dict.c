@@ -919,7 +919,8 @@ static unsigned long _dictNextPower(unsigned long size)
  * index is always returned in the context of the second (new) hash table. */
 static int _dictKeyIndex(dict *d, const void *key)
 {
-    unsigned int h, idx, table;
+    unsigned int h, table;
+    int idx;
     dictEntry *he;
 
     /* Expand the hash table if needed */

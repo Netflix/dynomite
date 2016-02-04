@@ -567,7 +567,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
-    struct conn *c_conn;    /* peer client connection */
 
     struct server *server = conn->owner;
 
