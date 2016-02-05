@@ -107,6 +107,7 @@ stats_metric_init(struct stats_metric *stm)
         break;
 
     case STATS_STRING:
+        string_deinit(&stm->value.str); // first free the existing data
         string_init(&stm->value.str);
         break;
 
@@ -743,6 +744,13 @@ stats_aggregate(struct stats *st)
         }
     }
 
+    static int64_t last_reset = 0;
+    if (!last_reset)
+        last_reset = dn_msec_now();
+    if ((last_reset + 5*60*1000) < dn_msec_now()) {
+        st->reset_histogram = 1;
+        last_reset = dn_msec_now();
+    }
     if (st->reset_histogram) {
         st->reset_histogram = 0;
         histo_reset(&st->latency_histo);
