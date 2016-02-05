@@ -27,7 +27,7 @@
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_proxy.h"
-#include "dyn_dnode_server.h"
+#include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 

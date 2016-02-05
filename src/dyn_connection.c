@@ -26,7 +26,7 @@
 #include "dyn_server.h"
 #include "dyn_client.h"
 #include "dyn_proxy.h"
-#include "dyn_dnode_server.h"
+#include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
 
@@ -117,12 +117,6 @@ conn_to_ctx(struct conn *conn)
     }
 
     return pool ? pool->ctx : NULL;
-}
-
-static rstatus_t
-conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
-{
-    return DN_ENO_IMPL;
 }
 
 static struct conn *
@@ -235,42 +229,6 @@ test_conn_get(void)
    return _conn_get();
 }
 
-struct conn_ops dnode_peer_client_ops = {
-    msg_recv,
-    dnode_req_recv_next,
-    dnode_req_recv_done,
-    msg_send,
-    dnode_rsp_send_next,
-    dnode_rsp_send_done,
-    dnode_client_close,
-    dnode_client_active,
-    dnode_client_ref,
-    dnode_client_unref,
-    NULL,
-    NULL,
-    dnode_req_client_enqueue_omsgq,
-    dnode_req_client_dequeue_omsgq,
-    dnode_client_handle_response 
-};
-
-struct conn_ops dnode_peer_server_ops = {
-    msg_recv,
-    dnode_rsp_recv_next,
-    dnode_rsp_recv_done,
-    msg_send,
-    dnode_req_send_next,
-    dnode_req_send_done,
-    dnode_peer_close,
-    dnode_peer_active,
-    dnode_peer_ref,
-    dnode_peer_unref,
-    dnode_req_peer_enqueue_imsgq,
-    dnode_req_peer_dequeue_imsgq,
-    dnode_req_peer_enqueue_omsgq,
-    dnode_req_peer_dequeue_omsgq,
-    conn_cant_handle_response
-};
-
 struct conn *
 conn_get_peer(void *owner, bool client, int data_store)
 {
@@ -289,16 +247,14 @@ conn_get_peer(void *owner, bool client, int data_store)
          * dyn client receives a request, possibly parsing it, and sends a
          * response downstream.
          */
-        conn->type = CONN_DNODE_PEER_CLIENT;
-        conn->ops = &dnode_peer_client_ops;
+        init_dnode_client_conn(conn);
     } else {
         /*
          * outgoing peer connection
          * dyn server receives a response, possibly parsing it, and sends a
          * request upstream.
          */
-        conn->type = CONN_DNODE_PEER_SERVER;
-        conn->ops = &dnode_peer_server_ops;
+        init_dnode_peer_conn(conn);
     }
 
     conn_ref(conn, owner);
@@ -307,42 +263,6 @@ conn_get_peer(void *owner, bool client, int data_store)
 
     return conn;
 }
-
-struct conn_ops client_ops = {
-    msg_recv,
-    req_recv_next,
-    req_recv_done,
-    msg_send,
-    rsp_send_next,
-    rsp_send_done,
-    client_close,
-    client_active,
-    client_ref,
-    client_unref,
-    NULL,
-    NULL,
-    req_client_enqueue_omsgq,
-    req_client_dequeue_omsgq,
-    client_handle_response 
-};
-
-struct conn_ops server_ops = {
-    msg_recv,
-    rsp_recv_next,
-    server_rsp_recv_done,
-    msg_send,
-    req_send_next,
-    req_send_done,
-    server_close,
-    server_active,
-    server_ref,
-    server_unref,
-    req_server_enqueue_imsgq,
-    req_server_dequeue_imsgq,
-    req_server_enqueue_omsgq,
-    req_server_dequeue_omsgq,
-    conn_cant_handle_response
-};
 
 struct conn *
 conn_get(void *owner, bool client, int data_store)
@@ -364,15 +284,13 @@ conn_get(void *owner, bool client, int data_store)
          * client receives a request, possibly parsing it, and sends a
          * response downstream.
          */
-        conn->type = CONN_CLIENT;
-        conn->ops = &client_ops;
+        init_client_conn(conn);
     } else {
         /*
          * server receives a response, possibly parsing it, and sends a
          * request upstream.
          */
-        conn->type = CONN_SERVER;
-        conn->ops = &server_ops;
+        init_server_conn(conn);
     }
 
     conn_ref(conn, owner);
@@ -381,24 +299,6 @@ conn_get(void *owner, bool client, int data_store)
 
     return conn;
 }
-
-struct conn_ops dnode_server_ops = {
-    dnode_recv,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    dnode_close,
-    NULL,
-    dnode_ref,
-    dnode_unref,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    conn_cant_handle_response
-};
 
 struct conn *
 conn_get_dnode(void *owner)
@@ -412,35 +312,14 @@ conn_get_dnode(void *owner)
     }
 
     conn->data_store = pool->data_store;
-    conn->type = CONN_DNODE_PEER_PROXY;
-
     conn->dyn_mode = 1;
-    conn->ops = &dnode_server_ops;
+    init_dnode_proxy_conn(conn);
     conn_ref(conn, owner);
 
     log_debug(LOG_VVERB, "get conn %p %s", conn, conn_get_type_string(conn));
 
     return conn;
 }
-
-struct conn_ops proxy_ops = {
-    proxy_recv,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    proxy_close,
-    NULL,
-    proxy_ref,
-    proxy_unref,
-    // enqueue, dequeues
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    conn_cant_handle_response
-};
 
 struct conn *
 conn_get_proxy(void *owner)
@@ -453,12 +332,10 @@ conn_get_proxy(void *owner)
         return NULL;
     }
 
-    conn->type = CONN_PROXY;
     conn->data_store = pool->data_store;
 
     conn->dyn_mode = 0;
-    conn->ops = &proxy_ops;
-
+    init_proxy_conn(conn);
     conn_ref(conn, owner);
 
     log_debug(LOG_VVERB, "get conn %p %s", conn, conn_get_type_string(conn));
