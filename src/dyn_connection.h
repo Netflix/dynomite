@@ -158,6 +158,11 @@ conn_get_type_string(struct conn *conn)
     return "INVALID";
 }
 
+static inline rstatus_t
+conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
+{
+    return DN_ENO_IMPL;
+}
 
 static inline rstatus_t
 conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)

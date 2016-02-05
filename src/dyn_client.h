@@ -25,10 +25,6 @@
 #ifndef _DYN_CLIENT_H_
 #define _DYN_CLIENT_H_
 
-
-bool client_active(struct conn *conn);
-void client_ref(struct conn *conn, void *owner);
-void client_unref(struct conn *conn);
-void client_close(struct context *ctx, struct conn *conn);
+void init_client_conn(struct conn *conn);
 
 #endif

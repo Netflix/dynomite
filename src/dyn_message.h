@@ -367,12 +367,6 @@ struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
 bool req_done(struct conn *conn, struct msg *msg);
 bool req_error(struct conn *conn, struct msg *msg);
-void req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
 struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc);
 void req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
 struct msg *req_send_next(struct context *ctx, struct conn *conn);
@@ -387,24 +381,6 @@ void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
 
 /* for dynomite  */
-void dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-void dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg);
-struct msg *dnode_req_recv_next(struct context *ctx, struct conn *conn, bool alloc);
-void dnode_req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
-struct msg *dnode_req_send_next(struct context *ctx, struct conn *conn);
-void dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
-
-void dnode_rsp_put(struct msg *msg);
-struct msg *dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
-void dnode_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
-struct msg *dnode_rsp_send_next(struct context *ctx, struct conn *conn);
-void dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
-
-
 void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg);
 
 
@@ -416,8 +392,4 @@ void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct con
 
 //void peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data);
-
-rstatus_t client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp);
-rstatus_t dnode_client_handle_response(struct conn *conn, msgid_t msg, struct msg *rsp);
-
 #endif

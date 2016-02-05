@@ -8,9 +8,8 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
-#include "dyn_dnode_server.h"
 
-void
+static void
 dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
@@ -31,7 +30,7 @@ dnode_ref(struct conn *conn, void *owner)
               pool, pool->idx);
 }
 
-void
+static void
 dnode_unref(struct conn *conn)
 {
     struct server_pool *pool;
@@ -48,7 +47,7 @@ dnode_unref(struct conn *conn)
               pool, pool->idx);
 }
 
-void
+static void
 dnode_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
@@ -170,7 +169,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 dnode_each_init(void *elem, void *data)
 {
     rstatus_t status;
@@ -224,7 +223,7 @@ dnode_init(struct context *ctx)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 dnode_each_deinit(void *elem, void *data)
 {
     struct server_pool *pool = elem;
@@ -354,7 +353,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
@@ -373,3 +372,27 @@ dnode_recv(struct context *ctx, struct conn *conn)
     return DN_OK;
 }
 
+struct conn_ops dnode_server_ops = {
+    dnode_recv,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    dnode_close,
+    NULL,
+    dnode_ref,
+    dnode_unref,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    conn_cant_handle_response
+};
+
+void
+init_dnode_proxy_conn(struct conn *conn)
+{
+    conn->type = CONN_DNODE_PEER_PROXY;
+    conn->ops = &dnode_server_ops;
+}
