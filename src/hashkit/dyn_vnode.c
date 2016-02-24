@@ -37,7 +37,7 @@ vnode_item_cmp(const void *t1, const void *t2)
     return cmp_dyn_token(ct1->token, ct2->token);
 }
 
-rstatus_t
+static rstatus_t
 vnode_rack_verify_continuum(void *elem, void *data)
 {
     struct rack *rack = elem;
