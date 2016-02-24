@@ -464,8 +464,9 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
                       && (!conn->same_dc)) ||
         (req->owner == conn)) // a gossip message that originated on this conn
     {
-        log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
-                  " type %d", conn->sd, req->id, req->mlen, req->type);
+        log_info("close %s %d swallow req %u:%u len %"PRIu32
+                 " type %d", conn_get_type_string(conn), conn->sd, req->id,
+                 req->parent_id, req->mlen, req->type);
         req_put(req);
         return;
     }
@@ -487,9 +488,10 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     rsp->dmsg = dmsg_get();
     rsp->dmsg->id =  req->id;
 
-    log_warn("dyn: close s %d schedule error for req %u:%u "
-             "len %"PRIu32" type %d from c %d%c %s", conn->sd, req->id, req->parent_id,
-             req->mlen, req->type, c_conn->sd, conn->err ? ':' : ' ',
+    log_info("close %s %d req %u:%u "
+             "len %"PRIu32" type %d from c %d%c %s", conn_get_type_string(conn),
+             conn->sd, req->id, req->parent_id, req->mlen, req->type,
+             c_conn->sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rstatus_t status =
             conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
@@ -596,17 +598,19 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         conn_put(conn);
         return;
     }
-
+    uint32_t out_counter = 0;
     for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
         /* dequeue the message (request) from server outq */
         conn_dequeue_outq(ctx, conn, msg);
         dnode_peer_ack_err(ctx, conn, msg);
+        out_counter++;
     }
 
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
+    uint32_t in_counter = 0;
     for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
@@ -616,12 +620,15 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         // for outq, its already taken care of
         msg_tmo_delete(msg);
         dnode_peer_ack_err(ctx, conn, msg);
+        in_counter++;
 
         stats_pool_incr(ctx, server->owner, peer_dropped_requests);
     }
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
+    log_warn("close %s %d Dropped %u outqueue & %u inqueue requests",
+             conn_get_type_string(conn), conn->sd, out_counter, in_counter);
     msg = conn->rmsg;
     if (msg != NULL) {
         conn->rmsg = NULL;

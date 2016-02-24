@@ -293,8 +293,6 @@ proxy_accept(struct context *ctx, struct conn *p)
             }
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                log_error("accept on %s %d not ready - eagain",
-                          conn_get_type_string(p), p->sd);
                 p->recv_ready = 0;
                 return DN_OK;
             }

@@ -277,8 +277,6 @@ dnode_accept(struct context *ctx, struct conn *p)
             }
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                log_warn("dyn: accept on %s %d not ready - eagain",
-                         conn_get_type_string(p), p->sd);
                 p->recv_ready = 0;
                 return DN_OK;
             }
@@ -296,14 +294,12 @@ dnode_accept(struct context *ctx, struct conn *p)
         break;
     }
 
-    log_notice("dyn: accept on sd %d", sd);
-
     char clntName[INET_ADDRSTRLEN];
 
     if(inet_ntop(AF_INET, &client_address.sin_addr.s_addr, clntName, sizeof(clntName))!=NULL){
        loga("Accepting client connection from %s%c%d on sd %d",clntName,'/',ntohs(client_address.sin_port), sd);
     } else {
-       loga("Unable to get client's address\n");
+       loga("Unable to get client's address for accept on sd %d\n", sd);
     }
 
     c = conn_get_peer(p->owner, true, p->data_store);

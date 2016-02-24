@@ -34,6 +34,7 @@ struct rbnode {
     struct rbnode *right;    /* right link */
     struct rbnode *parent;   /* parent link */
     int64_t       key;       /* key for ordering */
+    int           timeout;   /* timeout */
     void          *data;     /* opaque data */
     uint8_t       color;     /* red | black */
 };

@@ -197,6 +197,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     timeout = timeout * g_timeout_factor;
 
     node = &msg->tmo_rbe;
+    node->timeout = timeout;
     node->key = dn_msec_now() + timeout;
     node->data = conn;
 

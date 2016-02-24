@@ -360,7 +360,8 @@ core_timeout(struct context *ctx)
 			return;
 		}
 
-		log_debug(LOG_WARN, "req %"PRIu64" on s %d timedout", msg->id, conn->sd);
+        log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", msg->id,
+                 conn_get_type_string(conn), conn->sd, msg->tmo_rbe.timeout);
 
 		msg_tmo_delete(msg);
 

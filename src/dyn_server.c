@@ -341,8 +341,9 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)
                       && (!conn->same_dc))) {
-        log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
-                  " type %d", conn->sd, req->id, req->mlen, req->type);
+        log_info("close %s %d swallow req %"PRIu64" len %"PRIu32
+                 " type %d", conn_get_type_string(conn), conn->sd, req->id,
+                 req->mlen, req->type);
         req_put(req);
         return;
     }
@@ -367,10 +368,11 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     rsp->err = req->err = conn->err;
     rsp->dyn_error = req->dyn_error = STORAGE_CONNECTION_REFUSE;
     rsp->dmsg = NULL;
-    log_warn("%d:%d <-> %d:%d", req->id, req->parent_id, rsp->id, rsp->parent_id);
+    log_debug(LOG_DEBUG, "%d:%d <-> %d:%d", req->id, req->parent_id, rsp->id, rsp->parent_id);
 
-    log_warn("dyn: close s %d schedule error for req %u:%u "
-             "len %"PRIu32" type %d from c %d%c %s", conn->sd, req->id, req->parent_id,
+    log_info("close %s %d req %u:%u "
+             "len %"PRIu32" type %d from c %d%c %s", conn_get_type_string(conn),
+             conn->sd, req->id, req->parent_id,
              req->mlen, req->type, c_conn->sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rstatus_t status =
@@ -399,15 +401,18 @@ server_close(struct context *ctx, struct conn *conn)
 		return;
 	}
 
+    uint32_t out_counter = 0;
 	for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server outq */
         conn_dequeue_outq(ctx, conn, msg);
         server_ack_err(ctx, conn, msg);
+        out_counter++;
 	}
 	ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
+    uint32_t in_counter = 0;
     for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
@@ -416,11 +421,14 @@ server_close(struct context *ctx, struct conn *conn)
         // We should also remove the msg from the timeout rbtree.
         msg_tmo_delete(msg);
         server_ack_err(ctx, conn, msg);
+        in_counter++;
 
 		stats_server_incr(ctx, conn->owner, server_dropped_requests);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
+    log_warn("close %s %d Dropped %u outqueue & %u inqueue requests",
+             conn_get_type_string(conn), conn->sd, out_counter, in_counter);
 
 	msg = conn->rmsg;
 	if (msg != NULL) {
