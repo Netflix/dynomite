@@ -133,6 +133,7 @@ typedef enum stats_type {
 
 typedef enum {
     CMD_UNKNOWN,
+    CMD_HELP,
     CMD_INFO,
     CMD_PING,
     CMD_DESCRIBE,
@@ -151,7 +152,8 @@ typedef enum {
     CMD_CL_DESCRIBE,  /* cluster_describe */
     CMD_SET_CONSISTENCY,
     CMD_GET_CONSISTENCY,
-    CMD_TIMEOUT_FACTOR,
+    CMD_GET_TIMEOUT_FACTOR,
+    CMD_SET_TIMEOUT_FACTOR,
 } stats_cmd_t;
 
 struct stats_metric {

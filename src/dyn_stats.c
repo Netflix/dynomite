@@ -1001,6 +1001,9 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 } else if (strcmp(reqline[1], "/info") == 0) {
                     st_cmd->cmd = CMD_INFO;
                     return;
+                } else if (strcmp(reqline[1], "/help") == 0) {
+                    st_cmd->cmd = CMD_HELP;
+                    return;
                 } else if (strcmp(reqline[1], "/ping") == 0) {
                     st_cmd->cmd = CMD_PING;
                     return;
@@ -1047,8 +1050,11 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                     } else
                         st_cmd->cmd = CMD_UNKNOWN;
                     return;
+                } else if (strcmp(reqline[1], "/get_timeout_factor") == 0) {
+                    st_cmd->cmd = CMD_GET_TIMEOUT_FACTOR;
+                    return;
                 } else if (strncmp(reqline[1], "/set_timeout_factor", 19) == 0) {
-                    st_cmd->cmd = CMD_TIMEOUT_FACTOR;
+                    st_cmd->cmd = CMD_SET_TIMEOUT_FACTOR;
                     log_notice("Setting timeout factor: %s", reqline[1]);
                     char* val = reqline[1] + 19;
                     if (*val != '/') {
@@ -1172,6 +1178,14 @@ stats_send_rsp(struct stats *st)
             log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
             return stats_http_rsp(sd, st->buf.data, st->buf.len);
         }
+    } else if (cmd == CMD_HELP) {
+        char rsp[5120];
+        dn_sprintf(rsp, "/info\n/help\n/ping\n/cluster_describe\n/standby\n"\
+                        "/writes_only\n/loglevelup\n/logleveldown\n/historeset\n"\
+                        "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum>\n"\
+                        "/get_timeout_factor\n/set_timeout_factor/<1-10>\n/peer/<up|down|reset>\n"\
+                        "/state/<writes_only|normal|%s>\n\n", "resuming");
+        return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_NORMAL) {
         st->ctx->dyn_state = NORMAL;
         return stats_http_rsp(sd, ok.data, ok.len);
@@ -1205,7 +1219,11 @@ stats_send_rsp(struct stats *st)
                    get_consistency_string(g_read_consistency),
                    get_consistency_string(g_write_consistency));
         return stats_http_rsp(sd, cons_rsp, dn_strlen(cons_rsp));
-    } else if (cmd == CMD_TIMEOUT_FACTOR) {
+    } else if (cmd == CMD_GET_TIMEOUT_FACTOR) {
+        char rsp[1024];
+        dn_sprintf(rsp, "Timeout factor: %d\n", g_timeout_factor);
+        return stats_http_rsp(sd, rsp, dn_strlen(rsp));
+    } else if (cmd == CMD_SET_TIMEOUT_FACTOR) {
         int8_t timeout_factor = 0;
         log_warn("st_cmd.req_data '%.*s' ", st_cmd.req_data);
         sscanf(st_cmd.req_data.data, "%d", &timeout_factor);
@@ -1213,8 +1231,8 @@ stats_send_rsp(struct stats *st)
         // make sure timeout factor is within a range
         if (timeout_factor < 1)
             timeout_factor = 1;
-        if (timeout_factor > 4)
-            timeout_factor = 4;
+        if (timeout_factor > 10)
+            timeout_factor = 10;
         g_timeout_factor = timeout_factor;
         log_warn("setting timeout_factor to %d", g_timeout_factor);
         return stats_http_rsp(sd, ok.data, ok.len);
