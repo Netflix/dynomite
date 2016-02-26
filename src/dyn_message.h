@@ -349,14 +349,14 @@ struct msg *msg_get(struct conn *conn, bool request, int data_store, const char*
 void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
-struct msg *msg_get_error(int data_store, dyn_error_t dyn_err, err_t err);
+struct msg *msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err);
 void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
 size_t msg_alloc_msgs(void);
 uint32_t msg_payload_crc32(struct msg *msg);
-struct msg *msg_get_rsp_integer(int data_store);
+struct msg *msg_get_rsp_integer(struct conn *conn);
 struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
 rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
