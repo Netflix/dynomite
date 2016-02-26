@@ -419,7 +419,7 @@ static void
 send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 {
     //do nothing
-    struct msg *rsp = msg_get_rsp_integer(true);
+    struct msg *rsp = msg_get_rsp_integer(c_conn);
     if (!req->noreply)
         conn_enqueue_outq(ctx, c_conn, req);
     req->peer = rsp;

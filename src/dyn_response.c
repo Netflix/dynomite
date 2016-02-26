@@ -89,7 +89,7 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
         rsp_put(pmsg);
     }
 
-    return msg_get_error(conn->data_store, msg->dyn_error, err);
+    return msg_get_error(conn, msg->dyn_error, err);
 }
 
 struct msg *
