@@ -27,6 +27,7 @@
 
 #include "dyn_core.h"
 #include "dyn_server.h"
+#include "dyn_dnode_peer.h"
 #include "proto/dyn_proto.h"
 #include "hashkit/dyn_hashkit.h"
 

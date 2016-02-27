@@ -937,6 +937,7 @@ gossip_destroy(struct server_pool *sp)
 }
 
 
+long long dictFingerprint(dict *d);
 void gossip_debug(void)
 {
 	uint32_t i, nelem;

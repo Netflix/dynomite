@@ -45,6 +45,7 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_client.h"
+#include "dyn_dnode_peer.h"
 
 static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
 static rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
