@@ -27,6 +27,7 @@
 #include "dyn_server.h"
 #include "dyn_conf.h"
 #include "dyn_token.h"
+#include "dyn_dnode_peer.h"
 
 static void server_close(struct context *ctx, struct conn *conn);
 static void

@@ -11,6 +11,7 @@
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_node_snitch.h"
 #include "dyn_token.h"
 
 

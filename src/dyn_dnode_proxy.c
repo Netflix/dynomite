@@ -4,10 +4,12 @@
  */ 
 
 #include <sys/un.h>
+#include <arpa/inet.h>
 
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_dnode_proxy.h"
 
 static void
 dnode_ref(struct conn *conn, void *owner)

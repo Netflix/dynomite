@@ -27,5 +27,6 @@
 
 rstatus_t proxy_init(struct context *ctx);
 void proxy_deinit(struct context *ctx);
+void init_proxy_conn(struct conn *conn);
 
 #endif
