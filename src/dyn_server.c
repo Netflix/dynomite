@@ -1273,7 +1273,7 @@ static void
 req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_SERVER)
+    ASSERT(conn->type == CONN_SERVER);
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
