@@ -236,7 +236,6 @@ static size_t alloc_msg_count = 0;
 static struct msg *
 _msg_get(struct conn *conn, const char *const caller)
 {
-    bool force_alloc = conn->dyn_mode;
     struct msg *msg;
 
     if (!TAILQ_EMPTY(&free_msgq)) {
@@ -250,14 +249,9 @@ _msg_get(struct conn *conn, const char *const caller)
 
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
-    if (alloc_msg_count >= alloc_msgs_max && !force_alloc) {
+    if (alloc_msg_count >= alloc_msgs_max) {
          log_debug(LOG_WARN, "allocated #msgs %lu hit max allowable limit", alloc_msg_count);
          return NULL;
-    }
-
-    if (alloc_msg_count >= MAX_ALLOC_MSGS) {
-        log_debug(LOG_WARN, "allocated #msgs %lu hit max hard limit", alloc_msg_count);
-        return NULL; //we hit the max limit
     }
 
     alloc_msg_count++;
