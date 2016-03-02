@@ -239,6 +239,8 @@ struct stats {
 
     struct string             alloc_msgs_str;
     struct string             free_msgs_str;
+    struct string             alloc_mbufs_str;
+    struct string             free_mbufs_str;
 
     struct string             rack_str;
     struct string             rack;
@@ -262,8 +264,10 @@ struct stats {
     volatile struct histogram remote_peer_in_queue;
     volatile struct histogram remote_peer_out_queue;
 
-    volatile size_t           alloc_msgs;
-    volatile size_t           free_msgs;
+    uint64_t         alloc_msgs;
+    uint64_t         free_msgs;
+    uint64_t         alloc_mbufs;
+    uint64_t         free_mbufs;
 
 };
 

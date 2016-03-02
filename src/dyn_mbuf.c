@@ -25,11 +25,18 @@
 
 #include "dyn_core.h"
 
-static uint32_t nfree_mbufq;   /* # free mbuf */
+static uint64_t nfree_mbufq;   /* # free mbuf */
 static struct mhdr free_mbufq; /* free mbuf q */
 
 static size_t mbuf_chunk_size; /* mbuf chunk size - header + data (const) */
 static size_t mbuf_offset;     /* mbuf offset in chunk (const) - include the extra space*/
+static uint64_t mbuf_alloc_count = 0;
+
+uint64_t
+mbuf_alloc_get_count(void)
+{
+    return mbuf_alloc_count;
+}
 
 static struct mbuf *
 _mbuf_get(void)
@@ -54,6 +61,7 @@ _mbuf_get(void)
     if (buf == NULL) {
         return NULL;
     }
+    mbuf_alloc_count++;
 
     /*
      * mbuf header is at the tail end of the mbuf. This enables us to catch
@@ -129,9 +137,10 @@ mbuf_free(struct mbuf *mbuf)
     dn_free(buf);
 }
 
-uint32_t mbuf_free_queue_size(void)
+uint64_t
+mbuf_free_queue_size(void)
 {
-    return     nfree_mbufq;
+    return nfree_mbufq;
 }
 
 
