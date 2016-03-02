@@ -24,6 +24,7 @@ rstatus_t rspmgr_submit_response(struct response_mgr *rspmgr, struct msg *rsp);
 bool rspmgr_check_is_done(struct response_mgr *rspmgr);
 struct msg* rspmgr_get_response(struct response_mgr *rspmgr);
 void rspmgr_free_response(struct response_mgr *rspmgr, struct msg *dont_free);
+void rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free);
 
 
 #endif

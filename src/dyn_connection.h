@@ -152,12 +152,19 @@ conn_get_type_string(struct conn *conn)
         case CONN_CLIENT: return "CLIENT";
         case CONN_SERVER: return "SERVER";
         case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
-        case CONN_DNODE_PEER_CLIENT: return "PEER_CLIENT";
-        case CONN_DNODE_PEER_SERVER: return "PEER_SERVER";
+        case CONN_DNODE_PEER_CLIENT: return conn->same_dc ?
+                                            "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
+        case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
+                                            "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
     }
     return "INVALID";
 }
 
+static inline rstatus_t
+conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
+{
+    return DN_ENO_IMPL;
+}
 
 static inline rstatus_t
 conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)

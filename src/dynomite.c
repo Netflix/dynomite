@@ -61,7 +61,7 @@ static int show_version;
 static int test_conf;
 static int admin_opt = 0;
 static int daemonize;
-static int enable_gossip = 0;
+static bool enable_gossip = false;
 static int describe_stats;
 
 static struct option long_options[] = {
@@ -197,10 +197,10 @@ dn_print_run(struct instance *nci)
 
     status = uname(&name);
     if (status < 0) {
-        loga("dynomite-%s started on pid %d", DN_VERSION_STRING, nci->pid);
+        loga("dynomite-%s started on pid %d", VERSION, nci->pid);
     } else {
         loga("dynomite-%s built for %s %s %s started on pid %d",
-             DN_VERSION_STRING, name.sysname, name.release, name.machine,
+             VERSION, name.sysname, name.release, name.machine,
              nci->pid);
     }
 
@@ -365,7 +365,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             break;
 
         case 'g':
-            enable_gossip = 1;
+            enable_gossip = true;
             break;
 
         case 'v':
@@ -587,7 +587,7 @@ dn_run(struct instance *nci)
     }
 
     ctx->enable_gossip = enable_gossip;
-    ctx->admin_opt = admin_opt;
+    ctx->admin_opt = (unsigned)admin_opt;
 
     if (!ctx->enable_gossip)
     	ctx->dyn_state = NORMAL;
@@ -627,7 +627,7 @@ main(int argc, char **argv)
     }
 
     if (show_version) {
-        log_stderr("This is dynomite-%s" CRLF, DN_VERSION_STRING);
+        log_stderr("This is dynomite-%s" CRLF, VERSION);
         if (show_help) {
             dn_show_usage();
         }

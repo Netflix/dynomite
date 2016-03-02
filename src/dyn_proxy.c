@@ -26,7 +26,7 @@
 #include "dyn_server.h"
 #include "dyn_proxy.h"
 
-void
+static void
 proxy_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
@@ -47,7 +47,7 @@ proxy_ref(struct conn *conn, void *owner)
               pool, pool->idx);
 }
 
-void
+static void
 proxy_unref(struct conn *conn)
 {
     struct server_pool *pool;
@@ -64,7 +64,7 @@ proxy_unref(struct conn *conn)
               pool, pool->idx);
 }
 
-void
+static void
 proxy_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
@@ -186,7 +186,7 @@ proxy_listen(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 proxy_each_init(void *elem, void *data)
 {
     rstatus_t status;
@@ -242,7 +242,7 @@ proxy_init(struct context *ctx)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 proxy_each_deinit(void *elem, void *data)
 {
     struct server_pool *pool = elem;
@@ -293,8 +293,6 @@ proxy_accept(struct context *ctx, struct conn *p)
             }
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                log_error("accept on %s %d not ready - eagain",
-                          conn_get_type_string(p), p->sd);
                 p->recv_ready = 0;
                 return DN_OK;
             }
@@ -357,7 +355,7 @@ proxy_accept(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 proxy_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
@@ -375,3 +373,30 @@ proxy_recv(struct context *ctx, struct conn *conn)
 
     return DN_OK;
 }
+
+struct conn_ops proxy_ops = {
+    proxy_recv,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    proxy_close,
+    NULL,
+    proxy_ref,
+    proxy_unref,
+    // enqueue, dequeues
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    conn_cant_handle_response
+};
+
+void
+init_proxy_conn(struct conn *conn)
+{
+    conn->type = CONN_PROXY;
+    conn->ops = &proxy_ops;
+}
+

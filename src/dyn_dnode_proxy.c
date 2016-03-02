@@ -4,13 +4,14 @@
  */ 
 
 #include <sys/un.h>
+#include <arpa/inet.h>
 
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
-#include "dyn_dnode_server.h"
+#include "dyn_dnode_proxy.h"
 
-void
+static void
 dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
@@ -31,7 +32,7 @@ dnode_ref(struct conn *conn, void *owner)
               pool, pool->idx);
 }
 
-void
+static void
 dnode_unref(struct conn *conn)
 {
     struct server_pool *pool;
@@ -48,7 +49,7 @@ dnode_unref(struct conn *conn)
               pool, pool->idx);
 }
 
-void
+static void
 dnode_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
@@ -170,7 +171,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 dnode_each_init(void *elem, void *data)
 {
     rstatus_t status;
@@ -224,7 +225,7 @@ dnode_init(struct context *ctx)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 dnode_each_deinit(void *elem, void *data)
 {
     struct server_pool *pool = elem;
@@ -278,8 +279,6 @@ dnode_accept(struct context *ctx, struct conn *p)
             }
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                log_warn("dyn: accept on %s %d not ready - eagain",
-                         conn_get_type_string(p), p->sd);
                 p->recv_ready = 0;
                 return DN_OK;
             }
@@ -297,14 +296,12 @@ dnode_accept(struct context *ctx, struct conn *p)
         break;
     }
 
-    log_notice("dyn: accept on sd %d", sd);
-
     char clntName[INET_ADDRSTRLEN];
 
     if(inet_ntop(AF_INET, &client_address.sin_addr.s_addr, clntName, sizeof(clntName))!=NULL){
        loga("Accepting client connection from %s%c%d on sd %d",clntName,'/',ntohs(client_address.sin_port), sd);
     } else {
-       loga("Unable to get client's address\n");
+       loga("Unable to get client's address for accept on sd %d\n", sd);
     }
 
     c = conn_get_peer(p->owner, true, p->data_store);
@@ -354,7 +351,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-rstatus_t
+static rstatus_t
 dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
@@ -373,3 +370,27 @@ dnode_recv(struct context *ctx, struct conn *conn)
     return DN_OK;
 }
 
+struct conn_ops dnode_server_ops = {
+    dnode_recv,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    dnode_close,
+    NULL,
+    dnode_ref,
+    dnode_unref,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    conn_cant_handle_response
+};
+
+void
+init_dnode_proxy_conn(struct conn *conn)
+{
+    conn->type = CONN_DNODE_PEER_PROXY;
+    conn->ops = &dnode_server_ops;
+}

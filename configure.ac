@@ -1,12 +1,21 @@
+# Add support for m4_esyscmd_s to autoconf-2.63 (used in RHEL/CentOS 6.7)
+m4_ifndef([m4_esyscmd_s], [m4_define([m4_chomp_all], [m4_format([[%.*s]], m4_bregexp(m4_translit([[$1]], [/], [/ ]), [/*$]), [$1])])])
+m4_ifndef([m4_esyscmd_s], [m4_define([m4_esyscmd_s], [m4_chomp_all(m4_esyscmd([$1]))])])
+
 # Define the package version numbers and the bug reporting address
 m4_define([DN_MAJOR], 0)
 m4_define([DN_MINOR], 5)
 m4_define([DN_PATCH], 6)
 m4_define([DN_BUGS], [dynomite@netflix.com])
+m4_define([DN_VERSION_STRING], m4_esyscmd_s([git describe --dirty --always --tags]))
 
 # Initialize autoconf
 AC_PREREQ([2.63])
+<<<<<<< .merge_file_a7S2ED
 AC_INIT([dynomite], [DN_MAJOR.DN_MINOR.DN_PATCH], [DN_BUGS])
+=======
+AC_INIT([dynomite], [DN_VERSION_STRING], [DN_BUGS])
+>>>>>>> .merge_file_YwhkOZ
 AC_CONFIG_SRCDIR([src/dynomite.c])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADERS([config.h:config.h.in])
@@ -211,7 +220,12 @@ AC_CONFIG_FILES([Makefile
                  src/hashkit/Makefile
                  src/proto/Makefile
                  src/seedsprovider/Makefile
+<<<<<<< .merge_file_a7S2ED
                  src/event/Makefile])
+=======
+                 src/event/Makefile
+                 src/tools/Makefile])
+>>>>>>> .merge_file_YwhkOZ
 
 # Generate the "configure" script
 AC_OUTPUT

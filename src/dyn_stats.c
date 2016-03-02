@@ -107,6 +107,7 @@ stats_metric_init(struct stats_metric *stm)
         break;
 
     case STATS_STRING:
+        string_deinit(&stm->value.str); // first free the existing data
         string_init(&stm->value.str);
         break;
 
@@ -412,6 +413,14 @@ stats_create_bufs(struct stats *st)
     size += int64_max_digits;
     size += key_value_extra;
 
+    size += st->alloc_mbufs_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
+    size += st->free_mbufs_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
     /* server pools */
     for (i = 0; i < array_n(&st->sum); i++) {
         struct stats_pool *stp = array_get(&st->sum, i);
@@ -517,7 +526,7 @@ stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",", key->len, key->data,
+    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
                     val);
     if (n < 0 || n >= (int)room) {
         log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
@@ -573,10 +582,32 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.mean));
     THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_avg_rtt,
                  (int64_t)st->cross_region_histo.mean));
+    THROW_STATUS(stats_add_num(&st->buf, &st->client_out_queue_99,
+                 (int64_t)st->client_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->server_in_queue_99,
+                 (int64_t)st->server_in_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->server_out_queue_99,
+                 (int64_t)st->server_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->dnode_client_out_queue_99,
+                 (int64_t)st->dnode_client_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->peer_in_queue_99,
+                 (int64_t)st->peer_in_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->peer_out_queue_99,
+                 (int64_t)st->peer_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->remote_peer_out_queue_99,
+                 (int64_t)st->remote_peer_out_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->remote_peer_in_queue_99,
+                 (int64_t)st->remote_peer_in_queue.val_99th));
+    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_99_rtt,
+                 (int64_t)st->cross_region_histo.val_99th));
     THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_msgs_str,
                  (int64_t)st->free_msgs));
+    THROW_STATUS(stats_add_num(&st->buf, &st->alloc_mbufs_str,
+                 (int64_t)st->alloc_mbufs));
+    THROW_STATUS(stats_add_num(&st->buf, &st->free_mbufs_str,
+                 (int64_t)st->free_mbufs));
 
     return DN_OK;
 }
@@ -679,7 +710,7 @@ stats_aggregate_metric(struct array *dst, struct array *src)
             break;
 
         case STATS_GAUGE:
-            stm2->value.counter += stm1->value.counter;
+            stm2->value.counter = stm1->value.counter;
             break;
 
         case STATS_TIMESTAMP:
@@ -725,11 +756,26 @@ stats_aggregate(struct stats *st)
         }
     }
 
+    static int64_t last_reset = 0;
+    if (!last_reset)
+        last_reset = dn_msec_now();
+    if ((last_reset + 5*60*1000) < dn_msec_now()) {
+        st->reset_histogram = 1;
+        last_reset = dn_msec_now();
+    }
     if (st->reset_histogram) {
         st->reset_histogram = 0;
         histo_reset(&st->latency_histo);
         histo_reset(&st->payload_size_histo);
         histo_reset(&st->cross_region_histo);
+        histo_reset(&st->server_in_queue);
+        histo_reset(&st->server_out_queue);
+        histo_reset(&st->client_out_queue);
+        histo_reset(&st->dnode_client_out_queue);
+        histo_reset(&st->peer_in_queue);
+        histo_reset(&st->peer_out_queue);
+        histo_reset(&st->remote_peer_in_queue);
+        histo_reset(&st->remote_peer_out_queue);
     }
     st->aggregate = 0;
 }
@@ -967,6 +1013,9 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 } else if (strcmp(reqline[1], "/info") == 0) {
                     st_cmd->cmd = CMD_INFO;
                     return;
+                } else if (strcmp(reqline[1], "/help") == 0) {
+                    st_cmd->cmd = CMD_HELP;
+                    return;
                 } else if (strcmp(reqline[1], "/ping") == 0) {
                     st_cmd->cmd = CMD_PING;
                     return;
@@ -1013,8 +1062,11 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                     } else
                         st_cmd->cmd = CMD_UNKNOWN;
                     return;
+                } else if (strcmp(reqline[1], "/get_timeout_factor") == 0) {
+                    st_cmd->cmd = CMD_GET_TIMEOUT_FACTOR;
+                    return;
                 } else if (strncmp(reqline[1], "/set_timeout_factor", 19) == 0) {
-                    st_cmd->cmd = CMD_TIMEOUT_FACTOR;
+                    st_cmd->cmd = CMD_SET_TIMEOUT_FACTOR;
                     log_notice("Setting timeout factor: %s", reqline[1]);
                     char* val = reqline[1] + 19;
                     if (*val != '/') {
@@ -1138,6 +1190,14 @@ stats_send_rsp(struct stats *st)
             log_debug(LOG_VERB, "send stats on sd %d %d bytes", sd, st->buf.len);
             return stats_http_rsp(sd, st->buf.data, st->buf.len);
         }
+    } else if (cmd == CMD_HELP) {
+        char rsp[5120];
+        dn_sprintf(rsp, "/info\n/help\n/ping\n/cluster_describe\n/standby\n"\
+                        "/writes_only\n/loglevelup\n/logleveldown\n/historeset\n"\
+                        "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum>\n"\
+                        "/get_timeout_factor\n/set_timeout_factor/<1-10>\n/peer/<up|down|reset>\n"\
+                        "/state/<writes_only|normal|%s>\n\n", "resuming");
+        return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_NORMAL) {
         st->ctx->dyn_state = NORMAL;
         return stats_http_rsp(sd, ok.data, ok.len);
@@ -1171,7 +1231,11 @@ stats_send_rsp(struct stats *st)
                    get_consistency_string(g_read_consistency),
                    get_consistency_string(g_write_consistency));
         return stats_http_rsp(sd, cons_rsp, dn_strlen(cons_rsp));
-    } else if (cmd == CMD_TIMEOUT_FACTOR) {
+    } else if (cmd == CMD_GET_TIMEOUT_FACTOR) {
+        char rsp[1024];
+        dn_sprintf(rsp, "Timeout factor: %d\n", g_timeout_factor);
+        return stats_http_rsp(sd, rsp, dn_strlen(rsp));
+    } else if (cmd == CMD_SET_TIMEOUT_FACTOR) {
         int8_t timeout_factor = 0;
         log_warn("st_cmd.req_data '%.*s' ", st_cmd.req_data);
         sscanf(st_cmd.req_data.data, "%d", &timeout_factor);
@@ -1358,7 +1422,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_raw(&st->source, source);
 
     string_set_text(&st->version_str, "version");
-    string_set_text(&st->version, DN_VERSION_STRING);
+    string_set_text(&st->version, VERSION);
 
     string_set_text(&st->uptime_str, "uptime");
     string_set_text(&st->timestamp_str, "timestamp");
@@ -1379,9 +1443,21 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     // cross region average latency
     string_set_text(&st->cross_region_avg_rtt, "average_cross_region_rtt");
+    string_set_text(&st->cross_region_99_rtt, "99_cross_region_rtt");
+
+    string_set_text(&st->client_out_queue_99, "client_out_queue_99");
+    string_set_text(&st->server_in_queue_99, "server_in_queue_99");
+    string_set_text(&st->server_out_queue_99, "server_out_queue_99");
+    string_set_text(&st->dnode_client_out_queue_99, "dnode_client_out_queue_99");
+    string_set_text(&st->peer_in_queue_99, "peer_in_queue_99");
+    string_set_text(&st->peer_out_queue_99, "peer_out_queue_99");
+    string_set_text(&st->remote_peer_in_queue_99, "remote_peer_in_queue_99");
+    string_set_text(&st->remote_peer_out_queue_99, "remote_peer_out_queue_99");
 
     string_set_text(&st->alloc_msgs_str, "alloc_msgs");
     string_set_text(&st->free_msgs_str, "free_msgs");
+    string_set_text(&st->alloc_mbufs_str, "alloc_mbufs");
+    string_set_text(&st->free_mbufs_str, "free_mbufs");
 
     //only display the first pool
     struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
@@ -1399,9 +1475,19 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     histo_init(&st->latency_histo);
     histo_init(&st->payload_size_histo);
     histo_init(&st->cross_region_histo);
+    histo_init(&st->client_out_queue);
+    histo_init(&st->server_in_queue);
+    histo_init(&st->server_out_queue);
+    histo_init(&st->dnode_client_out_queue);
+    histo_init(&st->peer_in_queue);
+    histo_init(&st->peer_out_queue);
+    histo_init(&st->remote_peer_in_queue);
+    histo_init(&st->remote_peer_out_queue);
     st->reset_histogram = 0;
     st->alloc_msgs = 0;
     st->free_msgs = 0;
+    st->alloc_mbufs = 0;
+    st->free_mbufs = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 
@@ -1479,8 +1565,19 @@ stats_swap(struct stats *st)
     histo_compute(&st->payload_size_histo);
     histo_compute(&st->cross_region_histo);
 
+    histo_compute(&st->client_out_queue);
+    histo_compute(&st->server_in_queue);
+    histo_compute(&st->server_out_queue);
+    histo_compute(&st->dnode_client_out_queue);
+    histo_compute(&st->peer_in_queue);
+    histo_compute(&st->peer_out_queue);
+    histo_compute(&st->remote_peer_in_queue);
+    histo_compute(&st->remote_peer_out_queue);
+
     st->alloc_msgs = msg_alloc_msgs();
     st->free_msgs = msg_free_queue_size();
+    st->alloc_mbufs = mbuf_alloc_get_count();
+    st->free_mbufs = mbuf_free_queue_size();
 
     array_swap(&st->current, &st->shadow);
 

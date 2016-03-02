@@ -14,6 +14,7 @@
 *.gcda
 *.gcno
 *.gcov
+*.pyc
 
 # Packages
 *.tar.gz
@@ -72,3 +73,7 @@ Makefile.in
 /src/test
 cscope.out
 /src/cscope.out
+/test/*.pyc
+/test/_binaries/*
+/test/_binaries
+/test/conf

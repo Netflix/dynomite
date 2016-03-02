@@ -1,75 +1,128 @@
-.TH DYNOMITE 8 "June 13, 2013"
+.TH DYNOMITE 8 "December 15, 2015" "v0.5.6"
 .SH NAME
-dynomite \- is a distributed thin proxy layer for memcached and redis protocols. In the near future, it will support other protocols.
+dynomite - a generic dynamo implementation for different key/value storage engines.
 .SH SYNOPSIS
+.B dynomite \-\-help
+.br
+.B dynomite \-\-version
+.br
 .B dynomite
-.RI [ options ]
+.RI "[\"
+.B "-c"
+.RI "conf-file]"
+.br
+.B dynomite 
+.RB [\| \-?hVdDt \|]
+.RB [\| \-v
+.IR verbosity-level \|] 
+.RB [\| \-o
+.IR output-file \|]
+.RB [\| -c
+.IR conf-file \|]
+.RB [\-s
+.IR stats-port \|]
+.RB [\-a
+.IR stats-addr \|]
+.RB [\-i
+.IR stats-interval \|]
+.RB [\-p
+.IR pid-file \|]
+.RB [\-m
+.IR mbuf-size \|]
+.RB [\-M
+.IR max-alloc-messages \|]
 .SH DESCRIPTION
-\fBdynomite\fP is a distributed thin proxy layer for memcached protocol. In the near future, it will support Redis protocol and other protocols.
+.B Dynomite
+is a thin, distributed Dynamo layer for different storage engines and protocols. Dynomite provides sharding and multi-data center replication. It has a shared nothing architecture with no single point of failure (SPOF) that delivers high availability (HA) even when a server, rack or entire data center goes offline.
 .PP
-It was primarily built to reduce the connection count on backend caching
-servers, but it has a number of features, such as:
+Redis is currently the primary backend and protocol supported by Dynomite, while support for Memcached is partially implemented. Future versions of Dynomite will support additional backends.
+.PP
+Dynomite provides the following functionality:
 .IP \[bu]
-Maintains persistent server connections to backend servers.
+Linear scalability
 .IP \[bu]
-Enables pipelining of requests and responses.
+High availability (HA)
 .IP \[bu]
-Supports multiple server pools simultaneously.
+Shared nothing architecture with symmetric nodes
 .IP \[bu]
-Shard data automatically across multiple servers.
+Multi-data center (DC) replication
 .IP \[bu]
-Supports multiple hashing modes including consistent hashing and
-distribution.
+Data replication and sharding
 .IP \[bu]
-High-availability by disabling nodes on failures.
+Support for any Redis client plus a specialized Dyno client for Java
 .IP \[bu]
-Observability through stats exposed on stats monitoring port.
+Reduced connections to and lower connection overhead on backend storage engines via persistent connections
+.IP \[bu]
+Observability via easily accessible statistics
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help
-Show usage information and exit.
+Show help about dynomite and exit.
 .TP
 .BR \-V ", " \-\-version
-Show version and exit.
+Show dynomite version and exit.
 .TP
 .BR \-t ", " \-\-test-conf
-Test configuration for syntax errors and exit.
+Test configuration file for syntax errors and exit.
 .TP
-.BR \-D ", " \-\-describe-stats
-Print stats description and exit.
-.TP
-.BR \-v ", " \-\-verbosity=\fIN\fP
-Set logging level to \fIN\fP. (default: 5, min: 0, max: 11)
-.TP
-.BR \-o ", " \-\-output=\fIfilename\fP
-Set logging file to \fIfilename\fP.
-.TP
-.BR \-c ", " \-\-conf-file=\fIfilename\fP
-Set configuration file to \fIfilename\fP.
-.TP
-.BR \-s ", " \-\-stats-port=\fIport\fP
-Set stats monitoring port to \fIport\fP.
-(default: 22222)
-.TP
-.BR \-a ", " \-\-stats-addr=\fIaddress\fP
-Set stats monitoring IP to \fIaddress\fP.
-(default: 0.0.0.0)
-.TP
-.BR \-i ", " \-\-stats-interval=\fIinterval\fP
-Set stats aggregation interval in msec to \fIinterval\fP.
-(default: 30000 msec)
-.TP
-.BR \-m ", " \-\-mbuf-size=\fIsize\fP
-Set size of mbuf chunk in bytes to \fIsize\fP. (default: 16384 bytes)
+.BR \-g ", " \-\-gossip
+Enable gossip. (default: disable)
 .TP
 .BR \-d ", " \-\-daemonize
-Run as a daemon.
+Run dynomite as a daemon in the background.
 .TP
-.BR \-p ", " \-\-pid-file=\fIfilename\fP
-Set pid file to \fIfilename\fP.
+.BR \-D ", " \-\-describe-stats
+Print statistics description and exit.
+.TP
+.BI \-v\  N \fR,\ \fB\-\-verbosity= N
+Set logging level to
+.IR N .
+(default: 5, min: 0, max: 11)
+.TP
+.BI \-o\  file \fR,\ \fB\-\-output= file
+Set logging file to
+.IR file .
+.TP
+.BI \-c\  file \fR,\ \fB\-\-conf-file= file
+Set the configuration file to
+.IR file .
+.TP
+.BI \-s\  port \fR,\ \fB\-\-stats-port= port
+Set the statistics monitoring port to
+.IR port .
+(default: 22222)
+.TP
+.BI \-a\  ip-address \fR,\ \fB\-\-stats-addr= ip-address
+Set the statistics monitoring IP address to
+.IR ip-address .
+(default: 0.0.0.0)
+.TP
+.BI \-i\  N \fR,\ \fB\-\-stats-interval= N
+Set statistics aggregation interval to
+.IR N
+milliseconds. (default: 30000)
+.TP
+.BI \-p\  file \fR,\ \fB\-\-pid-file= file
+Set the pid file to
+.IR file .
+.TP
+.BI \-m\  N \fR,\ \fB\-\-mbuf-size= N
+Set mbuf chunk size to
+.IR N
+bytes. (default: 16384)
+.TP
+.BI \-M\  N \fR,\ \fB\-\-max-msgx= N
+Set the maximum number of messages to allocate to
+.IR N .
+(default: 200000)
+.TP
+.BI \-x\  N \fR,\ \fB\-\-admin-operation= N
+Set the size of admin operation to
+.IR N .
+(default: 0)
 .SH SEE ALSO
 .BR memcached (8),
 .BR redis-server (1)
 .br
 .SH AUTHOR
-dynomite was written by Netflix, Inc.
+Dynomite was originally written by Netflix, Inc. as a fork of Twitter twemproxy. Dynomite is currently developed by Netflix, Inc. and the open source community. 

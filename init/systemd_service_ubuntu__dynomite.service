@@ -1,0 +1,20 @@
+[Unit]
+Description=Dynomite server
+; Services that should be started before Dynomite
+After=network.target nss-lookup.target time-sync.target
+Documentation=man:dynomite(8)
+
+[Service]
+User=dynomite
+; Default environment variable values
+Environment=DYNOMITE_CONF=/etc/dynomite/dynomite.yaml
+Type=forking
+; Environment vars to customize startup 
+EnvironmentFile=-/etc/default/dynomite
+ExecStart=/usr/local/sbin/dynomite -d -c $DYNOMITE_CONF -p /var/run/dynomite/dynomite.pid
+; Restart dynomite every 100ms
+Restart=always
+PIDFile=/var/run/dynomite/dynomite.pid
+
+[Install]
+WantedBy=multi-user.target

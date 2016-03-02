@@ -17,7 +17,7 @@ AM_CFLAGS += -Winline
 AM_CFLAGS += -Wunused-function -Wunused-variable -Wunused-value
 AM_CFLAGS += -Wno-unused-parameter -Wno-unused-value
 AM_CFLAGS += -Wconversion -Wsign-compare
-AM_CFLAGS += -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wmissing-declarations
+AM_CFLAGS += -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wmissing-declarations -Werror=implicit-function-declaration
 
 AM_LDFLAGS =
 AM_LDFLAGS += -lm -lpthread -rdynamic
@@ -27,7 +27,7 @@ if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
 
-SUBDIRS = hashkit proto event seedsprovider
+SUBDIRS = hashkit proto event seedsprovider tools
 
 sbin_PROGRAMS = dynomite test
 
@@ -41,8 +41,7 @@ dynomite_SOURCES =			                          \
         dyn_dnode_msg.c dyn_dnode_msg.h                           \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
         dyn_dnode_request.c                                       \
-        dyn_dnode_response.c                                      \
-        dyn_dnode_server.c dyn_dnode_server.h                     \
+        dyn_dnode_proxy.c dyn_dnode_proxy.h                     \
         dyn_histogram.c dyn_histogram.h                           \
         dyn_server.c dyn_server.h		                          \
         dyn_proxy.c dyn_proxy.h		                              \
@@ -65,7 +64,7 @@ dynomite_SOURCES =			                          \
         dyn_queue.h			                                      \
         dyn_gossip.c dyn_gossip.h                                 \
         dyn_dict.c dyn_dict.h                                     \
-        dyn_asciilogo.h                                           \ 
+        dyn_asciilogo.h                                           \
         dynomite.c 
 
 
@@ -87,8 +86,7 @@ test_SOURCES =                                                \
         dyn_dnode_msg.c dyn_dnode_msg.h                           \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
         dyn_dnode_request.c                                       \
-        dyn_dnode_response.c                                      \
-        dyn_dnode_server.c dyn_dnode_server.h                     \
+        dyn_dnode_proxy.c dyn_dnode_proxy.h                     \
         dyn_histogram.c dyn_histogram.h                           \
         dyn_server.c dyn_server.h                                 \
         dyn_proxy.c dyn_proxy.h                                   \

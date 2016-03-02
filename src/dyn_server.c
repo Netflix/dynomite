@@ -27,8 +27,10 @@
 #include "dyn_server.h"
 #include "dyn_conf.h"
 #include "dyn_token.h"
+#include "dyn_dnode_peer.h"
 
-void
+static void server_close(struct context *ctx, struct conn *conn);
+static void
 server_ref(struct conn *conn, void *owner)
 {
 	struct server *server = owner;
@@ -49,7 +51,7 @@ server_ref(struct conn *conn, void *owner)
 			server->pname.len, server->pname.data);
 }
 
-void
+static void
 server_unref(struct conn *conn)
 {
 	struct server *server;
@@ -82,7 +84,7 @@ server_timeout(struct conn *conn)
 	return pool->timeout;
 }
 
-bool
+static bool
 server_active(struct conn *conn)
 {
     ASSERT(conn->type == CONN_SERVER);
@@ -123,6 +125,19 @@ server_each_set_owner(void *elem, void *data)
 	return DN_OK;
 }
 
+static void
+server_deinit(struct array *server)
+{
+	uint32_t i, nserver;
+
+	for (i = 0, nserver = array_n(server); i < nserver; i++) {
+		struct server *s = array_pop(server);
+        IGNORE_RET_VAL(s);
+		ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
+	}
+	array_deinit(server);
+}
+
 rstatus_t
 server_init(struct array *servers, struct array *conf_server,
 		struct server_pool *sp)
@@ -160,20 +175,7 @@ server_init(struct array *servers, struct array *conf_server,
 	return DN_OK;
 }
 
-void
-server_deinit(struct array *server)
-{
-	uint32_t i, nserver;
-
-	for (i = 0, nserver = array_n(server); i < nserver; i++) {
-		struct server *s = array_pop(server);
-        IGNORE_RET_VAL(s);
-		ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
-	}
-	array_deinit(server);
-}
-
-struct conn *
+static struct conn *
 server_conn(struct server *server)
 {
 	struct server_pool *pool;
@@ -340,8 +342,9 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)
                       && (!conn->same_dc))) {
-        log_debug(LOG_INFO, "dyn: close s %d swallow req %"PRIu64" len %"PRIu32
-                  " type %d", conn->sd, req->id, req->mlen, req->type);
+        log_info("close %s %d swallow req %"PRIu64" len %"PRIu32
+                 " type %d", conn_get_type_string(conn), conn->sd, req->id,
+                 req->mlen, req->type);
         req_put(req);
         return;
     }
@@ -366,10 +369,11 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     rsp->err = req->err = conn->err;
     rsp->dyn_error = req->dyn_error = STORAGE_CONNECTION_REFUSE;
     rsp->dmsg = NULL;
-    log_warn("%d:%d <-> %d:%d", req->id, req->parent_id, rsp->id, rsp->parent_id);
+    log_debug(LOG_DEBUG, "%d:%d <-> %d:%d", req->id, req->parent_id, rsp->id, rsp->parent_id);
 
-    log_warn("dyn: close s %d schedule error for req %u:%u "
-             "len %"PRIu32" type %d from c %d%c %s", conn->sd, req->id, req->parent_id,
+    log_info("close %s %d req %u:%u "
+             "len %"PRIu32" type %d from c %d%c %s", conn_get_type_string(conn),
+             conn->sd, req->id, req->parent_id,
              req->mlen, req->type, c_conn->sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rstatus_t status =
@@ -379,7 +383,8 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     if (req->swallow)
         req_put(req);
 }
-void
+
+static void
 server_close(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
@@ -397,15 +402,18 @@ server_close(struct context *ctx, struct conn *conn)
 		return;
 	}
 
+    uint32_t out_counter = 0;
 	for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
 		/* dequeue the message (request) from server outq */
         conn_dequeue_outq(ctx, conn, msg);
         server_ack_err(ctx, conn, msg);
+        out_counter++;
 	}
 	ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
+    uint32_t in_counter = 0;
     for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
 		nmsg = TAILQ_NEXT(msg, s_tqe);
 
@@ -414,11 +422,14 @@ server_close(struct context *ctx, struct conn *conn)
         // We should also remove the msg from the timeout rbtree.
         msg_tmo_delete(msg);
         server_ack_err(ctx, conn, msg);
+        in_counter++;
 
 		stats_server_incr(ctx, conn->owner, server_dropped_requests);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
+    log_warn("close %s %d Dropped %u outqueue & %u inqueue requests",
+             conn_get_type_string(conn), conn->sd, out_counter, in_counter);
 
 	msg = conn->rmsg;
 	if (msg != NULL) {
@@ -527,7 +538,7 @@ server_connect(struct context *ctx, struct server *server, struct conn *conn)
 	return status;
 }
 
-void
+static void
 server_connected(struct context *ctx, struct conn *conn)
 {
 	struct server *server = conn->owner;
@@ -546,7 +557,7 @@ server_connected(struct context *ctx, struct conn *conn)
         }
 }
 
-void
+static void
 server_ok(struct context *ctx, struct conn *conn)
 {
 	struct server *server = conn->owner;
@@ -835,7 +846,7 @@ dictType dc_string_dict_type = {
 };
 
 
-rstatus_t
+static rstatus_t
 rack_init(struct rack *rack)
 {
 	rack->continuum = dn_alloc(sizeof(struct continuum));
@@ -851,7 +862,7 @@ rack_init(struct rack *rack)
 }
 
 
-rstatus_t
+static rstatus_t
 rack_deinit(struct rack *rack)
 {
 	if (rack->continuum != NULL) {
@@ -862,7 +873,8 @@ rack_deinit(struct rack *rack)
 }
 
 
-rstatus_t dc_init(struct datacenter *dc)
+static rstatus_t
+dc_init(struct datacenter *dc)
 {
 	rstatus_t status;
 
@@ -875,21 +887,20 @@ rstatus_t dc_init(struct datacenter *dc)
 	return status;
 }
 
-rstatus_t
+static rstatus_t
+rack_destroy(void *elem, void *data)
+{
+	struct rack *rack = elem;
+	return rack_deinit(rack);
+}
+
+static rstatus_t
 dc_deinit(struct datacenter *dc)
 {
 	array_each(&dc->racks, rack_destroy, NULL);
 	string_deinit(dc->name);
 	//dictRelease(dc->dict_rack);
 	return DN_OK;
-}
-
-
-rstatus_t
-rack_destroy(void *elem, void *data)
-{
-	struct rack *rack = elem;
-	return rack_deinit(rack);
 }
 
 rstatus_t
@@ -988,4 +999,371 @@ server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, stru
 {
 	struct datacenter *dc = server_get_dc(sp, dcname);
 	return server_get_rack(dc, rackname);
+}
+
+struct msg *
+rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
+{
+    struct msg *msg;
+
+    ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
+           (conn->type == CONN_SERVER));
+
+    if (conn->eof) {
+        msg = conn->rmsg;
+
+        if (conn->dyn_mode) {
+            if (conn->non_bytes_recv > MAX_CONN_ALLOWABLE_NON_RECV) {
+                conn->err = EPIPE;
+                return NULL;
+            }
+            conn->eof = 0;
+            return msg;
+        }
+
+        /* server sent eof before sending the entire request */
+        if (msg != NULL) {
+            conn->rmsg = NULL;
+
+            ASSERT(msg->peer == NULL);
+            ASSERT(!msg->request);
+
+            log_error("eof s %d discarding incomplete rsp %"PRIu64" len "
+                      "%"PRIu32"", conn->sd, msg->id, msg->mlen);
+
+            rsp_put(msg);
+        }
+
+        /*
+         * We treat TCP half-close from a server different from how we treat
+         * those from a client. On a FIN from a server, we close the connection
+         * immediately by sending the second FIN even if there were outstanding
+         * or pending requests. This is actually a tricky part in the FA, as
+         * we don't expect this to happen unless the server is misbehaving or
+         * it crashes
+         */
+        conn->done = 1;
+        log_debug(LOG_DEBUG, "s %d active %d is done", conn->sd, conn_active(conn));
+
+        return NULL;
+    }
+
+    msg = conn->rmsg;
+    if (msg != NULL) {
+        ASSERT(!msg->request);
+        return msg;
+    }
+
+    if (!alloc) {
+        return NULL;
+    }
+
+    msg = rsp_get(conn);
+    if (msg != NULL) {
+        conn->rmsg = msg;
+    }
+
+    return msg;
+}
+
+static bool
+server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    struct msg *pmsg;
+
+    ASSERT(conn->type == CONN_SERVER);
+
+    if (msg_empty(msg)) {
+        ASSERT(conn->rmsg == NULL);
+        log_debug(LOG_VERB, "filter empty rsp %"PRIu64" on s %d", msg->id,
+                  conn->sd);
+        rsp_put(msg);
+        return true;
+    }
+
+    pmsg = TAILQ_FIRST(&conn->omsg_q);
+    if (pmsg == NULL) {
+        log_debug(LOG_VERB, "filter stray rsp %"PRIu64" len %"PRIu32" on s %d",
+                  msg->id, msg->mlen, conn->sd);
+        rsp_put(msg);
+        return true;
+    }
+
+    if (pmsg->noreply) {
+         conn_dequeue_outq(ctx, conn, pmsg);
+         req_put(pmsg);
+         rsp_put(msg);
+         return true;
+    }
+
+    ASSERT(pmsg->peer == NULL);
+    ASSERT(pmsg->request && !pmsg->done);
+
+    if (pmsg->swallow) {
+        conn_dequeue_outq(ctx, conn, pmsg);
+        pmsg->done = 1;
+
+        log_debug(LOG_DEBUG, "swallow rsp %"PRIu64" len %"PRIu32" of req "
+                  "%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
+                  conn->sd);
+
+        rsp_put(msg);
+        req_put(pmsg);
+        return true;
+    }
+
+    return false;
+}
+
+static void
+server_rsp_forward_stats(struct context *ctx, struct server *server,
+                         struct msg *msg)
+{
+	ASSERT(!msg->request);
+
+	if (msg->is_read) {
+		stats_server_incr(ctx, server, read_responses);
+		stats_server_incr_by(ctx, server, read_response_bytes, msg->mlen);
+	} else {
+		stats_server_incr(ctx, server, write_responses);
+		stats_server_incr_by(ctx, server, write_response_bytes, msg->mlen);
+	}
+}
+
+static void
+server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
+{
+    rstatus_t status;
+    struct msg *req;
+    struct conn *c_conn;
+    ASSERT(s_conn->type == CONN_SERVER);
+
+    /* response from server implies that server is ok and heartbeating */
+    server_ok(ctx, s_conn);
+
+    /* dequeue peer message (request) from server */
+    req = TAILQ_FIRST(&s_conn->omsg_q);
+    ASSERT(req != NULL && req->peer == NULL);
+    ASSERT(req->request && !req->done);
+
+    conn_dequeue_outq(ctx, s_conn, req);
+    req->done = 1;
+
+    /* establish rsp <-> req (response <-> request) link */
+    req->peer = rsp;
+    rsp->peer = req;
+
+    rsp->pre_coalesce(rsp);
+
+    c_conn = req->owner;
+    log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
+               rsp->id, rsp->parent_id);
+    
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+
+    server_rsp_forward_stats(ctx, s_conn->owner, rsp);
+    // this should really be the message's response handler be doing it
+    if (req_done(c_conn, req)) {
+        // handler owns the response now
+        status = conn_handle_response(c_conn, c_conn->type == CONN_CLIENT ?
+                                      req->id : req->parent_id, rsp);
+        IGNORE_RET_VAL(status);
+     }
+}
+
+static void
+rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
+                     struct msg *nmsg)
+{
+    ASSERT(conn->type == CONN_SERVER);
+    ASSERT(msg != NULL && conn->rmsg == msg);
+    ASSERT(!msg->request);
+    ASSERT(msg->owner == conn);
+    ASSERT(nmsg == NULL || !nmsg->request);
+
+    /* enqueue next message (response), if any */
+    conn->rmsg = nmsg;
+
+    if (server_rsp_filter(ctx, conn, msg)) {
+        return;
+    }
+    server_rsp_forward(ctx, conn, msg);
+}
+
+struct msg *
+req_send_next(struct context *ctx, struct conn *conn)
+{
+    rstatus_t status;
+    struct msg *msg, *nmsg; /* current and next message */
+
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
+
+    if (conn->connecting) {
+        if (conn->type == CONN_SERVER) {
+           server_connected(ctx, conn);
+        } else if (conn->type == CONN_DNODE_PEER_SERVER) {
+           dnode_peer_connected(ctx, conn);
+        }
+    }
+
+    nmsg = TAILQ_FIRST(&conn->imsg_q);
+    if (nmsg == NULL) {
+        /* nothing to send as the server inq is empty */
+        status = event_del_out(ctx->evb, conn);
+        if (status != DN_OK) {
+            conn->err = errno;
+        }
+
+        return NULL;
+    }
+
+    msg = conn->smsg;
+    if (msg != NULL) {
+        ASSERT(msg->request && !msg->done);
+        nmsg = TAILQ_NEXT(msg, s_tqe);
+    }
+
+    conn->smsg = nmsg;
+
+    if (nmsg == NULL) {
+        return NULL;
+    }
+
+    ASSERT(nmsg->request && !nmsg->done);
+
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "send next req %"PRIu64" len %"PRIu32" type %d on "
+                "s %d", nmsg->id, nmsg->mlen, nmsg->type, conn->sd);
+    }
+
+    return nmsg;
+}
+
+void
+req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    ASSERT((conn->type == CONN_SERVER) ||
+           (conn->type == CONN_DNODE_PEER_SERVER));
+    ASSERT(msg != NULL && conn->smsg == NULL);
+    ASSERT(msg->request && !msg->done);
+    //ASSERT(msg->owner == conn);
+
+    if (log_loggable(LOG_VVERB)) {
+       log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
+                "s %d", msg->id, msg->mlen, msg->type, conn->sd);
+    }
+
+    /* dequeue the message (request) from server inq */
+    conn_dequeue_inq(ctx, conn, msg);
+
+    /*
+     * noreply request instructs the server not to send any response. So,
+     * enqueue message (request) in server outq, if response is expected.
+     * Otherwise, free the noreply request
+     */
+    if (!msg->noreply || (conn->type == CONN_SERVER))
+        conn_enqueue_outq(ctx, conn, msg);
+    else
+        req_put(msg);
+}
+
+static void
+req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    ASSERT(msg->request);
+    ASSERT(conn->type == CONN_SERVER);
+
+    /*
+     * timeout clock starts ticking the instant the message is enqueued into
+     * the server in_q; the clock continues to tick until it either expires
+     * or the message is dequeued from the server out_q
+     *
+     * noreply request are free from timeouts because client is not interested
+     * in the reponse anyway!
+     */
+    if (!msg->noreply) {
+        msg_tmo_insert(msg, conn);
+    }
+
+    TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
+
+    conn->imsg_count++;
+    histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
+    stats_server_incr(ctx, conn->owner, in_queue);
+    stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+}
+
+static void
+req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    ASSERT(msg->request);
+    ASSERT(conn->type == CONN_SERVER);
+
+    TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
+
+    conn->imsg_count--;
+    histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
+    stats_server_decr(ctx, conn->owner, in_queue);
+    stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+}
+
+static void
+req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    ASSERT(msg->request);
+    ASSERT(conn->type == CONN_SERVER);
+
+    TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
+
+    conn->omsg_count++;
+    histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
+    stats_server_incr(ctx, conn->owner, out_queue);
+    stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
+}
+
+static void
+req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+{
+    ASSERT(msg->request);
+    ASSERT(conn->type == CONN_SERVER);
+
+    msg_tmo_delete(msg);
+
+    TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, msg->id, msg->parent_id);
+
+    conn->omsg_count--;
+    histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
+    stats_server_decr(ctx, conn->owner, out_queue);
+    stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
+}
+
+struct conn_ops server_ops = {
+    msg_recv,
+    rsp_recv_next,
+    rsp_recv_done,
+    msg_send,
+    req_send_next,
+    req_send_done,
+    server_close,
+    server_active,
+    server_ref,
+    server_unref,
+    req_server_enqueue_imsgq,
+    req_server_dequeue_imsgq,
+    req_server_enqueue_omsgq,
+    req_server_dequeue_omsgq,
+    conn_cant_handle_response
+};
+
+void
+init_server_conn(struct conn *conn)
+{
+    conn->type = CONN_SERVER;
+    conn->ops = &server_ops;
 }

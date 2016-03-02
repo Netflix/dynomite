@@ -27,6 +27,7 @@
 
 #include "dyn_core.h"
 #include "dyn_server.h"
+#include "dyn_dnode_peer.h"
 #include "proto/dyn_proto.h"
 #include "hashkit/dyn_hashkit.h"
 
@@ -197,6 +198,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     timeout = timeout * g_timeout_factor;
 
     node = &msg->tmo_rbe;
+    node->timeout = timeout;
     node->key = dn_msec_now() + timeout;
     node->data = conn;
 
@@ -232,7 +234,7 @@ msg_tmo_delete(struct msg *msg)
 static size_t alloc_msg_count = 0;
 
 static struct msg *
-_msg_get(bool force_alloc, const char *const caller)
+_msg_get(struct conn *conn, const char *const caller)
 {
     struct msg *msg;
 
@@ -247,20 +249,16 @@ _msg_get(bool force_alloc, const char *const caller)
 
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
-    if (alloc_msg_count >= alloc_msgs_max && !force_alloc) {
+    if (alloc_msg_count >= alloc_msgs_max) {
          log_debug(LOG_WARN, "allocated #msgs %lu hit max allowable limit", alloc_msg_count);
          return NULL;
-    }
-
-    if (alloc_msg_count >= MAX_ALLOC_MSGS) {
-        log_debug(LOG_WARN, "allocated #msgs %lu hit max hard limit", alloc_msg_count);
-        return NULL; //we hit the max limit
     }
 
     alloc_msg_count++;
 
 
-    log_warn("alloc_msg_count : %lu caller %s", alloc_msg_count, caller);
+    log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
+             alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -354,7 +352,7 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
 {
     struct msg *msg;
 
-    msg = _msg_get(conn->dyn_mode, caller);
+    msg = _msg_get(conn, caller);
     if (msg == NULL) {
         return NULL;
     }
@@ -460,13 +458,13 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 
 
 struct msg *
-msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
+msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
 {
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? strerror(err) : "unknown";
-    char *protstr = data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
+    char *protstr = conn->data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source;
 
     if (dyn_err == PEER_CONNECTION_REFUSE) {
@@ -475,7 +473,7 @@ msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
         source = "Storage:";
     }
 
-    msg = _msg_get(1, __FUNCTION__);
+    msg = _msg_get(conn, __FUNCTION__);
     if (msg == NULL) {
         return NULL;
     }
@@ -504,13 +502,13 @@ msg_get_error(int data_store, dyn_error_t dyn_err, err_t err)
 
 
 struct msg *
-msg_get_rsp_integer(int data_store)
+msg_get_rsp_integer(struct conn *conn)
 {
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
 
-    msg = _msg_get(1, __FUNCTION__);
+    msg = _msg_get(conn, __FUNCTION__);
     if (msg == NULL) {
         return NULL;
     }
