@@ -67,11 +67,10 @@ dynomite_SOURCES =			                          \
         dyn_asciilogo.h                                           \
         dynomite.c 
 
-
 dynomite_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
 dynomite_LDADD += $(top_builddir)/src/proto/libproto.a
 dynomite_LDADD += $(top_builddir)/src/event/libevent.a
-dynomite_LDADD +=  $(top_builddir)/src/seedsprovider/libseedsprovider.a
+dynomite_LDADD +=  $(top_builddir)/src/seedsprovider/libseedsprovider.a -lresolv
 dynomite_LDADD += $(top_builddir)/contrib/yaml-0.1.4/src/.libs/libyaml.a
 
 
@@ -116,5 +115,16 @@ test_SOURCES =                                                \
 test_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
 test_LDADD += $(top_builddir)/src/proto/libproto.a
 test_LDADD += $(top_builddir)/src/event/libevent.a
-test_LDADD +=  $(top_builddir)/src/seedsprovider/libseedsprovider.a
+test_LDADD +=  $(top_builddir)/src/seedsprovider/libseedsprovider.a -lresolv
 test_LDADD += $(top_builddir)/contrib/yaml-0.1.4/src/.libs/libyaml.a
+
+if OS_BSD
+dynomite_SOURCES +=                                               \
+	$(top_builddir)/contrib/fmemopen.c                        \
+	$(top_builddir)/contrib/fmemopen.h
+test_SOURCES +=                                                   \
+	$(top_builddir)/contrib/fmemopen.c                        \
+	$(top_builddir)/contrib/fmemopen.h
+endif
+
+
