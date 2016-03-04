@@ -12,6 +12,7 @@
 
 #define SIMPLE_PROVIDER           "simple_provider"
 #define FLORIDA_PROVIDER          "florida_provider"
+#define DNS_PROVIDER              "dns_provider"
 
 #define SEED_BUF_SIZE (1024*1024)     //in bytes
 
