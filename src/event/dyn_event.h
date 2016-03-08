@@ -34,6 +34,7 @@
 
 typedef int (*event_cb_t)(void *, uint32_t);
 typedef void (*event_stats_cb_t)(void *, void *);
+typedef void (*event_entropy_cb_t)(void *, void *);
 
 #ifdef DN_HAVE_KQUEUE
 
@@ -108,5 +109,6 @@ int event_add_conn(struct event_base *evb, struct conn *c);
 int event_del_conn(struct event_base *evb, struct conn *c);
 int event_wait(struct event_base *evb, int timeout);
 void event_loop_stats(event_stats_cb_t cb, void *arg);
+void event_loop_entropy(event_entropy_cb_t cb, void *arg);
 
 #endif /* _DN_EVENT_H */

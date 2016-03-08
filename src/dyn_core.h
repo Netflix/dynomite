@@ -98,6 +98,7 @@ struct mbuf;
 struct mhdr;
 struct conf;
 struct stats;
+struct entropy_conn;
 struct instance;
 struct event_base;
 struct rack;
@@ -136,6 +137,7 @@ struct dyn_ring;
 #include "dyn_crypto.h"
 #include "dyn_setting.h"
 
+#include "entropy/dyn_entropy.h"
 #include "event/dyn_event.h"
 
 #define ENCRYPTION 1
@@ -165,18 +167,18 @@ typedef enum data_store {
 
 
 struct context {
-    uint32_t           id;          /* unique context id */
-    struct conf        *cf;         /* configuration */
-    struct stats       *stats;      /* stats */
-
-    struct array       pool;        /* server_pool[] */
-    struct event_base  *evb;        /* event base */
-    int                max_timeout; /* max timeout in msec */
-    int                timeout;     /* timeout in msec */
-    dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
+    uint32_t           id;          	/* unique context id */
+    struct conf        *cf;         	/* configuration */
+    struct stats       *stats;          /* stats */
+    struct entropy     *entropy;    	/* send reconciliation connection */
+    struct array       pool;        	/* server_pool[] */
+    struct event_base  *evb;        	/* event base */
+    int                max_timeout; 	/* max timeout in msec */
+    int                timeout;     	/* timeout in msec */
+    dyn_state_t        dyn_state;   	/* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     unsigned           enable_gossip:1;   /* enable/disable gossip */
-    unsigned           admin_opt;   /* admin mode */
+    unsigned           admin_opt;   	/* admin mode */
 };
 
 
@@ -189,8 +191,10 @@ struct instance {
     int             stats_interval;              /* stats aggregation interval */
     char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
+    uint16_t        entropy_port;                  /* send reconciliation port */
+    char            *entropy_addr;                 /* send reconciliation addr */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
-    size_t			alloc_msgs_max;			 /* allocated messages buffer size */
+    size_t			alloc_msgs_max;			     /* allocated messages buffer size */
     pid_t           pid;                         /* process id */
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
@@ -305,6 +309,8 @@ struct server_pool {
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
     struct string      pem_key_file;
+    struct string      recon_key_file;
+	struct string      recon_iv_file;
     data_store_t	   data_store;	/* the backend data store */
 
 };
