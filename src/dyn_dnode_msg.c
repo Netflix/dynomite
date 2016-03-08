@@ -506,7 +506,7 @@ dyn_parse_req(struct msg *r)
 
 			}
 
-			//substract alraedy received bytes
+			//subtract the already received bytes
 			dmsg->plen -= b->last - b->pos;
 
 			return;
