@@ -2,7 +2,7 @@ MAINTAINERCLEANFILES = Makefile.in
 
 AM_CPPFLAGS = -I $(top_srcdir)/src
 
-AM_CFLAGS = -Wall -Wshadow -WError
+AM_CFLAGS = -Wall -Wshadow -Werror
 AM_CFLAGS += -Wno-unused-parameter -Wno-unused-value
 
 
