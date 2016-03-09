@@ -125,7 +125,7 @@ entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *pl
 
 error:
 
-  if(ctx != null)
+  if(ctx != NULL)
 	  free(ctx);
 
   return DN_ERROR;
@@ -189,7 +189,7 @@ entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *ciph
 
 error:
 
-    if(ctx != null)
+    if(ctx != NULL)
   	  free(ctx);
 
     return DN_ERROR;
