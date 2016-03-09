@@ -85,7 +85,8 @@ entropy_crypto_deinit()
  *
  */
 
-int entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *plaintext)
+int
+entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *plaintext)
 {
   EVP_CIPHER_CTX *ctx;
 
@@ -95,30 +96,40 @@ int entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char
 
   /* Create and initialize the context */
   if(!(ctx = EVP_CIPHER_CTX_new()))
-	  return DN_ERROR;
+	  goto error;
 
   /* Initialize the decryption operation with 256 bit AES */
   if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, theKey, theIv))
-	  return DN_ERROR;
+     goto error;
 
   /* Provide the message to be decrypted, and obtain the encrypted output.
    * EVP_EncryptUpdate can be called multiple times if necessary
    */
   if(1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
-	  return DN_ERROR;
+     goto error;
+
   plaintext_len = len;
 
   /* Finalize the decryption. Further ciphertext bytes may be written at
    * this stage.
    */
   if(1 != EVP_DecryptFinal_ex(ctx, ciphertext + len, &len))
-	  return DN_ERROR;
+     goto error;
+
   plaintext_len += len;
 
   /* Clean up */
   EVP_CIPHER_CTX_free(ctx);
 
   return plaintext_len;
+
+error:
+
+  if(ctx != null)
+	  free(ctx);
+
+  return DN_ERROR;
+
 }
 
 
@@ -133,7 +144,8 @@ int entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char
  *
  */
 
-int entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *ciphertext)
+int
+entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *ciphertext)
 {
   EVP_CIPHER_CTX *ctx;
 
@@ -147,24 +159,25 @@ int entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *
 
   /* Padding */
   if(1 != EVP_CIPHER_CTX_set_padding(ctx,0))
-	  return DN_ERROR;
+	  goto error;
 
   /* Initialize the encryption operation with 256 bit AES */
   if(1 != EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, theKey, theIv))
-	  return DN_ERROR;
+	  goto error;
 
   /* Provide the message to be encrypted, and obtain the encrypted output.
    * EVP_EncryptUpdate can be called multiple times if necessary
    */
   if(1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
-	  return DN_ERROR;
+	  goto error;
+
   ciphertext_len = len;
 
   /* Finalize the encryption. Further ciphertext bytes may be written at
    * this stage.
    */
   if(1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len))
-	  return DN_ERROR;
+	  goto error;
   ciphertext_len += len;
 
   /* Clean up */
@@ -173,6 +186,14 @@ int entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *
  // loga("Block size: %d", EVP_CIPHER_block_size(ctx) );
 
   return ciphertext_len;
+
+error:
+
+    if(ctx != null)
+  	  free(ctx);
+
+    return DN_ERROR;
+
 }
 
 
@@ -358,7 +379,8 @@ entropy_key_iv_load(struct context *ctx){
  *           or NULL if a new thread cannot be picked up.
  */
 
-struct entropy *entropy_init(uint16_t entropy_port, char *entropy_ip, struct context *ctx)
+struct entropy *
+entropy_init(uint16_t entropy_port, char *entropy_ip, struct context *ctx)
 {
 
     rstatus_t status;
