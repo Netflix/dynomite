@@ -25,7 +25,7 @@
 #define ENCRYPT_FLAG			1
 #define DECRYPT_FLAG			0
 
-#define BUFFER_SIZE				16384				    // BUFFER_SIZE 256KB
+#define BUFFER_SIZE				(16 * 1024)				// BUFFER_SIZE 16384
 #define CIPHER_SIZE				(BUFFER_SIZE + 1024)    // CIPHER_SIZE must be larger than BUFFER_SIZE
 
 /* Structure for sending AOF to Spark Cluster */
@@ -42,7 +42,7 @@ struct entropy {
     struct string     recon_iv_file;		  /* file with Initialization Vector encryption in reconciliation */
 };
 
-struct entropy *entropy_init(uint16_t entropy_port, char *entropy_ip, struct context *ctx);
+struct entropy *entropy_init(struct context *ctx, uint16_t entropy_port, char *entropy_ip);
 void *entropy_loop(void *arg);
 rstatus_t entropy_conn_start(struct entropy *cn);
 void entropy_conn_destroy(struct entropy *cn);

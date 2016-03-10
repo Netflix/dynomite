@@ -33,6 +33,65 @@
 
 #include "dyn_core.h"
 
+
+/**
+ * Anti - Entropy
+ * ------------
+ *
+ * The entropy utility requires an external cluster that receives
+ * the data and performs the reconciliation among nodes that contain
+ * the same token. The communication between the external cluster
+ * and Dynomite is performed through port 8105. Dynomite sends the snapshot
+ * in chunks and encrypts each chunk independently using AES CBC 128.
+ * The use of encryption is configurable.
+ *
+ * All socket connections are initialized
+ * by the external cluster. Dynomite processes the following header:
+ *
+ * 1. Dynomite entropy receives a header with the following information
+ *    a. 4 Bytes: Magic number which consists of 64640000 + 000X, where X is the version
+ *    b. 4 Bytes: Dynomite to send the snapshot (1) or to receive reconciled data (2)
+ *    c. 4 Bytes: size of the header
+ *    d. 4 Bytes: size of each chunk size (or else referred to as buffer_size)
+ *    e. 4 Bytes: size of the cipher
+ *
+ *    //TODO: need to add the IV in the header from Spark ---> Dynomite
+ *
+ * 2. Based on the fist byte the "dyn_entropy_snd.c" or "dyn_entropy_rcv.c" is invoked.
+ *
+ * Dynomite Sender
+ * ---------------
+ * The sender works as follows:
+ * 3. Dynomite invokes a Redis background AOF
+ *
+ * 4. Dynomite sends a header that contains
+ *    a. 4 Bytes: Version number
+ *    b. 4 Bytes: File size to stream
+ *    c. 4 Bytes: Encryption enabled or disabled
+ *
+ * 5. Dynomite streams the snapshot in chunks. Evidently the last
+ *    chunk size may be smaller than the rest.
+ *
+ * Stream of a snapshot is also throttled. By default set to 10 Mbps.
+ *
+ * Dynomite Receiver
+ * ---------------
+ * The receiver first opens a connection with the Redis server to talk through RESP.
+ * 3. Dynomite receiver receives
+ *    a. 4 Bytes: key length
+ *    b. key length Bytes : key
+ *    c. 4 Bytes: old value length
+ *    d. old value length Bytes: old value
+ *    e. 4 Bytes: new value length
+ *    f  new value length Bytes: new value
+ *
+ * 4. Data are flushed to Redis.
+ */
+
+
+/* Magic number for the protocol*/
+#define MAGIC_NUMBER 64640001
+
 /* Define max values so that Dynomite operates under limits */
 #define MAX_HEADER_SIZE 1024
 #define MAX_BUFFER_SIZE 5120000 //5MB
@@ -126,7 +185,7 @@ entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *pl
 error:
 
   if(ctx != NULL)
-	  free(ctx);
+	  EVP_CIPHER_CTX_free(ctx);
 
   return DN_ERROR;
 
@@ -190,7 +249,7 @@ entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *ciph
 error:
 
     if(ctx != NULL)
-  	  free(ctx);
+    	EVP_CIPHER_CTX_free(ctx);
 
     return DN_ERROR;
 
@@ -203,7 +262,7 @@ error:
  * closes the socket connection
  */
 
-void
+static void
 entropy_conn_stop(struct entropy *cn)
 {
     close(cn->sd);
@@ -334,7 +393,8 @@ entropy_key_iv_load(struct context *ctx){
         log_error("Error fstat --> %s", strerror(errno));
     	return DN_ERROR;
     }
-    else if (file_stat.st_size > BUFFER_SIZE){			/* Compare file size with BUFFER_SIZE */
+
+    if (file_stat.st_size > BUFFER_SIZE){			/* Compare file size with BUFFER_SIZE */
        	log_error("key file size is bigger then the buffer size");
    	    return DN_ERROR;
     }
@@ -345,7 +405,8 @@ entropy_key_iv_load(struct context *ctx){
     	log_error("Error fstat --> %s", strerror(errno));
  	    return DN_ERROR;
     }
-    else if (file_stat.st_size > BUFFER_SIZE){
+
+    if (file_stat.st_size > BUFFER_SIZE){
     	log_error("IV file size is bigger then the buffer size");
 	    return DN_ERROR;
     }
@@ -373,14 +434,16 @@ entropy_key_iv_load(struct context *ctx){
 /*
  * Function:  entropy_snd_init
  * --------------------
- * Initiates the data for the connection towards another cluster for reconciliation
+ * Initiates the data for the connection towards another cluster for reconciliation.
+ * Loading of key/iv happens only once by calling entropy_key_iv_load which is a util function.
+ *  The same key/iv are reused in the entropy_rcv_init as well.
  *
  *  returns: a entropy_conn structure with information about the connection
  *           or NULL if a new thread cannot be picked up.
  */
 
 struct entropy *
-entropy_init(uint16_t entropy_port, char *entropy_ip, struct context *ctx)
+entropy_init( struct context *ctx, uint16_t entropy_port, char *entropy_ip)
 {
 
     rstatus_t status;
@@ -392,9 +455,6 @@ entropy_init(uint16_t entropy_port, char *entropy_ip, struct context *ctx)
         goto error;
     }
 
-    /* Loading of key/iv happens only once by calling entropy_key_iv_load which is a util function.
-     * The same key/iv are reused in the entropy_rcv_init as well.
-     */
     if(entropy_key_iv_load(ctx) == DN_ERROR){										//TODO: we do not need to do that if encryption flag is not set.
     	log_error("recon_key.pem or recon_iv.pem cannot be loaded properly");
         goto error;
@@ -461,37 +521,52 @@ entropy_callback(void *arg1, void *arg2)
     	log_error("peer socket could not be established");
     	goto error;
     }
-    loga("Spark socket connection accepted"); //TODO: print information about the socket IP address.
+    loga("Recon socket connection accepted"); //TODO: print information about the socket IP address.
 
     /* Read header from Lepton */
-    int32_t sndOrRcv = 0;
-    if( read(peer_socket, &sndOrRcv, sizeof(int32_t)) < 1) {
+    uint32_t magic = 0;
+    if( read(peer_socket, &magic, sizeof(uint32_t)) < 1) {
+        log_error("Error on processing header from Lepton --> %s", strerror(errno));
+    	goto error;
+    }
+    magic = ntohl(magic);
+
+    uint32_t sndOrRcv = 0;
+    if( read(peer_socket, &sndOrRcv, sizeof(uint32_t)) < 1) {
         log_error("Error on processing header from Lepton --> %s", strerror(errno));
     	goto error;
     }
     sndOrRcv = ntohl(sndOrRcv);
 
-    int32_t headerSize;
-    if( read(peer_socket, &headerSize, sizeof(int32_t)) < 1) {
+    uint32_t headerSize;
+    if( read(peer_socket, &headerSize, sizeof(uint32_t)) < 1) {
         log_error("Error on processing header size from Lepton --> %s", strerror(errno));
     	goto error;
     }
     headerSize = ntohl(headerSize);
 
-    int32_t bufferSize;
-    if( read(peer_socket, &bufferSize, sizeof(int32_t)) < 1) {
+    uint32_t bufferSize;
+    if( read(peer_socket, &bufferSize, sizeof(uint32_t)) < 1) {
         log_error("Error on processing buffer size from Lepton --> %s", strerror(errno));
     	goto error;
     }
     bufferSize = ntohl(bufferSize);
 
-    int32_t cipherSize;
-    if( read(peer_socket, &cipherSize, sizeof(int32_t)) < 1) {
+    uint32_t cipherSize;
+    if( read(peer_socket, &cipherSize, sizeof(uint32_t)) < 1) {
         log_error("Error on processing cipher size from Lepton --> %s", strerror(errno));
        	goto error;
     }
     cipherSize = ntohl(cipherSize);
 
+    if (magic != MAGIC_NUMBER) {
+    	log_error("Magic number not correct or not receiver properly --> %s ----> %d", strerror(errno),magic);
+    	log_error("Expected magic number: %d", MAGIC_NUMBER);
+    	goto error;
+    }
+    else{
+    	log_debug("Protocol magic number: %d", magic);
+    }
 
     if (sndOrRcv != 1 && sndOrRcv !=2) {
     	log_error("Error on receiving PULL/PUSH --> %s ----> %d", strerror(errno),sndOrRcv);
