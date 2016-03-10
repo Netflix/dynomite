@@ -37,7 +37,6 @@
 #define THROUGHPUT_THROTTLE		10000000
 #define AOF_TO_SEND		"/mnt/data/nfredis/appendonly.aof"	/* add in .yml */
 
-
 /*
  * Function:  entropy_redis_compact_aof
  * --------------------
