@@ -206,7 +206,7 @@ dnode_peer_each_pool_init(void *elem, void *context)
     /* init seeds list */
     nseed = array_n(conf_seeds);
     if(nseed == 0) {
-        log_debug(LOG_INFO, "dyn: look like you are running with no seeds deifined. This is ok for running with just one node.");
+        log_debug(LOG_INFO, "dyn: look like you are running with no seeds defined. This is ok for running with just one node.");
 
         // add current node to peers array
         status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct server));
