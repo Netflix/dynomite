@@ -84,7 +84,7 @@
 #define CONF_DEFAULT_DC                      "localdc"
 #define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
 
-#define CONF_DEFAUTL_SEED_PROVIDER           "simple_provider"
+#define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
 #define PEM_KEY_FILE  "conf/dynomite.pem"
 
