@@ -710,7 +710,7 @@ stats_aggregate_metric(struct array *dst, struct array *src)
             break;
 
         case STATS_GAUGE:
-            stm2->value.counter = stm1->value.counter;
+            stm2->value.counter += stm1->value.counter;
             break;
 
         case STATS_TIMESTAMP:
