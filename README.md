@@ -10,7 +10,7 @@ The ultimate goal with Dynomite is to be able to implement high availability and
 
 The stable version of Dynomite is the [master]( https://github.com/Netflix/dynomite/tree/master ) branch. 
 
-For questions or contributions, please consider reading [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+For questions or contributions, please consider reading [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Build
 
