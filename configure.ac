@@ -5,7 +5,7 @@ m4_ifndef([m4_esyscmd_s], [m4_define([m4_esyscmd_s], [m4_chomp_all(m4_esyscmd([$
 # Define the package version numbers and the bug reporting address
 m4_define([DN_MAJOR], 0)
 m4_define([DN_MINOR], 5)
-m4_define([DN_PATCH], 6)
+m4_define([DN_PATCH], 7)
 m4_define([DN_BUGS], [dynomite@netflix.com])
 m4_define([DN_VERSION_STRING], m4_esyscmd_s([git describe --dirty --always --tags]))
 

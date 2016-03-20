@@ -23,9 +23,9 @@ if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
 
-sbin_PROGRAMS = dyn_hash_tool
+bin_PROGRAMS = dyno-hash-tool
 
-dyn_hash_tool_SOURCES =                                                \
+dyno_hash_tool_SOURCES =                                                \
         dyn_hash_tool.c ../dyn_token.c ../dyn_log.c ../dyn_util.c ../dyn_array.c
 
-dyn_hash_tool_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
+dyno_hash_tool_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
