@@ -182,14 +182,9 @@ crypto_init_for_test()
 rstatus_t
 crypto_deinit(void)
 {
+
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
-
-
     EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
-
-
-    EVP_CIPHER_CTX_free(aes_encrypt_ctx);
-    EVP_CIPHER_CTX_free(aes_decrypt_ctx);
 
     //free(aes_key);
 
