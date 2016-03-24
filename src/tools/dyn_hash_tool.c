@@ -17,15 +17,20 @@ char * token_filename = NULL;
 static void
 print_usage()
 {
-    printf("Usage:\n\n\thash_tool -h -i <filename> -o <output filename>\n");
-    printf("                -i <filename> or '-' for stdin(default)\n");
-    printf("                -o <filename> or '-' for stdout(default)\n");
-    printf("                -k also output keys in the output file\n\n");
-    printf("\tReads a key from the input file and outputs the token to the output"\
-           " file.\n\tUses stdin and stdout by default for input and output.\n"\
-           "\tExpects one key per line in the input and outputs one token per line in the output\n"\
-           "\tif -k is specified, it will output keys and tokens alternately. The Keys are prepended\n"\
-           "\twith 'KEY:'\n\n\tWARN: CURRENTLY IT USES MURMUR HASH ONLY\n\n");
+    printf("Usage: dyno-hash-tool [-hk] -i <filename> -o <output filename>\n");
+    printf("Read a key from input, hash key to create token, then output token to output.\n");
+    printf("  -i <filename> or '-' for stdin (default)\n");
+    printf("  -o <filename> or '-' for stdout (default)\n\n");
+    printf("Options:\n");
+    printf("  -h, --help             : this help\n");
+    printf("  -k                     : include key in output\n\n");
+    printf("Read a key from the input file and output the token to the output file. Default\n");
+    printf("input and output are stdin and stdout, respectively. Input file must list one\n");
+    printf("key per line. Output file will list one token per line that matches the line\n");
+    printf("number of the input key.\n\n"); 
+    printf("If the '-k' option is specified, then keys and tokens will output on alternating\n");
+    printf("rows. Each key has 'KEY:' appended to the beginning of the line\n\n");
+    printf("WARNING: dyno-hash-tool ONLY SUPPORTS MURMUR HASH (CURRENTLY)\n\n");
 }
 
 static int 

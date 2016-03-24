@@ -6,4 +6,4 @@ SUBDIRS = contrib src
 
 dist_man_MANS = man/dynomite.8
 
-EXTRA_DIST = README.md NOTICE LICENSE ChangeLog conf scripts notes
+EXTRA_DIST = README.md NOTICE LICENSE conf scripts notes
