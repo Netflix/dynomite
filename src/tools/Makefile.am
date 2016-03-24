@@ -23,7 +23,7 @@ if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
 
-bin_PROGRAMS = dyno-hash-tool
+bin_PROGRAMS = dynomite-hash-tool
 
 dyno_hash_tool_SOURCES =                                                \
         dyn_hash_tool.c ../dyn_token.c ../dyn_log.c ../dyn_util.c ../dyn_array.c
