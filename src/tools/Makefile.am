@@ -25,7 +25,11 @@ endif
 
 bin_PROGRAMS = dynomite-hash-tool
 
-dyno_hash_tool_SOURCES =                                                \
-        dyn_hash_tool.c ../dyn_token.c ../dyn_log.c ../dyn_util.c ../dyn_array.c
+dynomite_hash_tool_SOURCES = \
+        dyn_hash_tool.c \
+	../dyn_token.c \
+	../dyn_log.c \
+	../dyn_util.c \
+	../dyn_array.c
 
-dyno_hash_tool_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
+dynomite_hash_tool_LDADD = $(top_builddir)/src/hashkit/libhashkit.a
