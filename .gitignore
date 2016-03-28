@@ -78,6 +78,9 @@ Makefile.in
 /src/test
 cscope.out
 /src/cscope.out
+/src/.dirstamp
+/src/tools/dyn_hash_tool
+/src/tools/dynomite-hash-tool
 /test/*.pyc
 /test/_binaries/*
 /test/_binaries
