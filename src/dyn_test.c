@@ -434,7 +434,7 @@ aes_test(void)
 
     unsigned char *enc_msg = NULL;
     char *dec_msg          = NULL;
-    size_t enc_msg_len;
+    int enc_msg_len;
     int dec_msg_len;
 
     loga("=======================AES======================");
@@ -444,18 +444,18 @@ aes_test(void)
         const char *msg = msgs[i];
         log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
 
-        size_t expected_output_len = 16*((strlen(msg)/16) + 1);
+        int expected_output_len = (int) 16*((strlen(msg)/16) + 1);
         //loga("expected_output_len  = %lu", expected_output_len);
         // Encrypt the message with AES
         rstatus_t ret = DN_OK;
-        ret = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key);
+        ret = aes_encrypt((const unsigned char*)msg, (int) strlen(msg)+1, &enc_msg, aes_key);
         if (ret == DN_ERROR) {
             log_debug(LOG_VERB, "AES encryption failed\n");
             return ret;
         }
-        enc_msg_len = (size_t)ret;/* if success, aes_encrypt returns len */
+        enc_msg_len = (int)ret;/* if success, aes_encrypt returns len */
 
-        loga("enc_msg_len length %lu: ", enc_msg_len);
+        loga("enc_msg_len length %d: ", enc_msg_len);
         if (enc_msg_len != expected_output_len) {
             return DN_ERROR;
         }

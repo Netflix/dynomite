@@ -971,7 +971,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                     return DN_ENOMEM;
                 }
 
-                status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+                status = (rstatus_t)dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
                 if (status == DN_OK) {
                     int remain = n - msg->dmsg->plen;
                     uint8_t *pos = mbuf->last - remain;
@@ -986,7 +986,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                     return DN_ENOMEM;
                 }
 
-                status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+                status = (rstatus_t)dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
             }
 
             if (status != DN_ERROR && nbuf != NULL) {
