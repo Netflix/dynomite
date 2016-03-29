@@ -756,7 +756,7 @@ stats_aggregate(struct stats *st)
         }
     }
 
-    static int64_t last_reset = 0;
+    static msec_t last_reset = 0;
     if (!last_reset)
         last_reset = dn_msec_now();
     if ((last_reset + 5*60*1000) < dn_msec_now()) {
@@ -1876,7 +1876,7 @@ _stats_server_decr_by(struct context *ctx, struct server *server,
 
 void
 _stats_server_set_ts(struct context *ctx, struct server *server,
-                     stats_server_field_t fidx, int64_t val)
+                     stats_server_field_t fidx, uint64_t val)
 {
 
     struct stats_metric *stm;

@@ -124,7 +124,7 @@ struct conf_pool {
     int                preconnect;            /* preconnect: */
     int                auto_eject_hosts;      /* auto_eject_hosts: */
     int                server_connections;    /* server_connections: */
-    int                server_retry_timeout;  /* server_retry_timeout: in msec */
+    msec_t             server_retry_timeout_ms;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
     struct array       server;                /* servers: conf_server array */
     unsigned           valid:1;               /* valid? */
