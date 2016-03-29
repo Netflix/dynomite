@@ -261,7 +261,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     rstatus_t status;
     struct conn *c;
     struct sockaddr_in client_address;
-    int client_len = 0;
+    socklen_t client_len = sizeof(client_address);
     int sd = 0;
 
     ASSERT(p->type == CONN_DNODE_PEER_PROXY);
@@ -320,9 +320,8 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("dyn: set nonblock on %s %d from %s %d failed: %s",
-                  conn_get_type_string(c), c->sd, conn_get_type_string(p), p->sd,
-                  strerror(errno));
+        log_error("dyn: set nonblock on s %d from peer socket %d failed: %s",
+                  c->sd, p->sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -330,9 +329,8 @@ dnode_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("dyn: set tcpnodelay on %s %d from %s %d failed, ignored: %s",
-                     conn_get_type_string(c), c->sd, conn_get_type_string(p),
-                     p->sd, strerror(errno));
+            log_warn("dyn: set tcpnodelay on %d from peer socket %d failed, ignored: %s",
+                     c->sd, p->sd, strerror(errno));
         }
     }
 

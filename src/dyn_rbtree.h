@@ -22,6 +22,7 @@
 
 #ifndef _DYN_RBTREE_
 #define _DYN_RBTREE_
+#include "dyn_types.h"
 
 #define rbtree_red(_node)           ((_node)->color = 1)
 #define rbtree_black(_node)         ((_node)->color = 0)
@@ -33,8 +34,8 @@ struct rbnode {
     struct rbnode *left;     /* left link */
     struct rbnode *right;    /* right link */
     struct rbnode *parent;   /* parent link */
-    int64_t       key;       /* key for ordering */
-    int           timeout;   /* timeout */
+    msec_t        key;       /* key for ordering */
+    msec_t        timeout;   /* timeout */
     void          *data;     /* opaque data */
     uint8_t       color;     /* red | black */
 };

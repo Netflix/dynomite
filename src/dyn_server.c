@@ -70,7 +70,7 @@ server_unref(struct conn *conn)
 			server->pname.len, server->pname.data);
 }
 
-int
+msec_t
 server_timeout(struct conn *conn)
 {
 	struct server *server;
@@ -258,7 +258,7 @@ static void
 server_failure(struct context *ctx, struct server *server)
 {
 	struct server_pool *pool = server->owner;
-	int64_t now, next;
+	usec_t now, next;
 	rstatus_t status;
 
 	if (!pool->auto_eject_hosts) {
@@ -282,12 +282,12 @@ server_failure(struct context *ctx, struct server *server)
 
 	stats_server_set_ts(ctx, server, server_ejected_at, now);
 
-	next = now + pool->server_retry_timeout;
+	next = now + pool->server_retry_timeout_us;
 
 	log_debug(LOG_INFO, "update pool %"PRIu32" '%.*s' to delete server '%.*s' "
 			"for next %"PRIu32" secs", pool->idx, pool->name.len,
 			pool->name.data, server->pname.len, server->pname.data,
-			pool->server_retry_timeout / 1000 / 1000);
+			pool->server_retry_timeout_us / 1000 / 1000);
 
 	stats_pool_incr(ctx, pool, server_ejects);
 
@@ -580,14 +580,14 @@ static rstatus_t
 server_pool_update(struct server_pool *pool)
 {
 	rstatus_t status;
-	int64_t now;
+	usec_t now;
 	uint32_t pnlive_server; /* prev # live server */
 
 	if (!pool->auto_eject_hosts) {
 		return DN_OK;
 	}
 
-	if (pool->next_rebuild == 0LL) {
+	if (pool->next_rebuild == 0ULL) {
 		return DN_OK;
 	}
 
