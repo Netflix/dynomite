@@ -248,7 +248,7 @@ conf_server_each_transform(void *elem, void *data)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0LL;
+    s->next_retry = 0ULL;
     s->failure_count = 0;
 
     log_debug(LOG_VERB, "transform to server %"PRIu32" '%.*s'",
@@ -297,7 +297,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0LL;
+    s->next_retry = 0ULL;
     s->failure_count = 0;
 
     s->processed = 0;
@@ -485,7 +485,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->client_connections = (uint32_t)cp->client_connections;
 
     sp->server_connections = (uint32_t)cp->server_connections;
-    sp->server_retry_timeout_us = (int64_t)cp->server_retry_timeout_ms * 1000LL;
+    sp->server_retry_timeout_ms = cp->server_retry_timeout_ms;
     sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
     sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
     sp->preconnect = cp->preconnect ? 1 : 0;

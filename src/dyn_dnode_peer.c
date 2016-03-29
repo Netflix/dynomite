@@ -157,7 +157,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
     peer->ns_conn_q = 0;
     TAILQ_INIT(&peer->s_conn_q);
 
-    peer->next_retry = 0LL;
+    peer->next_retry = 0ULL;
     peer->failure_count = 0;
     peer->is_seed = 1;
     string_copy(&peer->dc, pool->dc.data, pool->dc.len);
@@ -528,7 +528,7 @@ dnode_peer_failure(struct context *ctx, struct server *server)
        log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' for peer '%.*s' "
                "for next %"PRIu32" secs", pool->idx, pool->name.len,
                pool->name.data, server->pname.len, server->pname.data,
-               pool->server_retry_timeout_us / 1000 / 1000);
+               pool->server_retry_timeout_ms/1000);
     }
 
     stats_pool_incr(ctx, pool, peer_ejects);
@@ -923,7 +923,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0LL;
+    s->next_retry = 0ULL;
     s->failure_count = 0;
     s->is_seed = node->is_seed;
 
@@ -1116,7 +1116,7 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
                 " to 0", server->pname.len, server->pname.data,
                 server->failure_count);
         server->failure_count = 0;
-        server->next_retry = 0LL;
+        server->next_retry = 0ULL;
     }
 }
 
