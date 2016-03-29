@@ -201,29 +201,34 @@ aes_encrypt(const unsigned char *msg, int msg_len, unsigned char *enc_msg, unsig
     EVP_CIPHER_CTX *aes_encrypt_ctx;
 
     /* Create and initialize the context */
-    if(!(aes_encrypt_ctx = EVP_CIPHER_CTX_new()))
-        goto error;
+    if(!(aes_encrypt_ctx = EVP_CIPHER_CTX_new())) {
+    	loga("creating encryption context failed");
+   	    goto error;
+    }
 
     /* RSA Padding */
-    if(1 != EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING))
-        goto error;
+    if(1 != EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING)) {
+    	loga("encryption set padding failed");
+   	    goto error;
+    }
 
     /* Initialize the encryption operation with 256 bit AES */
-    if(1 != EVP_EncryptInit_ex(aes_encrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key))
-        goto error;
-
+    if(1 != EVP_EncryptInit_ex(aes_encrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key)) {
+        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptInit_ex, crypto data with %ld bytes of data", msg_len);
+   	    goto error;
+    }
 
     /* Provide the message to be encrypted, and obtain the encrypted output.
       * EVP_EncryptUpdate can be called multiple times if necessary
       */
      if(1 != EVP_EncryptUpdate(aes_encrypt_ctx, enc_msg, &block_len, msg, enc_msg_len)) {
-         log_debug(LOG_VERB, "This is bad data in EVP_EncryptInit_ex : '%.*s'", msg_len, msg);
+    	 log_error("This is bad data in EVP_EncryptUpdate : '%.*s'", msg_len, msg);
          goto error;
      }
      enc_msg_len += block_len;
 
      if(1 != EVP_EncryptFinal_ex(aes_encrypt_ctx, enc_msg + enc_msg_len, (int*) &block_len)) {
-         log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
+         log_error("This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
          goto error;
      }
 
@@ -271,7 +276,7 @@ dyn_aes_encrypt(const unsigned char *msg, int msg_len, struct mbuf *mbuf, unsign
     enc_msg_len += block_len;
 
     if(1 != EVP_EncryptFinal_ex(aes_encrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
+    	log_error("This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
    	    goto error;
     }
 
@@ -411,26 +416,30 @@ aes_decrypt(unsigned char *enc_msg, int enc_msg_len, unsigned char *dec_msg, uns
     EVP_CIPHER_CTX *aes_decrypt_ctx;
 
     /* Create and initialize the context */
-    if(!(aes_decrypt_ctx = EVP_CIPHER_CTX_new()))
-        goto error;
+    if(!(aes_decrypt_ctx = EVP_CIPHER_CTX_new())) {
+    	log_error("creating encryption context failed");
+   	    goto error;
+    }
 
     /* RSA Padding */
-    if(1 != EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING))
-        goto error;
+    if(1 != EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING)) {
+    	log_error("encryption set padding failed");
+   	    goto error;
+    }
 
     if(1 != EVP_DecryptInit_ex(aes_decrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
+    	log_error("This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
         goto error;
     }
 
   	if(1 != EVP_DecryptUpdate(aes_decrypt_ctx, dec_msg, &len, enc_msg, enc_msg_len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_DecryptUpdate : '%.*s'", len, enc_msg);
+  		log_error("This is bad data in EVP_DecryptUpdate : '%.*s'", len, enc_msg);
         goto error;
   	}
     plaintext_len = len;
 
     if(1 != EVP_DecryptFinal_ex(aes_decrypt_ctx, enc_msg + len, &len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
+    	log_error("This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
         goto error;
     }
     plaintext_len += len;
