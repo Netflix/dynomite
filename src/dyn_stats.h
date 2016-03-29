@@ -251,21 +251,20 @@ struct stats {
     volatile int              aggregate;      /* shadow (b) aggregate? */
     volatile int              updated;        /* current (a) updated? */
     volatile bool             reset_histogram;
-    volatile struct histogram latency_histo;
-    volatile struct histogram payload_size_histo;
-    volatile struct histogram cross_region_histo;
+    struct histogram latency_histo;
+    struct histogram payload_size_histo;
+    struct histogram cross_region_histo;
+    struct histogram client_out_queue;
+    struct histogram server_in_queue;
+    struct histogram server_out_queue;
+    struct histogram dnode_client_out_queue;
+    struct histogram peer_in_queue;
+    struct histogram peer_out_queue;
+    struct histogram remote_peer_in_queue;
+    struct histogram remote_peer_out_queue;
 
-    volatile struct histogram client_out_queue;
-    volatile struct histogram server_in_queue;
-    volatile struct histogram server_out_queue;
-    volatile struct histogram dnode_client_out_queue;
-    volatile struct histogram peer_in_queue;
-    volatile struct histogram peer_out_queue;
-    volatile struct histogram remote_peer_in_queue;
-    volatile struct histogram remote_peer_out_queue;
-
-    uint64_t         alloc_msgs;
-    uint64_t         free_msgs;
+    size_t           alloc_msgs;
+    size_t           free_msgs;
     uint64_t         alloc_mbufs;
     uint64_t         free_mbufs;
 
@@ -407,7 +406,7 @@ void _stats_server_incr(struct context *ctx, struct server *server, stats_server
 void _stats_server_decr(struct context *ctx, struct server *server, stats_server_field_t fidx);
 void _stats_server_incr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 void _stats_server_decr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
-void _stats_server_set_ts(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
+void _stats_server_set_ts(struct context *ctx, struct server *server, stats_server_field_t fidx, uint64_t val);
 uint64_t _stats_server_get_ts(struct context *ctx, struct server *server, stats_server_field_t fidx);
 void _stats_server_set_val(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
 int64_t _stats_server_get_val(struct context *ctx, struct server *server, stats_server_field_t fidx);

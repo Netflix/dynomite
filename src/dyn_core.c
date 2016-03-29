@@ -330,7 +330,7 @@ core_timeout(struct context *ctx)
 	for (;;) {
 		struct msg *msg;
 		struct conn *conn;
-		int64_t now, then;
+		msec_t now, then;
 
 		msg = msg_tmo_min();
 		if (msg == NULL) {

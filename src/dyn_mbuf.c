@@ -353,7 +353,7 @@ mbuf_write_char(struct mbuf *mbuf, char ch)
 
 
 void 
-mbuf_write_string(struct mbuf *mbuf, struct string *s)
+mbuf_write_string(struct mbuf *mbuf, const struct string *s)
 {
    ASSERT(s->len < mbuf_size(mbuf));
    mbuf_copy(mbuf, s->data, s->len);
@@ -364,7 +364,7 @@ void mbuf_write_mbuf(struct mbuf *mbuf, struct mbuf *data)
     mbuf_copy(mbuf, data->pos, data->last - data->pos);
 }
 
-void mbuf_write_bytes(struct mbuf *mbuf, char *data, int len)
+void mbuf_write_bytes(struct mbuf *mbuf, unsigned char *data, int len)
 {
     mbuf_copy(mbuf, data, len);
 }
@@ -411,23 +411,22 @@ mbuf_write_uint64(struct mbuf *mbuf, uint64_t num)
 
 //allocate an arbitrary size mbuf for a general purpose operation
 struct mbuf *
-mbuf_alloc(size_t size)
+mbuf_alloc(const size_t size)
 {
    uint8_t *buf = dn_alloc(size + MBUF_HSIZE);
    if (buf == NULL) {
        return NULL;
    }
 
-   size_t mbuf_offset = size;
-   struct mbuf *mbuf = (struct mbuf *)(buf + mbuf_offset);
+   struct mbuf *mbuf = (struct mbuf *)(buf + size);
    mbuf->magic = MBUF_MAGIC;
    mbuf->chunk_size = size;
 
    STAILQ_NEXT(mbuf, next) = NULL;
 
    mbuf->start = buf;
-   mbuf->end = buf + mbuf_offset - MBUF_ESIZE;
-   mbuf->end_extra = buf + mbuf_offset;
+   mbuf->end = buf + size - MBUF_ESIZE;
+   mbuf->end_extra = buf + size;
 
    mbuf->pos = mbuf->start;
    mbuf->last = mbuf->start;
@@ -446,7 +445,7 @@ mbuf_dealloc(struct mbuf *mbuf)
     ASSERT(STAILQ_NEXT(mbuf, next) == NULL);
     ASSERT(mbuf->magic == MBUF_MAGIC);
 
-    size_t mbuf_offset = mbuf->chunk_size - MBUF_HSIZE;
-    buf = (uint8_t *)mbuf - mbuf_offset;
+    size_t size = mbuf->chunk_size - MBUF_HSIZE;
+    buf = (uint8_t *)mbuf - size;
     dn_free(buf);
 }

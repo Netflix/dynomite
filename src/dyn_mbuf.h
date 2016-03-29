@@ -81,14 +81,14 @@ void mbuf_copy(struct mbuf *mbuf, uint8_t *pos, size_t n);
 struct mbuf *mbuf_split(struct mhdr *h, uint8_t *pos, func_mbuf_copy_t cb, void *cbarg);
 
 void mbuf_write_char(struct mbuf *mbuf, char ch);
-void mbuf_write_string(struct mbuf *mbuf,  struct string *s);
+void mbuf_write_string(struct mbuf *mbuf, const struct string *s);
 void mbuf_write_uint8(struct mbuf *mbuf, uint8_t num);
 void mbuf_write_uint32(struct mbuf *mbuf, uint32_t num);
 void mbuf_write_uint64(struct mbuf *mbuf, uint64_t num);
 void mbuf_write_mbuf(struct mbuf *mbuf, struct mbuf *data);
-void mbuf_write_bytes(struct mbuf *mbuf, char *data, int len);
+void mbuf_write_bytes(struct mbuf *mbuf, unsigned char *data, int len);
 
-struct mbuf *mbuf_alloc(size_t size);
+struct mbuf *mbuf_alloc(const size_t size);
 void mbuf_dealloc(struct mbuf *mbuf);
 
 #endif
