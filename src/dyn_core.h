@@ -234,7 +234,7 @@ struct server {
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
 
-    msec_t             next_retry;    /* next retry time in usec */
+    msec_t             next_retry;    /* next retry time in msec */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */

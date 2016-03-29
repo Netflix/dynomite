@@ -592,7 +592,7 @@ server_pool_update(struct server_pool *pool)
 	}
 
 	now = dn_usec_now();
-	if (now < 0) {
+	if (now == 0) {
 		return DN_ERROR;
 	}
 
