@@ -234,7 +234,7 @@ struct server {
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
 
-    usec_t             next_retry;    /* next retry time in usec */
+    msec_t             next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */
@@ -276,7 +276,7 @@ struct server_pool {
     int                backlog;              /* listen backlog */
     uint32_t           client_connections;   /* maximum # client connection */
     uint32_t           server_connections;   /* maximum # server connection */
-    usec_t             server_retry_timeout_us; /* server retry timeout in usec */
+    msec_t             server_retry_timeout_ms; /* server retry timeout in msec */
     uint32_t           server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */

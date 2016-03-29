@@ -31,8 +31,8 @@ struct node {
 
     int                port;             /* port */
 
-    int64_t            next_retry;       /* next retry time in usec */
-    int64_t            last_retry;       /* last retry time in usec */
+    msec_t             next_retry;       /* next retry time in msec */
+    msec_t             last_retry;       /* last retry time in msec */
     uint32_t           failure_count;    /* # consecutive failures */
 
     bool               is_seed;          /* seed? */
