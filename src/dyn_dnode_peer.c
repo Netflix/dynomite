@@ -159,6 +159,7 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
     peer->next_retry = 0LL;
     peer->failure_count = 0;
     peer->is_seed = 1;
+    peer->processed = 0;
     string_copy(&peer->dc, pool->dc.data, pool->dc.len);
     peer->owner = pool;
 
