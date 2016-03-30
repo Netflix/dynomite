@@ -985,20 +985,8 @@ gossip_pool_each_init(void *elem, void *data)
 rstatus_t
 gossip_pool_init(struct context *ctx)
 {
-    rstatus_t status;
-
-    status = array_each(&ctx->pool, gossip_pool_each_init, NULL);
-    if (status != DN_OK) {
-        return status;
-    }
-
+	THROW_STATUS(array_each(&ctx->pool, gossip_pool_each_init, NULL));
     return DN_OK;
-}
-
-
-void gossip_pool_deinit(struct context *ctx)
-{
-
 }
 
 
