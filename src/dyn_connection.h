@@ -133,7 +133,6 @@ struct conn {
     unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
-    uint32_t           last_received;         /* last ts to receive a byte */
     uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
     uint32_t           non_bytes_recv;        /* #times or epoll triggers we receive no bytes */
     //uint32_t           non_bytes_send;        /* #times or epoll triggers that we are not able to send any bytes */
@@ -143,22 +142,7 @@ struct conn {
     connection_type_t  type;
 };
 
-static inline char *
-conn_get_type_string(struct conn *conn)
-{
-    switch(conn->type) {
-        case CONN_UNSPECIFIED: return "UNSPEC";
-        case CONN_PROXY : return "PROXY";
-        case CONN_CLIENT: return "CLIENT";
-        case CONN_SERVER: return "SERVER";
-        case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
-        case CONN_DNODE_PEER_CLIENT: return conn->same_dc ?
-                                            "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
-        case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
-                                            "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
-    }
-    return "INVALID";
-}
+char * conn_get_type_string(struct conn *conn);
 
 static inline rstatus_t
 conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)

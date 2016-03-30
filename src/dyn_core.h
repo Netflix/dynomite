@@ -234,7 +234,7 @@ struct server {
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
 
-    int64_t            next_retry;    /* next retry time in usec */
+    msec_t             next_retry;    /* next retry time in msec */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */
@@ -260,7 +260,7 @@ struct server_pool {
     struct array       server;               /* server[] */
     struct array       datacenters;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
-    int64_t            next_rebuild;         /* next distribution rebuild time in usec */
+    uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
 
     struct string      name;                 /* pool name (ref in conf_pool) */
     struct string      addrstr;              /* pool address (ref in conf_pool) */
@@ -272,11 +272,11 @@ struct server_pool {
     int                key_hash_type;        /* key hash type (hash_type_t) */
     hash_t             key_hash;             /* key hasher */
     struct string      hash_tag;             /* key hash tag (ref in conf_pool) */
-    int                timeout;              /* timeout in msec */
+    msec_t             timeout;              /* timeout in msec */
     int                backlog;              /* listen backlog */
     uint32_t           client_connections;   /* maximum # client connection */
     uint32_t           server_connections;   /* maximum # server connection */
-    int64_t            server_retry_timeout; /* server retry timeout in usec */
+    msec_t             server_retry_timeout_ms; /* server retry timeout in msec */
     uint32_t           server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */

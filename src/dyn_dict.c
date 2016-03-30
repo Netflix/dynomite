@@ -67,7 +67,8 @@ static int _dictInit(dict *ht, dictType *type, void *privDataPtr);
 /* -------------------------- hash functions -------------------------------- */
 
 /* Thomas Wang's 32 bit Mix Function */
-unsigned int dictIntHashFunction(unsigned int key)
+/*static unsigned int
+dictIntHashFunction(unsigned int key)
 {
     key += ~(key << 15);
     key ^=  (key >> 10);
@@ -76,13 +77,14 @@ unsigned int dictIntHashFunction(unsigned int key)
     key += ~(key << 11);
     key ^=  (key >> 16);
     return key;
-}
+}*/
 
 /* Identity hash function for integer keys */
-unsigned int dictIdentityHashFunction(unsigned int key)
+/*static unsigned int
+dictIdentityHashFunction(unsigned int key)
 {
     return key;
-}
+}*/
 
 static uint32_t dict_hash_function_seed = 5381;
 
@@ -279,15 +281,19 @@ int dictRehash(dict *d, int n) {
     return 1;
 }
 
-long long timeInMilliseconds(void) {
+/*static long long
+timeInMilliseconds(void)
+{
     struct timeval tv;
 
     gettimeofday(&tv,NULL);
     return (((long long)tv.tv_sec)*1000)+(tv.tv_usec/1000);
-}
+}*/
 
 /* Rehash for an amount of time between ms milliseconds and ms+1 milliseconds */
-int dictRehashMilliseconds(dict *d, int ms) {
+/*static int
+dictRehashMilliseconds(dict *d, int ms)
+{
     long long start = timeInMilliseconds();
     int rehashes = 0;
 
@@ -296,7 +302,7 @@ int dictRehashMilliseconds(dict *d, int ms) {
         if (timeInMilliseconds()-start > ms) break;
     }
     return rehashes;
-}
+}*/
 
 /* This function performs just a step of rehashing, and only if there are
  * no safe iterators bound to our hash table. When we have iterators in the
@@ -445,7 +451,9 @@ int dictDeleteNoFree(dict *ht, const void *key) {
 }
 
 /* Destroy an entire dictionary */
-int _dictClear(dict *d, dictht *ht, void(callback)(void *)) {
+static int
+_dictClear(dict *d, dictht *ht, void(callback)(void *))
+{
     unsigned long i;
 
     /* Free all the elements */
@@ -517,7 +525,9 @@ void *dictFetchValue(dict *d, const void *key) {
  * the fingerprint again when the iterator is released.
  * If the two fingerprints are different it means that the user of the iterator
  * performed forbidden operations against the dictionary while iterating. */
-long long dictFingerprint(dict *d) {
+long long
+dictFingerprint(dict *d)
+{
     long long integers[6], hash = 0;
     int j;
 
