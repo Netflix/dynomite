@@ -191,7 +191,20 @@ core_ctx_create(struct instance *nci)
 	CBUF_Init(C2S_InQ);
 	CBUF_Init(C2S_OutQ);
 
-	gossip_pool_init(ctx);
+    status = gossip_pool_init(ctx);
+    if (status != DN_OK) {
+    	loga("Failed to initialize gossip!!!");
+        crypto_deinit();
+        dnode_peer_deinit(&ctx->pool);
+        dnode_deinit(ctx);
+        server_pool_disconnect(ctx);
+        event_base_destroy(ctx->evb);
+        stats_destroy(ctx->stats);
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+        return NULL;
+    }
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 
