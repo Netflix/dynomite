@@ -27,22 +27,22 @@
 #define AES_KEYLEN 32
 
 
+void aes_init(void);
+
+
 rstatus_t crypto_init(struct context *ctx);
 rstatus_t crypto_init_for_test(void);
-rstatus_t crypto_deinit(void);
+void crypto_deinit(void);
 
 char* base64_encode(const unsigned char *message, const size_t length);
 int base64_decode(const char *b64message, const size_t length, unsigned char **buffer);
 int calc_decode_length(const char *b64input, const size_t length);
 
-rstatus_t aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg, unsigned char *aes_key);
-rstatus_t aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg, unsigned char *aes_key);
+rstatus_t aes_encrypt(const unsigned char *msg, int msg_len, unsigned char *enc_msg, unsigned char *aes_key);
+rstatus_t aes_decrypt(unsigned char *encMsg, int encMsgLen, unsigned char *decMsg, unsigned char *aes_key);
 
-rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msgLen,
-		                  struct mbuf *mbuf, unsigned char *aes_key);
-
-rstatus_t dyn_aes_decrypt(unsigned char *encMsg, size_t encMsgLen,
-		                  struct mbuf *mbuf, unsigned char *aes_key);
+rstatus_t dyn_aes_encrypt(const unsigned char *msg, int msg_len, struct mbuf *mbuf, unsigned char *aes_key);
+rstatus_t dyn_aes_decrypt(unsigned char *encMsg, int encMsgLen, struct mbuf *mbuf, unsigned char *aes_key);
 
 rstatus_t dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key);
 unsigned char* generate_aes_key(void);
