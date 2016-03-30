@@ -75,7 +75,10 @@ dyno-hash-tool
 Makefile
 Makefile.in
 /Debug
+/src/.dirstamp
 /src/test
+/src/tools
+/src/dynomite-test
 cscope.out
 /src/cscope.out
 /src/.dirstamp

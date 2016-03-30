@@ -228,7 +228,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store
                 return; //TODOs: need to clean up
             }
 
-            status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
+            status = dyn_aes_encrypt(data_buf->pos, (int)mbuf_length(data_buf), encrypted_buf, conn->aes_key);
             if (log_loggable(LOG_VERB)) {
                log_debug(LOG_VERB, "#encrypted bytes : %d", status);
             }
