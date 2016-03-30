@@ -9,6 +9,7 @@
 #include <openssl/evp.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/conf.h>
 #include <stdio.h>
 
 
@@ -16,27 +17,18 @@
 #include "dyn_crypto.h"
 #include "dyn_server.h"
 
-static EVP_CIPHER *aes_cipher;
 static RSA *rsa;
 static int rsa_size = 0;
 
-static int aes_key_size = AES_KEYLEN;
-static unsigned char aes_key[AES_KEYLEN];
-
-static EVP_CIPHER_CTX *aes_encrypt_ctx;
-static EVP_CIPHER_CTX *aes_decrypt_ctx;
-
-
 static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
 {
-    FILE * fp;
 
    if (string_empty(pem_key_file)) {
         log_error("Could NOT read RSA pem key file with empty name");
         return DN_ERROR;
    }
 
-   unsigned char file_name[pem_key_file->len + 1];
+   char file_name[pem_key_file->len + 1];
    memcpy(file_name, pem_key_file->data, pem_key_file->len);
    file_name[pem_key_file->len] = '\0';
 
@@ -45,58 +37,24 @@ static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
         return DN_ERROR;
    }
 
-    if(NULL != (fp= fopen(file_name, "r")) )
-    {
-        rsa = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
-        if(rsa == NULL)
-        {
-            log_error("Error: could NOT read RSA pem key file at %s", file_name);
-            return DN_ERROR;
-        }
+   FILE *fp = fopen(file_name,"r");
+   if(file_name == NULL){
+       log_error("Error: could NOT locate RSA pem key file at %s", file_name);
+	   return DN_ERROR;
+   }
 
-    } else {
-        log_error("Error: could NOT locate RSA pem key file at %s", file_name);
-        return DN_ERROR;
+   rsa = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
+   if(rsa == NULL)
+   {
+       log_error("Error: could NOT read RSA pem key file at %s", file_name);
+       return DN_ERROR;
+   }
 
-    }
+   rsa_size = RSA_size(rsa);
 
-    rsa_size = RSA_size(rsa);
+   log_debug(LOG_INFO, "Private RSA structure filled");
 
-    log_debug(LOG_INFO, "Private RSA structure filled");
-    /*
-    char   *pri_key;           // Private key
-    char   *pub_key;           // Public key
-    size_t pri_len;            // Length of private key
-    size_t pub_len;            // Length of public key
-
-    // To get the C-string PEM form:
-    BIO *pri = BIO_new(BIO_s_mem());
-    BIO *pub = BIO_new(BIO_s_mem());
-
-    PEM_write_bio_RSAPrivateKey(pri, rsa, NULL, NULL, 0, NULL, NULL);
-    PEM_write_bio_RSAPublicKey(pub, rsa);
-
-    pri_len = BIO_pending(pri);
-    pub_len = BIO_pending(pub);
-
-    pri_key = malloc(pri_len + 1);
-    pub_key = malloc(pub_len + 1);
-
-    BIO_read(pri, pri_key, pri_len);
-    BIO_read(pub, pub_key, pub_len);
-
-    pri_key[pri_len] = '\0';
-    pub_key[pub_len] = '\0';
-
-    //log_debug(LOG_VERB, ("pri_key %s", pri_key);
-    //log_debug(LOG_VERB, "pub_key %s", pub_key);
-
-    BIO_free_all(pub);
-    BIO_free_all(pri);
-
-   */
-
-    return DN_OK;
+   return DN_OK;
 
 }
 
@@ -115,34 +73,12 @@ load_private_rsa_key(struct server_pool *sp)
 
 
 
-static rstatus_t
-aes_init(void)
+void aes_init(void)
 {
-    // Initalize contexts
-    aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
-    aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
-
-    EVP_CIPHER_CTX_init(aes_encrypt_ctx);
-
-    //EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_PKCS1_PADDING);
-    EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING);
-
-    EVP_CIPHER_CTX_init(aes_decrypt_ctx);
-
-    //EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_PKCS1_PADDING);
-    EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING);
-
-    // Init AES
-    aes_cipher =  EVP_aes_128_cbc();
-
-
-    if(RAND_bytes(aes_key, aes_key_size) == 0) {
-        return DN_ERROR;
-    }
-
-    return DN_OK;
+    ERR_load_crypto_strings();
+    OpenSSL_add_all_algorithms();
+    OPENSSL_config(NULL);
 }
-
 
 //only support loading one file at this time
 static rstatus_t
@@ -151,7 +87,7 @@ crypto_pool_each_init(void *elem, void *data)
     struct server_pool *sp = elem;
 
     //init AES
-    THROW_STATUS(aes_init());
+    aes_init();
 
     //init RSA
     THROW_STATUS(load_private_rsa_key(sp));
@@ -170,7 +106,7 @@ crypto_init(struct context *ctx)
 rstatus_t
 crypto_init_for_test()
 {
-    THROW_STATUS(aes_init());
+    aes_init();
 
     //init RSA
     struct string pem_file = string("conf/dynomite.pem");
@@ -179,21 +115,11 @@ crypto_init_for_test()
     return DN_OK;
 }
 
-rstatus_t
+void
 crypto_deinit(void)
 {
-    EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
-
-
-    EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
-
-
-    free(aes_encrypt_ctx);
-    free(aes_decrypt_ctx);
-
-    //free(aes_key);
-
-    return DN_OK;
+	EVP_cleanup();
+	ERR_free_strings();
 }
 
 
@@ -204,7 +130,7 @@ base64_encode(const unsigned char *message, const size_t length)
     BIO *b64;
     FILE* stream;
 
-    int encodedSize = 4*ceil((double)length/3);
+    size_t encodedSize = (size_t)(4*ceil((double)length/3));
     char *buffer = (char*)malloc(encodedSize+1);
     if(buffer == NULL) {
         fprintf(stderr, "Failed to allocate memory\n");
@@ -267,113 +193,160 @@ calc_decode_length(const char *b64input, const size_t length) {
 }
 
 rstatus_t
-aes_encrypt(const unsigned char *msg, size_t msg_len, unsigned char **enc_msg, unsigned char *aes_key)
+aes_encrypt(const unsigned char *msg, int msg_len, unsigned char *enc_msg, unsigned char *aes_key)
 {
-    size_t block_len  = 0;
-    size_t enc_msg_len = 0;
+    int block_len  = 0;
+    int enc_msg_len = 0;
 
-    *enc_msg = (unsigned char*)malloc(msg_len + AES_BLOCK_SIZE);
-    if(enc_msg == NULL)
-        return DN_ERROR;
+    EVP_CIPHER_CTX *aes_encrypt_ctx;
 
-    //if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
-    if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_EncryptInit_ex : '%.*s'", msg_len, msg);
-        return DN_ERROR;
+    /* Create and initialize the context */
+    if(!(aes_encrypt_ctx = EVP_CIPHER_CTX_new())) {
+    	loga("creating encryption context failed");
+   	    goto error;
     }
 
-    if(!EVP_EncryptUpdate(aes_encrypt_ctx, *enc_msg, (int*)&block_len, (unsigned char*)msg, msg_len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_EncryptUpdate : '%.*s'", msg_len, msg);
-        return DN_ERROR;
-    }
-    enc_msg_len += block_len;
-
-    if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, *enc_msg + enc_msg_len, (int*) &block_len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
-        return DN_ERROR;
+    /* RSA Padding */
+    if(1 != EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING)) {
+    	loga("encryption set padding failed");
+   	    goto error;
     }
 
-    //EVP_CIPHER_CTX_cleanup(aesEncryptCtx);
+    /* Initialize the encryption operation with 256 bit AES */
+    if(1 != EVP_EncryptInit_ex(aes_encrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key)) {
+        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptInit_ex, crypto data with %ld bytes of data", msg_len);
+   	    goto error;
+    }
 
-    return enc_msg_len + block_len;
+    /* Provide the message to be encrypted, and obtain the encrypted output.
+      * EVP_EncryptUpdate can be called multiple times if necessary
+      */
+     if(1 != EVP_EncryptUpdate(aes_encrypt_ctx, enc_msg, &block_len, msg, enc_msg_len)) {
+    	 log_error("This is bad data in EVP_EncryptUpdate : '%.*s'", msg_len, msg);
+         goto error;
+     }
+     enc_msg_len += block_len;
+
+     if(1 != EVP_EncryptFinal_ex(aes_encrypt_ctx, enc_msg + enc_msg_len, (int*) &block_len)) {
+         log_error("This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
+         goto error;
+     }
+
+     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+     return (rstatus_t)(enc_msg_len + block_len);
+
+error:
+	EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+	return DN_ERROR;
 }
 
 
 rstatus_t
-dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, unsigned char *aes_key)
+dyn_aes_encrypt(const unsigned char *msg, int msg_len, struct mbuf *mbuf, unsigned char *aes_key)
 {
 
-    size_t block_len  = 0;
-    size_t enc_msg_len = 0;
+    int block_len  = 0;
+    int enc_msg_len = 0;
+    EVP_CIPHER_CTX *aes_encrypt_ctx;
+
 
     ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
 
-    //if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
-    if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptInit_ex, crypto data with %ld bytes of data", msg_len);
-        return DN_ERROR;
+    /* Create and initialize the context */
+    if(!(aes_encrypt_ctx = EVP_CIPHER_CTX_new())) {
+    	loga("creating encryption context failed");
+   	    goto error;
     }
 
-    if(!EVP_EncryptUpdate(aes_encrypt_ctx, mbuf->start, (int*)&block_len, (unsigned char*) msg, msg_len)) {
-        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptUpdate, crypto data with %ld bytes of data", msg_len);
-        return DN_ERROR;
+    /* RSA Padding */
+    if(1 != EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING)) {
+    	loga("encryption set padding failed");
+   	    goto error;
     }
+
+    if(1 != EVP_EncryptInit_ex(aes_encrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key)) {
+        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptInit_ex, crypto data with %ld bytes of data", msg_len);
+   	    goto error;
+    }
+
+  	if(1 != EVP_EncryptUpdate(aes_encrypt_ctx, mbuf->start, &block_len, msg, enc_msg_len)) {
+        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptUpdate, crypto data with %ld bytes of data", msg_len);
+   	    goto error;
+  	}
     enc_msg_len += block_len;
 
-    if(!EVP_EncryptFinal_ex(aes_encrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
-        loga_hexdump(msg, msg_len, "Bad data in EVP_EncryptFinal_ex, crypto data with %ld bytes of data", msg_len);
-        return DN_ERROR;
+    if(1 != EVP_EncryptFinal_ex(aes_encrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
+    	log_error("This is bad data in EVP_EncryptFinal_ex : '%.*s'", msg_len, msg);
+   	    goto error;
     }
-
-    EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
 
     //for encrypt, we allow to use up to the extra space
     if (enc_msg_len + block_len > mbuf->end_extra - mbuf->last) {
-        return DN_ERROR;
+        goto error;
     }
 
     mbuf->last = mbuf->pos + enc_msg_len + block_len;
-
+    EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
     return enc_msg_len + block_len;
+
+error:
+    EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+    return DN_ERROR;
 }
 
 
 rstatus_t
-dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, unsigned char *aes_key)
+dyn_aes_decrypt(unsigned char *enc_msg, int enc_msg_len, struct mbuf *mbuf, unsigned char *aes_key)
 {
+    EVP_CIPHER_CTX *aes_decrypt_ctx;
+
     if (ENCRYPTION) {
-        size_t dec_len   = 0;
-        size_t block_len = 0;
+        int dec_len   = 0;
+        int block_len = 0;
 
         ASSERT(mbuf != NULL && mbuf->start == mbuf->pos);
 
-        //if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
-        if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-            loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptInit_ex, crypto data with %ld bytes of data", enc_msg_len);
-            return DN_ERROR;
+        /* Create and initialize the context */
+
+        if(!(aes_decrypt_ctx = EVP_CIPHER_CTX_new())) {
+        	loga("creating decryption context failed");
+      	  	goto error;
         }
 
-        if(!EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->pos, (int*) &block_len, enc_msg, (int)enc_msg_len)) {
-            loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptUpdate, crypto data with %ld bytes of data", enc_msg_len);
-            return DN_ERROR;
+        /* RSA Padding */
+        if(1 != EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING)) {
+        	loga("encryption set padding failed");
+      	  	goto error;
         }
+
+        if(1 != EVP_DecryptInit_ex(aes_decrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key)) {
+            loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptInit_ex, crypto data with %ld bytes of data", enc_msg_len);
+      	  	goto error;
+        }
+
+      	if(1 != EVP_DecryptUpdate(aes_decrypt_ctx, mbuf->start, &block_len, enc_msg, enc_msg_len)) {
+            loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptUpdate, crypto data with %ld bytes of data", enc_msg_len);
+      	  	goto error;
+      	}
         dec_len += block_len;
 
-        if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->pos + dec_len, (int*) &block_len)) {
+        if(1 != EVP_DecryptFinal_ex(aes_decrypt_ctx, mbuf->start + enc_msg_len, (int*) &block_len)) {
             loga_hexdump(enc_msg, enc_msg_len, "Bad data in EVP_DecryptFinal_ex, crypto data with %ld bytes of data", enc_msg_len);
             return DN_ERROR;
         }
-
         dec_len += block_len;
         mbuf->last = mbuf->pos + dec_len;
 
         EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
-
         return (int) dec_len;
     }
 
-    mbuf_copy(mbuf, enc_msg, enc_msg_len);
+    mbuf_copy(mbuf, enc_msg, (size_t)enc_msg_len);
     return (int) enc_msg_len;
+
+error:
+    EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+    return DN_ERROR;
 }
 
 /*
@@ -384,7 +357,7 @@ rstatus_t
 dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 {
     struct mhdr mhdr_tem;
-    size_t count = 0;
+    rstatus_t count = 0;
 
     if (STAILQ_EMPTY(&msg->mhdr)) {
         return DN_ERROR;
@@ -406,7 +379,7 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
             return DN_ERROR;
         }
 
-        int n = dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
+        rstatus_t n = dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
         if (n > 0)
             count += n;
 
@@ -436,40 +409,56 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
 
 
 rstatus_t
-aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg, unsigned char *aes_key) {
-    size_t dec_len   = 0;
-    size_t block_len = 0;
+aes_decrypt(unsigned char *enc_msg, int enc_msg_len, unsigned char *dec_msg, unsigned char *aes_key) {
 
-    *dec_msg = (unsigned char*) malloc(enc_msg_len);
-    if(*dec_msg == NULL)
-        return DN_ERROR;
+	int len = 0;
+	int plaintext_len = 0;
+    EVP_CIPHER_CTX *aes_decrypt_ctx;
 
-    //if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_iv)) {
-    if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, aes_key, aes_key)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
-        return DN_ERROR;
+    /* Create and initialize the context */
+    if(!(aes_decrypt_ctx = EVP_CIPHER_CTX_new())) {
+    	log_error("creating encryption context failed");
+   	    goto error;
     }
 
-    if(!EVP_DecryptUpdate(aes_decrypt_ctx, (unsigned char*) *dec_msg, (int*) &block_len, enc_msg, (int) enc_msg_len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_DecryptUpdate : '%.*s'", enc_msg_len, enc_msg);
-        return DN_ERROR;
+    /* RSA Padding */
+    if(1 != EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING)) {
+    	log_error("encryption set padding failed");
+   	    goto error;
     }
-    dec_len += block_len;
 
-    if(!EVP_DecryptFinal_ex(aes_decrypt_ctx, (unsigned char*) *dec_msg + dec_len, (int*) &block_len)) {
-        log_debug(LOG_VERB, "This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
-        return DN_ERROR;
+    if(1 != EVP_DecryptInit_ex(aes_decrypt_ctx, EVP_aes_128_cbc(), NULL, aes_key, aes_key)) {
+    	log_error("This is bad data in EVP_DecryptInit_ex : '%.*s'", enc_msg_len, enc_msg);
+        goto error;
     }
-    dec_len += block_len;
 
-    //EVP_CIPHER_CTX_cleanup(aesDecryptCtx);
+  	if(1 != EVP_DecryptUpdate(aes_decrypt_ctx, dec_msg, &len, enc_msg, enc_msg_len)) {
+  		log_error("This is bad data in EVP_DecryptUpdate : '%.*s'", len, enc_msg);
+        goto error;
+  	}
+    plaintext_len = len;
 
-    return (int)dec_len;
+    if(1 != EVP_DecryptFinal_ex(aes_decrypt_ctx, enc_msg + len, &len)) {
+    	log_error("This is bad data in EVP_DecryptFinal_ex : '%.*s'", enc_msg_len, enc_msg);
+        goto error;
+    }
+    plaintext_len += len;
+
+    EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+
+    return plaintext_len;
+
+error:
+    EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+    return DN_ERROR;
 }
 
 
 unsigned char* generate_aes_key(void)
 {
+	unsigned char aes_key[AES_KEYLEN];
+	int aes_key_size = AES_KEYLEN;
+
     if(RAND_bytes(aes_key, aes_key_size) == 0) {
         return NULL;
     }
