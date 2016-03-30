@@ -199,7 +199,6 @@ void
 dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data_buf)
 {
     rstatus_t status;
-    size_t encrypted;
     struct msg *msg = msg_get(conn, 1, data_store, __FUNCTION__);
 
     if (msg == NULL) {
@@ -229,9 +228,9 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store
                 return; //TODOs: need to clean up
             }
 
-            encrypted = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
+            status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
             if (log_loggable(LOG_VERB)) {
-               log_debug(LOG_VERB, "#encrypted bytes : %d", encrypted);
+               log_debug(LOG_VERB, "#encrypted bytes : %d", status);
             }
 
             //write dnode header

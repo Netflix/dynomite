@@ -287,7 +287,7 @@ dyn_aes_encrypt(const unsigned char *msg, int msg_len, struct mbuf *mbuf, unsign
 
     mbuf->last = mbuf->pos + enc_msg_len + block_len;
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
-    return DN_OK;
+    return enc_msg_len + block_len;
 
 error:
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
@@ -338,11 +338,11 @@ dyn_aes_decrypt(unsigned char *enc_msg, int enc_msg_len, struct mbuf *mbuf, unsi
         mbuf->last = mbuf->pos + dec_len;
 
         EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
-        return DN_OK;
+        return (int) dec_len;
     }
 
     mbuf_copy(mbuf, enc_msg, (size_t)enc_msg_len);
-    return DN_OK;
+    return (int) enc_msg_len;
 
 error:
     EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
