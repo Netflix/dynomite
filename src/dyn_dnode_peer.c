@@ -1457,7 +1457,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
+        //log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
     }
 
     /* if client consistency is dc_quorum, forward the response from only the
@@ -1467,7 +1467,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
+        //log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
     }
 
     log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
