@@ -205,6 +205,7 @@ core_ctx_create(struct instance *nci)
         dn_free(ctx);
         return NULL;
     }
+    preselect_remote_rack_for_replication(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 
