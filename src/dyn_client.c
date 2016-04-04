@@ -787,8 +787,9 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     if (rack_cnt == 0)
         return;
 
-    uint32_t ran_index = (uint32_t)rand() % rack_cnt;
-    struct rack *rack = array_get(&dc->racks, ran_index);
+    struct rack *rack = dc->preselected_rack_for_replication;
+    if (rack == NULL)
+        rack = array_get(&dc->racks, 0);
 
     struct msg *rack_msg = msg_get(c_conn, msg->request, msg->data_store, __FUNCTION__);
     if (rack_msg == NULL) {

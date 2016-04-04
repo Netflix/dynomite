@@ -192,6 +192,7 @@ core_ctx_create(struct instance *nci)
 	CBUF_Init(C2S_OutQ);
 
 	gossip_pool_init(ctx);
+    preselect_remote_rack_for_replication(ctx);
 
 	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
 
