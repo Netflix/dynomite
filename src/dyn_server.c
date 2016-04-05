@@ -881,6 +881,7 @@ dc_init(struct datacenter *dc)
 	dc->dict_rack = dictCreate(&dc_string_dict_type, NULL);
 	dc->name = dn_alloc(sizeof(struct string));
 	string_init(dc->name);
+    dc->preselected_rack_for_replication = NULL;
 
 	status = array_init(&dc->racks, 3, sizeof(struct rack));
 

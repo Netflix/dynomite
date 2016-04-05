@@ -215,6 +215,7 @@ struct rack {
 struct datacenter {
 	struct string      *name;            /* datacenter name */
 	struct array       racks;           /* list of racks in a datacenter */
+    struct rack        *preselected_rack_for_replication;
 	dict               *dict_rack;
 };
 

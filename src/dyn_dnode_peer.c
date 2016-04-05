@@ -1901,3 +1901,71 @@ init_dnode_peer_conn(struct conn *conn)
     conn->type = CONN_DNODE_PEER_SERVER;
     conn->ops = &dnode_peer_ops;
 }
+
+static int
+rack_name_cmp(const void *t1, const void *t2)
+{
+    const struct rack *s1 = t1, *s2 = t2;
+
+    return string_compare(s1->name, s2->name);
+}
+
+// The idea here is to have a designated rack in each remote region to replicate
+// data to. This is used to replicate writes to remote regions
+static void
+preselect_remote_rack_for_replication_each(void *elem, void *data)
+{
+    struct server_pool *sp = elem;
+    uint32_t dc_cnt = array_n(&sp->datacenters);
+    uint32_t dc_index;
+    uint32_t my_rack_index = 0;
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        // sort the racks.
+        array_sort(&dc->racks, rack_name_cmp);
+        if (string_compare(dc->name, &sp->dc) != 0)
+            continue;
+
+        // if the dc is a local dc, get the rack_idx
+        uint32_t rack_index;
+        uint32_t rack_cnt = array_n(&dc->racks);
+        for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+            struct rack *rack = array_get(&dc->racks, rack_index);
+            if (string_compare(rack->name, &sp->rack) == 0) {
+                my_rack_index = rack_index;
+                log_notice("my rack index %u", my_rack_index);
+                break;
+            }
+        }
+    }
+
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        dc->preselected_rack_for_replication = NULL;
+
+        // Nothing to do for local DC, continue;
+        if (string_compare(dc->name, &sp->dc) == 0)
+            continue;
+
+        // if no racks, keep preselected_rack_for_replication as NULL
+        uint32_t rack_cnt = array_n(&dc->racks);
+        if (rack_cnt == 0)
+            continue;
+
+        // if the dc is a remote dc, get the rack at rack_idx
+        // use that as preselected rack for replication
+        uint32_t this_rack_index = my_rack_index % rack_cnt;
+        dc->preselected_rack_for_replication = array_get(&dc->racks,
+                                                         this_rack_index);
+        log_notice("Selected rack %.*s for replication to remote region %.*s",
+                   dc->preselected_rack_for_replication->name->len,
+                   dc->preselected_rack_for_replication->name->data,
+                   dc->name->len, dc->name->data);
+    }
+}
+
+void
+preselect_remote_rack_for_replication(struct context *ctx)
+{
+    array_each(&ctx->pool, preselect_remote_rack_for_replication_each, NULL);
+}
