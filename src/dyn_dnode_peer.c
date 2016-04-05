@@ -1939,14 +1939,23 @@ preselect_remote_rack_for_replication_each(void *elem, void *data)
 
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
         struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        dc->preselected_rack_for_replication = NULL;
+
+        // Nothing to do for local DC, continue;
         if (string_compare(dc->name, &sp->dc) == 0)
             continue;
+
+        // if no racks, keep preselected_rack_for_replication as NULL
+        uint32_t rack_cnt = array_n(&dc->racks);
+        if (rack_cnt == 0)
+            continue;
+
         // if the dc is a remote dc, get the rack at rack_idx
         // use that as preselected rack for replication
-        uint32_t rack_cnt = array_n(&dc->racks);
         uint32_t this_rack_index = my_rack_index % rack_cnt;
-        dc->preselected_rack_for_replication = array_get(&dc->racks, this_rack_index);
-        log_notice("Selected rack %.*s for remote region %.*s",
+        dc->preselected_rack_for_replication = array_get(&dc->racks,
+                                                         this_rack_index);
+        log_notice("Selected rack %.*s for replication to remote region %.*s",
                    dc->preselected_rack_for_replication->name->len,
                    dc->preselected_rack_for_replication->name->data,
                    dc->name->len, dc->name->data);
