@@ -856,14 +856,17 @@ gossip_start(struct server_pool *sp)
 static void
 gossip_set_seeds_provider(struct string * seeds_provider_str)
 {
-    log_debug(LOG_VERB, "Seed provider :::::: '%.*s'",
-            seeds_provider_str->len, seeds_provider_str->data);
+	log_debug(LOG_VERB, "Seed provider :::::: '%.*s'",
+			seeds_provider_str->len, seeds_provider_str->data);
 
-    if (dn_strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
-        gn_pool.seeds_provider = florida_get_seeds;
-    } else {
-        gn_pool.seeds_provider = NULL;
-    }
+	if (dn_strncmp(seeds_provider_str->data, FLORIDA_PROVIDER, 16) == 0) {
+		gn_pool.seeds_provider = florida_get_seeds;
+	} else
+	if (dn_strncmp(seeds_provider_str->data, DNS_PROVIDER, 12) == 0) {
+		gn_pool.seeds_provider = dns_get_seeds;
+	} else {
+		gn_pool.seeds_provider = NULL;
+	}
 }
 
 
@@ -982,20 +985,8 @@ gossip_pool_each_init(void *elem, void *data)
 rstatus_t
 gossip_pool_init(struct context *ctx)
 {
-    rstatus_t status;
-
-    status = array_each(&ctx->pool, gossip_pool_each_init, NULL);
-    if (status != DN_OK) {
-        return status;
-    }
-
+	THROW_STATUS(array_each(&ctx->pool, gossip_pool_each_init, NULL));
     return DN_OK;
-}
-
-
-void gossip_pool_deinit(struct context *ctx)
-{
-
 }
 
 

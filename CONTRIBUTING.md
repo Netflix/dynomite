@@ -1,8 +1,11 @@
 # Contributing to Dynomite
 
-Documentation for Dynomite is mainly kept at the [wiki]( https://github.com/Netflix/dynomite/wiki ).
+Documentation for Dynomite is available in the following locations:
+- <a href="http://www.dynomitedb.com/docs/" target="_blank">Dynomite docs</a>
+- [wiki]( https://github.com/Netflix/dynomite/wiki )
 
 The Dynomite team is following the Gitflow workflow. The active development branch is [dev](https://github.com/Netflix/dynomite/tree/dev), the stable branch is [master](https://github.com/Netflix/dynomite/tree/master).
+
 Contributions will be accepted to the [dev](https://github.com/Netflix/dynomite/tree/dev) only.
 
 
@@ -29,4 +32,3 @@ For minor fixes just open a pull request to the [dev]( https://github.com/Netfli
 
 If you have questions or want to report a bug please create an [Issue]( https://github.com/Netflix/dynomite/issues ) or send us an email: dynomite [at] netflix [DOT] com
 
- 

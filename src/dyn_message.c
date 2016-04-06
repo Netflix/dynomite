@@ -189,7 +189,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     int timeout;
 
     //ASSERT(msg->request);
-    ASSERT(!msg->quit && !msg->noreply);
+    ASSERT(!msg->quit && msg->expect_datastore_reply);
 
     timeout = conn->dyn_mode? dnode_peer_timeout(msg, conn) : server_timeout(conn);
     if (timeout <= 0) {
@@ -317,7 +317,7 @@ done:
     msg->ferror = 0;
     msg->request = 0;
     msg->quit = 0;
-    msg->noreply = 0;
+    msg->expect_datastore_reply = 1;
     msg->done = 0;
     msg->fdone = 0;
     msg->first_fragment = 0;
@@ -424,7 +424,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->pre_coalesce = src->pre_coalesce;
     target->post_coalesce = src->post_coalesce;
 
-    target->noreply = src->noreply;
+    target->expect_datastore_reply = src->expect_datastore_reply;
     target->swallow = src->swallow;
     target->type = src->type;
     target->key_start = src->key_start;

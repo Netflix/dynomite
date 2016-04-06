@@ -3,7 +3,11 @@ var url = require('url');
 var fs = require('fs');
 
 // Settings
-var port = 8080;
+var port = process.env.DYNOMITE_FLORIDA_PORT ?
+    process.env.DYNOMITE_FLORIDA_PORT : 8080;
+
+var apiUrl = process.env.DYNOMITE_FLORIDA_REQUEST ?
+    process.env.DYNOMITE_FLORIDA_REQUEST : '/REST/v1/admin/get_seeds';
 
 // Parse command line options
 var seedsFilePath = process.argv[2] && process.argv[2].length > 0 ?
@@ -15,7 +19,7 @@ http.createServer(function(req, res) {
   enableDebug && console.log('Request: ' + path);
 
   res.writeHead(200, {'Content-Type': 'application/json'});
-  if (path === '/REST/v1/admin/get_seeds') {
+  if (path === apiUrl) {
     fs.readFile(seedsFilePath, 'utf-8', function(err, data) {
       if (err) console.log(err); 
 
