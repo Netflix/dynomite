@@ -149,7 +149,7 @@ static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
-int8_t g_timeout_factor = 1;
+uint8_t g_timeout_factor = 1;
 
 static inline rstatus_t
 msg_cant_handle_response(struct msg *req, struct msg *rsp)
@@ -186,7 +186,7 @@ void
 msg_tmo_insert(struct msg *msg, struct conn *conn)
 {
     struct rbnode *node;
-    int timeout;
+    msec_t timeout;
 
     //ASSERT(msg->request);
     ASSERT(!msg->quit && msg->expect_datastore_reply);
@@ -271,7 +271,7 @@ done:
     msg->parent_id = 0;
     msg->peer = NULL;
     msg->owner = NULL;
-    msg->stime_in_microsec = 0L;
+    msg->stime_in_microsec = 0ULL;
     msg->remote_region_send_time = 0L;
     msg->awaiting_rsps = 0;
     msg->selected_rsp = NULL;
@@ -596,7 +596,8 @@ uint32_t msg_length(struct msg *msg)
     struct mbuf *mbuf;
 
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
-        count += mbuf->last - mbuf->start;
+        ASSERT(mbuf->last >= mbuf->start);
+        count += (uint32_t)(mbuf->last - mbuf->start);
     }
 
     return count;
@@ -689,7 +690,7 @@ msg_payload_crc32(struct msg *msg)
             }
         }
 
-        crc = crc32_sz(start, end - start, crc);
+        crc = crc32_sz((char *)start, end - start, crc);
     }
     return crc;
 

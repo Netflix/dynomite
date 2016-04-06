@@ -990,7 +990,7 @@ msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     return DN_OK;
 }
 
-void
+static void
 req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
@@ -1002,14 +1002,14 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 }
 
-void
+static void
 req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_CLIENT);
 
     if (msg->stime_in_microsec) {
-        uint64_t latency = dn_usec_now() - msg->stime_in_microsec;
+        usec_t latency = dn_usec_now() - msg->stime_in_microsec;
         stats_histo_add_latency(ctx, latency);
     }
     conn->omsg_count--;
