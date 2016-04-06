@@ -338,7 +338,7 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
     // I want to make sure we do not have swallow here.
     //ASSERT_LOG(!req->swallow, "req %d:%d has swallow set??", req->id, req->parent_id);
-    if ((req->swallow && req->noreply) ||
+    if ((req->swallow && !req->expect_datastore_reply) ||
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && (req->consistency == DC_QUORUM)
                       && (!conn->same_dc))) {
@@ -1090,7 +1090,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         return true;
     }
 
-    if (pmsg->noreply) {
+    if (!pmsg->expect_datastore_reply) {
          conn_dequeue_outq(ctx, conn, pmsg);
          req_put(pmsg);
          rsp_put(msg);
@@ -1260,11 +1260,11 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     conn_dequeue_inq(ctx, conn, msg);
 
     /*
-     * noreply request instructs the server not to send any response. So,
+     * expect_datastore_reply request instructs the server to send response. So,
      * enqueue message (request) in server outq, if response is expected.
-     * Otherwise, free the noreply request
+     * Otherwise, free the request
      */
-    if (!msg->noreply || (conn->type == CONN_SERVER))
+    if (msg->expect_datastore_reply || (conn->type == CONN_SERVER))
         conn_enqueue_outq(ctx, conn, msg);
     else
         req_put(msg);
@@ -1281,10 +1281,10 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
      * the server in_q; the clock continues to tick until it either expires
      * or the message is dequeued from the server out_q
      *
-     * noreply request are free from timeouts because client is not interested
-     * in the reponse anyway!
+     * expect_datastore_reply request have timeouts because client is expecting
+     * a response
      */
-    if (!msg->noreply) {
+    if (msg->expect_datastore_reply) {
         msg_tmo_insert(msg, conn);
     }
 

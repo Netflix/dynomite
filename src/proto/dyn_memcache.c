@@ -623,7 +623,7 @@ memcache_parse_req(struct msg *r)
                     ASSERT(memcache_storage(r) || memcache_arithmetic(r) || memcache_delete(r) || memcache_touch(r));
                     r->token = NULL;
                     /* noreply_end <- p - 1 */
-                    r->noreply = 1;
+                    r->expect_datastore_reply = 0;
                     state = SW_AFTER_NOREPLY;
                     p = p - 1; /* go back by 1 byte */
                 } else {
