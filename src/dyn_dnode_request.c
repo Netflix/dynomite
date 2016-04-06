@@ -27,8 +27,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
     msg->error = 1;
     msg->err = errno;
 
-    /* noreply request don't expect any response */
-    if (msg->noreply || msg->swallow) {
+    if (!msg->expect_datastore_reply || msg->swallow) {
         req_put(msg);
         return;
     }
@@ -70,7 +69,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     struct string *dc = rack->dc;
     rstatus_t status;
     /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply && !msg->swallow) {
+    if (msg->expect_datastore_reply && !msg->swallow) {
         conn_enqueue_outq(ctx, c_conn, msg);
     }
 
@@ -282,6 +281,6 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store
     //need to handle a reply
     //conn->enqueue_outq(ctx, conn, msg);
 
-    msg->noreply = 1;
+    msg->expect_datastore_reply = 0;
     conn_enqueue_inq(ctx, conn, msg);
 }

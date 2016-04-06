@@ -461,7 +461,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 static void
 dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    if ((req->swallow && req->noreply) || // no reply
+    if ((req->swallow && !req->expect_datastore_reply) || // no reply
         (req->swallow && (req->consistency == DC_ONE)) || // dc one
         (req->swallow && (req->consistency == DC_QUORUM) // remote dc request
                       && (!conn->same_dc)) ||
@@ -1398,8 +1398,8 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL) {
-        log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
-                msg->id, msg->mlen, conn->sd, msg->noreply);
+        log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d expect_datastore_reply %d",
+                msg->id, msg->mlen, conn->sd, msg->expect_datastore_reply);
         rsp_put(msg);
         return true;
     }
@@ -1454,7 +1454,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
+        //log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
     }
 
     /* if client consistency is dc_quorum, forward the response from only the
@@ -1464,7 +1464,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
+        //log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
     }
 
     log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
@@ -1767,7 +1767,7 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
        log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
     }
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-    // crashes because dmsg is NULL :(
+    // TODO: crashes because dmsg is NULL :(
     /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->sd, msg->dmsg->id);*/
 
@@ -1784,7 +1784,7 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
               conn, msg->id, msg->parent_id);
-    if (!msg->noreply) {
+    if (msg->expect_datastore_reply) {
         msg_tmo_insert(msg, conn);
     }
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
@@ -1898,4 +1898,63 @@ init_dnode_peer_conn(struct conn *conn)
 {
     conn->type = CONN_DNODE_PEER_SERVER;
     conn->ops = &dnode_peer_ops;
+}
+
+static int
+rack_name_cmp(const void *t1, const void *t2)
+{
+    const struct rack *s1 = t1, *s2 = t2;
+
+    return string_compare(s1->name, s2->name);
+}
+
+// The idea here is to have a designated rack in each remote region to replicate
+// data to. This is used to replicate writes to remote regions
+static void
+preselect_remote_rack_for_replication_each(void *elem, void *data)
+{
+    struct server_pool *sp = elem;
+    uint32_t dc_cnt = array_n(&sp->datacenters);
+    uint32_t dc_index;
+    uint32_t my_rack_index = 0;
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        // sort the racks.
+        array_sort(&dc->racks, rack_name_cmp);
+        if (string_compare(dc->name, &sp->dc) != 0)
+            continue;
+
+        // if the dc is a local dc, get the rack_idx
+        uint32_t rack_index;
+        uint32_t rack_cnt = array_n(&dc->racks);
+        for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+            struct rack *rack = array_get(&dc->racks, rack_index);
+            if (string_compare(rack->name, &sp->rack) == 0) {
+                my_rack_index = rack_index;
+                log_notice("my rack index %u", my_rack_index);
+                break;
+            }
+        }
+    }
+
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        if (string_compare(dc->name, &sp->dc) == 0)
+            continue;
+        // if the dc is a remote dc, get the rack at rack_idx
+        // use that as preselected rack for replication
+        uint32_t rack_cnt = array_n(&dc->racks);
+        uint32_t this_rack_index = my_rack_index % rack_cnt;
+        dc->preselected_rack_for_replication = array_get(&dc->racks, this_rack_index);
+        log_notice("Selected rack %.*s for remote region %.*s",
+                   dc->preselected_rack_for_replication->name->len,
+                   dc->preselected_rack_for_replication->name->data,
+                   dc->name->len, dc->name->data);
+    }
+}
+
+void
+preselect_remote_rack_for_replication(struct context *ctx)
+{
+    array_each(&ctx->pool, preselect_remote_rack_for_replication_each, NULL);
 }

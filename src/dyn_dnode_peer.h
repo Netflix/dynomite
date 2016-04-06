@@ -26,4 +26,5 @@ rstatus_t dnode_peer_replace(void *rmsg);
 rstatus_t dnode_peer_handshake_announcing(void *rmsg);
 
 void init_dnode_peer_conn(struct conn *conn);
+void preselect_remote_rack_for_replication(struct context *ctx);
 #endif 
