@@ -190,6 +190,7 @@ def mread_ops(skipkeys, numkeys, delay, host, port, db):
        while (len(keys) > 0) :
           values = r.mget(keys)
           print values
+          time.sleep(int(delay))
           for key in values.keys() :
               keys.remove(key)
 
@@ -236,6 +237,7 @@ def main():
     parser.add_option("-d", "--delay",
                       action="store",
    		      dest="delay",
+                      default="0",
                       help="Delay between operations. Default is 0\n")
     parser.add_option("-s", "--payloadsize",
                       action="store",
