@@ -421,7 +421,7 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 {
     //do nothing
     struct msg *rsp = msg_get_rsp_integer(c_conn);
-    if (!req->noreply)
+    if (req->expect_datastore_reply)
         conn_enqueue_outq(ctx, c_conn, req);
     req->peer = rsp;
     rsp->peer = req;
@@ -449,8 +449,7 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
     msg->error = 1;
     msg->err = err;
 
-    /* noreply request don't expect any response */
-    if (msg->noreply) {
+    if (!msg->expect_datastore_reply) {
         req_put(msg);
         return;
     }
@@ -584,7 +583,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue message (request) into client outq, if response is expected */
-    if (!msg->noreply) {
+    if (msg->expect_datastore_reply) {
         conn_enqueue_outq(ctx, c_conn, msg);
     }
 

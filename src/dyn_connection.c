@@ -56,7 +56,7 @@
  * Request received over the client connection are forwarded to the server by
  * enqueuing the request in the chosen server's in_q. From the client's
  * perspective once the request is forwarded, it is outstanding and is tracked
- * in the client's out_q (unless the request was tagged as noreply). The server
+ * in the client's out_q (unless the request was tagged as !expect_datastore_reply). The server
  * in turn picks up requests from its own in_q in fifo order and puts them on
  * the wire. Once the request is outstanding on the wire, and a response is
  * expected for it, the server keeps track of outstanding requests it in its

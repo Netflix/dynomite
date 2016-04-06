@@ -460,7 +460,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
 static void
 dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    if ((req->swallow && req->noreply) || // no reply
+    if ((req->swallow && !req->expect_datastore_reply) || // no reply
         (req->swallow && (req->consistency == DC_ONE)) || // dc one
         (req->swallow && (req->consistency == DC_QUORUM) // remote dc request
                       && (!conn->same_dc)) ||
@@ -1401,8 +1401,8 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL) {
-        log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d noreply %d",
-                msg->id, msg->mlen, conn->sd, msg->noreply);
+        log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d expect_datastore_reply %d",
+                msg->id, msg->mlen, conn->sd, msg->expect_datastore_reply);
         rsp_put(msg);
         return true;
     }
@@ -1769,7 +1769,7 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
        log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
     }
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-    // crashes because dmsg is NULL :(
+    // TODO: crashes because dmsg is NULL :(
     /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->sd, msg->dmsg->id);*/
 
@@ -1786,7 +1786,7 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
               conn, msg->id, msg->parent_id);
-    if (!msg->noreply) {
+    if (msg->expect_datastore_reply) {
         msg_tmo_insert(msg, conn);
     }
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);

@@ -287,7 +287,7 @@ struct msg {
     unsigned             ferror:1;        /* one or more fragments are in error? */
     unsigned             request:1;       /* request? or response? */
     unsigned             quit:1;          /* quit request? */
-    unsigned             noreply:1;       /* noreply? */
+    unsigned             expect_datastore_reply:1;       /* expect datastore reply */
     unsigned             done:1;          /* done? */
     unsigned             fdone:1;         /* all fragments are done? */
     unsigned             first_fragment:1;/* first fragment? */
