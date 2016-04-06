@@ -133,6 +133,7 @@ redis_arg1(struct msg *r)
     case MSG_REQ_REDIS_ZREVRANK:
     case MSG_REQ_REDIS_ZSCORE:
     case MSG_REQ_REDIS_SLAVEOF:
+
         return true;
 
     default:
@@ -174,6 +175,7 @@ redis_arg2(struct msg *r)
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
 
     case MSG_REQ_REDIS_RESTORE:
+
         return true;
 
     default:
@@ -242,6 +244,8 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
+    case MSG_REQ_REDIS_CONFIG:
+
         return true;
 
     default:
@@ -969,6 +973,12 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
+                if (str6icmp(m, 'c', 'o', 'n', 'f', 'i', 'g')) {
+                	r->type = MSG_REQ_REDIS_CONFIG;
+                	r->is_read = 0;
+                	break;
+                }
+
                 break;
 
             case 7:
@@ -1107,6 +1117,8 @@ redis_parse_req(struct msg *r)
                     r->is_read = 0;
                     break;
                 }
+
+                break;
 
             case 11:
                 if (str11icmp(m, 'i', 'n', 'c', 'r', 'b', 'y', 'f', 'l', 'o', 'a', 't')) {
