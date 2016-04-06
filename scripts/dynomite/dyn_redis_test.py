@@ -238,7 +238,7 @@ def main():
                       action="store",
    		      dest="delay",
                       default="0",
-                      help="Delay between operations. Default is 0\n")
+                      help="Delay between operations in seconds. Default is 0\n")
     parser.add_option("-s", "--payloadsize",
                       action="store",
                       dest="payloadsize",
