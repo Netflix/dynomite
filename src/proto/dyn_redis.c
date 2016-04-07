@@ -975,7 +975,7 @@ redis_parse_req(struct msg *r)
 
                 if (str6icmp(m, 'c', 'o', 'n', 'f', 'i', 'g')) {
                 	r->type = MSG_REQ_REDIS_CONFIG;
-                	r->is_read = 0;
+                	r->is_read = 1;
                 	break;
                 }
 
@@ -1405,7 +1405,13 @@ redis_parse_req(struct msg *r)
             break;
 
         case SW_ARG1:
+            if (r->type == MSG_REQ_REDIS_CONFIG && !str3icmp(m, 'g', 'e', 't')) {
+                log_error("Redis CONFIG command not supported '%.*s'", p - m, m);
+                goto error;
+            }
+
             m = p + r->rlen;
+
             if (m >= b->last) {
                 r->rlen -= (uint32_t)(b->last - p);
                 m = b->last - 1;
