@@ -133,6 +133,8 @@ redis_arg1(struct msg *r)
     case MSG_REQ_REDIS_ZREVRANK:
     case MSG_REQ_REDIS_ZSCORE:
     case MSG_REQ_REDIS_SLAVEOF:
+    case MSG_REQ_REDIS_CONFIG:
+
         return true;
 
     default:
@@ -174,6 +176,7 @@ redis_arg2(struct msg *r)
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
 
     case MSG_REQ_REDIS_RESTORE:
+
         return true;
 
     default:
@@ -242,6 +245,7 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
+
         return true;
 
     default:
@@ -624,7 +628,7 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
-                if (str4icmp(m, 'i', 'n', 'f', 'o')) { /* Yannis: Need to identify how this is defined in Redis protocol */
+                if (str4icmp(m, 'i', 'n', 'f', 'o')) {
                     r->type = MSG_REQ_REDIS_INFO;
                     r->msg_type = 1; //local only
                     p = p + 1;
@@ -969,6 +973,13 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
+                if (str6icmp(m, 'c', 'o', 'n', 'f', 'i', 'g')) {
+                	r->type = MSG_REQ_REDIS_CONFIG;
+                    r->msg_type = 1; //local only
+                	r->is_read = 1;
+                	break;
+                }
+
                 break;
 
             case 7:
@@ -1107,6 +1118,8 @@ redis_parse_req(struct msg *r)
                     r->is_read = 0;
                     break;
                 }
+
+                break;
 
             case 11:
                 if (str11icmp(m, 'i', 'n', 'c', 'r', 'b', 'y', 'f', 'l', 'o', 'a', 't')) {
@@ -1393,7 +1406,14 @@ redis_parse_req(struct msg *r)
             break;
 
         case SW_ARG1:
+
+
+            if (r->type == MSG_REQ_REDIS_CONFIG && !str3icmp(m, 'g', 'e', 't')) {
+                log_error("Redis CONFIG command not supported '%.*s'", p - m, m);
+                goto error;
+            }
             m = p + r->rlen;
+
             if (m >= b->last) {
                 r->rlen -= (uint32_t)(b->last - p);
                 m = b->last - 1;
@@ -1407,6 +1427,7 @@ redis_parse_req(struct msg *r)
 
             p = m; /* move forward by rlen bytes */
             r->rlen = 0;
+
 
             state = SW_ARG1_LF;
 
