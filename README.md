@@ -31,6 +31,18 @@ To build Dynomite in _debug mode_:
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
+
+### Build with Docker
+
+Dynomite can be compiled inside of a Docker container. The container provides a clean build environment.
+
+```bash
+git clone https://github.com/Netflix/dynomite.git
+
+cd dynomite
+
+docker run -it --rm -v $PWD:/src dynomitedb/build-dynomite
+```
     
 ## Help
 
