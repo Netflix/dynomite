@@ -1,0 +1,14 @@
+Package: dynomitedb-dynomite
+Version: 0:0.5.7
+Section: database
+Priority: extra
+Licence: Apache 2.0
+Vendor: DynomiteDB
+Architecture: amd64
+Depends: libc6 (>= 2.14), libssl1.0.0 (>= 1.0.0), adduser
+Maintainer: Akbar S. Ahmed <akbar@dynomitedb.com>
+Homepage: http://www.dynomitedb.com
+Description: Turn single server databases into distributed databases
+ A high performance, linearly scalable, highly available (HA) and distributed
+ database framework with support for pluggable persistent and in-memory
+ storage engines.
