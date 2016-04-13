@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cmd="pkill dynomite"
+cmd="pkill /apps/dynomite/bin/dynomite"
 if [ $USER != "root" ];then
     exec $cmd
 else
