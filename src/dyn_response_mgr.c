@@ -18,7 +18,8 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
 static bool
 rspmgr_is_quorum_achieved(struct response_mgr *rspmgr)
 {
-    if (rspmgr->good_responses == rspmgr->quorum_responses == 1)
+    if (rspmgr->quorum_responses == 1 &&
+            rspmgr->good_responses == rspmgr->quorum_responses)
         return true;
     if (rspmgr->good_responses < rspmgr->quorum_responses)
         return false;
