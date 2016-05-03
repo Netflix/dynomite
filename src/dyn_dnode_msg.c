@@ -369,6 +369,7 @@ dyn_parse_core(struct msg *r)
           }
           mbuf_insert(&r->mhdr, nbuf);
           mbuf_remove(&r->mhdr, b);
+          mbuf_put(b);
           r->pos = nbuf->pos;
           return false;
        }
