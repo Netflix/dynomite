@@ -314,25 +314,24 @@ is_conn_secured(struct server_pool *sp, struct server *peer_node)
     //ASSERT(sp != NULL);
 
     // if dc-secured mode then communication only between nodes in different dc is secured
-    if (dn_strcmp(sp->secure_server_option.data, CONF_STR_DC) == 0) {
-        if (string_compare(&sp->dc, &peer_node->dc) != 0) {
+    switch (sp->secure_server_option)
+    {
+        case SECURE_OPTION_NONE:
+            return false;
+        case SECURE_OPTION_RACK:
+            if (string_compare(&sp->rack, &peer_node->rack) != 0
+                    || string_compare(&sp->dc, &peer_node->dc) != 0) {
+                return true;
+            }
+            return false;
+        case SECURE_OPTION_DC:
+            if (string_compare(&sp->dc, &peer_node->dc) != 0) {
+                return true;
+            }
+            return false;
+        case SECURE_OPTION_ALL:
             return true;
-        }
     }
-    // if rack-secured mode then communication only between nodes in different rack is secured.
-    // communication secured between nodes if they are in rack with same name across dcs.
-    else if (dn_strcmp(sp->secure_server_option.data, CONF_STR_RACK) == 0) {
-        // if not same rack nor dc
-        if (string_compare(&sp->rack, &peer_node->rack) != 0
-                || string_compare(&sp->dc, &peer_node->dc) != 0) {
-            return true;
-        }
-    }
-    // if all then all communication between nodes will be secured.
-    else if (dn_strcmp(sp->secure_server_option.data, CONF_STR_ALL) == 0) {
-        return true;
-    }
-
     return false;
 }
 

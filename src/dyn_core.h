@@ -120,6 +120,7 @@ struct dyn_ring;
 #include <sys/time.h>
 #include <netinet/in.h>
 
+#include "dyn_types.h"
 #include "dyn_array.h"
 #include "dyn_dict.h"
 #include "dyn_string.h"
@@ -165,7 +166,7 @@ typedef enum data_store {
 
 
 struct context {
-    uint32_t           id;          /* unique context id */
+    //uint32_t           id;          /* unique context id */
     struct conf        *cf;         /* configuration */
     struct stats       *stats;      /* stats */
 
@@ -304,7 +305,7 @@ struct server_pool {
     struct string      dc;                   /* server's dc */
     struct string      env;                  /* aws, network, ect */
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
-    struct string      secure_server_option;
+    secure_server_option_t secure_server_option;
     struct string      pem_key_file;
     data_store_t	   data_store;	/* the backend data store */
 

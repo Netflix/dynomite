@@ -32,8 +32,6 @@
 #include "dyn_gossip.h"
 
 
-static uint32_t ctx_id; /* context generation */
-
 static struct context *
 core_ctx_create(struct instance *nci)
 {
@@ -46,7 +44,6 @@ core_ctx_create(struct instance *nci)
 	if (ctx == NULL) {
 		return NULL;
 	}
-	ctx->id = ++ctx_id;
 	ctx->cf = NULL;
 	ctx->stats = NULL;
 	ctx->evb = NULL;
@@ -207,15 +204,12 @@ core_ctx_create(struct instance *nci)
     }
     preselect_remote_rack_for_replication(ctx);
 
-	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
-
 	return ctx;
 }
 
 static void
 core_ctx_destroy(struct context *ctx)
 {
-	log_debug(LOG_VVERB, "destroy ctx %p id %"PRIu32"", ctx, ctx->id);
 	proxy_deinit(ctx);
 	server_pool_disconnect(ctx);
 	event_base_destroy(ctx->evb);

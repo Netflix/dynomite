@@ -50,132 +50,59 @@ static struct string dist_strings[] = {
 };
 #undef DEFINE_ACTION
 
-static struct command conf_commands[] = {
-    { string("listen"),
-      conf_set_listen,
-      offsetof(struct conf_pool, listen) },
+#define CONF_OK             (void *) NULL
+#define CONF_ERROR          (void *) "has an invalid value"
+#define CONF_ROOT_DEPTH     1
+#define CONF_MAX_DEPTH      CONF_ROOT_DEPTH + 1
+#define CONF_DEFAULT_ARGS       3
+#define CONF_DEFAULT_POOL       8
+#define CONF_UNSET_NUM  0
+#define CONF_UNSET_PTR  NULL
+#define CONF_DEFAULT_SERVERS    8
+#define CONF_UNSET_HASH (hash_type_t) -1
+#define CONF_UNSET_DIST (dist_type_t) -1
 
-    { string("hash"),
-      conf_set_hash,
-      offsetof(struct conf_pool, hash) },
+#define CONF_DEFAULT_HASH                    HASH_MURMUR
+#define CONF_DEFAULT_DIST                    DIST_VNODE
+#define CONF_DEFAULT_TIMEOUT                 5000
+#define CONF_DEFAULT_LISTEN_BACKLOG          512
+#define CONF_DEFAULT_CLIENT_CONNECTIONS      0
+#define CONF_DEFAULT_DATASTORE				 0
+#define CONF_DEFAULT_PRECONNECT              true
+#define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
+#define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
+#define CONF_DEFAULT_SERVER_FAILURE_LIMIT    2
+#define CONF_DEFAULT_SERVER_CONNECTIONS      1
+#define CONF_DEFAULT_KETAMA_PORT             11211
 
-    { string("hash_tag"),
-      conf_set_hashtag,
-      offsetof(struct conf_pool, hash_tag) },
+#define CONF_DEFAULT_SEEDS                   5
+#define CONF_DEFAULT_DYN_READ_TIMEOUT        10000
+#define CONF_DEFAULT_DYN_WRITE_TIMEOUT       10000
+#define CONF_DEFAULT_DYN_CONNECTIONS         100
+#define CONF_DEFAULT_VNODE_TOKENS            1
+#define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
 
-    { string("distribution"),
-      conf_set_distribution,
-      offsetof(struct conf_pool, distribution) },
+#define CONF_STR_NONE                        "none"
+#define CONF_STR_DC                          "datacenter"
+#define CONF_STR_RACK                        "rack"
+#define CONF_STR_ALL                         "all"
 
-    { string("timeout"),
-      conf_set_num,
-      offsetof(struct conf_pool, timeout) },
+#define CONF_STR_DC_QUORUM                   "dc_quorum"
+#define CONF_STR_DC_ONE                      "dc_one"
 
-    { string("backlog"),
-      conf_set_num,
-      offsetof(struct conf_pool, backlog) },
 
-    { string("client_connections"),
-      conf_set_num,
-      offsetof(struct conf_pool, client_connections) },
+#define CONF_DEFAULT_RACK                    "localrack"
+#define CONF_DEFAULT_DC                      "localdc"
+#define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
 
-    { string("data_store"),
-      conf_set_num,
-      offsetof(struct conf_pool, data_store) },
+#define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
-    { string("preconnect"),
-      conf_set_bool,
-      offsetof(struct conf_pool, preconnect) },
+#define PEM_KEY_FILE  "conf/dynomite.pem"
 
-    { string("auto_eject_hosts"),
-      conf_set_bool,
-      offsetof(struct conf_pool, auto_eject_hosts) },
-
-    { string("server_connections"),
-      conf_set_num,
-      offsetof(struct conf_pool, server_connections) },
-
-    { string("server_retry_timeout"),
-      conf_set_num,
-      offsetof(struct conf_pool, server_retry_timeout_ms) },
-
-    { string("server_failure_limit"),
-      conf_set_num,
-      offsetof(struct conf_pool, server_failure_limit) },
-
-    { string("servers"),
-      conf_add_server,
-      offsetof(struct conf_pool, server) },
-
-    { string("dyn_read_timeout"),
-      conf_set_num,
-      offsetof(struct conf_pool, dyn_read_timeout) },
-
-    { string("dyn_write_timeout"),
-      conf_set_num,
-      offsetof(struct conf_pool, dyn_write_timeout) },
-
-    { string("dyn_listen"),
-      conf_set_listen,
-      offsetof(struct conf_pool, dyn_listen) },
-
-    { string("dyn_seed_provider"),
-      conf_set_string,
-      offsetof(struct conf_pool, dyn_seed_provider) },
-
-    { string("dyn_seeds"),
-      conf_add_dyn_server,
-      offsetof(struct conf_pool, dyn_seeds) },
-
-    { string("dyn_port"),
-      conf_set_num,
-      offsetof(struct conf_pool, dyn_port) },
-
-    { string("dyn_connections"),
-      conf_set_num,
-      offsetof(struct conf_pool, dyn_connections) },
-
-    { string("rack"),
-      conf_set_string,
-      offsetof(struct conf_pool, rack) },
-
-    { string("tokens"),
-      conf_set_tokens,
-      offsetof(struct conf_pool, tokens) },
-
-    { string("gos_interval"),
-      conf_set_num,
-      offsetof(struct conf_pool, gos_interval) },
-
-    { string("secure_server_option"),
-      conf_set_string,
-      offsetof(struct conf_pool, secure_server_option) },
-
-    { string("pem_key_file"),
-        conf_set_string,
-        offsetof(struct conf_pool, pem_key_file) },
-
-    { string("datacenter"),
-      conf_set_string,
-      offsetof(struct conf_pool, dc) },
-
-    { string("env"),
-      conf_set_string,
-      offsetof(struct conf_pool, env) },
-
-    { string("conn_msg_rate"),
-      conf_set_num,
-      offsetof(struct conf_pool, conn_msg_rate)},
-
-    { string("read_consistency"),
-      conf_set_string,
-      offsetof(struct conf_pool, read_consistency) },
-
-    { string("write_consistency"),
-      conf_set_string,
-      offsetof(struct conf_pool, write_consistency) },
-
-    null_command
+struct command {
+    struct string name;
+    char          *(*set)(struct conf *cf, struct command *cmd, void *data);
+    int           offset;
 };
 
 static rstatus_t
@@ -437,6 +364,24 @@ conf_pool_deinit(struct conf_pool *cp)
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }
 
+static secure_server_option_t
+get_secure_server_option(struct string option)
+{
+    if (dn_strcmp(option.data, CONF_STR_NONE) == 0) {
+        return SECURE_OPTION_NONE;
+    }
+    if (dn_strcmp(option.data, CONF_STR_RACK) == 0) {
+        return SECURE_OPTION_RACK;
+    }
+    if (dn_strcmp(option.data, CONF_STR_DC) == 0) {
+        return SECURE_OPTION_DC;
+    }
+    if (dn_strcmp(option.data, CONF_STR_ALL) == 0) {
+        return SECURE_OPTION_ALL;
+    }
+    return SECURE_OPTION_NONE;
+}
+
 rstatus_t
 conf_pool_each_transform(void *elem, void *data)
 {
@@ -508,7 +453,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->tokens = cp->tokens;
     sp->env = cp->env;
 
-    sp->secure_server_option = cp->secure_server_option;
+    sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
 
     array_null(&sp->seeds);
@@ -747,6 +692,705 @@ conf_pop_scalar(struct conf *cf)
     log_debug(LOG_VVERB, "pop '%.*s'", value->len, value->data);
     string_deinit(value);
 }
+
+static char *
+conf_set_string(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    uint8_t *p;
+    struct string *field, *value;
+
+    p = conf;
+    field = (struct string *)(p + cmd->offset);
+
+    if (field->data != CONF_UNSET_PTR) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+
+    status = string_duplicate(field, value);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    return CONF_OK;
+}
+
+static char *
+conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    struct string *value;
+    struct conf_listen *field;
+    uint8_t *p, *name;
+    uint32_t namelen;
+
+    p = conf;
+    field = (struct conf_listen *)(p + cmd->offset);
+
+    if (field->valid == 1) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+
+    status = string_duplicate(&field->pname, value);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    if (value->data[0] == '/') {
+        name = value->data;
+        namelen = value->len;
+    } else {
+        uint8_t *q, *start, *port;
+        uint32_t portlen;
+
+        /* parse "hostname:port" from the end */
+        p = value->data + value->len - 1;
+        start = value->data;
+        q = dn_strrchr(p, start, ':');
+        if (q == NULL) {
+            return "has an invalid \"hostname:port\" format string";
+        }
+
+        port = q + 1;
+        portlen = (uint32_t)(p - port + 1);
+
+        p = q - 1;
+
+        name = start;
+        namelen = (uint32_t)(p - start + 1);
+
+        field->port = dn_atoi(port, portlen);
+        if (field->port < 0 || !dn_valid_port(field->port)) {
+            return "has an invalid port in \"hostname:port\" format string";
+        }
+    }
+
+    status = string_copy(&field->name, name, namelen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    status = dn_resolve(&field->name, field->port, &field->info);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    field->valid = 1;
+
+    return CONF_OK;
+}
+
+/* Parses servers: from yaml */
+static char *
+conf_add_server(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    struct array *a;
+    struct string *value;
+    struct conf_server *field;
+    uint8_t *p, *q, *start;
+    uint8_t *pname, *addr, *port, *weight, *name;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, weightlen, namelen;
+    struct string address;
+    char delim[] = " ::";
+
+    string_init(&address);
+    p = conf;
+    a = (struct array *)(p + cmd->offset);
+
+    field = array_push(a);
+    if (field == NULL) {
+        return CONF_ERROR;
+    }
+
+    status = conf_server_init(field);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    value = array_top(&cf->arg);
+
+    /* parse "hostname:port:weight [name]" or "/path/unix_socket:weight [name]" from the end */
+    p = value->data + value->len - 1;
+    start = value->data;
+    addr = NULL;
+    addrlen = 0;
+    weight = NULL;
+    weightlen = 0;
+    port = NULL;
+    portlen = 0;
+    name = NULL;
+    namelen = 0;
+
+    delimlen = value->data[0] == '/' ? 2 : 3;
+
+    for (k = 0; k < sizeof(delim); k++) {
+        q = dn_strrchr(p, start, delim[k]);
+        if (q == NULL) {
+            if (k == 0) {
+                /*
+                 * name in "hostname:port:weight [name]" format string is
+                 * optional
+                 */
+                continue;
+            }
+            break;
+        }
+
+        switch (k) {
+        case 0:
+            name = q + 1;
+            namelen = (uint32_t)(p - name + 1);
+            break;
+
+        case 1:
+            weight = q + 1;
+            weightlen = (uint32_t)(p - weight + 1);
+            break;
+
+        case 2:
+            port = q + 1;
+            portlen = (uint32_t)(p - port + 1);
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+
+        p = q - 1;
+    }
+
+    if (k != delimlen) {
+        return "has an invalid \"hostname:port:weight [name]\"or \"/path/unix_socket:weight [name]\" format string";
+    }
+
+    pname = value->data;
+    pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
+    status = string_copy(&field->pname, pname, pnamelen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    addr = start;
+    addrlen = (uint32_t)(p - start + 1);
+
+    field->weight = dn_atoi(weight, weightlen);
+    if (field->weight < 0) {
+        return "has an invalid weight in \"hostname:port:weight [name]\" format string";
+    }
+
+    if (value->data[0] != '/') {
+        field->port = dn_atoi(port, portlen);
+        if (field->port < 0 || !dn_valid_port(field->port)) {
+            return "has an invalid port in \"hostname:port:weight [name]\" format string";
+        }
+    }
+
+    if (name == NULL) {
+        /*
+         * To maintain backward compatibility with libmemcached, we don't
+         * include the port as the part of the input string to the consistent
+         * hashing algorithm, when it is equal to 11211.
+         */
+        if (field->port == CONF_DEFAULT_KETAMA_PORT) {
+            name = addr;
+            namelen = addrlen;
+        } else {
+            name = addr;
+            namelen = addrlen + 1 + portlen;
+        }
+    }
+
+    status = string_copy(&field->name, name, namelen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&address, addr, addrlen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+
+    status = dn_resolve(&address, field->port, &field->info);
+    if (status != DN_OK) {
+        string_deinit(&address);
+        return CONF_ERROR;
+    }
+
+    string_deinit(&address);
+    field->valid = 1;
+
+    return CONF_OK;
+}
+
+
+/*
+ * Well, this just blows. Copied from conf_add_server() there is a colon delimited
+ * string in the yaml that requires a few levels of magic in order to guess the
+ * structure of, rather than doing the right thing and making proper fields.
+ * Need to fix however, there's bigger fish to deep fry at this point.
+ */
+static char *
+conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    struct array *a;
+    struct string *value;
+    struct conf_server *field;
+    uint8_t *p, *q, *start;
+    uint8_t *pname, *addr, *port, *rack, *tokens, *name, *dc;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, racklen, tokenslen, namelen, dclen;
+    struct string address;
+    char delim[] = " ::::";
+    //struct conf_pool *cfpool = conf;
+
+    string_init(&address);
+    p = conf; // conf_pool
+    a = (struct array *)(p + cmd->offset); // a is conf_server array
+
+    field = array_push(a);
+    if (field == NULL) {
+        return CONF_ERROR;
+    }
+
+    status = conf_server_init(field); // field is conf_server
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    value = array_top(&cf->arg);
+
+    /* parse "hostname:port:rack:dc:tokens [name]" */
+    p = value->data + value->len - 1; // p is now pointing to a string
+    start = value->data;
+    addr = NULL;
+    addrlen = 0;
+    rack = NULL;
+    racklen = 0;
+    tokens = NULL;
+    tokenslen = 0;
+    port = NULL;
+    portlen = 0;
+    name = NULL;
+    namelen = 0;
+    dc = NULL;
+    dclen = 0;
+
+    delimlen = 5;
+
+    for (k = 0; k < sizeof(delim); k++) {
+        q = dn_strrchr(p, start, delim[k]);
+        if (q == NULL) {
+            if (k == 0) {
+                /*
+                 * name in "hostname:port:rack:dc:tokens [name]" format string is
+                 * optional
+                 */
+                continue;
+            }
+            break;
+        }
+
+        switch (k) {
+        case 0:
+            name = q + 1;
+            namelen = (uint32_t)(p - name + 1);
+            break;
+
+        case 1:
+            tokens = q + 1;
+            tokenslen = (uint32_t)(p - tokens + 1);
+            break;
+
+        case 2:
+            dc = q + 1;
+            dclen = (uint32_t)(p - dc + 1);
+            break;
+
+        case 3:
+            rack = q + 1;
+            racklen = (uint32_t)(p - rack + 1);
+            break;
+
+        case 4:
+            port = q + 1;
+            portlen = (uint32_t)(p - port + 1);
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+
+        p = q - 1;
+    }
+
+    if (k != delimlen) {
+        return "has an invalid format must match \"hostname:port:rack:dc:tokens [name]\"";
+    }
+
+    pname = value->data; // seed node config string.
+    pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
+    status = string_copy(&field->pname, pname, pnamelen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&field->dc, dc, dclen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&field->rack, rack, racklen);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    uint8_t *t_end = tokens + tokenslen;
+    status = derive_tokens(&field->tokens, tokens, t_end);
+    if (status != DN_OK) {
+        array_pop(a);
+        return CONF_ERROR;
+    }
+
+    addr = start;
+    addrlen = (uint32_t)(p - start + 1);
+    if (value->data[0] != '/') {
+        field->port = dn_atoi(port, portlen);
+        if (field->port < 0 || !dn_valid_port(field->port)) {
+            return "has an invalid port in \"hostname:port:weight [name]\" format string";
+        }
+    }
+
+    if (name == NULL) {
+        /*
+         * To maintain backward compatibility with libmemcached, we don't
+         * include the port as the part of the input string to the consistent
+         * hashing algorithm, when it is equal to 11211.
+         */
+        if (field->port == CONF_DEFAULT_KETAMA_PORT) {
+            name = addr;
+            namelen = addrlen;
+        } else {
+            name = addr;
+            namelen = addrlen + 1 + portlen;
+        }
+    }
+
+    status = string_copy(&field->name, name, namelen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    status = string_copy(&address, addr, addrlen);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    status = dn_resolve(&address, field->port, &field->info);
+    if (status != DN_OK) {
+        string_deinit(&address);
+        return CONF_ERROR;
+    }
+
+    string_deinit(&address);
+    field->valid = 1;
+
+    return CONF_OK;
+}
+
+static char *
+conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
+{
+    uint8_t *p = conf;
+    struct array *tokens = (struct array *)(p + cmd->offset);
+    struct string *value = array_top(&cf->arg);
+    p = value->data + value->len;
+
+    rstatus_t status = derive_tokens(tokens, value->data, p);
+    if (status != DN_OK) {
+        //TODO: should we dealloc the tokens/array?
+        return CONF_ERROR;
+    }
+
+    return CONF_OK;
+}
+
+static char *
+conf_set_num(struct conf *cf, struct command *cmd, void *conf)
+{
+    uint8_t *p;
+    int num, *np;
+    struct string *value;
+
+    p = conf;
+    np = (int *)(p + cmd->offset);
+
+    if (*np != CONF_UNSET_NUM) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+
+    num = dn_atoi(value->data, value->len);
+    if (num < 0) {
+        return "is not a number";
+    }
+
+    *np = num;
+
+    return CONF_OK;
+}
+
+static char *
+conf_set_bool(struct conf *cf, struct command *cmd, void *conf)
+{
+    uint8_t *p;
+    int *bp;
+    struct string *value, true_str, false_str;
+
+    p = conf;
+    bp = (int *)(p + cmd->offset);
+
+    if (*bp != CONF_UNSET_NUM) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+    string_set_text(&true_str, "true");
+    string_set_text(&false_str, "false");
+
+    if (string_compare(value, &true_str) == 0) {
+        *bp = 1;
+    } else if (string_compare(value, &false_str) == 0) {
+        *bp = 0;
+    } else {
+        return "is not \"true\" or \"false\"";
+    }
+
+    return CONF_OK;
+}
+
+static char *
+conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
+{
+    uint8_t *p;
+    hash_type_t *hp;
+    struct string *value, *hash;
+
+    p = conf;
+    hp = (hash_type_t *)(p + cmd->offset);
+
+    if (*hp != CONF_UNSET_HASH) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+
+    for (hash = hash_strings; hash->len != 0; hash++) {
+        if (string_compare(value, hash) != 0) {
+            continue;
+        }
+
+        *hp = hash - hash_strings;
+
+        return CONF_OK;
+    }
+
+    return "is not a valid hash";
+}
+
+static char *
+conf_set_distribution(struct conf *cf, struct command *cmd, void *conf)
+{
+    uint8_t *p;
+    dist_type_t *dp;
+    struct string *value, *dist;
+
+    p = conf;
+    dp = (dist_type_t *)(p + cmd->offset);
+
+    if (*dp != CONF_UNSET_DIST) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+
+    for (dist = dist_strings; dist->len != 0; dist++) {
+        if (string_compare(value, dist) != 0) {
+            continue;
+        }
+
+        *dp = dist - dist_strings;
+
+        return CONF_OK;
+    }
+
+    return "is not a valid distribution";
+}
+
+static char *
+conf_set_hashtag(struct conf *cf, struct command *cmd, void *conf)
+{
+    rstatus_t status;
+    uint8_t *p;
+    struct string *field, *value;
+
+    p = conf;
+    field = (struct string *)(p + cmd->offset);
+
+    if (field->data != CONF_UNSET_PTR) {
+        return "is a duplicate";
+    }
+
+    value = array_top(&cf->arg);
+
+    if (value->len != 2) {
+        return "is not a valid hash tag string with two characters";
+    }
+
+    status = string_duplicate(field, value);
+    if (status != DN_OK) {
+        return CONF_ERROR;
+    }
+
+    return CONF_OK;
+}
+static struct command conf_commands[] = {
+    { string("listen"),
+      conf_set_listen,
+      offsetof(struct conf_pool, listen) },
+
+    { string("hash"),
+      conf_set_hash,
+      offsetof(struct conf_pool, hash) },
+
+    { string("hash_tag"),
+      conf_set_hashtag,
+      offsetof(struct conf_pool, hash_tag) },
+
+    { string("distribution"),
+      conf_set_distribution,
+      offsetof(struct conf_pool, distribution) },
+
+    { string("timeout"),
+      conf_set_num,
+      offsetof(struct conf_pool, timeout) },
+
+    { string("backlog"),
+      conf_set_num,
+      offsetof(struct conf_pool, backlog) },
+
+    { string("client_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, client_connections) },
+
+    { string("data_store"),
+      conf_set_num,
+      offsetof(struct conf_pool, data_store) },
+
+    { string("preconnect"),
+      conf_set_bool,
+      offsetof(struct conf_pool, preconnect) },
+
+    { string("auto_eject_hosts"),
+      conf_set_bool,
+      offsetof(struct conf_pool, auto_eject_hosts) },
+
+    { string("server_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, server_connections) },
+
+    { string("server_retry_timeout"),
+      conf_set_num,
+      offsetof(struct conf_pool, server_retry_timeout_ms) },
+
+    { string("server_failure_limit"),
+      conf_set_num,
+      offsetof(struct conf_pool, server_failure_limit) },
+
+    { string("servers"),
+      conf_add_server,
+      offsetof(struct conf_pool, server) },
+
+    { string("dyn_read_timeout"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_read_timeout) },
+
+    { string("dyn_write_timeout"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_write_timeout) },
+
+    { string("dyn_listen"),
+      conf_set_listen,
+      offsetof(struct conf_pool, dyn_listen) },
+
+    { string("dyn_seed_provider"),
+      conf_set_string,
+      offsetof(struct conf_pool, dyn_seed_provider) },
+
+    { string("dyn_seeds"),
+      conf_add_dyn_server,
+      offsetof(struct conf_pool, dyn_seeds) },
+
+    { string("dyn_port"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_port) },
+
+    { string("dyn_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, dyn_connections) },
+
+    { string("rack"),
+      conf_set_string,
+      offsetof(struct conf_pool, rack) },
+
+    { string("tokens"),
+      conf_set_tokens,
+      offsetof(struct conf_pool, tokens) },
+
+    { string("gos_interval"),
+      conf_set_num,
+      offsetof(struct conf_pool, gos_interval) },
+
+    { string("secure_server_option"),
+      conf_set_string,
+      offsetof(struct conf_pool, secure_server_option) },
+
+    { string("pem_key_file"),
+        conf_set_string,
+        offsetof(struct conf_pool, pem_key_file) },
+
+    { string("datacenter"),
+      conf_set_string,
+      offsetof(struct conf_pool, dc) },
+
+    { string("env"),
+      conf_set_string,
+      offsetof(struct conf_pool, env) },
+
+    { string("conn_msg_rate"),
+      conf_set_num,
+      offsetof(struct conf_pool, conn_msg_rate)},
+
+    { string("read_consistency"),
+      conf_set_string,
+      offsetof(struct conf_pool, read_consistency) },
+
+    { string("write_consistency"),
+      conf_set_string,
+      offsetof(struct conf_pool, write_consistency) },
+
+    null_command
+};
 
 static rstatus_t
 conf_handler(struct conf *cf, void *data)
@@ -1478,7 +2122,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (string_empty(&cp->dyn_seed_provider)) {
-    	string_copy_c(&cp->dyn_seed_provider, &CONF_DEFAULT_SEED_PROVIDER);
+    	string_copy_c(&cp->dyn_seed_provider, (const uint8_t *)CONF_DEFAULT_SEED_PROVIDER);
     }
 
     if (cp->hash == CONF_UNSET_HASH) {
@@ -1546,32 +2190,32 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (string_empty(&cp->rack)) {
-        string_copy_c(&cp->rack, &CONF_DEFAULT_RACK);
+        string_copy_c(&cp->rack, (const uint8_t *)CONF_DEFAULT_RACK);
         log_debug(LOG_INFO, "setting rack to default value:%s", CONF_DEFAULT_RACK);
     }
 
     if (string_empty(&cp->dc)) {
-        string_copy_c(&cp->dc, &CONF_DEFAULT_DC);
+        string_copy_c(&cp->dc, (const uint8_t *)CONF_DEFAULT_DC);
         log_debug(LOG_INFO, "setting dc to default value:%s", CONF_DEFAULT_DC);
     }
 
     if (string_empty(&cp->secure_server_option)) {
         string_copy_c(&cp->secure_server_option,
-                &CONF_DEFAULT_SECURE_SERVER_OPTION);
+                      (const uint8_t *)CONF_DEFAULT_SECURE_SERVER_OPTION);
         log_debug(LOG_INFO, "setting secure_server_option to default value:%s",
-                CONF_DEFAULT_SECURE_SERVER_OPTION);
+                  CONF_DEFAULT_SECURE_SERVER_OPTION);
     }
 
     if (string_empty(&cp->read_consistency)) {
         string_copy_c(&cp->read_consistency,
-                &CONF_STR_DC_ONE);
+                      (const uint8_t *)CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting read_consistency to default value:%s",
                 CONF_STR_DC_ONE);
     }
 
     if (string_empty(&cp->write_consistency)) {
         string_copy_c(&cp->write_consistency,
-                &CONF_STR_DC_ONE);
+                      (const uint8_t *)CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting write_consistency to default value:%s",
                 CONF_STR_DC_ONE);
     }
@@ -1603,12 +2247,12 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (string_empty(&cp->env)) {
-        string_copy_c(&cp->env, &CONF_DEFAULT_ENV);
+        string_copy_c(&cp->env, (const uint8_t *)CONF_DEFAULT_ENV);
         log_debug(LOG_INFO, "setting env to default value:%s", CONF_DEFAULT_ENV);
     }
 
     if (string_empty(&cp->pem_key_file)) {
-        string_copy_c(&cp->pem_key_file, &PEM_KEY_FILE);
+        string_copy_c(&cp->pem_key_file, (const uint8_t *)PEM_KEY_FILE);
         log_debug(LOG_INFO, "setting pem key file to default value:%s", PEM_KEY_FILE);
     }
 
@@ -1794,574 +2438,3 @@ conf_destroy(struct conf *cf)
     dn_free(cf);
 }
 
-char *
-conf_set_string(struct conf *cf, struct command *cmd, void *conf)
-{
-    rstatus_t status;
-    uint8_t *p;
-    struct string *field, *value;
-
-    p = conf;
-    field = (struct string *)(p + cmd->offset);
-
-    if (field->data != CONF_UNSET_PTR) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    status = string_duplicate(field, value);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    return CONF_OK;
-}
-
-char *
-conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
-{
-    rstatus_t status;
-    struct string *value;
-    struct conf_listen *field;
-    uint8_t *p, *name;
-    uint32_t namelen;
-
-    p = conf;
-    field = (struct conf_listen *)(p + cmd->offset);
-
-    if (field->valid == 1) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    status = string_duplicate(&field->pname, value);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    if (value->data[0] == '/') {
-        name = value->data;
-        namelen = value->len;
-    } else {
-        uint8_t *q, *start, *port;
-        uint32_t portlen;
-
-        /* parse "hostname:port" from the end */
-        p = value->data + value->len - 1;
-        start = value->data;
-        q = dn_strrchr(p, start, ':');
-        if (q == NULL) {
-            return "has an invalid \"hostname:port\" format string";
-        }
-
-        port = q + 1;
-        portlen = (uint32_t)(p - port + 1);
-
-        p = q - 1;
-
-        name = start;
-        namelen = (uint32_t)(p - start + 1);
-
-        field->port = dn_atoi(port, portlen);
-        if (field->port < 0 || !dn_valid_port(field->port)) {
-            return "has an invalid port in \"hostname:port\" format string";
-        }
-    }
-
-    status = string_copy(&field->name, name, namelen);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    status = dn_resolve(&field->name, field->port, &field->info);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    field->valid = 1;
-
-    return CONF_OK;
-}
-
-/* Parses servers: from yaml */
-char *
-conf_add_server(struct conf *cf, struct command *cmd, void *conf)
-{
-    rstatus_t status;
-    struct array *a;
-    struct string *value;
-    struct conf_server *field;
-    uint8_t *p, *q, *start;
-    uint8_t *pname, *addr, *port, *weight, *name;
-    uint32_t k, delimlen, pnamelen, addrlen, portlen, weightlen, namelen;
-    struct string address;
-    char delim[] = " ::";
-
-    string_init(&address);
-    p = conf;
-    a = (struct array *)(p + cmd->offset);
-
-    field = array_push(a);
-    if (field == NULL) {
-        return CONF_ERROR;
-    }
-
-    status = conf_server_init(field);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    value = array_top(&cf->arg);
-
-    /* parse "hostname:port:weight [name]" or "/path/unix_socket:weight [name]" from the end */
-    p = value->data + value->len - 1;
-    start = value->data;
-    addr = NULL;
-    addrlen = 0;
-    weight = NULL;
-    weightlen = 0;
-    port = NULL;
-    portlen = 0;
-    name = NULL;
-    namelen = 0;
-
-    delimlen = value->data[0] == '/' ? 2 : 3;
-
-    for (k = 0; k < sizeof(delim); k++) {
-        q = dn_strrchr(p, start, delim[k]);
-        if (q == NULL) {
-            if (k == 0) {
-                /*
-                 * name in "hostname:port:weight [name]" format string is
-                 * optional
-                 */
-                continue;
-            }
-            break;
-        }
-
-        switch (k) {
-        case 0:
-            name = q + 1;
-            namelen = (uint32_t)(p - name + 1);
-            break;
-
-        case 1:
-            weight = q + 1;
-            weightlen = (uint32_t)(p - weight + 1);
-            break;
-
-        case 2:
-            port = q + 1;
-            portlen = (uint32_t)(p - port + 1);
-            break;
-
-        default:
-            NOT_REACHED();
-        }
-
-        p = q - 1;
-    }
-
-    if (k != delimlen) {
-        return "has an invalid \"hostname:port:weight [name]\"or \"/path/unix_socket:weight [name]\" format string";
-    }
-
-    pname = value->data;
-    pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
-    status = string_copy(&field->pname, pname, pnamelen);
-    if (status != DN_OK) {
-        array_pop(a);
-        return CONF_ERROR;
-    }
-
-    addr = start;
-    addrlen = (uint32_t)(p - start + 1);
-
-    field->weight = dn_atoi(weight, weightlen);
-    if (field->weight < 0) {
-        return "has an invalid weight in \"hostname:port:weight [name]\" format string";
-    }
-
-    if (value->data[0] != '/') {
-        field->port = dn_atoi(port, portlen);
-        if (field->port < 0 || !dn_valid_port(field->port)) {
-            return "has an invalid port in \"hostname:port:weight [name]\" format string";
-        }
-    }
-
-    if (name == NULL) {
-        /*
-         * To maintain backward compatibility with libmemcached, we don't
-         * include the port as the part of the input string to the consistent
-         * hashing algorithm, when it is equal to 11211.
-         */
-        if (field->port == CONF_DEFAULT_KETAMA_PORT) {
-            name = addr;
-            namelen = addrlen;
-        } else {
-            name = addr;
-            namelen = addrlen + 1 + portlen;
-        }
-    }
-
-    status = string_copy(&field->name, name, namelen);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    status = string_copy(&address, addr, addrlen);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-
-    status = dn_resolve(&address, field->port, &field->info);
-    if (status != DN_OK) {
-        string_deinit(&address);
-        return CONF_ERROR;
-    }
-
-    string_deinit(&address);
-    field->valid = 1;
-
-    return CONF_OK;
-}
-
-
-/*
- * Well, this just blows. Copied from conf_add_server() there is a colon delimited
- * string in the yaml that requires a few levels of magic in order to guess the
- * structure of, rather than doing the right thing and making proper fields.
- * Need to fix however, there's bigger fish to deep fry at this point.
- */
-char *
-conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
-{
-    rstatus_t status;
-    struct array *a;
-    struct string *value;
-    struct conf_server *field;
-    uint8_t *p, *q, *start;
-    uint8_t *pname, *addr, *port, *rack, *tokens, *name, *dc;
-    uint32_t k, delimlen, pnamelen, addrlen, portlen, racklen, tokenslen, namelen, dclen;
-    struct string address;
-    char delim[] = " ::::";
-    //struct conf_pool *cfpool = conf;
-
-    string_init(&address);
-    p = conf; // conf_pool
-    a = (struct array *)(p + cmd->offset); // a is conf_server array
-
-    field = array_push(a);
-    if (field == NULL) {
-        return CONF_ERROR;
-    }
-
-    status = conf_server_init(field); // field is conf_server
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    value = array_top(&cf->arg);
-
-    /* parse "hostname:port:rack:dc:tokens [name]" */
-    p = value->data + value->len - 1; // p is now pointing to a string
-    start = value->data;
-    addr = NULL;
-    addrlen = 0;
-    rack = NULL;
-    racklen = 0;
-    tokens = NULL;
-    tokenslen = 0;
-    port = NULL;
-    portlen = 0;
-    name = NULL;
-    namelen = 0;
-    dc = NULL;
-    dclen = 0;
-
-    delimlen = 5;
-
-    for (k = 0; k < sizeof(delim); k++) {
-        q = dn_strrchr(p, start, delim[k]);
-        if (q == NULL) {
-            if (k == 0) {
-                /*
-                 * name in "hostname:port:rack:dc:tokens [name]" format string is
-                 * optional
-                 */
-                continue;
-            }
-            break;
-        }
-
-        switch (k) {
-        case 0:
-            name = q + 1;
-            namelen = (uint32_t)(p - name + 1);
-            break;
-
-        case 1:
-            tokens = q + 1;
-            tokenslen = (uint32_t)(p - tokens + 1);
-            break;
-
-        case 2:
-            dc = q + 1;
-            dclen = (uint32_t)(p - dc + 1);
-            break;
-
-        case 3:
-            rack = q + 1;
-            racklen = (uint32_t)(p - rack + 1);
-            break;
-
-        case 4:
-            port = q + 1;
-            portlen = (uint32_t)(p - port + 1);
-            break;
-
-        default:
-            NOT_REACHED();
-        }
-
-        p = q - 1;
-    }
-
-    if (k != delimlen) {
-        return "has an invalid format must match \"hostname:port:rack:dc:tokens [name]\"";
-    }
-
-    pname = value->data; // seed node config string.
-    pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
-    status = string_copy(&field->pname, pname, pnamelen);
-    if (status != DN_OK) {
-        array_pop(a);
-        return CONF_ERROR;
-    }
-
-    status = string_copy(&field->dc, dc, dclen);
-    if (status != DN_OK) {
-        array_pop(a);
-        return CONF_ERROR;
-    }
-
-    status = string_copy(&field->rack, rack, racklen);
-    if (status != DN_OK) {
-        array_pop(a);
-        return CONF_ERROR;
-    }
-
-    uint8_t *t_end = tokens + tokenslen;
-    status = derive_tokens(&field->tokens, tokens, t_end);
-    if (status != DN_OK) {
-        array_pop(a);
-        return CONF_ERROR;
-    }
-
-    addr = start;
-    addrlen = (uint32_t)(p - start + 1);
-    if (value->data[0] != '/') {
-        field->port = dn_atoi(port, portlen);
-        if (field->port < 0 || !dn_valid_port(field->port)) {
-            return "has an invalid port in \"hostname:port:weight [name]\" format string";
-        }
-    }
-
-    if (name == NULL) {
-        /*
-         * To maintain backward compatibility with libmemcached, we don't
-         * include the port as the part of the input string to the consistent
-         * hashing algorithm, when it is equal to 11211.
-         */
-        if (field->port == CONF_DEFAULT_KETAMA_PORT) {
-            name = addr;
-            namelen = addrlen;
-        } else {
-            name = addr;
-            namelen = addrlen + 1 + portlen;
-        }
-    }
-
-    status = string_copy(&field->name, name, namelen);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    status = string_copy(&address, addr, addrlen);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    status = dn_resolve(&address, field->port, &field->info);
-    if (status != DN_OK) {
-        string_deinit(&address);
-        return CONF_ERROR;
-    }
-
-    string_deinit(&address);
-    field->valid = 1;
-
-    return CONF_OK;
-}
-
-char *
-conf_set_tokens(struct conf *cf, struct command *cmd, void *conf)
-{
-    uint8_t *p = conf;
-    struct array *tokens = (struct array *)(p + cmd->offset);
-    struct string *value = array_top(&cf->arg);
-    p = value->data + value->len;
-
-    rstatus_t status = derive_tokens(tokens, value->data, p);
-    if (status != DN_OK) {
-        //TODO: should we dealloc the tokens/array?
-        return CONF_ERROR;
-    }
-
-    return CONF_OK;
-}
-
-char *
-conf_set_num(struct conf *cf, struct command *cmd, void *conf)
-{
-    uint8_t *p;
-    int num, *np;
-    struct string *value;
-
-    p = conf;
-    np = (int *)(p + cmd->offset);
-
-    if (*np != CONF_UNSET_NUM) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    num = dn_atoi(value->data, value->len);
-    if (num < 0) {
-        return "is not a number";
-    }
-
-    *np = num;
-
-    return CONF_OK;
-}
-
-char *
-conf_set_bool(struct conf *cf, struct command *cmd, void *conf)
-{
-    uint8_t *p;
-    int *bp;
-    struct string *value, true_str, false_str;
-
-    p = conf;
-    bp = (int *)(p + cmd->offset);
-
-    if (*bp != CONF_UNSET_NUM) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-    string_set_text(&true_str, "true");
-    string_set_text(&false_str, "false");
-
-    if (string_compare(value, &true_str) == 0) {
-        *bp = 1;
-    } else if (string_compare(value, &false_str) == 0) {
-        *bp = 0;
-    } else {
-        return "is not \"true\" or \"false\"";
-    }
-
-    return CONF_OK;
-}
-
-char *
-conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
-{
-    uint8_t *p;
-    hash_type_t *hp;
-    struct string *value, *hash;
-
-    p = conf;
-    hp = (hash_type_t *)(p + cmd->offset);
-
-    if (*hp != CONF_UNSET_HASH) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    for (hash = hash_strings; hash->len != 0; hash++) {
-        if (string_compare(value, hash) != 0) {
-            continue;
-        }
-
-        *hp = hash - hash_strings;
-
-        return CONF_OK;
-    }
-
-    return "is not a valid hash";
-}
-
-char *
-conf_set_distribution(struct conf *cf, struct command *cmd, void *conf)
-{
-    uint8_t *p;
-    dist_type_t *dp;
-    struct string *value, *dist;
-
-    p = conf;
-    dp = (dist_type_t *)(p + cmd->offset);
-
-    if (*dp != CONF_UNSET_DIST) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    for (dist = dist_strings; dist->len != 0; dist++) {
-        if (string_compare(value, dist) != 0) {
-            continue;
-        }
-
-        *dp = dist - dist_strings;
-
-        return CONF_OK;
-    }
-
-    return "is not a valid distribution";
-}
-
-char *
-conf_set_hashtag(struct conf *cf, struct command *cmd, void *conf)
-{
-    rstatus_t status;
-    uint8_t *p;
-    struct string *field, *value;
-
-    p = conf;
-    field = (struct string *)(p + cmd->offset);
-
-    if (field->data != CONF_UNSET_PTR) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    if (value->len != 2) {
-        return "is not a valid hash tag string with two characters";
-    }
-
-    status = string_duplicate(field, value);
-    if (status != DN_OK) {
-        return CONF_ERROR;
-    }
-
-    return CONF_OK;
-}
