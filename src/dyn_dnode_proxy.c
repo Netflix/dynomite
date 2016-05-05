@@ -28,8 +28,7 @@ dnode_ref(struct conn *conn, void *owner)
     /* owner of the proxy connection is the server pool */
     conn->owner = owner;
 
-    log_debug(LOG_VVERB, "ref conn %p owner %p into pool %"PRIu32"", conn,
-              pool, pool->idx);
+    log_debug(LOG_VVERB, "ref conn %p owner %p", conn, pool);
 }
 
 static void
@@ -45,8 +44,7 @@ dnode_unref(struct conn *conn)
 
     pool->d_conn = NULL;
 
-    log_debug(LOG_VVERB, "unref conn %p owner %p from pool %"PRIu32"", conn,
-              pool, pool->idx);
+    log_debug(LOG_VVERB, "unref conn %p owner %p", conn, pool);
 }
 
 static void
@@ -197,12 +195,11 @@ dnode_each_init(void *elem, void *data)
     	log_datastore = "memcache";
     }
 
-    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool %"PRIu32" '%.*s'"
+    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'"
               " with %"PRIu32" servers", p->sd, pool->addrstr.len,
               pool->d_addrstr.data,
 			  log_datastore,
-              pool->idx, pool->name.len, pool->name.data,
-              array_n(&pool->server));
+              pool->name.len, pool->name.data );
     return DN_OK;
 }
 

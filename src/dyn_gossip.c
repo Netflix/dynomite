@@ -878,7 +878,7 @@ gossip_pool_each_init(void *elem, void *data)
 
     gn_pool.ctx = sp->ctx;
     gn_pool.name = &sp->name;
-    gn_pool.idx = sp->idx;
+    gn_pool.idx = 0;
     gn_pool.g_interval = sp->g_interval;
 
     //dictDisableResize();

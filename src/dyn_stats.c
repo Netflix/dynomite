@@ -287,9 +287,9 @@ stats_pool_map(struct array *stats_pool, struct array *server_pool)
     uint32_t i, npool;
 
     npool = array_n(server_pool);
-    ASSERT(npool != 0);
+    ASSERT(npool == 1);
 
-    THROW_STATUS(array_init(stats_pool, npool, sizeof(struct stats_pool)));
+    THROW_STATUS(array_init(stats_pool, 1, sizeof(struct stats_pool)));
 
     for (i = 0; i < npool; i++) {
         struct server_pool *sp = array_get(server_pool, i);
@@ -1598,9 +1598,8 @@ uint64_t _stats_pool_get_ts(struct context *ctx, struct server_pool *pool,
    struct stats *st = ctx->stats;
    struct stats_pool *stp;
    struct stats_metric *stm;
-   uint32_t pidx = pool->idx;
 
-   stp = array_get(&st->current, pidx);
+   stp = array_get(&st->current, 0);
    stm = array_get(&stp->metric, fidx);
 
    return stm->value.counter;
@@ -1612,9 +1611,8 @@ int64_t _stats_pool_get_val(struct context *ctx, struct server_pool *pool,
    struct stats *st = ctx->stats;
    struct stats_pool *stp;
    struct stats_metric *stm;
-   uint32_t pidx = pool->idx;
 
-   stp = array_get(&st->current, pidx);
+   stp = array_get(&st->current, 0);
    stm = array_get(&stp->metric, fidx);
 
    return stm->value.counter;
@@ -1630,10 +1628,8 @@ stats_pool_to_metric(struct context *ctx, struct server_pool *pool,
     struct stats_metric *stm;
     uint32_t pidx;
 
-    pidx = pool->idx;
-
     st = ctx->stats;
-    stp = array_get(&st->current, pidx);
+    stp = array_get(&st->current, 0);
     stm = array_get(&stp->metric, fidx);
 
     st->updated = 1;
@@ -1734,10 +1730,9 @@ uint64_t _stats_server_get_ts(struct context *ctx, struct server *server,
    uint32_t pidx, sidx;
 
    sidx = server->idx;
-   pidx = server->owner->idx;
 
    st = ctx->stats;
-   stp = array_get(&st->current, pidx);
+   stp = array_get(&st->current, 0);
    sts = array_get(&stp->server, sidx);
    stm = array_get(&sts->metric, fidx);
 
@@ -1769,10 +1764,9 @@ int64_t _stats_server_get_val(struct context *ctx, struct server *server,
    uint32_t pidx, sidx;
 
    sidx = server->idx;
-   pidx = server->owner->idx;
 
    st = ctx->stats;
-   stp = array_get(&st->current, pidx);
+   stp = array_get(&st->current, 0);
    sts = array_get(&stp->server, sidx);
    stm = array_get(&sts->metric, fidx);
 
@@ -1788,20 +1782,19 @@ stats_server_to_metric(struct context *ctx, struct server *server,
     struct stats_pool *stp;
     struct stats_server *sts;
     struct stats_metric *stm;
-    uint32_t pidx, sidx;
+    uint32_t sidx;
 
     sidx = server->idx;
-    pidx = server->owner->idx;
 
     st = ctx->stats;
-    stp = array_get(&st->current, pidx);
+    stp = array_get(&st->current, 0);
     sts = array_get(&stp->server, sidx);
     stm = array_get(&sts->metric, fidx);
 
     st->updated = 1;
 
-    log_debug(LOG_VVVERB, "metric '%.*s' in pool %"PRIu32" server %"PRIu32"",
-              stm->name.len, stm->name.data, pidx, sidx);
+    log_debug(LOG_VVVERB, "metric '%.*s' for server %"PRIu32"",
+              stm->name.len, stm->name.data, sidx);
 
     return stm;
 }

@@ -169,8 +169,8 @@ server_init(struct array *servers, struct array *conf_server,
 		return status;
 	}
 
-	log_debug(LOG_DEBUG, "init %"PRIu32" servers in pool %"PRIu32" '%.*s'",
-			nserver, sp->idx, sp->name.len, sp->name.data);
+	log_debug(LOG_DEBUG, "init %"PRIu32" servers in pool '%.*s'",
+			  nserver, sp->name.len, sp->name.data);
 
 	return DN_OK;
 }
@@ -284,8 +284,8 @@ server_failure(struct context *ctx, struct server *server)
 
 	next = now + pool->server_retry_timeout_ms;
 
-	log_debug(LOG_INFO, "update pool %"PRIu32" '%.*s' to delete server '%.*s' "
-			"for next %"PRIu32" secs", pool->idx, pool->name.len,
+	log_debug(LOG_INFO, "update pool '%.*s' to delete server '%.*s' "
+			"for next %"PRIu32" secs", pool->name.len,
 			pool->name.data, server->pname.len, server->pname.data,
 			pool->server_retry_timeout_ms/1000);
 
@@ -296,7 +296,7 @@ server_failure(struct context *ctx, struct server *server)
 
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
-		log_error("updating pool %"PRIu32" '%.*s' failed: %s", pool->idx,
+		log_error("updating pool '%.*s' failed: %s",
 				pool->name.len, pool->name.data, strerror(errno));
 	}
 }
@@ -608,13 +608,13 @@ server_pool_update(struct server_pool *pool)
 
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
-		log_error("updating pool %"PRIu32" with dist %d failed: %s", pool->idx,
+		log_error("updating pool with dist %d failed: %s",
 				pool->dist_type, strerror(errno));
 		return status;
 	}
 
-	log_debug(LOG_INFO, "update pool %"PRIu32" '%.*s' to add %"PRIu32" servers",
-			pool->idx, pool->name.len, pool->name.data,
+	log_debug(LOG_INFO, "update pool '%.*s' to add %"PRIu32" servers",
+			pool->name.len, pool->name.data,
 			pool->nlive_server - pnlive_server);
 
 
@@ -826,8 +826,7 @@ server_pool_deinit(struct array *server_pool)
 
 		sp->nlive_server = 0;
 
-		log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,
-				sp->name.len, sp->name.data);
+		log_debug(LOG_DEBUG, "deinit pool '%.*s'", sp->name.len, sp->name.data);
 	}
 
 	array_deinit(server_pool);
@@ -921,7 +920,7 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	uint32_t i, len;
 
 	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
+		log_debug(LOG_DEBUG, "server_get_dc dc '%.*s'",
 				dcname->len, dcname->data);
 	}
 
@@ -940,7 +939,7 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	string_copy(dc->name, dcname->data, dcname->len);
 
 	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
+		log_debug(LOG_DEBUG, "server_get_dc about to exit dc '%.*s'",
 				dc->name->len, dc->name->data);
 	}
 

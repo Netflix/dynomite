@@ -395,7 +395,6 @@ conf_pool_each_transform(void *elem, void *data)
     sp = array_push(server_pool);
     ASSERT(sp != NULL);
 
-    sp->idx = array_idx(server_pool, sp);
     sp->ctx = NULL;
 
     sp->p_conn = NULL;
@@ -466,8 +465,7 @@ conf_pool_each_transform(void *elem, void *data)
 
     set_msgs_per_sec(cp->conn_msg_rate);
 
-    log_debug(LOG_VERB, "transform to pool %"PRIu32" '%.*s'", sp->idx,
-              sp->name.len, sp->name.data);
+    log_debug(LOG_VERB, "transform to pool '%.*s'", sp->name.len, sp->name.data);
 
     return DN_OK;
 }

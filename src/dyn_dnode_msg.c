@@ -31,7 +31,7 @@ dyn_parse_core(struct msg *r)
 {
    struct dmsg *dmsg;
    struct mbuf *b;
-   uint8_t *p, *token;
+   uint8_t *p = r->pos, *token;
    uint8_t ch = ' ';
    uint64_t num = 0;
 

@@ -464,7 +464,7 @@ core_debug(struct context *ctx)
 	uint32_t i, nelem;
 	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
 		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
-		log_debug(LOG_VERB, "Server pool          : %"PRIu32"", sp->idx);
+		log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
 		uint32_t j, n;
 		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
 			log_debug(LOG_VERB, "==============================================");

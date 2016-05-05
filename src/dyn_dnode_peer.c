@@ -286,8 +286,8 @@ dnode_peer_each_pool_init(void *elem, void *context)
 
     dnode_peer_pool_run(sp);
 
-    log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool %"PRIu32" '%.*s'",
-            nseed, sp->idx, sp->name.len, sp->name.data);
+    log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool '%.*s'",
+              nseed, sp->name.len, sp->name.data);
 
     return DN_OK;
 }
@@ -525,8 +525,8 @@ dnode_peer_failure(struct context *ctx, struct server *server)
     }
 
     if (log_loggable(LOG_INFO)) {
-       log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' for peer '%.*s' "
-               "for next %"PRIu32" secs", pool->idx, pool->name.len,
+       log_debug(LOG_INFO, "dyn: update peer pool '%.*s' for peer '%.*s' "
+               "for next %"PRIu32" secs", pool->name.len,
                pool->name.data, server->pname.len, server->pname.data,
                pool->server_retry_timeout_ms/1000);
     }
@@ -538,7 +538,7 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 
     status = dnode_peer_pool_run(pool);
     if (status != DN_OK) {
-        log_error("dyn: updating peer pool %"PRIu32" '%.*s' failed: %s", pool->idx,
+        log_error("dyn: updating peer pool '%.*s' failed: %s",
                 pool->name.len, pool->name.data, strerror(errno));
     }
 }
@@ -1909,7 +1909,7 @@ rack_name_cmp(const void *t1, const void *t2)
 
 // The idea here is to have a designated rack in each remote region to replicate
 // data to. This is used to replicate writes to remote regions
-static void
+static rstatus_t 
 preselect_remote_rack_for_replication_each(void *elem, void *data)
 {
     struct server_pool *sp = elem;
@@ -1959,6 +1959,7 @@ preselect_remote_rack_for_replication_each(void *elem, void *data)
                    dc->preselected_rack_for_replication->name->data,
                    dc->name->len, dc->name->data);
     }
+    return DN_OK;
 }
 
 void

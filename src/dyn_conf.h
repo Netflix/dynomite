@@ -115,8 +115,11 @@ struct conf {
 
 #define null_command { null_string, NULL, 0 }
 
+// converts conf_server to server
 rstatus_t conf_server_each_transform(void *elem, void *data);
+// converts conf_pool to server_pool
 rstatus_t conf_pool_each_transform(void *elem, void *data);
+// converts conf_server to server ... except that this is for peers
 rstatus_t conf_seed_each_transform(void *elem, void *data);
 
 struct conf *conf_create(char *filename);

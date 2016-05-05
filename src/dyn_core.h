@@ -166,7 +166,6 @@ typedef enum data_store {
 
 
 struct context {
-    //uint32_t           id;          /* unique context id */
     struct conf        *cf;         /* configuration */
     struct stats       *stats;      /* stats */
 
@@ -251,7 +250,6 @@ struct server {
 
 
 struct server_pool {
-    uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
