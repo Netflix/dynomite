@@ -319,12 +319,15 @@ is_conn_secured(struct server_pool *sp, struct server *peer_node)
         case SECURE_OPTION_NONE:
             return false;
         case SECURE_OPTION_RACK:
+            // if rack-secured mode then communication only between nodes in different rack is secured.
+            // communication secured between nodes if they are in rack with same name across dcs.
             if (string_compare(&sp->rack, &peer_node->rack) != 0
                     || string_compare(&sp->dc, &peer_node->dc) != 0) {
                 return true;
             }
             return false;
         case SECURE_OPTION_DC:
+            // if dc-secured mode then communication only between nodes in different dc is secured     
             if (string_compare(&sp->dc, &peer_node->dc) != 0) {
                 return true;
             }
