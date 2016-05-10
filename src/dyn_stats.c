@@ -199,23 +199,16 @@ stats_server_init(struct stats_server *sts, struct server *s)
 }
 
 static rstatus_t
-stats_server_map(struct array *stats_server, struct array *server)
+stats_server_map(struct array *stats_server, struct conf_server *datastore)
 {
-    uint32_t i, nserver;
+    ASSERT(datastore != NULL);
+    THROW_STATUS(array_init(stats_server, 1, sizeof(struct stats_server)));
 
-    nserver = array_n(server);
-    ASSERT(nserver != 0);
+    struct stats_server *sts = array_push(stats_server);
 
-    THROW_STATUS(array_init(stats_server, nserver, sizeof(struct stats_server)));
+    THROW_STATUS(stats_server_init(sts, datastore));
 
-    for (i = 0; i < nserver; i++) {
-        struct server *s = array_get(server, i);
-        struct stats_server *sts = array_push(stats_server);
-
-        THROW_STATUS(stats_server_init(sts, s));
-    }
-
-    log_debug(LOG_VVVERB, "map %"PRIu32" stats servers", nserver);
+    log_debug(LOG_VVVERB, "mappd 1 stats servers");
 
     return DN_OK;
 }
@@ -247,7 +240,7 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
 
     THROW_STATUS(stats_pool_metric_init(&stp->metric));
 
-    status = stats_server_map(&stp->server, &sp->server);
+    status = stats_server_map(&stp->server, sp->datastore);
     if (status != DN_OK) {
         stats_metric_deinit(&stp->metric);
         return status;

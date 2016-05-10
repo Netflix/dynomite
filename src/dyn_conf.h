@@ -71,7 +71,7 @@ struct conf_pool {
     int                server_connections;    /* server_connections: */
     msec_t             server_retry_timeout_ms;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
-    struct array       server;                /* servers: conf_server array */
+    struct conf_server *conf_datastore;
     unsigned           valid:1;               /* valid? */
     struct conf_listen dyn_listen;            /* dyn_listen  */
     int                dyn_read_timeout;      /* inter dyn nodes' read timeout in ms */
@@ -116,7 +116,8 @@ struct conf {
 #define null_command { null_string, NULL, 0 }
 
 // converts conf_server to server
-rstatus_t conf_server_each_transform(void *elem, void *data);
+rstatus_t conf_server_transform(struct server *datastore,
+                                struct conf_server *conf_datastore);
 // converts conf_pool to server_pool
 rstatus_t conf_pool_each_transform(void *elem, void *data);
 // converts conf_server to server ... except that this is for peers

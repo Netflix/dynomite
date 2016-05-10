@@ -68,7 +68,7 @@
 
 
 msec_t server_timeout(struct conn *conn);
-rstatus_t server_init(struct array *server, struct array *conf_server, struct server_pool *sp);
+rstatus_t server_init(struct server_pool *sp, struct array *conf_server);
 rstatus_t server_connect(struct context *ctx, struct server *server, struct conn *conn);
 
 struct datacenter *server_get_dc(struct server_pool *pool, struct string *dcname);

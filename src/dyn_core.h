@@ -257,7 +257,7 @@ struct server_pool {
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
 
-    struct array       server;               /* server[] */
+    struct server      *datastore;               /* server[] */
     struct array       datacenters;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */

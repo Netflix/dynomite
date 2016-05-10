@@ -211,12 +211,11 @@ proxy_each_init(void *elem, void *data)
     }
 
 
-    log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'"
-              " with %"PRIu32" servers", p->sd, pool->addrstr.len,
+    log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'",
+              p->sd, pool->addrstr.len,
               pool->addrstr.data,
 			  log_datastore,
-              pool->name.len, pool->name.data,
-              array_n(&pool->server));
+              pool->name.len, pool->name.data);
 
     return DN_OK;
 }

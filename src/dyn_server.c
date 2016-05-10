@@ -126,53 +126,9 @@ server_each_set_owner(void *elem, void *data)
 }
 
 static void
-server_deinit(struct array *server)
+server_deinit(struct server **pdatastore)
 {
-	uint32_t i, nserver;
-
-	for (i = 0, nserver = array_n(server); i < nserver; i++) {
-		struct server *s = array_pop(server);
-        IGNORE_RET_VAL(s);
-		ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
-	}
-	array_deinit(server);
-}
-
-rstatus_t
-server_init(struct array *servers, struct array *conf_server,
-		struct server_pool *sp)
-{
-	rstatus_t status;
-	uint32_t nserver;
-
-	nserver = array_n(conf_server);
-	ASSERT(nserver != 0);
-	ASSERT(array_n(servers) == 0);
-
-	status = array_init(servers, nserver, sizeof(struct server));
-	if (status != DN_OK) {
-		return status;
-	}
-
-	/* transform conf server to server */
-	status = array_each(conf_server, conf_server_each_transform, servers);
-	if (status != DN_OK) {
-		server_deinit(servers);
-		return status;
-	}
-	ASSERT(array_n(servers) == nserver);
-
-	/* set server owner */
-	status = array_each(servers, server_each_set_owner, sp);
-	if (status != DN_OK) {
-		server_deinit(servers);
-		return status;
-	}
-
-	log_debug(LOG_DEBUG, "init %"PRIu32" servers in pool '%.*s'",
-			  nserver, sp->name.len, sp->name.data);
-
-	return DN_OK;
+    // TODO MT:
 }
 
 static struct conn *
@@ -208,25 +164,23 @@ server_conn(struct server *server)
 }
 
 static rstatus_t
-server_each_preconnect(void *elem, void *data)
+datastore_preconnect(struct server *datastore)
 {
 	rstatus_t status;
-	struct server *server;
 	struct server_pool *pool;
 	struct conn *conn;
 
-	server = elem;
-	pool = server->owner;
+	pool = datastore->owner;
 
-	conn = server_conn(server);
+	conn = server_conn(datastore);
 	if (conn == NULL) {
 		return DN_ENOMEM;
 	}
 
-	status = server_connect(pool->ctx, server, conn);
+	status = server_connect(pool->ctx, datastore, conn);
 	if (status != DN_OK) {
-		log_warn("connect to server '%.*s' failed, ignored: %s",
-				server->pname.len, server->pname.data, strerror(errno));
+		log_warn("connect to datastore '%.*s' failed, ignored: %s",
+				datastore->pname.len, datastore->pname.data, strerror(errno));
 		server_close(pool->ctx, conn);
 	}
 
@@ -234,20 +188,16 @@ server_each_preconnect(void *elem, void *data)
 }
 
 static rstatus_t
-server_each_disconnect(void *elem, void *data)
+datastore_disconnect(struct server *datastore)
 {
-	struct server *server;
-	struct server_pool *pool;
+	struct server_pool *pool = datastore->owner;
 
-	server = elem;
-	pool = server->owner;
-
-	while (!TAILQ_EMPTY(&server->s_conn_q)) {
+	while (!TAILQ_EMPTY(&datastore->s_conn_q)) {
 		struct conn *conn;
 
-		ASSERT(server->ns_conn_q > 0);
+		ASSERT(datastore->ns_conn_q > 0);
 
-		conn = TAILQ_FIRST(&server->s_conn_q);
+		conn = TAILQ_FIRST(&datastore->s_conn_q);
 		conn_close(pool->ctx, conn);
 	}
 
@@ -624,14 +574,8 @@ server_pool_update(struct server_pool *pool)
 static struct server *
 server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
-	struct server *server;
-
-	ASSERT(array_n(&pool->server) != 0);
-
-	//just return the first (memcache) entry in the array
-	server = array_get(&pool->server, 0);
-
-	return server;
+    ASSERT(pool->datastore != NULL);
+    return pool->datastore;
 }
 
 struct conn *
@@ -671,19 +615,12 @@ server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
 static rstatus_t
 server_pool_each_preconnect(void *elem, void *data)
 {
-	rstatus_t status;
 	struct server_pool *sp = elem;
 
 	if (!sp->preconnect) {
 		return DN_OK;
 	}
-
-	status = array_each(&sp->server, server_each_preconnect, NULL);
-	if (status != DN_OK) {
-		return status;
-	}
-
-	return DN_OK;
+    return datastore_preconnect(sp->datastore);
 }
 
 rstatus_t
@@ -691,6 +628,7 @@ server_pool_preconnect(struct context *ctx)
 {
 	rstatus_t status;
 
+    // for each server_pool,
 	status = array_each(&ctx->pool, server_pool_each_preconnect, NULL);
 	if (status != DN_OK) {
 		return status;
@@ -702,15 +640,8 @@ server_pool_preconnect(struct context *ctx)
 static rstatus_t
 server_pool_each_disconnect(void *elem, void *data)
 {
-	rstatus_t status;
 	struct server_pool *sp = elem;
-
-	status = array_each(&sp->server, server_each_disconnect, NULL);
-	if (status != DN_OK) {
-		return status;
-	}
-
-	return DN_OK;
+    return datastore_disconnect(sp->datastore);
 }
 
 void
@@ -733,7 +664,7 @@ server_pool_each_set_owner(void *elem, void *data)
 rstatus_t
 server_pool_run(struct server_pool *pool)
 {
-	ASSERT(array_n(&pool->server) != 0);
+	ASSERT(pool->datastore != NULL);
 
 	switch (pool->dist_type) {
 	case DIST_KETAMA:
@@ -822,7 +753,7 @@ server_pool_deinit(struct array *server_pool)
 		ASSERT(sp->p_conn == NULL);
 		ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
 
-		server_deinit(&sp->server);
+		server_deinit(&sp->datastore);
 
 		sp->nlive_server = 0;
 

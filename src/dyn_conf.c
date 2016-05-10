@@ -149,20 +149,11 @@ conf_server_deinit(struct conf_server *cs)
 
 // copy from struct conf_server to struct server
 rstatus_t
-conf_server_each_transform(void *elem, void *data)
+conf_server_transform(struct server *s, struct conf_server *cs)
 {
-    struct conf_server *cs = elem;
-    struct array *server = data;
-    struct server *s;
-
     ASSERT(cs->valid);
-
-    s = array_push(server);
     ASSERT(s != NULL);
-
-    s->idx = array_idx(server, s);
     s->owner = NULL;
-
     s->pname = cs->pname;
     s->name = cs->name;
     s->port = (uint16_t)cs->port;
@@ -178,8 +169,8 @@ conf_server_each_transform(void *elem, void *data)
     s->next_retry = 0ULL;
     s->failure_count = 0;
 
-    log_debug(LOG_VERB, "transform to server %"PRIu32" '%.*s'",
-              s->idx, s->pname.len, s->pname.data);
+    log_debug(LOG_VERB, "transform to server '%.*s'",
+              s->pname.len, s->pname.data);
 
     return DN_OK;
 }
@@ -242,6 +233,7 @@ static rstatus_t
 conf_pool_init(struct conf_pool *cp, struct string *name)
 {
     rstatus_t status;
+    memset(cp, 0, sizeof(*cp));
 
     string_init(&cp->name);
 
@@ -293,7 +285,6 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->conn_msg_rate = CONF_UNSET_NUM;
 
-    array_null(&cp->server);
     array_null(&cp->dyn_seeds);
 
     cp->valid = 0;
@@ -303,18 +294,12 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
         return status;
     }
 
-    status = array_init(&cp->server, CONF_DEFAULT_SERVERS,
-                        sizeof(struct conf_server));
-    if (status != DN_OK) {
-        string_deinit(&cp->name);
-        return status;
-    }
+    cp->conf_datastore = NULL;
 
     status = array_init(&cp->dyn_seeds, CONF_DEFAULT_SEEDS,
                         sizeof(struct conf_server));
     if (status != DN_OK) {
         string_deinit(&cp->name);
-        array_deinit(&cp->server);
         return status;
     }
 
@@ -322,7 +307,6 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
                         sizeof(struct dyn_token));
     if (status != DN_OK) {
         string_deinit(&cp->name);
-        array_deinit(&cp->server);
         array_deinit(&cp->dyn_seeds);
         return status;
     }
@@ -340,10 +324,9 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->listen.pname);
     string_deinit(&cp->listen.name);
 
-    while (array_n(&cp->server) != 0) {
-        conf_server_deinit(array_pop(&cp->server));
-    }
-    array_deinit(&cp->server);
+    conf_server_deinit(cp->conf_datastore);
+    dn_free(cp->conf_datastore);
+    cp->conf_datastore = NULL;
 
     //deinit dynomite
     string_deinit(&cp->dyn_seed_provider);
@@ -394,6 +377,7 @@ conf_pool_each_transform(void *elem, void *data)
 
     sp = array_push(server_pool);
     ASSERT(sp != NULL);
+    memset(sp, 0, sizeof(struct server_pool));
 
     sp->ctx = NULL;
 
@@ -401,7 +385,6 @@ conf_pool_each_transform(void *elem, void *data)
     sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
 
-    array_null(&sp->server);
     array_null(&sp->datacenters);
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
@@ -434,10 +417,14 @@ conf_pool_each_transform(void *elem, void *data)
     sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
     sp->preconnect = cp->preconnect ? 1 : 0;
 
-    status = server_init(&sp->server, &cp->server, sp);
+    sp->datastore = dn_zalloc(sizeof(*sp->datastore));
+    status = conf_server_transform(sp->datastore, cp->conf_datastore);
     if (status != DN_OK) {
         return status;
     }
+    sp->datastore->owner = sp;
+	log_debug(LOG_DEBUG, "init datastore in pool '%.*s'",
+			  sp->name.len, sp->name.data);
 
     /* dynomite init */
     sp->seed_provider = cp->dyn_seed_provider;
@@ -473,7 +460,7 @@ conf_pool_each_transform(void *elem, void *data)
 static void
 conf_dump(struct conf *cf)
 {
-    uint32_t i, j, npool, nserver;
+    uint32_t i, j, npool;
     struct conf_pool *cp;
     struct string *s;
 
@@ -516,12 +503,9 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  server_failure_limit: %d",
                   cp->server_failure_limit);
 
-        nserver = array_n(&cp->server);
-        log_debug(LOG_VVERB, "  servers: %"PRIu32"", nserver);
-        for (j = 0; j < nserver; j++) {
-            s = array_get(&cp->server, j);
-            log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
-        }
+        log_debug(LOG_VVERB, "  datastore: ");
+        log_debug(LOG_VVERB, "    %.*s",
+                  cp->conf_datastore->name.len, cp->conf_datastore->name.data);
 
         log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
 
@@ -798,15 +782,13 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 
     string_init(&address);
     p = conf;
-    a = (struct array *)(p + cmd->offset);
-
-    field = array_push(a);
-    if (field == NULL) {
-        return CONF_ERROR;
-    }
-
+    struct conf_server **pfield = (struct conf_server **)(p + cmd->offset);
+    ASSERT(*pfield == NULL);
+    *pfield = (struct conf_datastore *)dn_zalloc(sizeof(struct conf_server));
+    field = *pfield;
     status = conf_server_init(field);
     if (status != DN_OK) {
+        dn_free(*pfield);
         return CONF_ERROR;
     }
 
@@ -1317,7 +1299,7 @@ static struct command conf_commands[] = {
 
     { string("servers"),
       conf_add_server,
-      offsetof(struct conf_pool, server) },
+      offsetof(struct conf_pool, conf_datastore) },
 
     { string("dyn_read_timeout"),
       conf_set_num,
@@ -2064,35 +2046,9 @@ conf_validate_server(struct conf *cf, struct conf_pool *cp)
     uint32_t i, nserver;
     bool valid;
 
-    nserver = array_n(&cp->server);
-    if (nserver == 0) {
-        log_error("conf: pool '%.*s' has no servers", cp->name.len,
+    if (cp->conf_datastore == NULL) {
+        log_error("conf: pool '%.*s' has no datastores", cp->name.len,
                   cp->name.data);
-        return DN_ERROR;
-    }
-
-    /*
-     * Disallow duplicate servers - servers with identical "host:port:weight"
-     * or "name" combination are considered as duplicates. When server name
-     * is configured, we only check for duplicate "name" and not for duplicate
-     * "host:port:weight"
-     */
-    array_sort(&cp->server, conf_server_name_cmp);
-    for (valid = true, i = 0; i < nserver - 1; i++) {
-        struct conf_server *cs1, *cs2;
-
-        cs1 = array_get(&cp->server, i);
-        cs2 = array_get(&cp->server, i + 1);
-
-        if (string_compare(&cs1->name, &cs2->name) == 0) {
-            log_error("conf: pool '%.*s' has servers with same name '%.*s'",
-                      cp->name.len, cp->name.data, cs1->name.len,
-                      cs1->name.data);
-            valid = false;
-            break;
-        }
-    }
-    if (!valid) {
         return DN_ERROR;
     }
 
