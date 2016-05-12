@@ -421,6 +421,10 @@ stats_create_bufs(struct stats *st)
     size += int64_max_digits;
     size += key_value_extra;
 
+    size += st->dyn_memory_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
     /* server pools */
     for (i = 0; i < array_n(&st->sum); i++) {
         struct stats_pool *stp = array_get(&st->sum, i);
@@ -608,6 +612,8 @@ stats_add_header(struct stats *st)
                  (int64_t)st->alloc_mbufs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_mbufs_str,
                  (int64_t)st->free_mbufs));
+    THROW_STATUS(stats_add_num(&st->buf, &st->dyn_memory_str,
+                 (int64_t)st->dyn_memory));
 
     return DN_OK;
 }
@@ -1458,6 +1464,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->free_msgs_str, "free_msgs");
     string_set_text(&st->alloc_mbufs_str, "alloc_mbufs");
     string_set_text(&st->free_mbufs_str, "free_mbufs");
+    string_set_text(&st->dyn_memory_str, "dyn_memory");
 
     //only display the first pool
     struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
@@ -1488,6 +1495,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->free_msgs = 0;
     st->alloc_mbufs = 0;
     st->free_mbufs = 0;
+    st->dyn_memory = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 
@@ -1578,6 +1586,7 @@ stats_swap(struct stats *st)
     st->free_msgs = msg_free_queue_size();
     st->alloc_mbufs = mbuf_alloc_get_count();
     st->free_mbufs = mbuf_free_queue_size();
+    st->dyn_memory  = (uint64_t) (msg_alloc_msgs() * mbuf_alloc_get_count());
 
     array_swap(&st->current, &st->shadow);
 
