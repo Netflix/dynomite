@@ -179,7 +179,7 @@ struct stats_server {
 struct stats_pool {
     struct string name;   /* pool name (ref) */
     struct array  metric; /* stats_metric[] for pool codec */
-    struct array  server; /* stats_server[] */
+    struct stats_server server; /* stats for datastore */
 };
 
 struct stats_buffer {

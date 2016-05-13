@@ -199,34 +199,21 @@ stats_server_init(struct stats_server *sts, struct server *s)
 }
 
 static rstatus_t
-stats_server_map(struct array *stats_server, struct server *datastore)
+stats_server_map(struct stats_server *sts, struct server *datastore)
 {
     ASSERT(datastore != NULL);
-    THROW_STATUS(array_init(stats_server, 1, sizeof(struct stats_server)));
-
-    struct stats_server *sts = array_push(stats_server);
-
     THROW_STATUS(stats_server_init(sts, datastore));
 
-    log_debug(LOG_VVVERB, "mappd 1 stats servers");
+    log_debug(LOG_VVVERB, "mapped stats servers");
 
     return DN_OK;
 }
 
 static void
-stats_server_unmap(struct array *stats_server)
+stats_server_unmap(struct stats_server *sts)
 {
-    uint32_t i, nserver;
-
-    nserver = array_n(stats_server);
-
-    for (i = 0; i < nserver; i++) {
-        struct stats_server *sts = array_pop(stats_server);
-        stats_metric_deinit(&sts->metric);
-    }
-    array_deinit(stats_server);
-
-    log_debug(LOG_VVVERB, "unmap %"PRIu32" stats servers", nserver);
+    stats_metric_deinit(&sts->metric);
+    log_debug(LOG_VVVERB, "unmap stats servers");
 }
 
 static rstatus_t
@@ -236,7 +223,6 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
 
     stp->name = sp->name;
     array_null(&stp->metric);
-    array_null(&stp->server);
 
     THROW_STATUS(stats_pool_metric_init(&stp->metric));
 
@@ -246,9 +232,8 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
         return status;
     }
 
-    log_debug(LOG_VVVERB, "init stats pool '%.*s' with %"PRIu32" metric and "
-              "%"PRIu32" server", stp->name.len, stp->name.data,
-              array_n(&stp->metric), array_n(&stp->metric));
+    log_debug(LOG_VVVERB, "init stats pool '%.*s' with %"PRIu32" metric",
+              stp->name.len, stp->name.data, array_n(&stp->metric));
 
     return DN_OK;
 }
@@ -260,11 +245,8 @@ stats_pool_reset(struct stats_pool *stp)
 
     stats_metric_reset(&stp->metric);
 
-    nserver = array_n(&stp->server);
-    for (j = 0; j < nserver; j++) {
-        struct stats_server *sts = array_get(&stp->server, j);
-        stats_metric_reset(&sts->metric);
-    }
+    struct stats_server *sts = &stp->server;
+    stats_metric_reset(&sts->metric);
 }
 
 static void
@@ -389,20 +371,18 @@ stats_create_bufs(struct stats *st)
     }
 
     /* servers per pool */
-    for (j = 0; j < array_n(&stp->server); j++) {
-        struct stats_server *sts = array_get(&stp->server, j);
-        uint32_t k;
+    struct stats_server *sts = &stp->server;
+    uint32_t k;
 
-        size += sts->name.len;
-        size += server_extra;
+    size += sts->name.len;
+    size += server_extra;
 
-        for (k = 0; k < array_n(&sts->metric); k++) {
-            struct stats_metric *stm = array_get(&sts->metric, k);
+    for (k = 0; k < array_n(&sts->metric); k++) {
+        struct stats_metric *stm = array_get(&sts->metric, k);
 
-            size += stm->name.len;
-            size += int64_max_digits;
-            size += key_value_extra;
-        }
+        size += stm->name.len;
+        size += int64_max_digits;
+        size += key_value_extra;
     }
 
     /* footer */
@@ -691,13 +671,11 @@ stats_aggregate(struct stats *st)
     struct stats_pool  *stp2 = &st->sum;
     stats_aggregate_metric(&st->sum.metric, &st->shadow.metric);
 
-    for (j = 0; j < array_n(&stp1->server); j++) {
-        struct stats_server *sts1, *sts2;
+    struct stats_server *sts1, *sts2;
 
-        sts1 = array_get(&stp1->server, j);
-        sts2 = array_get(&stp2->server, j);
-        stats_aggregate_metric(&sts2->metric, &sts1->metric);
-    }
+    sts1 = &stp1->server;
+    sts2 = &stp2->server;
+    stats_aggregate_metric(&sts2->metric, &sts1->metric);
 
     static msec_t last_reset = 0;
     if (!last_reset)
@@ -736,14 +714,12 @@ stats_make_info_rsp(struct stats *st)
     /* copy pool metric from sum(c) to buffer */
     THROW_STATUS(stats_copy_metric(st, &stp->metric));
 
-    for (j = 0; j < array_n(&stp->server); j++) {
-        struct stats_server *sts = array_get(&stp->server, j);
+    struct stats_server *sts = &stp->server;
 
-        THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
-        /* copy server metric from sum(c) to buffer */
-        THROW_STATUS(stats_copy_metric(st, &sts->metric));
-        THROW_STATUS(stats_end_nesting(&st->buf, false));
-    }
+    THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
+    /* copy server metric from sum(c) to buffer */
+    THROW_STATUS(stats_copy_metric(st, &sts->metric));
+    THROW_STATUS(stats_end_nesting(&st->buf, false));
 
     THROW_STATUS(stats_end_nesting(&st->buf, false));
     THROW_STATUS(stats_add_footer(&st->buf));
@@ -1630,7 +1606,7 @@ _stats_server_get_ts(struct context *ctx, struct server *server,
 {
    struct stats *st = ctx->stats;
    struct stats_pool *stp = &st->current;
-   struct stats_server *sts = array_get(&stp->server, 0);
+   struct stats_server *sts = &stp->server;
    struct stats_metric *stm = array_get(&sts->metric, fidx);
 
    return stm->value.timestamp;
@@ -1654,7 +1630,7 @@ _stats_server_get_val(struct context *ctx, struct server *server,
 {
    struct stats *st = ctx->stats;
    struct stats_pool *stp = &st->current;
-   struct stats_server *sts = array_get(&stp->server, 0);
+   struct stats_server *sts = &stp->server;
    struct stats_metric *stm = array_get(&sts->metric, fidx);
 
    return stm->value.counter;
@@ -1666,7 +1642,7 @@ stats_server_to_metric(struct context *ctx, struct server *server,
 {
    struct stats *st = ctx->stats;
    struct stats_pool *stp = &st->current;
-   struct stats_server *sts = array_get(&stp->server, 0);
+   struct stats_server *sts = &stp->server;
    struct stats_metric *stm = array_get(&sts->metric, fidx);
 
     st->updated = 1;
