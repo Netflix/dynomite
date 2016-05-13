@@ -63,7 +63,8 @@ core_ctx_create(struct instance *nci)
 	/* initialize server pool from configuration */
 	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
 	if (status != DN_OK) {
-		loga("Failed to initialize server pool!!!");
+		loga("Failed to initialize server pool!!! ... uninitializing");
+		server_pool_deinit(&ctx->pool);
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
 		return NULL;
@@ -71,9 +72,9 @@ core_ctx_create(struct instance *nci)
 
 
 	/* crypto init */
-    status = crypto_init(ctx);
+    status = crypto_init(&ctx->pool);
     if (status != DN_OK) {
-   	loga("Failed to initialize crypto!!!");
+   	    loga("Failed to initialize crypto!!!");
     	dn_free(ctx);
     	return NULL;
     }
@@ -121,6 +122,7 @@ core_ctx_create(struct instance *nci)
 	status = proxy_init(ctx);
 	if (status != DN_OK) {
 		loga("Failed to initialize proxy!!!");
+        proxy_deinit(ctx);
 		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -135,6 +137,7 @@ core_ctx_create(struct instance *nci)
 	status = dnode_init(ctx);
 	if (status != DN_OK) {
 		loga("Failed to initialize dnode!!!");
+        proxy_deinit(ctx);
 		crypto_deinit();
 		server_pool_disconnect(ctx);
 		event_base_destroy(ctx->evb);
@@ -148,9 +151,11 @@ core_ctx_create(struct instance *nci)
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
 
 	/* initialize peers */
-	status = dnode_peer_init(&ctx->pool, ctx);
+	status = dnode_peer_init(ctx);
 	if (status != DN_OK) {
 		loga("Failed to initialize dnode peers!!!");
+        dnode_deinit(ctx);
+        proxy_deinit(ctx);
 		crypto_deinit();
 		dnode_deinit(ctx);
 		server_pool_disconnect(ctx);
@@ -168,6 +173,7 @@ core_ctx_create(struct instance *nci)
 	status = dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK) {
 		loga("Failed to preconnect dnode peers!!!");
+        proxy_deinit(ctx);
 		crypto_deinit();
 		dnode_peer_deinit(&ctx->pool);
 		dnode_deinit(ctx);
@@ -191,6 +197,7 @@ core_ctx_create(struct instance *nci)
     status = gossip_pool_init(ctx);
     if (status != DN_OK) {
     	loga("Failed to initialize gossip!!!");
+        proxy_deinit(ctx);
         crypto_deinit();
         dnode_peer_deinit(&ctx->pool);
         dnode_deinit(ctx);
@@ -461,48 +468,45 @@ void
 core_debug(struct context *ctx)
 {
 	log_debug(LOG_VERB, "=====================Peers info=====================");
-	uint32_t i, nelem;
-	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
-		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
-		log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
-		uint32_t j, n;
-		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
-			log_debug(LOG_VERB, "==============================================");
-			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",server->dc);
-			log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
+    uint32_t i, nelem;
+    struct server_pool *sp = &ctx->pool;
+    log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
+    uint32_t j, n;
+    for (j = 0, n = array_n(&sp->peers); j < n; j++) {
+        log_debug(LOG_VERB, "==============================================");
+        struct server *server = (struct server *) array_get(&sp->peers, j);
+        log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",server->dc);
+        log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
 
-			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
-			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
+        log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
+        log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
 
-			log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
-			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
-			log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
-			log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", server->failure_count);
-			log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&server->tokens));
+        log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
+        log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
+        log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
+        log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", server->failure_count);
+        log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&server->tokens));
 
-			uint32_t k;
-			for (k = 0; k < array_n(&server->tokens); k++) {
-				struct dyn_token *token = (struct dyn_token *) array_get(&server->tokens, k);
-				print_dyn_token(token, 12);
-			}
-		}
+        uint32_t k;
+        for (k = 0; k < array_n(&server->tokens); k++) {
+            struct dyn_token *token = (struct dyn_token *) array_get(&server->tokens, k);
+            print_dyn_token(token, 12);
+        }
+    }
 
-		log_debug(LOG_VERB, "Peers Datacenters/racks/nodes .................................................");
-		uint32_t dc_index, dc_len;
-		for(dc_index = 0, dc_len = array_n(&sp->datacenters); dc_index < dc_len; dc_index++) {
-			struct datacenter *dc = array_get(&sp->datacenters, dc_index);
-			log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
-			uint32_t rack_index, rack_len;
-			for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
-				struct rack *rack = array_get(&dc->racks, rack_index);
-				log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
-				log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
-				log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
-			}
-		}
-
-	}
+    log_debug(LOG_VERB, "Peers Datacenters/racks/nodes .................................................");
+    uint32_t dc_index, dc_len;
+    for(dc_index = 0, dc_len = array_n(&sp->datacenters); dc_index < dc_len; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
+        uint32_t rack_index, rack_len;
+        for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
+            struct rack *rack = array_get(&dc->racks, rack_index);
+            log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
+            log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
+            log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
+        }
+    }
 	log_debug(LOG_VERB, "...............................................................................");
 }
 

@@ -13,7 +13,7 @@
 #define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
 
 msec_t dnode_peer_timeout(struct msg *msg, struct conn *conn);
-rstatus_t dnode_peer_init(struct array *server_pool, struct context *ctx);
+rstatus_t dnode_peer_init(struct context *ctx);
 void dnode_peer_deinit(struct array *nodes);
 void dnode_peer_connected(struct context *ctx, struct conn *conn);
 

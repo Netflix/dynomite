@@ -184,15 +184,14 @@ proxy_listen(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-static rstatus_t
-proxy_each_init(void *elem, void *data)
+rstatus_t
+proxy_init(struct context *ctx)
 {
     rstatus_t status;
-    struct server_pool *pool = elem;
-    struct conn *p;
+    struct server_pool *pool = &ctx->pool;
 
-    p = conn_get_proxy(pool);
-    if (p == NULL) {
+    struct conn *p = conn_get_proxy(pool);
+    if (!p) {
         return DN_ENOMEM;
     }
 
@@ -210,7 +209,6 @@ proxy_each_init(void *elem, void *data)
     	log_datastore = "memcache";
     }
 
-
     log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'",
               p->sd, pool->addrstr.len,
               pool->addrstr.data,
@@ -220,53 +218,17 @@ proxy_each_init(void *elem, void *data)
     return DN_OK;
 }
 
-rstatus_t
-proxy_init(struct context *ctx)
-{
-    rstatus_t status;
-
-    ASSERT(array_n(&ctx->pool) != 0);
-
-    status = array_each(&ctx->pool, proxy_each_init, NULL);
-    if (status != DN_OK) {
-        proxy_deinit(ctx);
-        return status;
-    }
-
-    log_debug(LOG_VVERB, "init proxy with %"PRIu32" pools",
-              array_n(&ctx->pool));
-
-    return DN_OK;
-}
-
-static rstatus_t
-proxy_each_deinit(void *elem, void *data)
-{
-    struct server_pool *pool = elem;
-    struct conn *p;
-
-    p = pool->p_conn;
-    if (p != NULL) {
-        conn_close(pool->ctx, p);
-    }
-
-    return DN_OK;
-}
-
 void
 proxy_deinit(struct context *ctx)
 {
-    rstatus_t status;
-
-    ASSERT(array_n(&ctx->pool) != 0);
-
-    status = array_each(&ctx->pool, proxy_each_deinit, NULL);
-    if (status != DN_OK) {
-        return;
+    struct server_pool *pool = &ctx->pool;
+    struct conn *p = pool->p_conn;
+    if (p != NULL) {
+        conn_close(pool->ctx, p);
+        pool->p_conn = NULL;
     }
 
-    log_debug(LOG_VVERB, "deinit proxy with %"PRIu32" pools",
-              array_n(&ctx->pool));
+    log_debug(LOG_VVERB, "deinit proxy");
 }
 
 static rstatus_t

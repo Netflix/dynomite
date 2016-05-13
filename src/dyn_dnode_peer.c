@@ -193,11 +193,10 @@ dnode_peer_pool_run(struct server_pool *pool)
 }
 
 
-static rstatus_t
-dnode_peer_each_pool_init(void *elem, void *context)
+rstatus_t
+dnode_peer_init(struct context *ctx)
 {
-    struct server_pool *sp = (struct server_pool *) elem;
-    //struct context *ctx = context;
+    struct server_pool *sp = &ctx->pool;
     struct array *conf_seeds = &sp->conf_pool->dyn_seeds;
 
     struct array * seeds = &sp->seeds;
@@ -291,21 +290,6 @@ dnode_peer_each_pool_init(void *elem, void *context)
 
     return DN_OK;
 }
-
-rstatus_t
-dnode_peer_init(struct array *server_pool, struct context *ctx)
-{
-    rstatus_t status;
-
-    status = array_each(server_pool, dnode_peer_each_pool_init, ctx);
-    if (status != DN_OK) {
-        server_pool_deinit(server_pool);
-        return status;
-    }
-
-    return DN_OK;
-}
-
 
 static bool
 is_conn_secured(struct server_pool *sp, struct server *peer_node)
@@ -1295,30 +1279,17 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
 }
 
 
-static rstatus_t
-dnode_peer_pool_each_preconnect(void *elem, void *data)
+rstatus_t
+dnode_peer_pool_preconnect(struct context *ctx)
 {
     rstatus_t status;
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
 
     if (!sp->preconnect) {
         return DN_OK;
     }
 
     status = array_each(&sp->peers, dnode_peer_each_preconnect, NULL);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    return DN_OK;
-}
-
-rstatus_t
-dnode_peer_pool_preconnect(struct context *ctx)
-{
-    rstatus_t status;
-
-    status = array_each(&ctx->pool, dnode_peer_pool_each_preconnect, NULL);
     if (status != DN_OK) {
         return status;
     }
@@ -1912,10 +1883,10 @@ rack_name_cmp(const void *t1, const void *t2)
 
 // The idea here is to have a designated rack in each remote region to replicate
 // data to. This is used to replicate writes to remote regions
-static rstatus_t 
-preselect_remote_rack_for_replication_each(void *elem, void *data)
+void
+preselect_remote_rack_for_replication(struct context *ctx)
 {
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
     uint32_t dc_cnt = array_n(&sp->datacenters);
     uint32_t dc_index;
     uint32_t my_rack_index = 0;
@@ -1962,11 +1933,4 @@ preselect_remote_rack_for_replication_each(void *elem, void *data)
                    dc->preselected_rack_for_replication->name->data,
                    dc->name->len, dc->name->data);
     }
-    return DN_OK;
-}
-
-void
-preselect_remote_rack_for_replication(struct context *ctx)
-{
-    array_each(&ctx->pool, preselect_remote_rack_for_replication_each, NULL);
 }

@@ -55,7 +55,6 @@ static struct string dist_strings[] = {
 #define CONF_ROOT_DEPTH     1
 #define CONF_MAX_DEPTH      CONF_ROOT_DEPTH + 1
 #define CONF_DEFAULT_ARGS       3
-#define CONF_DEFAULT_POOL       8
 #define CONF_UNSET_NUM  0
 #define CONF_UNSET_PTR  NULL
 #define CONF_DEFAULT_SERVERS    8
@@ -366,21 +365,14 @@ get_secure_server_option(struct string option)
 }
 
 rstatus_t
-conf_pool_each_transform(void *elem, void *data)
+conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 {
     rstatus_t status;
-    struct conf_pool *cp = elem;
-    struct array *server_pool = data;
-    struct server_pool *sp;
-
     ASSERT(cp->valid);
 
-    sp = array_push(server_pool);
-    ASSERT(sp != NULL);
     memset(sp, 0, sizeof(struct server_pool));
 
     sp->ctx = NULL;
-
     sp->p_conn = NULL;
     sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
@@ -460,89 +452,80 @@ conf_pool_each_transform(void *elem, void *data)
 static void
 conf_dump(struct conf *cf)
 {
-    uint32_t i, j, npool;
-    struct conf_pool *cp;
+    uint32_t i, j;
     struct string *s;
 
-    npool = array_n(&cf->pool);
-    if (npool == 0) {
-        return;
+    log_debug(LOG_VVERB, "pool in configuration file '%s'", cf->fname);
+
+    struct conf_pool *cp = &cf->pool;
+
+    log_debug(LOG_VVERB, "%.*s", cp->name.len, cp->name.data);
+    log_debug(LOG_VVERB, "  listen: %.*s",
+            cp->listen.pname.len, cp->listen.pname.data);
+    log_debug(LOG_VVERB, "  timeout: %d", cp->timeout);
+    log_debug(LOG_VVERB, "  backlog: %d", cp->backlog);
+    log_debug(LOG_VVERB, "  hash: %d", cp->hash);
+    log_debug(LOG_VVERB, "  hash_tag: \"%.*s\"", cp->hash_tag.len,
+            cp->hash_tag.data);
+    log_debug(LOG_VVERB, "  distribution: %d", cp->distribution);
+    log_debug(LOG_VVERB, "  client_connections: %d",
+            cp->client_connections);
+    const char * temp_log = "unknown";
+    if(cp->data_store == DATA_REDIS){
+        temp_log = "redis";
+    }
+    else if(cp->data_store == DATA_MEMCACHE){
+        temp_log = "memcache";
+    }
+    log_debug(LOG_VVERB, "  data_store: %d (%s)", cp->data_store, temp_log);
+    log_debug(LOG_VVERB, "  preconnect: %d", cp->preconnect);
+    log_debug(LOG_VVERB, "  auto_eject_hosts: %d", cp->auto_eject_hosts);
+    log_debug(LOG_VVERB, "  server_connections: %d",
+            cp->server_connections);
+    log_debug(LOG_VVERB, "  server_retry_timeout: %d (msec)",
+            cp->server_retry_timeout_ms);
+    log_debug(LOG_VVERB, "  server_failure_limit: %d",
+            cp->server_failure_limit);
+
+    log_debug(LOG_VVERB, "  datastore: ");
+    log_debug(LOG_VVERB, "    %.*s",
+            cp->conf_datastore->name.len, cp->conf_datastore->name.data);
+
+    log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
+
+    uint32_t nseeds = array_n(&cp->dyn_seeds);
+    log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
+    for (j = 0; j < nseeds; j++) {
+        s = array_get(&cp->dyn_seeds, j);
+        log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
     }
 
-    log_debug(LOG_VVERB, "%"PRIu32" pools in configuration file '%s'", npool,
-              cf->fname);
+    log_debug(LOG_VVERB, "  env: %.*s", cp->env.len, cp->env.data);
+    log_debug(LOG_VVERB, "  rack: %.*s", cp->rack.len, cp->rack.data);
+    log_debug(LOG_VVERB, "  dc: %.*s", cp->dc.len, cp->dc.data);
 
-    for (i = 0; i < npool; i++) {
-        cp = array_get(&cf->pool, i);
+    log_debug(LOG_VVERB, "  dyn_listen: %.*s",
+            cp->dyn_listen.pname.len, cp->dyn_listen.pname.data);
+    log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
+    log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
+    log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
 
-        log_debug(LOG_VVERB, "%.*s", cp->name.len, cp->name.data);
-        log_debug(LOG_VVERB, "  listen: %.*s",
-                  cp->listen.pname.len, cp->listen.pname.data);
-        log_debug(LOG_VVERB, "  timeout: %d", cp->timeout);
-        log_debug(LOG_VVERB, "  backlog: %d", cp->backlog);
-        log_debug(LOG_VVERB, "  hash: %d", cp->hash);
-        log_debug(LOG_VVERB, "  hash_tag: \"%.*s\"", cp->hash_tag.len,
-                  cp->hash_tag.data);
-        log_debug(LOG_VVERB, "  distribution: %d", cp->distribution);
-        log_debug(LOG_VVERB, "  client_connections: %d",
-                  cp->client_connections);
-        const char * temp_log = "unknown";
-        if(cp->data_store == DATA_REDIS){
-        	temp_log = "redis";
-        }
-        else if(cp->data_store == DATA_MEMCACHE){
-        	temp_log = "memcache";
-        }
-        log_debug(LOG_VVERB, "  data_store: %d (%s)", cp->data_store, temp_log);
-        log_debug(LOG_VVERB, "  preconnect: %d", cp->preconnect);
-        log_debug(LOG_VVERB, "  auto_eject_hosts: %d", cp->auto_eject_hosts);
-        log_debug(LOG_VVERB, "  server_connections: %d",
-                  cp->server_connections);
-        log_debug(LOG_VVERB, "  server_retry_timeout: %d (msec)",
-                  cp->server_retry_timeout_ms);
-        log_debug(LOG_VVERB, "  server_failure_limit: %d",
-                  cp->server_failure_limit);
+    log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
+    log_debug(LOG_VVERB, "  conn_msg_rate: %d", cp->conn_msg_rate);
 
-        log_debug(LOG_VVERB, "  datastore: ");
-        log_debug(LOG_VVERB, "    %.*s",
-                  cp->conf_datastore->name.len, cp->conf_datastore->name.data);
+    log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
+            cp->secure_server_option.len,
+            cp->secure_server_option.data);
 
-        log_debug(LOG_VVERB, "  dyn_seed_provider: \"%.*s\"", cp->dyn_seed_provider.len, cp->dyn_seed_provider.data);
+    log_debug(LOG_VVERB, "  read_consistency: \"%.*s\"",
+            cp->read_consistency.len,
+            cp->read_consistency.data);
 
-        uint32_t nseeds = array_n(&cp->dyn_seeds);
-        log_debug(LOG_VVERB, "  dyn_seeds: %"PRIu32"", nseeds);
-        for (j = 0; j < nseeds; j++) {
-            s = array_get(&cp->dyn_seeds, j);
-            log_debug(LOG_VVERB, "    %.*s", s->len, s->data);
-        }
+    log_debug(LOG_VVERB, "  write_consistency: \"%.*s\"",
+            cp->write_consistency.len,
+            cp->write_consistency.data);
 
-        log_debug(LOG_VVERB, "  env: %.*s", cp->env.len, cp->env.data);
-        log_debug(LOG_VVERB, "  rack: %.*s", cp->rack.len, cp->rack.data);
-        log_debug(LOG_VVERB, "  dc: %.*s", cp->dc.len, cp->dc.data);
-
-        log_debug(LOG_VVERB, "  dyn_listen: %.*s",
-                  cp->dyn_listen.pname.len, cp->dyn_listen.pname.data);
-        log_debug(LOG_VVERB, "  dyn_read_timeout: %d", cp->dyn_read_timeout);
-        log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
-        log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
-
-        log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
-        log_debug(LOG_VVERB, "  conn_msg_rate: %d", cp->conn_msg_rate);
-
-        log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
-                              cp->secure_server_option.len,
-                              cp->secure_server_option.data);
-
-        log_debug(LOG_VVERB, "  read_consistency: \"%.*s\"",
-                              cp->read_consistency.len,
-                              cp->read_consistency.data);
-
-        log_debug(LOG_VVERB, "  write_consistency: \"%.*s\"",
-                              cp->write_consistency.len,
-                              cp->write_consistency.data);
-
-        log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
-    }
+    log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }
 
 static rstatus_t
@@ -928,7 +911,6 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
     uint32_t k, delimlen, pnamelen, addrlen, portlen, racklen, tokenslen, namelen, dclen;
     struct string address;
     char delim[] = " ::::";
-    //struct conf_pool *cfpool = conf;
 
     string_init(&address);
     p = conf; // conf_pool
@@ -1551,12 +1533,7 @@ conf_parse_core(struct conf *cf, void *data)
             ASSERT(cf->depth == CONF_MAX_DEPTH);
             leaf = true;
         } else if (cf->depth == CONF_ROOT_DEPTH) {
-            /* create new conf_pool */
-            data = array_push(&cf->pool);
-            if (data == NULL) {
-                status = DN_ENOMEM;
-                break;
-           }
+           data = &cf->pool;
            new_pool = true;
         } else if (array_n(&cf->arg) == cf->depth + 1) {
             /* for {key: value}, leaf is at CONF_MAX_DEPTH */
@@ -1641,7 +1618,7 @@ conf_open(char *filename)
         return NULL;
     }
 
-    cf = dn_alloc(sizeof(*cf));
+    cf = dn_zalloc(sizeof(*cf));
     if (cf == NULL) {
         fclose(fh);
         return NULL;
@@ -1649,14 +1626,6 @@ conf_open(char *filename)
 
     status = array_init(&cf->arg, CONF_DEFAULT_ARGS, sizeof(struct string));
     if (status != DN_OK) {
-        dn_free(cf);
-        fclose(fh);
-        return NULL;
-    }
-
-    status = array_init(&cf->pool, CONF_DEFAULT_POOL, sizeof(struct conf_pool));
-    if (status != DN_OK) {
-        array_deinit(&cf->arg);
         dn_free(cf);
         fclose(fh);
         return NULL;
@@ -2016,30 +1985,6 @@ conf_pre_validate(struct conf *cf)
     return DN_OK;
 }
 
-static int
-conf_server_name_cmp(const void *t1, const void *t2)
-{
-    const struct conf_server *s1 = t1, *s2 = t2;
-
-    return string_compare(&s1->name, &s2->name);
-}
-
-static int
-conf_pool_name_cmp(const void *t1, const void *t2)
-{
-    const struct conf_pool *p1 = t1, *p2 = t2;
-
-    return string_compare(&p1->name, &p2->name);
-}
-
-static int
-conf_pool_listen_cmp(const void *t1, const void *t2)
-{
-    const struct conf_pool *p1 = t1, *p2 = t2;
-
-    return string_compare(&p1->listen.pname, &p2->listen.pname);
-}
-
 static rstatus_t
 conf_validate_server(struct conf *cf, struct conf_pool *cp)
 {
@@ -2222,35 +2167,34 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
 
 /* Determine which peer node communications need to be secured  */
-static bool conf_set_is_secure(struct conf *cf, uint32_t npool) {
+static bool
+conf_set_is_secure(struct conf *cf)
+{
     bool valid = true;
-    uint32_t i, j, dpool;
+    uint32_t j, nseeds;
 
-    for (i = 0; i < npool; i++) {
-        struct conf_pool *cp = array_get(&cf->pool, i);
-
-        dpool = array_n(&cp->dyn_seeds);
-        for (j = 0; j < dpool; j++) {
-            struct conf_server *cs = array_get(&cp->dyn_seeds, j);
-            // if dc then communication only between nodes in different dc is secured
-            if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_DC)) {
-                if (string_compare(&cp->dc, &cs->dc)) {
-                    cs->is_secure = 1;
-                }
-            }
-            // if rack then communication only between nodes in different rack is secured.
-            // communication secured between nodes if they are in rack with same name across dcs.
-            else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK)) {
-                // if not same rack or dc
-                if (string_compare(&cp->rack, &cs->rack)
-                        || string_compare(&cp->dc, &cs->dc)) {
-                    cs->is_secure = 1;
-                }
-            }
-            // if all then all communication between nodes will be secured.
-            else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
+    struct conf_pool *cp = &cf->pool;
+    nseeds = array_n(&cp->dyn_seeds);
+    for (j = 0; j < nseeds; j++) {
+        struct conf_server *cs = array_get(&cp->dyn_seeds, j);
+        // if dc then communication only between nodes in different dc is secured
+        if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_DC)) {
+            if (string_compare(&cp->dc, &cs->dc)) {
                 cs->is_secure = 1;
             }
+        }
+        // if rack then communication only between nodes in different rack is secured.
+        // communication secured between nodes if they are in rack with same name across dcs.
+        else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK)) {
+            // if not same rack or dc
+            if (string_compare(&cp->rack, &cs->rack)
+                    || string_compare(&cp->dc, &cs->dc)) {
+                cs->is_secure = 1;
+            }
+        }
+        // if all then all communication between nodes will be secured.
+        else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
+            cs->is_secure = 1;
         }
     }
 
@@ -2260,75 +2204,15 @@ static bool conf_set_is_secure(struct conf *cf, uint32_t npool) {
 static rstatus_t
 conf_post_validate(struct conf *cf)
 {
-    rstatus_t status;
-    uint32_t i, npool;
-    bool valid;
-
     ASSERT(cf->sound && cf->parsed);
     ASSERT(!cf->valid);
 
-    npool = array_n(&cf->pool);
-    if (npool == 0) {
-        log_error("conf: '%.*s' has no pools", cf->fname);
-        return DN_ERROR;
-    }
-
-    /* validate pool */
-    for (i = 0; i < npool; i++) {
-        struct conf_pool *cp = array_get(&cf->pool, i);
-
-        status = conf_validate_pool(cf, cp);
-        if (status != DN_OK) {
-            return status;
-        }
-    }
-
-    /* disallow pools with duplicate listen: key values */
-    array_sort(&cf->pool, conf_pool_listen_cmp);
-    for (valid = true, i = 0; i < npool - 1; i++) {
-        struct conf_pool *p1, *p2;
-
-        p1 = array_get(&cf->pool, i);
-        p2 = array_get(&cf->pool, i + 1);
-
-        if (string_compare(&p1->listen.pname, &p2->listen.pname) == 0) {
-            log_error("conf: pools '%.*s' and '%.*s' have the same listen "
-                      "address '%.*s'", p1->name.len, p1->name.data,
-                      p2->name.len, p2->name.data, p1->listen.pname.len,
-                      p1->listen.pname.data);
-            valid = false;
-            break;
-        }
-    }
-    if (!valid) {
-        return DN_ERROR;
-    }
-
-    /* disallow pools with duplicate names */
-    array_sort(&cf->pool, conf_pool_name_cmp);
-    for (valid = true, i = 0; i < npool - 1; i++) {
-        struct conf_pool *p1, *p2;
-
-        p1 = array_get(&cf->pool, i);
-        p2 = array_get(&cf->pool, i + 1);
-
-        if (string_compare(&p1->name, &p2->name) == 0) {
-            log_error("conf: '%s' has pools with same name %.*s'", cf->fname,
-                      p1->name.len, p1->name.data);
-            valid = false;
-            break;
-        }
-    }
+    THROW_STATUS(conf_validate_pool(cf, &cf->pool));
 
     /* Determine which peer node communications need to be secured  */
-    if(!conf_set_is_secure(cf, npool)) {
+    if (!conf_set_is_secure(cf)) {
         return DN_ERROR;
     }
-
-    if (!valid) {
-        return DN_ERROR;
-    }
-
     return DN_OK;
 }
 
@@ -2384,11 +2268,7 @@ conf_destroy(struct conf *cf)
     }
     array_deinit(&cf->arg);
 
-    while (array_n(&cf->pool) != 0) {
-        conf_pool_deinit(array_pop(&cf->pool));
-    }
-    array_deinit(&cf->pool);
-
+    conf_pool_deinit(&cf->pool);
     dn_free(cf);
 }
 

@@ -99,7 +99,7 @@ struct conf {
     char          *fname;           /* file name (ref in argv[]) */
     FILE          *fh;              /* file handle */
     struct array  arg;              /* string[] (parsed {key, value} pairs) */
-    struct array  pool;             /* conf_pool[] (parsed pools) */
+    struct conf_pool pool;             /* conf_pool[] (parsed pools) */
     uint32_t      depth;            /* parsed tree depth */
     yaml_parser_t parser;           /* yaml parser */
     yaml_event_t  event;            /* yaml event */
@@ -119,7 +119,7 @@ struct conf {
 rstatus_t conf_server_transform(struct server *datastore,
                                 struct conf_server *conf_datastore);
 // converts conf_pool to server_pool
-rstatus_t conf_pool_each_transform(void *elem, void *data);
+rstatus_t conf_pool_transform(struct server_pool *, struct conf_pool *);
 // converts conf_server to server ... except that this is for peers
 rstatus_t conf_seed_each_transform(void *elem, void *data);
 

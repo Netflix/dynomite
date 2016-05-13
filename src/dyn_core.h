@@ -165,21 +165,6 @@ typedef enum data_store {
 } data_store_t;
 
 
-struct context {
-    struct conf        *cf;         /* configuration */
-    struct stats       *stats;      /* stats */
-
-    struct array       pool;        /* server_pool[] */
-    struct event_base  *evb;        /* event base */
-    int                max_timeout; /* max timeout in msec */
-    int                timeout;     /* timeout in msec */
-    dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
-                                       it is ok to eventually get its new value */
-    unsigned           enable_gossip:1;   /* enable/disable gossip */
-    unsigned           admin_opt;   /* admin mode */
-};
-
-
 struct instance {
     struct context  *ctx;                        /* active context */
     int             log_level;                   /* log level */
@@ -308,6 +293,21 @@ struct server_pool {
     data_store_t	   data_store;	/* the backend data store */
 
 };
+
+struct context {
+    struct conf        *cf;         /* configuration */
+    struct stats       *stats;      /* stats */
+
+    struct server_pool pool;        /* server_pool[] */
+    struct event_base  *evb;        /* event base */
+    int                max_timeout; /* max timeout in msec */
+    int                timeout;     /* timeout in msec */
+    dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
+                                       it is ok to eventually get its new value */
+    unsigned           enable_gossip:1;   /* enable/disable gossip */
+    unsigned           admin_opt;   /* admin mode */
+};
+
 
 
 struct context *core_start(struct instance *nci);
