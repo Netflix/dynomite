@@ -1458,7 +1458,7 @@ redis_parse_req(struct msg *r)
                     state = SW_ARGN_LEN;
                 } else if (redis_argeval(r)) {
                     if (r->rnarg < 2) {
-                    	log_error("Dynomite EVAL/EVALSHA requires at least 1 keys");
+                    	log_error("Dynomite EVAL/EVALSHA requires at least 1 key");
                         goto error;
                     }
                     state = SW_ARG2_LEN;
