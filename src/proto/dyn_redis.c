@@ -729,7 +729,7 @@ redis_parse_req(struct msg *r)
 
                 if (str4icmp(m, 'e', 'v', 'a', 'l')) {
                     r->type = MSG_REQ_REDIS_EVAL;
-                    r->is_read = 1;
+                    r->is_read = 0;
                     break;
                 }
 
@@ -1027,7 +1027,7 @@ redis_parse_req(struct msg *r)
 
                 if (str7icmp(m, 'e', 'v', 'a', 'l', 's', 'h', 'a')) {
                     r->type = MSG_REQ_REDIS_EVALSHA;
-                    r->is_read = 1;
+                    r->is_read = 0;
                     break;
                 }
 
