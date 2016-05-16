@@ -19,7 +19,7 @@ void dnode_peer_connected(struct context *ctx, struct conn *conn);
 
 struct conn *dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen, uint8_t msg_type);
 rstatus_t dnode_peer_pool_preconnect(struct context *ctx);
-
+void dnode_peer_pool_disconnect(struct context *ctx);
 rstatus_t dnode_peer_forward_state(void *rmsg);
 rstatus_t dnode_peer_add(void *rmsg);
 rstatus_t dnode_peer_replace(void *rmsg);

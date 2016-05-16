@@ -295,6 +295,7 @@ struct server_pool {
 };
 
 struct context {
+    struct instance    *instance;   /* back pointer to instance */
     struct conf        *cf;         /* configuration */
     struct stats       *stats;      /* stats */
 
@@ -310,7 +311,7 @@ struct context {
 
 
 
-struct context *core_start(struct instance *nci);
+rstatus_t core_start(struct instance *nci);
 void core_stop(struct context *ctx);
 rstatus_t core_core(void *arg, uint32_t events);
 rstatus_t core_loop(struct context *ctx);

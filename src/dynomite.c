@@ -575,17 +575,14 @@ dn_post_run(struct instance *nci)
     log_deinit();
 }
 
-static void
+static rstatus_t
 dn_run(struct instance *nci)
 {
     rstatus_t status;
-    struct context *ctx;
 
-    ctx = core_start(nci);
-    if (ctx == NULL) {
-        return;
-    }
+    THROW_STATUS(core_start(nci));
 
+    struct context *ctx = nci->ctx;
     ctx->enable_gossip = enable_gossip;
     ctx->admin_opt = (unsigned)admin_opt;
 
@@ -601,6 +598,7 @@ dn_run(struct instance *nci)
     }
 
     core_stop(ctx);
+    return DN_OK;
 }
 
 static void
@@ -652,7 +650,8 @@ main(int argc, char **argv)
         exit(1);
     }
 
-    dn_run(&nci);
+    status = dn_run(&nci);
+    IGNORE_RET_VAL(status);
 
     dn_post_run(&nci);
 

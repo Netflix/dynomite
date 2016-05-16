@@ -31,19 +31,151 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 
+static rstatus_t
+core_init_last(struct context *ctx)
+{
+	core_debug(ctx);
+    preselect_remote_rack_for_replication(ctx);
+    return DN_OK;
+}
 
-static struct context *
+static rstatus_t
+core_gossip_pool_init(struct context *ctx)
+{
+	//init ring msg queue
+	CBUF_Init(C2G_InQ);
+	CBUF_Init(C2G_OutQ);
+
+	//init stats msg queue
+	CBUF_Init(C2S_InQ);
+	CBUF_Init(C2S_OutQ);
+
+    THROW_STATUS(gossip_pool_init(ctx));
+    THROW_STATUS(core_init_last(ctx));
+    return DN_OK;
+}
+
+static rstatus_t
+core_dnode_peer_pool_preconnect(struct context *ctx)
+{
+	THROW_STATUS(dnode_peer_pool_preconnect(ctx));
+    rstatus_t status = core_gossip_pool_init(ctx);
+    //if (status != DN_OK)
+      //  gossip_pool_deinit(ctx);
+    return status;
+}
+static rstatus_t
+core_dnode_peer_init(struct context *ctx)
+{
+	/* initialize peers */
+	THROW_STATUS(dnode_peer_init(ctx));
+	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
+	if (status != DN_OK)
+	    dnode_peer_pool_disconnect(ctx);
+    return status;
+}
+
+static rstatus_t
+core_dnode_init(struct context *ctx)
+{
+	/* initialize dnode listener per server pool */
+    THROW_STATUS(dnode_init(ctx));
+
+	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
+    rstatus_t status = core_dnode_peer_init(ctx);
+    if (status != DN_OK)
+        dnode_peer_deinit(ctx);
+    return status;
+}
+
+static rstatus_t
+core_proxy_init(struct context *ctx)
+{
+	/* initialize proxy per server pool */
+    THROW_STATUS(proxy_init(ctx));
+    rstatus_t status = core_dnode_init(ctx);
+    if (status != DN_OK)
+        dnode_deinit(ctx);
+    return status;
+}
+
+static rstatus_t
+core_server_pool_preconnect(struct context *ctx)
+{
+	THROW_STATUS(server_pool_preconnect(ctx));
+
+     rstatus_t status = core_proxy_init(ctx);
+     if (status != DN_OK)
+        proxy_deinit(ctx);
+    return status;
+}
+
+static rstatus_t
+core_event_base_create(struct context *ctx)
+{
+	/* initialize event handling for client, proxy and server */
+	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
+	if (ctx->evb == NULL) {
+		loga("Failed to create socket event handling!!!");
+		return DN_ERROR;
+	}
+    rstatus_t status = core_server_pool_preconnect(ctx);
+    if (status != DN_OK)
+		server_pool_disconnect(ctx);
+    return status;
+}
+
+static rstatus_t
+core_stats_create(struct context *ctx)
+{
+    struct instance *nci = ctx->instance;
+	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
+			                  nci->hostname, &ctx->pool, ctx);
+    if (ctx->stats == NULL) {
+		loga("Failed to create stats!!!");
+		return DN_ERROR;
+	}
+    rstatus_t status = core_event_base_create(ctx);
+    if (status != DN_OK)
+        event_base_destroy(ctx->evb);
+    return status;
+}
+
+static rstatus_t
+core_crypto_init(struct context *ctx)
+{
+	/* crypto init */
+    THROW_STATUS(crypto_init(&ctx->pool));
+    rstatus_t status = core_stats_create(ctx);
+    if (status != DN_OK)
+		stats_destroy(ctx->stats);
+    return status;
+}
+
+static rstatus_t
+core_server_pool_init(struct context *ctx)
+{
+    THROW_STATUS(server_pool_init(&ctx->pool, &ctx->cf->pool, ctx));
+    rstatus_t status = core_crypto_init(ctx);
+    if (status != DN_OK)
+		crypto_deinit();
+    return status;
+}
+
+static rstatus_t
 core_ctx_create(struct instance *nci)
 {
-	rstatus_t status;
 	struct context *ctx;
 
 	srand((unsigned) time(NULL));
 
 	ctx = dn_alloc(sizeof(*ctx));
 	if (ctx == NULL) {
-		return NULL;
+		loga("Failed to create context!!!");
+		return DN_ERROR;
 	}
+    nci->ctx = ctx;
+    ctx->instance = nci;
 	ctx->cf = NULL;
 	ctx->stats = NULL;
 	ctx->evb = NULL;
@@ -53,165 +185,21 @@ core_ctx_create(struct instance *nci)
 	ctx->dyn_state = INIT;
 
 	/* parse and create configuration */
-	ctx->cf = conf_create(nci->conf_filename);
+    ctx->cf = conf_create(nci->conf_filename);
 	if (ctx->cf == NULL) {
-		loga("Failed to create context!!!");
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* initialize server pool from configuration */
-	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize server pool!!! ... uninitializing");
-		server_pool_deinit(&ctx->pool);
+		loga("Failed to create conf!!!");
 		conf_destroy(ctx->cf);
 		dn_free(ctx);
-		return NULL;
+		return DN_ERROR;
 	}
-
-
-	/* crypto init */
-    status = crypto_init(&ctx->pool);
+	rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
-   	    loga("Failed to initialize crypto!!!");
-    	dn_free(ctx);
-    	return NULL;
+		server_pool_deinit(&ctx->pool);
+		conf_destroy(ctx->cf);
+		dn_free(ctx);
+		return DN_ERROR;
     }
-
-
-	/* create stats per server pool */
-	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
-			                  nci->hostname, &ctx->pool, ctx);
-	if (ctx->stats == NULL) {
-		loga("Failed to create stats!!!");
-		crypto_deinit();
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* initialize event handling for client, proxy and server */
-	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
-	if (ctx->evb == NULL) {
-		loga("Failed to create socket event handling!!!");
-		crypto_deinit();
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* preconnect? servers in server pool */
-	status = server_pool_preconnect(ctx);
-	if (status != DN_OK) {
-		loga("Failed to preconnect for server pool!!!");
-		crypto_deinit();
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* initialize proxy per server pool */
-	status = proxy_init(ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize proxy!!!");
-        proxy_deinit(ctx);
-		crypto_deinit();
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* initialize dnode listener per server pool */
-	status = dnode_init(ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize dnode!!!");
-        proxy_deinit(ctx);
-		crypto_deinit();
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
-
-	/* initialize peers */
-	status = dnode_peer_init(ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize dnode peers!!!");
-        dnode_deinit(ctx);
-        proxy_deinit(ctx);
-		crypto_deinit();
-		dnode_deinit(ctx);
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	core_debug(ctx);
-
-	/* preconntect peers - probably start gossip here */
-	status = dnode_peer_pool_preconnect(ctx);
-	if (status != DN_OK) {
-		loga("Failed to preconnect dnode peers!!!");
-        proxy_deinit(ctx);
-		crypto_deinit();
-		dnode_peer_deinit(&ctx->pool);
-		dnode_deinit(ctx);
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	//init ring msg queue
-	CBUF_Init(C2G_InQ);
-	CBUF_Init(C2G_OutQ);
-
-	//init stats msg queue
-	CBUF_Init(C2S_InQ);
-	CBUF_Init(C2S_OutQ);
-
-    status = gossip_pool_init(ctx);
-    if (status != DN_OK) {
-    	loga("Failed to initialize gossip!!!");
-        proxy_deinit(ctx);
-        crypto_deinit();
-        dnode_peer_deinit(&ctx->pool);
-        dnode_deinit(ctx);
-        server_pool_disconnect(ctx);
-        event_base_destroy(ctx->evb);
-        stats_destroy(ctx->stats);
-        server_pool_deinit(&ctx->pool);
-        conf_destroy(ctx->cf);
-        dn_free(ctx);
-        return NULL;
-    }
-    preselect_remote_rack_for_replication(ctx);
-
-	return ctx;
+    return status;
 }
 
 static void
@@ -226,28 +214,22 @@ core_ctx_destroy(struct context *ctx)
 	dn_free(ctx);
 }
 
-struct context *
+rstatus_t
 core_start(struct instance *nci)
 {
-	struct context *ctx;
-	//last = dn_msec_now();
-
 	mbuf_init(nci);
 	msg_init(nci);
 	conn_init();
 
-	ctx = core_ctx_create(nci);
-	if (ctx != NULL) {
-		nci->ctx = ctx;
-		return ctx;
-	}
+    rstatus_t status = core_ctx_create(nci);
+    if (status != DN_OK) {
+        conn_deinit();
+        msg_deinit();
+        dmsg_deinit();
+        mbuf_deinit();
+    }
 
-	conn_deinit();
-	msg_deinit();
-	dmsg_deinit();
-	mbuf_deinit();
-
-	return NULL;
+	return status;
 }
 
 void
@@ -545,6 +527,3 @@ core_loop(struct context *ctx)
 
 	return DN_OK;
 }
-
-
-

@@ -1297,12 +1297,12 @@ dnode_peer_pool_preconnect(struct context *ctx)
     return DN_OK;
 }
 
-/*
-static rstatus_t
-dnode_peer_pool_each_disconnect(void *elem, void *data)
+
+void
+dnode_peer_pool_disconnect(struct context *ctx)
 {
     rstatus_t status;
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
 
     status = array_each(&sp->peers, dnode_peer_each_disconnect, NULL);
     if (status != DN_OK) {
@@ -1312,12 +1312,7 @@ dnode_peer_pool_each_disconnect(void *elem, void *data)
     return DN_OK;
 }
 
-static void
-dnode_peer_pool_disconnect(struct context *ctx)
-{
-    array_each(&ctx->pool, dnode_peer_pool_each_disconnect, NULL);
-}
-
+/*
 static void
 dnode_peer_pool_deinit(struct array *server_pool)
 {
