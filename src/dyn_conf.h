@@ -71,7 +71,7 @@ struct conf_pool {
     int                server_connections;    /* server_connections: */
     msec_t             server_retry_timeout_ms;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
-    struct conf_server *conf_datastore;
+    struct conf_server *conf_datastore;       /* This is the underlying datastore */
     unsigned           valid:1;               /* valid? */
     struct conf_listen dyn_listen;            /* dyn_listen  */
     int                dyn_read_timeout;      /* inter dyn nodes' read timeout in ms */

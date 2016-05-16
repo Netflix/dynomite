@@ -117,7 +117,10 @@ server_active(struct conn *conn)
 static void
 server_deinit(struct server **pdatastore)
 {
-    // TODO MT:
+    if (!pdatastore || !*pdatastore)
+        return;
+    struct server *s = *pdatastore;
+    ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 }
 
 static struct conn *
