@@ -1458,6 +1458,7 @@ redis_parse_req(struct msg *r)
                     state = SW_ARGN_LEN;
                 } else if (redis_argeval(r)) {
                     if (r->rnarg < 2) {
+                    	log_error("Dynomite EVAL/EVALSHA requires at least 1 keys");
                         goto error;
                     }
                     state = SW_ARG2_LEN;
@@ -1534,7 +1535,6 @@ redis_parse_req(struct msg *r)
             if (redis_argeval(r)) {
                 uint32_t nkey;
                 uint8_t *chp;
-
                 /*
                  * For EVAL/EVALSHA, we need to find the integer value of this
                  * argument. It tells us the number of keys in the script, and
