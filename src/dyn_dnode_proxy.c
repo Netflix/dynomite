@@ -28,8 +28,7 @@ dnode_ref(struct conn *conn, void *owner)
     /* owner of the proxy connection is the server pool */
     conn->owner = owner;
 
-    log_debug(LOG_VVERB, "ref conn %p owner %p into pool %"PRIu32"", conn,
-              pool, pool->idx);
+    log_debug(LOG_VVERB, "ref conn %p owner %p", conn, pool);
 }
 
 static void
@@ -45,8 +44,7 @@ dnode_unref(struct conn *conn)
 
     pool->d_conn = NULL;
 
-    log_debug(LOG_VVERB, "unref conn %p owner %p from pool %"PRIu32"", conn,
-              pool, pool->idx);
+    log_debug(LOG_VVERB, "unref conn %p owner %p", conn, pool);
 }
 
 static void
@@ -171,14 +169,12 @@ dnode_listen(struct context *ctx, struct conn *p)
     return DN_OK;
 }
 
-static rstatus_t
-dnode_each_init(void *elem, void *data)
+rstatus_t
+dnode_init(struct context *ctx)
 {
     rstatus_t status;
-    struct server_pool *pool = elem;
-    struct conn *p;
-
-    p = conn_get_dnode(pool);
+    struct server_pool *pool = &ctx->pool;
+    struct conn *p = conn_get_dnode(pool);
     if (p == NULL) {
         return DN_ENOMEM;
     }
@@ -190,69 +186,31 @@ dnode_each_init(void *elem, void *data)
     }
 
     const char * log_datastore = "not selected data store";
-    if (pool->data_store == DATA_REDIS){
+    if (g_data_store == DATA_REDIS){
     	log_datastore = "redis";
     }
-    else if (pool->data_store == DATA_MEMCACHE){
+    else if (g_data_store == DATA_MEMCACHE){
     	log_datastore = "memcache";
     }
 
-    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool %"PRIu32" '%.*s'"
+    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'"
               " with %"PRIu32" servers", p->sd, pool->addrstr.len,
               pool->d_addrstr.data,
 			  log_datastore,
-              pool->idx, pool->name.len, pool->name.data,
-              array_n(&pool->server));
-    return DN_OK;
-}
-
-rstatus_t
-dnode_init(struct context *ctx)
-{
-    rstatus_t status;
-
-    ASSERT(array_n(&ctx->pool) != 0);
-
-    status = array_each(&ctx->pool, dnode_each_init, NULL);
-    if (status != DN_OK) {
-        dnode_deinit(ctx);
-        return status;
-    }
-
-    log_debug(LOG_VVERB, "init dnode with %"PRIu32" pools",
-              array_n(&ctx->pool));
-
-    return DN_OK;
-}
-
-static rstatus_t
-dnode_each_deinit(void *elem, void *data)
-{
-    struct server_pool *pool = elem;
-    struct conn *p;
-
-    p = pool->d_conn;
-    if (p != NULL) {
-        conn_close(pool->ctx, p);
-    }
-
+              pool->name.len, pool->name.data );
     return DN_OK;
 }
 
 void
 dnode_deinit(struct context *ctx)
 {
-    rstatus_t status;
-
-    ASSERT(array_n(&ctx->pool) != 0);
-
-    status = array_each(&ctx->pool, dnode_each_deinit, NULL);
-    if (status != DN_OK) {
-        return;
+    struct server_pool *pool = &ctx->pool;
+    struct conn *p = pool->d_conn;
+    if (p != NULL) {
+        conn_close(pool->ctx, p);
     }
 
-    log_debug(LOG_VVERB, "deinit dnode with %"PRIu32" pools",
-              array_n(&ctx->pool));
+    log_debug(LOG_VVERB, "deinit dnode");
 }
 
 static rstatus_t
@@ -304,7 +262,7 @@ dnode_accept(struct context *ctx, struct conn *p)
        loga("Unable to get client's address for accept on sd %d\n", sd);
     }
 
-    c = conn_get_peer(p->owner, true, p->data_store);
+    c = conn_get_peer(p->owner, true);
     if (c == NULL) {
         log_error("dyn: get conn client peer for PEER_CLIENT %d from %s %d failed: %s",
                   sd, conn_get_type_string(p), p->sd, strerror(errno));

@@ -193,11 +193,10 @@ dnode_peer_pool_run(struct server_pool *pool)
 }
 
 
-static rstatus_t
-dnode_peer_each_pool_init(void *elem, void *context)
+rstatus_t
+dnode_peer_init(struct context *ctx)
 {
-    struct server_pool *sp = (struct server_pool *) elem;
-    //struct context *ctx = context;
+    struct server_pool *sp = &ctx->pool;
     struct array *conf_seeds = &sp->conf_pool->dyn_seeds;
 
     struct array * seeds = &sp->seeds;
@@ -286,26 +285,11 @@ dnode_peer_each_pool_init(void *elem, void *context)
 
     dnode_peer_pool_run(sp);
 
-    log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool %"PRIu32" '%.*s'",
-            nseed, sp->idx, sp->name.len, sp->name.data);
+    log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool '%.*s'",
+              nseed, sp->name.len, sp->name.data);
 
     return DN_OK;
 }
-
-rstatus_t
-dnode_peer_init(struct array *server_pool, struct context *ctx)
-{
-    rstatus_t status;
-
-    status = array_each(server_pool, dnode_peer_each_pool_init, ctx);
-    if (status != DN_OK) {
-        server_pool_deinit(server_pool);
-        return status;
-    }
-
-    return DN_OK;
-}
-
 
 static bool
 is_conn_secured(struct server_pool *sp, struct server *peer_node)
@@ -314,25 +298,27 @@ is_conn_secured(struct server_pool *sp, struct server *peer_node)
     //ASSERT(sp != NULL);
 
     // if dc-secured mode then communication only between nodes in different dc is secured
-    if (dn_strcmp(sp->secure_server_option.data, CONF_STR_DC) == 0) {
-        if (string_compare(&sp->dc, &peer_node->dc) != 0) {
+    switch (sp->secure_server_option)
+    {
+        case SECURE_OPTION_NONE:
+            return false;
+        case SECURE_OPTION_RACK:
+            // if rack-secured mode then communication only between nodes in different rack is secured.
+            // communication secured between nodes if they are in rack with same name across dcs.
+            if (string_compare(&sp->rack, &peer_node->rack) != 0
+                    || string_compare(&sp->dc, &peer_node->dc) != 0) {
+                return true;
+            }
+            return false;
+        case SECURE_OPTION_DC:
+            // if dc-secured mode then communication only between nodes in different dc is secured     
+            if (string_compare(&sp->dc, &peer_node->dc) != 0) {
+                return true;
+            }
+            return false;
+        case SECURE_OPTION_ALL:
             return true;
-        }
     }
-    // if rack-secured mode then communication only between nodes in different rack is secured.
-    // communication secured between nodes if they are in rack with same name across dcs.
-    else if (dn_strcmp(sp->secure_server_option.data, CONF_STR_RACK) == 0) {
-        // if not same rack nor dc
-        if (string_compare(&sp->rack, &peer_node->rack) != 0
-                || string_compare(&sp->dc, &peer_node->dc) != 0) {
-            return true;
-        }
-    }
-    // if all then all communication between nodes will be secured.
-    else if (dn_strcmp(sp->secure_server_option.data, CONF_STR_ALL) == 0) {
-        return true;
-    }
-
     return false;
 }
 
@@ -345,7 +331,7 @@ dnode_peer_conn(struct server *server)
     pool = server->owner;
 
     if (server->ns_conn_q < 1) {
-        conn = conn_get_peer(server, false, pool->data_store);
+        conn = conn_get_peer(server, false);
         if (is_conn_secured(pool, server)) {
             conn->dnode_secured = 1;
             conn->dnode_crypto_state = 0; //need to do a encryption handshake
@@ -483,7 +469,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
-    struct msg *rsp = msg_get(conn, false, conn->data_store, __FUNCTION__);
+    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     req->done = 1;
     rsp->error = req->error = 1;
     rsp->err = req->err = conn->err;
@@ -526,8 +512,8 @@ dnode_peer_failure(struct context *ctx, struct server *server)
     }
 
     if (log_loggable(LOG_INFO)) {
-       log_debug(LOG_INFO, "dyn: update peer pool %"PRIu32" '%.*s' for peer '%.*s' "
-               "for next %"PRIu32" secs", pool->idx, pool->name.len,
+       log_debug(LOG_INFO, "dyn: update peer pool '%.*s' for peer '%.*s' "
+               "for next %"PRIu32" secs", pool->name.len,
                pool->name.data, server->pname.len, server->pname.data,
                pool->server_retry_timeout_ms/1000);
     }
@@ -539,7 +525,7 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 
     status = dnode_peer_pool_run(pool);
     if (status != DN_OK) {
-        log_error("dyn: updating peer pool %"PRIu32" '%.*s' failed: %s", pool->idx,
+        log_error("dyn: updating peer pool '%.*s' failed: %s",
                 pool->name.len, pool->name.data, strerror(errno));
     }
 }
@@ -778,7 +764,7 @@ dnode_peer_forward_state(void *rmsg)
         return DN_ERROR;
     }
 
-    dnode_peer_gossip_forward(sp->ctx, conn, sp->data_store, mbuf);
+    dnode_peer_gossip_forward(sp->ctx, conn, mbuf);
 
     //free this as nobody else will do
     //mbuf_put(mbuf);
@@ -854,7 +840,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
         //conn->
 
-        dnode_peer_gossip_forward(sp->ctx, conn, sp->data_store, mbuf);
+        dnode_peer_gossip_forward(sp->ctx, conn, mbuf);
         //peer_gossip_forward1(sp->ctx, conn, sp->data_store, &data);
     }
 
@@ -1293,11 +1279,11 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
 }
 
 
-static rstatus_t
-dnode_peer_pool_each_preconnect(void *elem, void *data)
+rstatus_t
+dnode_peer_pool_preconnect(struct context *ctx)
 {
     rstatus_t status;
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
 
     if (!sp->preconnect) {
         return DN_OK;
@@ -1311,25 +1297,12 @@ dnode_peer_pool_each_preconnect(void *elem, void *data)
     return DN_OK;
 }
 
-rstatus_t
-dnode_peer_pool_preconnect(struct context *ctx)
+
+void
+dnode_peer_pool_disconnect(struct context *ctx)
 {
     rstatus_t status;
-
-    status = array_each(&ctx->pool, dnode_peer_pool_each_preconnect, NULL);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    return DN_OK;
-}
-
-/*
-static rstatus_t
-dnode_peer_pool_each_disconnect(void *elem, void *data)
-{
-    rstatus_t status;
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
 
     status = array_each(&sp->peers, dnode_peer_each_disconnect, NULL);
     if (status != DN_OK) {
@@ -1339,12 +1312,7 @@ dnode_peer_pool_each_disconnect(void *elem, void *data)
     return DN_OK;
 }
 
-static void
-dnode_peer_pool_disconnect(struct context *ctx)
-{
-    array_each(&ctx->pool, dnode_peer_pool_each_disconnect, NULL);
-}
-
+/*
 static void
 dnode_peer_pool_deinit(struct array *server_pool)
 {
@@ -1598,8 +1566,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         req->done = 1;
 
         // Create an appropriate response for the request so its propagated up;
-        struct msg *err_rsp = msg_get(peer_conn, false, peer_conn->data_store,
-                                      __FUNCTION__);
+        struct msg *err_rsp = msg_get(peer_conn, false, __FUNCTION__);
         err_rsp->error = req->error = 1;
         err_rsp->err = req->err = BAD_FORMAT;
         err_rsp->dyn_error = req->dyn_error = BAD_FORMAT;
@@ -1910,10 +1877,10 @@ rack_name_cmp(const void *t1, const void *t2)
 
 // The idea here is to have a designated rack in each remote region to replicate
 // data to. This is used to replicate writes to remote regions
-static void
-preselect_remote_rack_for_replication_each(void *elem, void *data)
+void
+preselect_remote_rack_for_replication(struct context *ctx)
 {
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
     uint32_t dc_cnt = array_n(&sp->datacenters);
     uint32_t dc_index;
     uint32_t my_rack_index = 0;
@@ -1960,10 +1927,4 @@ preselect_remote_rack_for_replication_each(void *elem, void *data)
                    dc->preselected_rack_for_replication->name->data,
                    dc->name->len, dc->name->data);
     }
-}
-
-void
-preselect_remote_rack_for_replication(struct context *ctx)
-{
-    array_each(&ctx->pool, preselect_remote_rack_for_replication_each, NULL);
 }

@@ -128,8 +128,6 @@ struct conn {
     unsigned           dnode_secured:1;      /* is a secured connection? */
     unsigned           dnode_crypto_state:1; /* crypto state */
     unsigned char      aes_key[50]; //aes_key[34];              /* a place holder for AES key */
-
-    int				   data_store;
     unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
@@ -195,9 +193,9 @@ void conn_set_read_consistency(struct conn *conn, consistency_t cons);
 consistency_t conn_get_read_consistency(struct conn *conn);
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *test_conn_get(void);
-struct conn *conn_get(void *owner, bool client, int data_store);
+struct conn *conn_get(void *owner, bool client);
 struct conn *conn_get_proxy(void *owner);
-struct conn *conn_get_peer(void *owner, bool client, int data_store);
+struct conn *conn_get_peer(void *owner, bool client);
 struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);

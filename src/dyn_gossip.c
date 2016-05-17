@@ -870,15 +870,15 @@ gossip_set_seeds_provider(struct string * seeds_provider_str)
 }
 
 
-static rstatus_t
-gossip_pool_each_init(void *elem, void *data)
+rstatus_t
+gossip_pool_init(struct context *ctx)
 {
     rstatus_t status;
-    struct server_pool *sp = elem;
+    struct server_pool *sp = &ctx->pool;
 
     gn_pool.ctx = sp->ctx;
     gn_pool.name = &sp->name;
-    gn_pool.idx = sp->idx;
+    gn_pool.idx = 0;
     gn_pool.g_interval = sp->g_interval;
 
     //dictDisableResize();
@@ -980,15 +980,6 @@ gossip_pool_each_init(void *elem, void *data)
     return DN_OK;
 
 }
-
-
-rstatus_t
-gossip_pool_init(struct context *ctx)
-{
-	THROW_STATUS(array_each(&ctx->pool, gossip_pool_each_init, NULL));
-    return DN_OK;
-}
-
 
 rstatus_t
 gossip_destroy(struct server_pool *sp)
