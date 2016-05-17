@@ -241,6 +241,7 @@ struct stats {
     struct string             free_msgs_str;
     struct string             alloc_mbufs_str;
     struct string             free_mbufs_str;
+    struct string			  dyn_memory_str;
 
     struct string             rack_str;
     struct string             rack;
@@ -267,6 +268,7 @@ struct stats {
     size_t           free_msgs;
     uint64_t         alloc_mbufs;
     uint64_t         free_mbufs;
+    uint64_t         dyn_memory;
 
 };
 

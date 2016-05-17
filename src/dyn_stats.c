@@ -26,6 +26,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/resource.h>
 #include <netinet/in.h>
 
 #include "dyn_core.h"
@@ -356,6 +357,10 @@ stats_create_bufs(struct stats *st)
     size += int64_max_digits;
     size += key_value_extra;
 
+    size += st->dyn_memory_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
+
     struct stats_pool *stp = &st->sum;
     uint32_t j;
 
@@ -537,6 +542,8 @@ stats_add_header(struct stats *st)
                  (int64_t)st->alloc_mbufs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_mbufs_str,
                  (int64_t)st->free_mbufs));
+    THROW_STATUS(stats_add_num(&st->buf, &st->dyn_memory_str,
+                 (int64_t)st->dyn_memory));
 
     return DN_OK;
 }
@@ -1369,6 +1376,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->free_msgs_str, "free_msgs");
     string_set_text(&st->alloc_mbufs_str, "alloc_mbufs");
     string_set_text(&st->free_mbufs_str, "free_mbufs");
+    string_set_text(&st->dyn_memory_str, "dyn_memory");
 
     string_set_text(&st->rack_str, "rack");
 
@@ -1396,6 +1404,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->free_msgs = 0;
     st->alloc_mbufs = 0;
     st->free_mbufs = 0;
+    st->dyn_memory = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 
@@ -1447,6 +1456,7 @@ stats_destroy(struct stats *st)
 void
 stats_swap(struct stats *st)
 {
+    struct rusage r_usage;
     if (!stats_enabled) {
         return;
     }
@@ -1486,6 +1496,9 @@ stats_swap(struct stats *st)
     st->free_msgs = msg_free_queue_size();
     st->alloc_mbufs = mbuf_alloc_get_count();
     st->free_mbufs = mbuf_free_queue_size();
+
+    getrusage(RUSAGE_SELF,&r_usage);
+    st->dyn_memory  = r_usage.ru_maxrss;
 
     // swap current and shadow
     struct stats_pool temp = st->current;
