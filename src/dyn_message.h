@@ -177,8 +177,10 @@ typedef enum msg_type {
     MSG_REQ_REDIS_ZSCORE,
     MSG_REQ_REDIS_ZUNIONSTORE,
     MSG_REQ_REDIS_ZSCAN,
-    MSG_REQ_REDIS_EVAL,                   /* redis requests - eval */
+    MSG_REQ_REDIS_EVAL,                   /* redis requests - Lua */
     MSG_REQ_REDIS_EVALSHA,
+	MSG_REQ_REDIS_PFADD,                  /* redis requests - hyperloglog */
+	MSG_REQ_REDIS_PFCOUNT,
     MSG_RSP_REDIS_STATUS,                 /* redis response */
     MSG_RSP_REDIS_INTEGER,
     MSG_RSP_REDIS_BULK,

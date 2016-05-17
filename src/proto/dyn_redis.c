@@ -89,6 +89,7 @@ redis_arg0(struct msg *r)
     case MSG_REQ_REDIS_ZCARD:
 
     case MSG_REQ_REDIS_KEYS:
+    case MSG_REQ_REDIS_PFCOUNT:
         return true;
 
     default:
@@ -245,7 +246,7 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
-
+    case MSG_REQ_REDIS_PFADD:
         return true;
 
     default:
@@ -848,7 +849,12 @@ redis_parse_req(struct msg *r)
                      r->type = MSG_REQ_REDIS_ZSCAN;
                      r->is_read = 1;
                      break;
-                 }
+                }
+                if (str5icmp(m, 'p', 'f', 'a', 'd', 'd')) {
+                     r->type = MSG_REQ_REDIS_PFADD;
+                     r->is_read = 0;
+                     break;
+                }
 
                 break;
 
@@ -1041,6 +1047,11 @@ redis_parse_req(struct msg *r)
                     r->type = MSG_REQ_REDIS_SLAVEOF;
                     r->msg_type = 1;
                     r->is_read = 0;
+                    break;
+                }
+                if (str7icmp(m, 'p', 'f', 'c', 'o', 'u', 'n', 't')) {
+                    r->type = MSG_REQ_REDIS_PFCOUNT;
+                    r->is_read = 1;
                     break;
                 }
 
