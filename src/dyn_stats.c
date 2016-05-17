@@ -26,6 +26,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/resource.h>
 #include <netinet/in.h>
 
 #include "dyn_core.h"
@@ -36,6 +37,7 @@
 #include "dyn_gossip.h"
 #include "dyn_connection.h"
 #include "dyn_conf.h"
+
 
 struct stats_desc {
     char *name; /* stats name */
@@ -1547,6 +1549,8 @@ stats_destroy(struct stats *st)
 void
 stats_swap(struct stats *st)
 {
+	struct rusage r_usage;
+
     if (!stats_enabled) {
         return;
     }
@@ -1586,7 +1590,9 @@ stats_swap(struct stats *st)
     st->free_msgs = msg_free_queue_size();
     st->alloc_mbufs = mbuf_alloc_get_count();
     st->free_mbufs = mbuf_free_queue_size();
-    st->dyn_memory  = (uint64_t) (msg_alloc_msgs() * mbuf_alloc_get_count());
+
+    getrusage(RUSAGE_SELF,&r_usage);
+    st->dyn_memory  = r_usage.ru_maxrss;
 
     array_swap(&st->current, &st->shadow);
 
