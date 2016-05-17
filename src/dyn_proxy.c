@@ -202,10 +202,10 @@ proxy_init(struct context *ctx)
     }
 
     char * log_datastore = "not selected data store";
-    if (pool->data_store == DATA_REDIS){
+    if (g_data_store == DATA_REDIS){
     	log_datastore = "redis";
     }
-    else if (pool->data_store == DATA_MEMCACHE){
+    else if (g_data_store == DATA_MEMCACHE){
     	log_datastore = "memcache";
     }
 
@@ -269,7 +269,7 @@ proxy_accept(struct context *ctx, struct conn *p)
         break;
     }
 
-    c = conn_get(p->owner, true, p->data_store);
+    c = conn_get(p->owner, true);
     if (c == NULL) {
         log_error("get conn for CLIENT %d from %s %d failed: %s", sd,
                   conn_get_type_string(p), p->sd, strerror(errno));

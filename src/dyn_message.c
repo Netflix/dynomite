@@ -324,7 +324,6 @@ done:
     msg->last_fragment = 0;
     msg->swallow = 0;
     msg->rsp_sent = 0;
-    msg->data_store = DATA_REDIS;
 
     //dynomite
     msg->is_read = 1;
@@ -348,7 +347,7 @@ size_t msg_free_queue_size(void)
 }
 
 struct msg *
-msg_get(struct conn *conn, bool request, int data_store, const char * const caller)
+msg_get(struct conn *conn, bool request, const char * const caller)
 {
     struct msg *msg;
 
@@ -359,9 +358,8 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
 
     msg->owner = conn;
     msg->request = request ? 1 : 0;
-    msg->data_store = data_store;
 
-    if (data_store == DATA_REDIS) {
+    if (g_data_store == DATA_REDIS) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -379,7 +377,7 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
         msg->post_splitcopy = redis_post_splitcopy;
         msg->pre_coalesce = redis_pre_coalesce;
         msg->post_coalesce = redis_post_coalesce;
-    } else if (data_store == DATA_MEMCACHE) {
+    } else if (g_data_store == DATA_MEMCACHE) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -398,7 +396,7 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
         msg->pre_coalesce = memcache_pre_coalesce;
         msg->post_coalesce = memcache_post_coalesce;
     } else{
-    	log_debug(LOG_VVERB,"incorrect selection of data store %d", data_store);
+    	log_debug(LOG_VVERB,"incorrect selection of data store %d", g_data_store);
     	exit(0);
     }
 
@@ -416,7 +414,6 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->parent_id = src->id;
     target->owner = src->owner;
     target->request = src->request;
-    target->data_store = src->data_store;
 
     target->parser = src->parser;
     target->pre_splitcopy = src->pre_splitcopy;
@@ -464,7 +461,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? strerror(err) : "unknown";
-    char *protstr = conn->data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
+    char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source;
 
     if (dyn_err == PEER_CONNECTION_REFUSE) {
@@ -723,7 +720,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, conn->data_store, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -762,7 +759,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, msg->data_store, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;

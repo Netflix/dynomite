@@ -66,7 +66,7 @@ static struct string dist_strings[] = {
 #define CONF_DEFAULT_TIMEOUT                 5000
 #define CONF_DEFAULT_LISTEN_BACKLOG          512
 #define CONF_DEFAULT_CLIENT_CONNECTIONS      0
-#define CONF_DEFAULT_DATASTORE				 0
+#define CONF_DEFAULT_DATASTORE				 DATA_REDIS
 #define CONF_DEFAULT_PRECONNECT              true
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
@@ -98,6 +98,7 @@ static struct string dist_strings[] = {
 
 #define PEM_KEY_FILE  "conf/dynomite.pem"
 
+data_store_t g_data_store = CONF_DEFAULT_DATASTORE;
 struct command {
     struct string name;
     char          *(*set)(struct conf *cf, struct command *cmd, void *data);
@@ -397,7 +398,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->dist_type = cp->distribution;
     sp->hash_tag = cp->hash_tag;
 
-    sp->data_store = cp->data_store;
+    g_data_store = cp->data_store;
     sp->timeout = cp->timeout;
     sp->backlog = cp->backlog;
 
@@ -471,13 +472,13 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  client_connections: %d",
             cp->client_connections);
     const char * temp_log = "unknown";
-    if(cp->data_store == DATA_REDIS){
+    if(g_data_store == DATA_REDIS){
         temp_log = "redis";
     }
-    else if(cp->data_store == DATA_MEMCACHE){
+    else if(g_data_store == DATA_MEMCACHE){
         temp_log = "memcache";
     }
-    log_debug(LOG_VVERB, "  data_store: %d (%s)", cp->data_store, temp_log);
+    log_debug(LOG_VVERB, "  data_store: %d (%s)", g_data_store, temp_log);
     log_debug(LOG_VVERB, "  preconnect: %d", cp->preconnect);
     log_debug(LOG_VVERB, "  auto_eject_hosts: %d", cp->auto_eject_hosts);
     log_debug(LOG_VVERB, "  server_connections: %d",

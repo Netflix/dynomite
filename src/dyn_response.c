@@ -31,7 +31,7 @@ rsp_get(struct conn *conn)
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
            (conn->type == CONN_SERVER));
 
-    msg = msg_get(conn, false, conn->data_store, __FUNCTION__);
+    msg = msg_get(conn, false, __FUNCTION__);
     if (msg == NULL) {
         conn->err = errno;
     }

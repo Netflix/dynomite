@@ -331,7 +331,7 @@ dnode_peer_conn(struct server *server)
     pool = server->owner;
 
     if (server->ns_conn_q < 1) {
-        conn = conn_get_peer(server, false, pool->data_store);
+        conn = conn_get_peer(server, false);
         if (is_conn_secured(pool, server)) {
             conn->dnode_secured = 1;
             conn->dnode_crypto_state = 0; //need to do a encryption handshake
@@ -469,7 +469,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
-    struct msg *rsp = msg_get(conn, false, conn->data_store, __FUNCTION__);
+    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     req->done = 1;
     rsp->error = req->error = 1;
     rsp->err = req->err = conn->err;
@@ -764,7 +764,7 @@ dnode_peer_forward_state(void *rmsg)
         return DN_ERROR;
     }
 
-    dnode_peer_gossip_forward(sp->ctx, conn, sp->data_store, mbuf);
+    dnode_peer_gossip_forward(sp->ctx, conn, mbuf);
 
     //free this as nobody else will do
     //mbuf_put(mbuf);
@@ -840,7 +840,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
         //conn->
 
-        dnode_peer_gossip_forward(sp->ctx, conn, sp->data_store, mbuf);
+        dnode_peer_gossip_forward(sp->ctx, conn, mbuf);
         //peer_gossip_forward1(sp->ctx, conn, sp->data_store, &data);
     }
 
@@ -1566,8 +1566,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         req->done = 1;
 
         // Create an appropriate response for the request so its propagated up;
-        struct msg *err_rsp = msg_get(peer_conn, false, peer_conn->data_store,
-                                      __FUNCTION__);
+        struct msg *err_rsp = msg_get(peer_conn, false, __FUNCTION__);
         err_rsp->error = req->error = 1;
         err_rsp->err = req->err = BAD_FORMAT;
         err_rsp->dyn_error = req->dyn_error = BAD_FORMAT;

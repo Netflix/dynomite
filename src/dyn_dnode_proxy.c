@@ -186,10 +186,10 @@ dnode_init(struct context *ctx)
     }
 
     const char * log_datastore = "not selected data store";
-    if (pool->data_store == DATA_REDIS){
+    if (g_data_store == DATA_REDIS){
     	log_datastore = "redis";
     }
-    else if (pool->data_store == DATA_MEMCACHE){
+    else if (g_data_store == DATA_MEMCACHE){
     	log_datastore = "memcache";
     }
 
@@ -262,7 +262,7 @@ dnode_accept(struct context *ctx, struct conn *p)
        loga("Unable to get client's address for accept on sd %d\n", sd);
     }
 
-    c = conn_get_peer(p->owner, true, p->data_store);
+    c = conn_get_peer(p->owner, true);
     if (c == NULL) {
         log_error("dyn: get conn client peer for PEER_CLIENT %d from %s %d failed: %s",
                   sd, conn_get_type_string(p), p->sd, strerror(errno));

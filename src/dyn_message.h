@@ -296,7 +296,6 @@ struct msg {
     unsigned             swallow:1;       /* swallow response? */
     unsigned             rsp_sent:1;      /* is a response sent for this request?*/
 
-    int					 data_store;
     //dynomite
     struct dmsg          *dmsg;          /* dyn message */
     int                  dyn_state;
@@ -346,7 +345,7 @@ void msg_tmo_delete(struct msg *msg);
 void msg_init(struct instance *nci);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
-struct msg *msg_get(struct conn *conn, bool request, int data_store, const char* const caller);
+struct msg *msg_get(struct conn *conn, bool request, const char* const caller);
 void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
@@ -391,6 +390,6 @@ void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg
 void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
 		                struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen);
 
-//void peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct string *data);
-void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data);
+//void peer_gossip_forward(struct context *ctx, struct conn *conn, struct string *data);
+void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *data);
 #endif

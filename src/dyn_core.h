@@ -164,6 +164,7 @@ typedef enum data_store {
 	DATA_MEMCACHE	  = 1  /* Data store is Memcache */
 } data_store_t;
 
+extern data_store_t g_data_store;
 
 struct instance {
     struct context  *ctx;                        /* active context */
@@ -290,8 +291,6 @@ struct server_pool {
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     secure_server_option_t secure_server_option;
     struct string      pem_key_file;
-    data_store_t	   data_store;	/* the backend data store */
-
 };
 
 struct context {
