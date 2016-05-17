@@ -114,65 +114,13 @@ server_active(struct conn *conn)
 	return false;
 }
 
-static rstatus_t
-server_each_set_owner(void *elem, void *data)
-{
-	struct server *s = elem;
-	struct server_pool *sp = data;
-
-	s->owner = sp;
-
-	return DN_OK;
-}
-
 static void
-server_deinit(struct array *server)
+server_deinit(struct server **pdatastore)
 {
-	uint32_t i, nserver;
-
-	for (i = 0, nserver = array_n(server); i < nserver; i++) {
-		struct server *s = array_pop(server);
-        IGNORE_RET_VAL(s);
-		ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
-	}
-	array_deinit(server);
-}
-
-rstatus_t
-server_init(struct array *servers, struct array *conf_server,
-		struct server_pool *sp)
-{
-	rstatus_t status;
-	uint32_t nserver;
-
-	nserver = array_n(conf_server);
-	ASSERT(nserver != 0);
-	ASSERT(array_n(servers) == 0);
-
-	status = array_init(servers, nserver, sizeof(struct server));
-	if (status != DN_OK) {
-		return status;
-	}
-
-	/* transform conf server to server */
-	status = array_each(conf_server, conf_server_each_transform, servers);
-	if (status != DN_OK) {
-		server_deinit(servers);
-		return status;
-	}
-	ASSERT(array_n(servers) == nserver);
-
-	/* set server owner */
-	status = array_each(servers, server_each_set_owner, sp);
-	if (status != DN_OK) {
-		server_deinit(servers);
-		return status;
-	}
-
-	log_debug(LOG_DEBUG, "init %"PRIu32" servers in pool %"PRIu32" '%.*s'",
-			nserver, sp->idx, sp->name.len, sp->name.data);
-
-	return DN_OK;
+    if (!pdatastore || !*pdatastore)
+        return;
+    struct server *s = *pdatastore;
+    ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 }
 
 static struct conn *
@@ -190,7 +138,7 @@ server_conn(struct server *server)
 	 */
 
 	if (server->ns_conn_q < pool->server_connections) {
-		return conn_get(server, false, pool->data_store);
+		return conn_get(server, false);
 	}
 	ASSERT(server->ns_conn_q == pool->server_connections);
 
@@ -208,25 +156,23 @@ server_conn(struct server *server)
 }
 
 static rstatus_t
-server_each_preconnect(void *elem, void *data)
+datastore_preconnect(struct server *datastore)
 {
 	rstatus_t status;
-	struct server *server;
 	struct server_pool *pool;
 	struct conn *conn;
 
-	server = elem;
-	pool = server->owner;
+	pool = datastore->owner;
 
-	conn = server_conn(server);
+	conn = server_conn(datastore);
 	if (conn == NULL) {
 		return DN_ENOMEM;
 	}
 
-	status = server_connect(pool->ctx, server, conn);
+	status = server_connect(pool->ctx, datastore, conn);
 	if (status != DN_OK) {
-		log_warn("connect to server '%.*s' failed, ignored: %s",
-				server->pname.len, server->pname.data, strerror(errno));
+		log_warn("connect to datastore '%.*s' failed, ignored: %s",
+				datastore->pname.len, datastore->pname.data, strerror(errno));
 		server_close(pool->ctx, conn);
 	}
 
@@ -234,20 +180,16 @@ server_each_preconnect(void *elem, void *data)
 }
 
 static rstatus_t
-server_each_disconnect(void *elem, void *data)
+datastore_disconnect(struct server *datastore)
 {
-	struct server *server;
-	struct server_pool *pool;
+	struct server_pool *pool = datastore->owner;
 
-	server = elem;
-	pool = server->owner;
-
-	while (!TAILQ_EMPTY(&server->s_conn_q)) {
+	while (!TAILQ_EMPTY(&datastore->s_conn_q)) {
 		struct conn *conn;
 
-		ASSERT(server->ns_conn_q > 0);
+		ASSERT(datastore->ns_conn_q > 0);
 
-		conn = TAILQ_FIRST(&server->s_conn_q);
+		conn = TAILQ_FIRST(&datastore->s_conn_q);
 		conn_close(pool->ctx, conn);
 	}
 
@@ -284,8 +226,8 @@ server_failure(struct context *ctx, struct server *server)
 
 	next = now + pool->server_retry_timeout_ms;
 
-	log_debug(LOG_INFO, "update pool %"PRIu32" '%.*s' to delete server '%.*s' "
-			"for next %"PRIu32" secs", pool->idx, pool->name.len,
+	log_debug(LOG_INFO, "update pool '%.*s' to delete server '%.*s' "
+			"for next %"PRIu32" secs", pool->name.len,
 			pool->name.data, server->pname.len, server->pname.data,
 			pool->server_retry_timeout_ms/1000);
 
@@ -296,7 +238,7 @@ server_failure(struct context *ctx, struct server *server)
 
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
-		log_error("updating pool %"PRIu32" '%.*s' failed: %s", pool->idx,
+		log_error("updating pool '%.*s' failed: %s",
 				pool->name.len, pool->name.data, strerror(errno));
 	}
 }
@@ -357,7 +299,7 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
-    struct msg *rsp = msg_get(conn, false, conn->data_store, __FUNCTION__);
+    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     if (rsp == NULL) {
         log_warn("Could not allocate msg.");
         return;
@@ -608,13 +550,13 @@ server_pool_update(struct server_pool *pool)
 
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
-		log_error("updating pool %"PRIu32" with dist %d failed: %s", pool->idx,
+		log_error("updating pool with dist %d failed: %s",
 				pool->dist_type, strerror(errno));
 		return status;
 	}
 
-	log_debug(LOG_INFO, "update pool %"PRIu32" '%.*s' to add %"PRIu32" servers",
-			pool->idx, pool->name.len, pool->name.data,
+	log_debug(LOG_INFO, "update pool '%.*s' to add %"PRIu32" servers",
+			pool->name.len, pool->name.data,
 			pool->nlive_server - pnlive_server);
 
 
@@ -624,14 +566,8 @@ server_pool_update(struct server_pool *pool)
 static struct server *
 server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 {
-	struct server *server;
-
-	ASSERT(array_n(&pool->server) != 0);
-
-	//just return the first (memcache) entry in the array
-	server = array_get(&pool->server, 0);
-
-	return server;
+    ASSERT(pool->datastore != NULL);
+    return pool->datastore;
 }
 
 struct conn *
@@ -668,72 +604,25 @@ server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
 	return conn;
 }
 
-static rstatus_t
-server_pool_each_preconnect(void *elem, void *data)
-{
-	rstatus_t status;
-	struct server_pool *sp = elem;
-
-	if (!sp->preconnect) {
-		return DN_OK;
-	}
-
-	status = array_each(&sp->server, server_each_preconnect, NULL);
-	if (status != DN_OK) {
-		return status;
-	}
-
-	return DN_OK;
-}
-
 rstatus_t
 server_pool_preconnect(struct context *ctx)
 {
-	rstatus_t status;
-
-	status = array_each(&ctx->pool, server_pool_each_preconnect, NULL);
-	if (status != DN_OK) {
-		return status;
+	if (!ctx->pool.preconnect) {
+		return DN_OK;
 	}
-
-	return DN_OK;
-}
-
-static rstatus_t
-server_pool_each_disconnect(void *elem, void *data)
-{
-	rstatus_t status;
-	struct server_pool *sp = elem;
-
-	status = array_each(&sp->server, server_each_disconnect, NULL);
-	if (status != DN_OK) {
-		return status;
-	}
-
-	return DN_OK;
+    return datastore_preconnect(ctx->pool.datastore);
 }
 
 void
 server_pool_disconnect(struct context *ctx)
 {
-	array_each(&ctx->pool, server_pool_each_disconnect, NULL);
-}
-
-static rstatus_t
-server_pool_each_set_owner(void *elem, void *data)
-{
-	struct server_pool *sp = elem;
-	struct context *ctx = data;
-
-	sp->ctx = ctx;
-
-	return DN_OK;
+    datastore_disconnect(ctx->pool.datastore);
 }
 
 rstatus_t
 server_pool_run(struct server_pool *pool)
 {
-	ASSERT(array_n(&pool->server) != 0);
+	ASSERT(pool->datastore != NULL);
 
 	switch (pool->dist_type) {
 	case DIST_KETAMA:
@@ -760,79 +649,26 @@ server_pool_run(struct server_pool *pool)
 	return DN_OK;
 }
 
-static rstatus_t
-server_pool_each_run(void *elem, void *data)
-{
-	return server_pool_run(elem);
-}
-
 rstatus_t
-server_pool_init(struct array *server_pool, struct array *conf_pool,
-		struct context *ctx)
+server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *ctx)
 {
-	rstatus_t status;
-	uint32_t npool;
-
-	npool = array_n(conf_pool);
-	ASSERT(npool != 0);
-	ASSERT(array_n(server_pool) == 0);
-
-	status = array_init(server_pool, npool, sizeof(struct server_pool));
-	if (status != DN_OK) {
-		return status;
-	}
-
-	/* transform conf pool to server pool */
-	status = array_each(conf_pool, conf_pool_each_transform, server_pool);
-	if (status != DN_OK) {
-		server_pool_deinit(server_pool);
-		return status;
-	}
-	ASSERT(array_n(server_pool) == npool);
-
-	/* set ctx as the server pool owner */
-	status = array_each(server_pool, server_pool_each_set_owner, ctx);
-	if (status != DN_OK) {
-		server_pool_deinit(server_pool);
-		return status;
-	}
-
-	/* update server pool continuum */
-	status = array_each(server_pool, server_pool_each_run, NULL);
-	if (status != DN_OK) {
-		server_pool_deinit(server_pool);
-		return status;
-	}
-
-	log_debug(LOG_DEBUG, "init %"PRIu32" pools", npool);
-
+	THROW_STATUS(conf_pool_transform(sp, cp));
+	sp->ctx = ctx;
+    THROW_STATUS(server_pool_run(sp));
+	log_debug(LOG_DEBUG, "inited server pool");
 	return DN_OK;
 }
 
 
 void
-server_pool_deinit(struct array *server_pool)
+server_pool_deinit(struct server_pool *sp)
 {
-	uint32_t i, npool;
+    ASSERT(sp->p_conn == NULL);
+    ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
 
-	for (i = 0, npool = array_n(server_pool); i < npool; i++) {
-		struct server_pool *sp;
-
-		sp = array_pop(server_pool);
-		ASSERT(sp->p_conn == NULL);
-		ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
-
-		server_deinit(&sp->server);
-
-		sp->nlive_server = 0;
-
-		log_debug(LOG_DEBUG, "deinit pool %"PRIu32" '%.*s'", sp->idx,
-				sp->name.len, sp->name.data);
-	}
-
-	array_deinit(server_pool);
-
-	log_debug(LOG_DEBUG, "deinit %"PRIu32" pools", npool);
+    server_deinit(&sp->datastore);
+    sp->nlive_server = 0;
+    log_debug(LOG_DEBUG, "deinit pool '%.*s'", sp->name.len, sp->name.data);
 }
 
 
@@ -921,7 +757,7 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	uint32_t i, len;
 
 	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc pool  '%.*s'",
+		log_debug(LOG_DEBUG, "server_get_dc dc '%.*s'",
 				dcname->len, dcname->data);
 	}
 
@@ -940,7 +776,7 @@ server_get_dc(struct server_pool *pool, struct string *dcname)
 	string_copy(dc->name, dcname->data, dcname->len);
 
 	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc pool about to exit  '%.*s'",
+		log_debug(LOG_DEBUG, "server_get_dc about to exit dc '%.*s'",
 				dc->name->len, dc->name->data);
 	}
 
