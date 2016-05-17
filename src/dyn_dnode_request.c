@@ -195,10 +195,10 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
  * Sending a mbuf of gossip data over the wire to a peer
  */
 void
-dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, int data_store, struct mbuf *data_buf)
+dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *data_buf)
 {
     rstatus_t status;
-    struct msg *msg = msg_get(conn, 1, data_store, __FUNCTION__);
+    struct msg *msg = msg_get(conn, 1, __FUNCTION__);
 
     if (msg == NULL) {
         log_debug(LOG_DEBUG, "Unable to obtain a msg");

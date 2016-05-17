@@ -120,6 +120,7 @@ struct dyn_ring;
 #include <sys/time.h>
 #include <netinet/in.h>
 
+#include "dyn_types.h"
 #include "dyn_array.h"
 #include "dyn_dict.h"
 #include "dyn_string.h"
@@ -163,22 +164,7 @@ typedef enum data_store {
 	DATA_MEMCACHE	  = 1  /* Data store is Memcache */
 } data_store_t;
 
-
-struct context {
-    uint32_t           id;          /* unique context id */
-    struct conf        *cf;         /* configuration */
-    struct stats       *stats;      /* stats */
-
-    struct array       pool;        /* server_pool[] */
-    struct event_base  *evb;        /* event base */
-    int                max_timeout; /* max timeout in msec */
-    int                timeout;     /* timeout in msec */
-    dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
-                                       it is ok to eventually get its new value */
-    unsigned           enable_gossip:1;   /* enable/disable gossip */
-    unsigned           admin_opt;   /* admin mode */
-};
-
+extern data_store_t g_data_store;
 
 struct instance {
     struct context  *ctx;                        /* active context */
@@ -250,7 +236,6 @@ struct server {
 
 
 struct server_pool {
-    uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
@@ -258,7 +243,7 @@ struct server_pool {
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
 
-    struct array       server;               /* server[] */
+    struct server      *datastore;               /* server[] */
     struct array       datacenters;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
@@ -304,14 +289,28 @@ struct server_pool {
     struct string      dc;                   /* server's dc */
     struct string      env;                  /* aws, network, ect */
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
-    struct string      secure_server_option;
+    secure_server_option_t secure_server_option;
     struct string      pem_key_file;
-    data_store_t	   data_store;	/* the backend data store */
+};
 
+struct context {
+    struct instance    *instance;   /* back pointer to instance */
+    struct conf        *cf;         /* configuration */
+    struct stats       *stats;      /* stats */
+
+    struct server_pool pool;        /* server_pool[] */
+    struct event_base  *evb;        /* event base */
+    int                max_timeout; /* max timeout in msec */
+    int                timeout;     /* timeout in msec */
+    dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
+                                       it is ok to eventually get its new value */
+    unsigned           enable_gossip:1;   /* enable/disable gossip */
+    unsigned           admin_opt;   /* admin mode */
 };
 
 
-struct context *core_start(struct instance *nci);
+
+rstatus_t core_start(struct instance *nci);
 void core_stop(struct context *ctx);
 rstatus_t core_core(void *arg, uint32_t events);
 rstatus_t core_loop(struct context *ctx);
