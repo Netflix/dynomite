@@ -750,7 +750,7 @@ get_host_from_pname(struct string *host, struct string *pname)
 }
 
 static rstatus_t
-stats_add_node_host(struct stats *st, struct node *node)
+stats_add_node_host(struct stats *st, struct gossip_node *node)
 {
     struct string host_str;
     string_set_text(&host_str, "host");
@@ -771,7 +771,7 @@ stats_add_node_host(struct stats *st, struct node *node)
 }
 
 static rstatus_t
-stats_add_node_name(struct stats *st, struct node *node)
+stats_add_node_name(struct stats *st, struct gossip_node *node)
 {
     struct string name_str;
     string_set_text(&name_str, "name");
@@ -795,7 +795,7 @@ stats_add_node_name(struct stats *st, struct node *node)
 }
 
 static rstatus_t
-stats_add_node_details(struct stats *st, struct node *node)
+stats_add_node_details(struct stats *st, struct gossip_node *node)
 {
     struct string port_str, token_str;
     string_set_text(&port_str, "port");
@@ -819,7 +819,7 @@ stats_add_rack_details(struct stats *st, struct gossip_rack *rack)
     THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &servers_str, true));
     uint32_t ni;
     for(ni = 0; ni < array_n(&rack->nodes); ni++) {
-        struct node *node = array_get(&rack->nodes, ni);
+        struct gossip_node *node = array_get(&rack->nodes, ni);
         THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
         THROW_STATUS(stats_add_node_details(st, node));
         THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));

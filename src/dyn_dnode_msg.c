@@ -1023,7 +1023,7 @@ dmsg_parse(struct dmsg *dmsg)
       end = p;
 
 
-      struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
+      struct gossip_node *rnode = (struct gossip_node *) array_get(&ring_msg->nodes, count);
       dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
 

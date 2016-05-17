@@ -17,7 +17,7 @@
 #define C2S_InQ_SIZE     256
 #define C2S_OutQ_SIZE    256
 
-struct node;
+struct gossip_node;
 
 typedef rstatus_t (*callback_t)(void *msg);
 typedef void (*data_func_t)(void *);
@@ -85,10 +85,10 @@ struct ring_msg *create_ring_msg_with_size(uint32_t size, bool init_node);
 rstatus_t ring_msg_init(struct ring_msg *msg, uint32_t size, bool init_node);
 rstatus_t ring_msg_deinit(struct ring_msg *msg);
 
-struct node * create_node(void);
-rstatus_t node_init(struct node *node);
-rstatus_t node_deinit(struct node *node);
-rstatus_t node_copy(const struct node *src, struct node *dst);
+struct gossip_node * create_node(void);
+rstatus_t node_init(struct gossip_node *node);
+rstatus_t node_deinit(struct gossip_node *node);
+rstatus_t node_copy(const struct gossip_node *src, struct gossip_node *dst);
 
 
 #endif

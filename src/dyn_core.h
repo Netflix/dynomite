@@ -234,7 +234,6 @@ struct server {
     dyn_state_t        state;         /* state of the server - used mainly in peers  */
 };
 
-
 struct server_pool {
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
@@ -243,7 +242,7 @@ struct server_pool {
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
 
-    struct server      *datastore;               /* server[] */
+    struct server      *datastore;               /* underlying datastore */
     struct array       datacenters;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */

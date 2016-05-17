@@ -21,7 +21,7 @@ typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
 extern struct gossip_node_pool gn_pool;
 
 
-struct node {
+struct gossip_node {
     struct dyn_token   token;            /* token for this node */
     struct string      dc;
     struct string      rack;

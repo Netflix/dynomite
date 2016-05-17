@@ -872,7 +872,7 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
 
 
 static rstatus_t
-dnode_peer_add_node(struct server_pool *sp, struct node *node)
+dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
 {
     rstatus_t status;
     struct array *peers = &sp->peers;
@@ -934,7 +934,7 @@ dnode_peer_add(void *rmsg)
     rstatus_t status;
     struct ring_msg *msg = rmsg;
     struct server_pool *sp = msg->sp;
-    struct node *node = array_get(&msg->nodes, 0);
+    struct gossip_node *node = array_get(&msg->nodes, 0);
     log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
     status = dnode_peer_add_node(sp, node);
 
@@ -943,7 +943,7 @@ dnode_peer_add(void *rmsg)
 
 /*
 rstatus_t
-dnode_peer_add(struct server_pool *sp, struct node *node)
+dnode_peer_add(struct server_pool *sp, struct gossip_node *node)
 {
     rstatus_t status;
 
@@ -960,7 +960,7 @@ dnode_peer_replace(void *rmsg)
     //rstatus_t status;
     struct ring_msg *msg = rmsg;
     struct server_pool *sp = msg->sp;
-    struct node *node = array_get(&msg->nodes, 0);
+    struct gossip_node *node = array_get(&msg->nodes, 0);
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
     struct array *peers = &sp->peers;
     struct server *s = NULL;
@@ -1015,7 +1015,7 @@ dnode_peer_replace(void *rmsg)
 
 /*
 rstatus_t
-dnode_peer_replace(struct server_pool *sp, struct node *node)
+dnode_peer_replace(struct server_pool *sp, struct gossip_node *node)
 {
     //rstatus_t status;
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
