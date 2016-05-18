@@ -824,7 +824,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     msg->frag_owner->nfrag++;
 
     if (!conn->dyn_mode) {
-       stats_pool_incr(ctx, conn->owner, fragments);
+       stats_pool_incr(ctx, fragments);
     } else {
         
     }

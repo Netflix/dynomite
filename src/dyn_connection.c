@@ -121,16 +121,23 @@ conn_get_type_string(struct conn *conn)
 struct context *
 conn_to_ctx(struct conn *conn)
 {
+    struct datastore *server;
+    struct node *peer;
     struct server_pool *pool;
-
-    if ((conn->type == CONN_PROXY) ||
-        (conn->type == CONN_CLIENT) ||
-        (conn->type == CONN_DNODE_PEER_PROXY)||
-        (conn->type == CONN_DNODE_PEER_CLIENT)) {
-        pool = conn->owner;
-    } else {
-        struct server *server = conn->owner;
-        pool = server ? server->owner : NULL;
+    switch(conn->type) {
+        case CONN_PROXY:
+        case CONN_CLIENT:
+        case CONN_DNODE_PEER_PROXY:
+        case CONN_DNODE_PEER_CLIENT:
+            pool = conn->owner;
+            break;
+        case CONN_SERVER:
+            server = conn->owner;
+            pool = server ? server->owner : NULL;
+            break;
+        case CONN_DNODE_PEER_SERVER:
+            peer = conn->owner;
+            pool = peer ? peer->owner : NULL;
     }
 
     return pool ? pool->ctx : NULL;

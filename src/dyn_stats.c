@@ -185,7 +185,7 @@ stats_metric_deinit(struct array *metric)
 }
 
 static rstatus_t
-stats_server_init(struct stats_server *sts, struct server *s)
+stats_server_init(struct stats_server *sts, struct datastore *s)
 {
     sts->name = s->name;
     array_null(&sts->metric);
@@ -200,7 +200,7 @@ stats_server_init(struct stats_server *sts, struct server *s)
 }
 
 static rstatus_t
-stats_server_map(struct stats_server *sts, struct server *datastore)
+stats_server_map(struct stats_server *sts, struct datastore *datastore)
 {
     ASSERT(datastore != NULL);
     THROW_STATUS(stats_server_init(sts, datastore));
@@ -1177,7 +1177,7 @@ stats_send_rsp(struct stats *st)
 
         //I think it is ok to keep this simple without a synchronization
         for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-            struct server *peer = array_get(&sp->peers, i);
+            struct node *peer = array_get(&sp->peers, i);
             log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
 
             if (string_compare(&st_cmd.req_data, &all) == 0) {
@@ -1517,7 +1517,7 @@ stats_swap(struct stats *st)
 }
 
 uint64_t
-_stats_pool_get_ts(struct context *ctx, struct server_pool *pool,
+_stats_pool_get_ts(struct context *ctx,
                    stats_pool_field_t fidx)
 {
    struct stats *st = ctx->stats;
@@ -1527,7 +1527,7 @@ _stats_pool_get_ts(struct context *ctx, struct server_pool *pool,
 }
 
 int64_t
-_stats_pool_get_val(struct context *ctx, struct server_pool *pool,
+_stats_pool_get_val(struct context *ctx,
                     stats_pool_field_t fidx)
 {
     struct stats *st = ctx->stats;
@@ -1538,7 +1538,7 @@ _stats_pool_get_val(struct context *ctx, struct server_pool *pool,
 
 
 static struct stats_metric *
-stats_pool_to_metric(struct context *ctx, struct server_pool *pool,
+stats_pool_to_metric(struct context *ctx,
                      stats_pool_field_t fidx)
 {
     struct stats *st = ctx->stats;
@@ -1549,10 +1549,10 @@ stats_pool_to_metric(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_incr(struct context *ctx, struct server_pool *pool,
+_stats_pool_incr(struct context *ctx,
                  stats_pool_field_t fidx)
 {
-    struct stats_metric *stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter++;
@@ -1562,10 +1562,10 @@ _stats_pool_incr(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_decr(struct context *ctx, struct server_pool *pool,
+_stats_pool_decr(struct context *ctx,
                  stats_pool_field_t fidx)
 {
-    struct stats_metric *stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter--;
@@ -1575,10 +1575,10 @@ _stats_pool_decr(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_incr_by(struct context *ctx, struct server_pool *pool,
+_stats_pool_incr_by(struct context *ctx,
                     stats_pool_field_t fidx, int64_t val)
 {
-    struct stats_metric *stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter += val;
@@ -1588,10 +1588,10 @@ _stats_pool_incr_by(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_decr_by(struct context *ctx, struct server_pool *pool,
+_stats_pool_decr_by(struct context *ctx,
                     stats_pool_field_t fidx, int64_t val)
 {
-    struct stats_metric *stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter -= val;
@@ -1601,10 +1601,10 @@ _stats_pool_decr_by(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
+_stats_pool_set_ts(struct context *ctx,
                    stats_pool_field_t fidx, int64_t val)
 {
-    struct stats_metric *stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_TIMESTAMP);
     stm->value.timestamp = val;
@@ -1614,7 +1614,7 @@ _stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
 }
 
 uint64_t
-_stats_server_get_ts(struct context *ctx, struct server *server,
+_stats_server_get_ts(struct context *ctx,
                      stats_server_field_t fidx)
 {
    struct stats *st = ctx->stats;
@@ -1626,10 +1626,10 @@ _stats_server_get_ts(struct context *ctx, struct server *server,
 }
 
 void
-_stats_pool_set_val(struct context *ctx, struct server_pool *pool,
+_stats_pool_set_val(struct context *ctx,
                     stats_pool_field_t fidx, int64_t val)
 {
-   struct stats_metric *stm = stats_pool_to_metric(ctx, pool, fidx);
+   struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
    stm->value.counter = val;
 
@@ -1638,7 +1638,7 @@ _stats_pool_set_val(struct context *ctx, struct server_pool *pool,
 }
 
 int64_t
-_stats_server_get_val(struct context *ctx, struct server *server,
+_stats_server_get_val(struct context *ctx,
                       stats_server_field_t fidx)
 {
    struct stats *st = ctx->stats;
@@ -1650,7 +1650,7 @@ _stats_server_get_val(struct context *ctx, struct server *server,
 }
 
 static struct stats_metric *
-stats_server_to_metric(struct context *ctx, struct server *server,
+stats_server_to_metric(struct context *ctx,
                        stats_server_field_t fidx)
 {
    struct stats *st = ctx->stats;
@@ -1667,11 +1667,11 @@ stats_server_to_metric(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_incr(struct context *ctx, struct server *server,
+_stats_server_incr(struct context *ctx,
                    stats_server_field_t fidx)
 {
     
-    struct stats_metric *stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter++;
@@ -1682,11 +1682,11 @@ _stats_server_incr(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_decr(struct context *ctx, struct server *server,
+_stats_server_decr(struct context *ctx,
                    stats_server_field_t fidx)
 {
 
-    struct stats_metric *stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter--;
@@ -1697,11 +1697,11 @@ _stats_server_decr(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_incr_by(struct context *ctx, struct server *server,
+_stats_server_incr_by(struct context *ctx,
                       stats_server_field_t fidx, int64_t val)
 {
 
-    struct stats_metric *stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter += val;
@@ -1712,11 +1712,11 @@ _stats_server_incr_by(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_decr_by(struct context *ctx, struct server *server,
+_stats_server_decr_by(struct context *ctx,
                       stats_server_field_t fidx, int64_t val)
 {
 
-    struct stats_metric *stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter -= val;
@@ -1727,11 +1727,11 @@ _stats_server_decr_by(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_set_ts(struct context *ctx, struct server *server,
+_stats_server_set_ts(struct context *ctx,
                      stats_server_field_t fidx, uint64_t val)
 {
 
-    struct stats_metric *stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_TIMESTAMP);
     stm->value.timestamp = val;

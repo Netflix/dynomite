@@ -281,7 +281,7 @@ proxy_accept(struct context *ctx, struct conn *p)
     }
     c->sd = sd;
 
-    stats_pool_incr(ctx, c->owner, client_connections);
+    stats_pool_incr(ctx, client_connections);
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {

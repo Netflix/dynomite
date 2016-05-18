@@ -148,8 +148,8 @@ conf_server_deinit(struct conf_server *cs)
 }
 
 // copy from struct conf_server to struct server
-rstatus_t
-conf_server_transform(struct server *s, struct conf_server *cs)
+static rstatus_t
+conf_server_transform(struct datastore *s, struct conf_server *cs)
 {
     ASSERT(cs->valid);
     ASSERT(s != NULL);
@@ -181,7 +181,7 @@ conf_seed_each_transform(void *elem, void *data)
 {
     struct conf_server *cseed = elem;
     struct array *seeds = data;
-    struct server *s;
+    struct node *s;
 
     ASSERT(cseed->valid);
 

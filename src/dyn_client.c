@@ -67,7 +67,7 @@ dict_msg_id_cmp(void *privdata, const void *key1, const void *key2)
 }
 
 dictType msg_table_dict_type = {
-	dict_msg_id_hash,            /* hash function */
+    dict_msg_id_hash,            /* hash function */
     NULL,                        /* key dup */
     NULL,                        /* val dup */
     dict_msg_id_cmp,             /* key compare */
@@ -177,10 +177,10 @@ static void
 client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
                    unsigned eof)
 {
-    stats_pool_decr(ctx, pool, client_connections);
+    stats_pool_decr(ctx, client_connections);
 
     if (eof) {
-        stats_pool_incr(ctx, pool, client_eof);
+        stats_pool_incr(ctx, client_eof);
         return;
     }
 
@@ -195,7 +195,7 @@ client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
     case EHOSTDOWN:
     case EHOSTUNREACH:
     default:
-        stats_pool_incr(ctx, pool, client_err);
+        stats_pool_incr(ctx, client_err);
         break;
     }
 }
@@ -255,7 +255,7 @@ client_close(struct context *ctx, struct conn *conn)
                       msg->type);
         }
 
-        stats_pool_incr(ctx, conn->owner, client_dropped_requests);
+        stats_pool_incr(ctx, client_dropped_requests);
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
@@ -464,41 +464,41 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
 }
 
 static void
-req_redis_stats(struct context *ctx, struct server *server, struct msg *msg)
+req_redis_stats(struct context *ctx, struct msg *msg)
 {
 
     switch (msg->type) {
 
     case MSG_REQ_REDIS_GET:
-    	 stats_server_incr(ctx, server, redis_req_get);
-    	 break;
+         stats_server_incr(ctx, redis_req_get);
+         break;
     case MSG_REQ_REDIS_SET:
-    	 stats_server_incr(ctx, server, redis_req_set);
+         stats_server_incr(ctx, redis_req_set);
          break;
     case MSG_REQ_REDIS_DEL:
-         stats_server_incr(ctx, server, redis_req_del);
-    	 break;
+         stats_server_incr(ctx, redis_req_del);
+         break;
     case MSG_REQ_REDIS_INCR:
     case MSG_REQ_REDIS_DECR:
-         stats_server_incr(ctx, server, redis_req_incr_decr);
+         stats_server_incr(ctx, redis_req_incr_decr);
          break;
     case MSG_REQ_REDIS_KEYS:
-         stats_server_incr(ctx, server, redis_req_keys);
+         stats_server_incr(ctx, redis_req_keys);
          break;
     case MSG_REQ_REDIS_MGET:
-         stats_server_incr(ctx, server, redis_req_mget);
+         stats_server_incr(ctx, redis_req_mget);
          break;
     case MSG_REQ_REDIS_SCAN:
-         stats_server_incr(ctx, server, redis_req_scan);
+         stats_server_incr(ctx, redis_req_scan);
          break;
     case MSG_REQ_REDIS_SORT:
-          stats_server_incr(ctx, server, redis_req_sort);
+          stats_server_incr(ctx, redis_req_sort);
           break;
     case MSG_REQ_REDIS_PING:
-         stats_server_incr(ctx, server, redis_req_ping);
+         stats_server_incr(ctx, redis_req_ping);
          break;
     case MSG_REQ_REDIS_LREM:
-          stats_server_incr(ctx, server, redis_req_lreqm);
+          stats_server_incr(ctx, redis_req_lreqm);
           /* do not break as this is a list operation as the following.
            * We count twice the LREM because it is an intensive operation/
            *  */
@@ -507,10 +507,10 @@ req_redis_stats(struct context *ctx, struct server *server, struct msg *msg)
     case MSG_REQ_REDIS_LTRIM:
     case MSG_REQ_REDIS_LINDEX:
     case MSG_REQ_REDIS_LPUSHX:
-    	 stats_server_incr(ctx, server, redis_req_lists);
-    	 break;
+         stats_server_incr(ctx, redis_req_lists);
+         break;
     case MSG_REQ_REDIS_SUNION:
-         stats_server_incr(ctx, server, redis_req_sunion);
+         stats_server_incr(ctx, redis_req_sunion);
          /* do not break as this is a set operation as the following.
           * We count twice the SUNION because it is an intensive operation/
           *  */
@@ -525,8 +525,8 @@ req_redis_stats(struct context *ctx, struct server *server, struct msg *msg)
     case MSG_REQ_REDIS_SREM:
     case MSG_REQ_REDIS_SUNIONSTORE:
     case MSG_REQ_REDIS_SSCAN:
-    	stats_server_incr(ctx, server, redis_req_set);
-    	break;
+        stats_server_incr(ctx, redis_req_set);
+        break;
     case MSG_REQ_REDIS_ZADD:
     case MSG_REQ_REDIS_ZINTERSTORE:
     case MSG_REQ_REDIS_ZRANGE:
@@ -540,31 +540,31 @@ req_redis_stats(struct context *ctx, struct server *server, struct msg *msg)
     case MSG_REQ_REDIS_ZINCRBY:
     case MSG_REQ_REDIS_ZREMRANGEBYRANK:
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
-    	stats_server_incr(ctx, server, redis_req_sortedsets);
-    	break;
+        stats_server_incr(ctx, redis_req_sortedsets);
+        break;
     case MSG_REQ_REDIS_HINCRBY:
     case MSG_REQ_REDIS_HINCRBYFLOAT:
     case MSG_REQ_REDIS_HSET:
     case MSG_REQ_REDIS_HSETNX:
-    	stats_server_incr(ctx, server, redis_req_hashes);
-    	break;
+        stats_server_incr(ctx, redis_req_hashes);
+        break;
     default:
-        stats_server_incr(ctx, server, redis_req_other);
+        stats_server_incr(ctx, redis_req_other);
         break;
     }
 }
 
 static void
-req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
+req_forward_stats(struct context *ctx, struct msg *msg)
 {
     ASSERT(msg->request);
 
     if (msg->is_read) {
-       stats_server_incr(ctx, server, read_requests);
-       stats_server_incr_by(ctx, server, read_request_bytes, msg->mlen);
+       stats_server_incr(ctx, read_requests);
+       stats_server_incr_by(ctx, read_request_bytes, msg->mlen);
     } else {
-       stats_server_incr(ctx, server, write_requests);
-       stats_server_incr_by(ctx, server, write_request_bytes, msg->mlen);
+       stats_server_incr(ctx, write_requests);
+       stats_server_incr_by(ctx, write_request_bytes, msg->mlen);
     }
 }
 
@@ -587,7 +587,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         conn_enqueue_outq(ctx, c_conn, msg);
     }
 
-    s_conn = server_pool_conn(ctx, c_conn->owner, key, keylen);
+    s_conn = get_datastore_conn(ctx, c_conn->owner);
     log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg, errno);
@@ -637,10 +637,10 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     conn_enqueue_inq(ctx, s_conn, msg);
-    req_forward_stats(ctx, s_conn->owner, msg);
+    req_forward_stats(ctx, msg);
     if(g_data_store == DATA_REDIS){
-    	req_redis_stats(ctx, s_conn->owner, msg);
-	}
+        req_redis_stats(ctx, msg);
+    }
 
 
     if (log_loggable(LOG_VERB)) {
@@ -667,7 +667,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
         return;
     }
 
-    struct server *peer = p_conn->owner;
+    struct node *peer = p_conn->owner;
 
     if (peer->is_local) {
         send_rsp_integer(ctx, c_conn, msg);
@@ -694,7 +694,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct server *peer = p_conn->owner;
+    struct node *peer = p_conn->owner;
 
     if (peer->is_local) {
         log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
@@ -836,9 +836,9 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     ASSERT(c_conn->type == CONN_CLIENT);
 
     if (msg->is_read)
-        stats_pool_incr(ctx, pool, client_read_requests);
+        stats_pool_incr(ctx, client_read_requests);
     else
-        stats_pool_incr(ctx, pool, client_write_requests);
+        stats_pool_incr(ctx, client_write_requests);
 
     key = NULL;
     keylen = 0;

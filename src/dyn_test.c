@@ -226,7 +226,7 @@ test_get_options(int argc, char **argv, struct instance *nci)
 
 
 static rstatus_t
-init_server(struct server *s)
+init_server(struct datastore *s)
 {
     s->idx = 0;
     s->owner = NULL;
@@ -484,7 +484,7 @@ aes_test(void)
 
 /* Inspection test */
 static rstatus_t
-aes_msg_test(struct server *server)
+aes_msg_test(struct node *server)
 {
     //unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get_peer(server, false);
@@ -521,7 +521,7 @@ aes_msg_test(struct server *server)
 /*
 
 static rstatus_t
-aes_msg_test2(struct server *server)
+aes_msg_test2(struct node *server)
 {
     unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get_peer(server, false, true);
@@ -583,7 +583,7 @@ main(int argc, char **argv)
     //rstatus_t status;
     init_test(argc, argv);
 
-    struct server *server = malloc(sizeof(struct server));
+    struct datastore *server = malloc(sizeof(struct datastore));
     init_server(server);
 
     struct conn *conn = conn_get_peer(server, false);

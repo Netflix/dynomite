@@ -115,9 +115,6 @@ struct conf {
 
 #define null_command { null_string, NULL, 0 }
 
-// converts conf_server to server
-rstatus_t conf_server_transform(struct server *datastore,
-                                struct conf_server *conf_datastore);
 // converts conf_pool to server_pool
 rstatus_t conf_pool_transform(struct server_pool *, struct conf_pool *);
 // converts conf_server to server ... except that this is for peers

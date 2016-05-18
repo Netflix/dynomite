@@ -206,7 +206,35 @@ struct datacenter {
 };
 
 
-struct server {
+struct datastore {
+    uint32_t           idx;           /* server index */
+    struct server_pool *owner;        /* owner pool */
+
+    struct string      pname;         /* name:port:weight (ref in conf_server) */
+    struct string      name;          /* name (ref in conf_server) */
+    uint16_t           port;          /* port */
+    uint32_t           weight;        /* weight */
+    int                family;        /* socket family */
+    socklen_t          addrlen;       /* socket length */
+    struct sockaddr    *addr;         /* socket address (ref in conf_server) */
+
+    uint32_t           ns_conn_q;     /* # server connection */
+    struct conn_tqh    s_conn_q;      /* server connection q */
+
+    msec_t             next_retry;    /* next retry time in msec */
+    uint32_t           failure_count; /* # consecutive failures */
+
+    struct string      rack;          /* logical rack */
+    struct string      dc;            /* server's dc */
+    struct array       tokens;        /* DHT tokens this peer owns */
+    bool               is_local;      /* is this peer the current running node?  */
+    unsigned           is_seed:1;     /* seed? */
+    unsigned           processed:1;   /* flag to indicate whether this has been processed */
+    unsigned           is_secure:1;   /* is the connection to the server secure? */
+    dyn_state_t        state;         /* state of the server - used mainly in peers  */
+};
+
+struct node {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
 
@@ -242,7 +270,7 @@ struct server_pool {
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
 
-    struct server      *datastore;               /* underlying datastore */
+    struct datastore   *datastore;               /* underlying datastore */
     struct array       datacenters;                /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
