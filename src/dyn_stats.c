@@ -817,7 +817,7 @@ stats_add_node_details(struct stats *st, struct gossip_node *node)
     THROW_STATUS(stats_add_node_name(st, node));
     THROW_STATUS(stats_add_node_host(st, node));
     THROW_STATUS(stats_add_num(&st->clus_desc_buf, &port_str, node->port));
-    THROW_STATUS(stats_add_num_last(&st->clus_desc_buf, &token_str, *(node->token.mag), 1));
+    THROW_STATUS(stats_add_num_last(&st->clus_desc_buf, &token_str, *(node->token.mag), true));
     return DN_OK;
 }
 
