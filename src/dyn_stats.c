@@ -449,7 +449,7 @@ stats_add_string(struct stats_buffer *buf, struct string *key, struct string *va
 }
 
 static rstatus_t
-stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, short last)
+stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, bool last)
 {
     uint8_t *pos;
     size_t room;
@@ -458,7 +458,7 @@ stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, sh
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    if (last == 0) {
+    if (!last) {
         n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
                        val);
     } else {
@@ -480,7 +480,7 @@ stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, sh
 static rstatus_t
 stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
 {
-	if (stats_add_num_last(buf,key, val, 0) == DN_ERROR) {
+	if (stats_add_num_last(buf,key, val, false) == DN_ERROR) {
 		return DN_ERROR;
 	}
 
