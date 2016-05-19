@@ -19,9 +19,9 @@ dnode_ref(struct conn *conn, void *owner)
     ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner == NULL);
 
-    conn->family = pool->d_family;
-    conn->addrlen = pool->d_addrlen;
-    conn->addr = pool->d_addr;
+    conn->family = pool->dnode_proxy_endpoint.family;
+    conn->addrlen = pool->dnode_proxy_endpoint.addrlen;
+    conn->addr = pool->dnode_proxy_endpoint.addr;
 
     pool->d_conn = conn;
 
@@ -124,7 +124,8 @@ dnode_listen(struct context *ctx, struct conn *p)
     status = dnode_reuse(p);
     if (status < 0) {
         log_error("dyn: reuse of addr '%.*s' for listening on p %d failed: %s",
-                  pool->d_addrstr.len, pool->d_addrstr.data, p->sd,
+                  pool->dnode_proxy_endpoint.pname.len,
+                  pool->dnode_proxy_endpoint.pname.data, p->sd,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -132,21 +133,21 @@ dnode_listen(struct context *ctx, struct conn *p)
     status = bind(p->sd, p->addr, p->addrlen);
     if (status < 0) {
         log_error("dyn: bind on p %d to addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
+                  pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = listen(p->sd, pool->backlog);
     if (status < 0) {
         log_error("dyn: listen on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
+                  pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = dn_set_nonblocking(p->sd);
     if (status < 0) {
         log_error("dyn: set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->d_addrstr.len, pool->d_addrstr.data, strerror(errno));
+                  pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data, strerror(errno));
         return DN_ERROR;
     }
 
@@ -154,7 +155,7 @@ dnode_listen(struct context *ctx, struct conn *p)
     status = event_add_conn(ctx->evb, p);
     if (status < 0) {
         log_error("dyn: event add conn p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->d_addrstr.len, pool->d_addrstr.data,
+                  p->sd, pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -194,8 +195,8 @@ dnode_init(struct context *ctx)
     }
 
     log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'"
-              " with %"PRIu32" servers", p->sd, pool->addrstr.len,
-              pool->d_addrstr.data,
+              " with %"PRIu32" servers", p->sd, pool->dnode_proxy_endpoint.pname.len,
+              pool->dnode_proxy_endpoint.pname.data,
 			  log_datastore,
               pool->name.len, pool->name.data );
     return DN_OK;

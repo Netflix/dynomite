@@ -205,46 +205,33 @@ struct datacenter {
 	dict               *dict_rack;
 };
 
-
-struct datastore {
-    uint32_t           idx;           /* server index */
-    struct server_pool *owner;        /* owner pool */
-
+struct endpoint {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
-    struct string      name;          /* name (ref in conf_server) */
     uint16_t           port;          /* port */
     uint32_t           weight;        /* weight */
     int                family;        /* socket family */
     socklen_t          addrlen;       /* socket length */
     struct sockaddr    *addr;         /* socket address (ref in conf_server) */
+};
+
+struct datastore {
+    uint32_t           idx;           /* server index */
+    struct server_pool *owner;        /* owner pool */
+    struct endpoint     endpoint;
+    struct string      name;          /* name (ref in conf_server) */
 
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
 
     msec_t             next_retry;    /* next retry time in msec */
     uint32_t           failure_count; /* # consecutive failures */
-
-    struct string      rack;          /* logical rack */
-    struct string      dc;            /* server's dc */
-    struct array       tokens;        /* DHT tokens this peer owns */
-    bool               is_local;      /* is this peer the current running node?  */
-    unsigned           is_seed:1;     /* seed? */
-    unsigned           processed:1;   /* flag to indicate whether this has been processed */
-    unsigned           is_secure:1;   /* is the connection to the server secure? */
-    dyn_state_t        state;         /* state of the server - used mainly in peers  */
 };
 
 struct node {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
-
-    struct string      pname;         /* name:port:weight (ref in conf_server) */
+    struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
-    uint16_t           port;          /* port */
-    uint32_t           weight;        /* weight */
-    int                family;        /* socket family */
-    socklen_t          addrlen;       /* socket length */
-    struct sockaddr    *addr;         /* socket address (ref in conf_server) */
 
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
@@ -276,11 +263,7 @@ struct server_pool {
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
 
     struct string      name;                 /* pool name (ref in conf_pool) */
-    struct string      addrstr;              /* pool address (ref in conf_pool) */
-    uint16_t           port;                 /* port */
-    int                family;               /* socket family */
-    socklen_t          addrlen;              /* socket length */
-    struct sockaddr    *addr;                /* socket address (ref in conf_pool) */
+    struct endpoint    proxy_endpoint;
     int                dist_type;            /* distribution type (dist_type_t) */
     int                key_hash_type;        /* key hash type (hash_type_t) */
     hash_t             key_hash;             /* key hasher */
@@ -299,11 +282,7 @@ struct server_pool {
     struct array       seeds;                /*dyn seeds */
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
-    struct string      d_addrstr;            /* pool address (ref in conf_pool) */
-    uint16_t           d_port;               /* port */
-    int                d_family;             /* socket family */
-    socklen_t          d_addrlen;            /* socket length */
-    struct sockaddr    *d_addr;              /* socket address (ref in conf_pool) */
+    struct endpoint    dnode_proxy_endpoint;
     int                d_timeout;            /* peer timeout in msec */
     int                d_backlog;            /* listen backlog */
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */

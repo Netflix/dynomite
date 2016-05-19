@@ -149,19 +149,19 @@ conf_server_deinit(struct conf_server *cs)
 
 // copy from struct conf_server to struct server
 static rstatus_t
-conf_server_transform(struct datastore *s, struct conf_server *cs)
+conf_datastore_transform(struct datastore *s, struct conf_server *cs)
 {
     ASSERT(cs->valid);
     ASSERT(s != NULL);
     s->owner = NULL;
-    s->pname = cs->pname;
+    s->endpoint.pname = cs->pname;
     s->name = cs->name;
-    s->port = (uint16_t)cs->port;
-    s->weight = (uint32_t)cs->weight;
+    s->endpoint.port = (uint16_t)cs->port;
+    s->endpoint.weight = (uint32_t)cs->weight;
 
-    s->family = cs->info.family;
-    s->addrlen = cs->info.addrlen;
-    s->addr = (struct sockaddr *)&cs->info.addr;
+    s->endpoint.family = cs->info.family;
+    s->endpoint.addrlen = cs->info.addrlen;
+    s->endpoint.addr = (struct sockaddr *)&cs->info.addr;
 
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
@@ -170,7 +170,7 @@ conf_server_transform(struct datastore *s, struct conf_server *cs)
     s->failure_count = 0;
 
     log_debug(LOG_VERB, "transform to server '%.*s'",
-              s->pname.len, s->pname.data);
+              s->endpoint.pname.len, s->endpoint.pname.data);
 
     return DN_OK;
 }
@@ -190,7 +190,7 @@ conf_seed_each_transform(void *elem, void *data)
 
     s->idx = array_idx(seeds, s);
     s->owner = NULL;
-    s->pname = cseed->pname;
+    s->endpoint.pname = cseed->pname;
 
     s->state = NORMAL;//assume peers are normal initially
 
@@ -198,8 +198,6 @@ conf_seed_each_transform(void *elem, void *data)
     uint8_t *start = cseed->name.data;
     string_copy(&s->name, start, dn_strrchr(p, start, ':') - start);
 
-    s->port = (uint16_t)cseed->port;
-    s->weight = (uint32_t)cseed->weight;
     s->rack = cseed->rack;
     s->dc = cseed->dc;
     //string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
@@ -208,9 +206,11 @@ conf_seed_each_transform(void *elem, void *data)
     //TODO-jeb need to copy over tokens, not sure if this is good enough
     s->tokens = cseed->tokens;
 
-    s->family = cseed->info.family;
-    s->addrlen = cseed->info.addrlen;
-    s->addr = (struct sockaddr *)&cseed->info.addr;
+    s->endpoint.port = (uint16_t)cseed->port;
+    s->endpoint.weight = (uint32_t)cseed->weight;
+    s->endpoint.family = cseed->info.family;
+    s->endpoint.addrlen = cseed->info.addrlen;
+    s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
 
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
@@ -223,7 +223,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->is_secure = cseed->is_secure;
 
     log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
-              s->idx, s->pname.len, s->pname.data);
+              s->idx, s->endpoint.pname.len, s->endpoint.pname.data);
 
     return DN_OK;
 }
@@ -386,12 +386,12 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->next_rebuild = 0ULL;
 
     sp->name = cp->name;
-    sp->addrstr = cp->listen.pname;
-    sp->port = (uint16_t)cp->listen.port;
+    sp->proxy_endpoint.pname = cp->listen.pname;
+    sp->proxy_endpoint.port = (uint16_t)cp->listen.port;
 
-    sp->family = cp->listen.info.family;
-    sp->addrlen = cp->listen.info.addrlen;
-    sp->addr = (struct sockaddr *)&cp->listen.info.addr;
+    sp->proxy_endpoint.family = cp->listen.info.family;
+    sp->proxy_endpoint.addrlen = cp->listen.info.addrlen;
+    sp->proxy_endpoint.addr = (struct sockaddr *)&cp->listen.info.addr;
 
     sp->key_hash_type = cp->hash;
     sp->key_hash = hash_algos[cp->hash];
@@ -411,7 +411,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->preconnect = cp->preconnect ? 1 : 0;
 
     sp->datastore = dn_zalloc(sizeof(*sp->datastore));
-    status = conf_server_transform(sp->datastore, cp->conf_datastore);
+    status = conf_datastore_transform(sp->datastore, cp->conf_datastore);
     if (status != DN_OK) {
         return status;
     }
@@ -421,11 +421,11 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     /* dynomite init */
     sp->seed_provider = cp->dyn_seed_provider;
-    sp->d_addrstr = cp->dyn_listen.pname;
-    sp->d_port = (uint16_t)cp->dyn_listen.port;
-    sp->d_family = cp->dyn_listen.info.family;
-    sp->d_addrlen = cp->dyn_listen.info.addrlen;
-    sp->d_addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
+    sp->dnode_proxy_endpoint.pname = cp->dyn_listen.pname;
+    sp->dnode_proxy_endpoint.port = (uint16_t)cp->dyn_listen.port;
+    sp->dnode_proxy_endpoint.family = cp->dyn_listen.info.family;
+    sp->dnode_proxy_endpoint.addrlen = cp->dyn_listen.info.addrlen;
+    sp->dnode_proxy_endpoint.addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
     sp->peer_connections = (uint32_t)cp->dyn_connections;
     sp->rack = cp->rack;
     sp->dc = cp->dc;
@@ -453,7 +453,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 static void
 conf_dump(struct conf *cf)
 {
-    uint32_t i, j;
+    uint32_t j;
     struct string *s;
 
     log_debug(LOG_VVERB, "pool in configuration file '%s'", cf->fname);
@@ -755,7 +755,6 @@ static char *
 conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 {
     rstatus_t status;
-    struct array *a;
     struct string *value;
     struct conf_server *field;
     uint8_t *p, *q, *start;
@@ -768,11 +767,12 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     p = conf;
     struct conf_server **pfield = (struct conf_server **)(p + cmd->offset);
     ASSERT(*pfield == NULL);
-    *pfield = (struct conf_datastore *)dn_zalloc(sizeof(struct conf_server));
+    *pfield = (struct conf_server *)dn_zalloc(sizeof(struct conf_server));
     field = *pfield;
     status = conf_server_init(field);
     if (status != DN_OK) {
         dn_free(*pfield);
+        *pfield = NULL;
         return CONF_ERROR;
     }
 
@@ -836,7 +836,8 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     pnamelen = namelen > 0 ? value->len - (namelen + 1) : value->len;
     status = string_copy(&field->pname, pname, pnamelen);
     if (status != DN_OK) {
-        array_pop(a);
+        dn_free(*pfield);
+        *pfield = NULL;
         return CONF_ERROR;
     }
 
@@ -1989,9 +1990,6 @@ conf_pre_validate(struct conf *cf)
 static rstatus_t
 conf_validate_server(struct conf *cf, struct conf_pool *cp)
 {
-    uint32_t i, nserver;
-    bool valid;
-
     if (cp->conf_datastore == NULL) {
         log_error("conf: pool '%.*s' has no datastores", cp->name.len,
                   cp->name.data);

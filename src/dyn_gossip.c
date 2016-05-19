@@ -37,7 +37,7 @@ static struct mbuf * seeds_buf = NULL;
 static unsigned int
 dict_node_hash(const void *key)
 {
-    struct gossip_node *node = key;
+    const struct gossip_node *node = key;
     if (node == NULL)
        return 0;
     return dictGenHashFunction((unsigned char*)node->dc.data, node->dc.len) +
@@ -49,8 +49,8 @@ static int
 dict_node_key_compare(void *privdata, const void *key1, const void *key2)
 {
     DICT_NOTUSED(privdata);
-    struct gossip_node *node1 = key1;
-    struct gossip_node *node2 = key2;
+    const struct gossip_node *node1 = key1;
+    const struct gossip_node *node2 = key2;
 
     ASSERT(node1 == NULL || node2 == NULL);
 
@@ -64,8 +64,8 @@ int
 dict_string_key_compare(void *privdata, const void *key1, const void *key2)
 {
     DICT_NOTUSED(privdata);
-    struct string *s1 = key1;
-    struct string *s2 = key2;
+    const struct string *s1 = key1;
+    const struct string *s2 = key2;
 
     //return (s1->len != s2->len)? 0 : strncmp(s1->data, s2->data, s1->len) == 0;
     return string_compare(s1, s2) == 0;
@@ -94,7 +94,7 @@ dict_string_destructor(void *privdata, void *val)
 unsigned int
 dict_string_hash(const void *key)
 {
-    struct string *s = key;
+    const struct string *s = key;
     //return dictGenHashFunction((unsigned char*)key, dn_strlen((char*)key));
     if (s == NULL)
         return 0;
@@ -193,7 +193,7 @@ write_number(uint8_t *pos, uint64_t num, int *count)
    write_number(pos, num / 10, count);
    write_char(pos + (*count), '0' + (num % 10));
    *count = *count + 1;
-   return count;
+   return *count;
 }
 
 
@@ -935,8 +935,8 @@ gossip_pool_init(struct context *ctx)
         string_copy(&gnode->dc, peer->dc.data, peer->dc.len);
         string_copy(&gnode->rack, g_rack->name.data, g_rack->name.len);
         string_copy(&gnode->name, peer->name.data, peer->name.len);
-        string_copy(&gnode->pname, peer->pname.data, peer->pname.len); //ignore the port for now
-        gnode->port = peer->port;
+        string_copy(&gnode->pname, peer->endpoint.pname.data, peer->endpoint.pname.len); //ignore the port for now
+        gnode->port = peer->endpoint.port;
         gnode->is_local = peer->is_local;
 
 

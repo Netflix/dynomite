@@ -84,7 +84,7 @@ core_dnode_init(struct context *ctx)
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
     rstatus_t status = core_dnode_peer_init(ctx);
     if (status != DN_OK)
-        dnode_peer_deinit(ctx);
+        dnode_peer_deinit(&ctx->pool.peers);
     return status;
 }
 
@@ -179,7 +179,6 @@ core_ctx_create(struct instance *nci)
 	ctx->cf = NULL;
 	ctx->stats = NULL;
 	ctx->evb = NULL;
-	array_null(&ctx->pool);
 	ctx->max_timeout = nci->stats_interval;
 	ctx->timeout = ctx->max_timeout;
 	ctx->dyn_state = INIT;
@@ -364,7 +363,6 @@ core_timeout(struct context *ctx)
 
 		if (conn->dyn_mode) {
 			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
-		 	   struct node *peer = conn->owner;
                 if (conn->same_dc)
 			        stats_pool_incr(ctx, peer_timedout_requests);
                 else
@@ -450,7 +448,6 @@ void
 core_debug(struct context *ctx)
 {
 	log_debug(LOG_VERB, "=====================Peers info=====================");
-    uint32_t i, nelem;
     struct server_pool *sp = &ctx->pool;
     log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
     uint32_t j, n;
@@ -461,10 +458,10 @@ core_debug(struct context *ctx)
         log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", peer->rack);
 
         log_debug(LOG_VERB, "\tPeer name          : '%.*s'", peer->name);
-        log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", peer->pname);
+        log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", peer->endpoint.pname);
 
         log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", peer->state);
-        log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", peer->port);
+        log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", peer->endpoint.port);
         log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", peer->is_local);
         log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", peer->failure_count);
         log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&peer->tokens));

@@ -138,6 +138,9 @@ conn_to_ctx(struct conn *conn)
         case CONN_DNODE_PEER_SERVER:
             peer = conn->owner;
             pool = peer ? peer->owner : NULL;
+            break;
+        default:
+            return NULL;
     }
 
     return pool ? pool->ctx : NULL;

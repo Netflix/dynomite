@@ -17,7 +17,7 @@
 #define SEED_BUF_SIZE (1024*1024)     //in bytes
 
 
-typedef uint8_t (*seeds_provider_t)(struct context *, struct string *);
+typedef uint8_t (*seeds_provider_t)(struct context *, struct mbuf *);
 extern struct gossip_node_pool gn_pool;
 
 

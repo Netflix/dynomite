@@ -38,9 +38,9 @@ server_ref(struct conn *conn, void *owner)
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->owner == NULL);
 
-	conn->family = server->family;
-	conn->addrlen = server->addrlen;
-	conn->addr = server->addr;
+	conn->family = server->endpoint.family;
+	conn->addrlen = server->endpoint.addrlen;
+	conn->addr = server->endpoint.addr;
 
 	server->ns_conn_q++;
 	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
@@ -48,7 +48,7 @@ server_ref(struct conn *conn, void *owner)
 	conn->owner = owner;
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
-			server->pname.len, server->pname.data);
+			server->endpoint.pname.len, server->endpoint.pname.data);
 }
 
 static void
@@ -67,7 +67,7 @@ server_unref(struct conn *conn)
 	TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
-			server->pname.len, server->pname.data);
+			server->endpoint.pname.len, server->endpoint.pname.data);
 }
 
 msec_t
@@ -202,7 +202,7 @@ datastore_preconnect(struct datastore *datastore)
 	status = server_connect(pool->ctx, datastore, conn);
 	if (status != DN_OK) {
 		log_warn("connect to datastore '%.*s' failed, ignored: %s",
-				datastore->pname.len, datastore->pname.data, strerror(errno));
+				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
 		server_close(pool->ctx, conn);
 	}
 
@@ -240,7 +240,7 @@ server_failure(struct context *ctx, struct datastore *server)
 	server->failure_count++;
 
 	log_debug(LOG_VERB, "server '%.*s' failure count %"PRIu32" limit %"PRIu32,
-			server->pname.len, server->pname.data, server->failure_count,
+			server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count,
 			pool->server_failure_limit);
 
 	if (server->failure_count < pool->server_failure_limit) {
@@ -258,7 +258,7 @@ server_failure(struct context *ctx, struct datastore *server)
 
 	log_debug(LOG_INFO, "update pool '%.*s' to delete server '%.*s' "
 			"for next %"PRIu32" secs", pool->name.len,
-			pool->name.data, server->pname.len, server->pname.data,
+			pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
 			pool->server_retry_timeout_ms/1000);
 
 	stats_pool_incr(ctx, server_ejects);
@@ -444,14 +444,14 @@ server_connect(struct context *ctx, struct datastore *server, struct conn *conn)
     }
 
     if (log_loggable(LOG_VVERB)) {
-        log_debug(LOG_VVERB, "connect to server '%.*s'", server->pname.len,
-                server->pname.data);
+        log_debug(LOG_VVERB, "connect to server '%.*s'", server->endpoint.pname.len,
+                server->endpoint.pname.data);
     }
 
     conn->sd = socket(conn->family, SOCK_STREAM, 0);
     if (conn->sd < 0) {
-        log_error("socket for server '%.*s' failed: %s", server->pname.len,
-                server->pname.data, strerror(errno));
+        log_error("socket for server '%.*s' failed: %s", server->endpoint.pname.len,
+                server->endpoint.pname.data, strerror(errno));
         status = DN_ERROR;
         goto error;
     }
@@ -459,16 +459,16 @@ server_connect(struct context *ctx, struct datastore *server, struct conn *conn)
     status = dn_set_nonblocking(conn->sd);
 	if (status != DN_OK) {
 		log_error("set nonblock on s %d for server '%.*s' failed: %s",
-				conn->sd,  server->pname.len, server->pname.data,
+				conn->sd,  server->endpoint.pname.len, server->endpoint.pname.data,
 				strerror(errno));
 		goto error;
 	}
 
-	if (server->pname.data[0] != '/') {
+	if (server->endpoint.pname.data[0] != '/') {
 		status = dn_set_tcpnodelay(conn->sd);
 		if (status != DN_OK) {
 			log_warn("set tcpnodelay on s %d for server '%.*s' failed, ignored: %s",
-					conn->sd, server->pname.len, server->pname.data,
+					conn->sd, server->endpoint.pname.len, server->endpoint.pname.data,
 					strerror(errno));
 		}
 	}
@@ -476,7 +476,7 @@ server_connect(struct context *ctx, struct datastore *server, struct conn *conn)
 	status = event_add_conn(ctx->evb, conn);
 	if (status != DN_OK) {
 		log_error("event add conn s %d for server '%.*s' failed: %s",
-				conn->sd, server->pname.len, server->pname.data,
+				conn->sd, server->endpoint.pname.len, server->endpoint.pname.data,
 				strerror(errno));
 		goto error;
 	}
@@ -488,12 +488,12 @@ server_connect(struct context *ctx, struct datastore *server, struct conn *conn)
 		if (errno == EINPROGRESS) {
 			conn->connecting = 1;
 			log_debug(LOG_DEBUG, "connecting on s %d to server '%.*s'",
-					conn->sd, server->pname.len, server->pname.data);
+					conn->sd, server->endpoint.pname.len, server->endpoint.pname.data);
 			return DN_OK;
 		}
 
 		log_error("connect on s %d to server '%.*s' failed: %s", conn->sd,
-				server->pname.len, server->pname.data, strerror(errno));
+				server->endpoint.pname.len, server->endpoint.pname.data, strerror(errno));
 
 		goto error;
 	}
@@ -501,7 +501,7 @@ server_connect(struct context *ctx, struct datastore *server, struct conn *conn)
 	ASSERT(!conn->connecting);
 	conn->connected = 1;
 	log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-			server->pname.len, server->pname.data);
+			server->endpoint.pname.len, server->endpoint.pname.data);
 
 	return DN_OK;
 
@@ -525,7 +525,7 @@ server_connected(struct context *ctx, struct conn *conn)
 
         if (log_loggable(LOG_INFO)) {
 	   log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-		   	server->pname.len, server->pname.data);
+		   	server->endpoint.pname.len, server->endpoint.pname.data);
         }
 }
 
@@ -540,7 +540,7 @@ server_ok(struct context *ctx, struct conn *conn)
 	if (server->failure_count != 0) {
            if (log_loggable(LOG_VERB)) {
 		   log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
-				 " to 0", server->pname.len, server->pname.data,
+				 " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
 				 server->failure_count);
            }
            server->failure_count = 0;

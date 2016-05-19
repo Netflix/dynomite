@@ -34,9 +34,9 @@ proxy_ref(struct conn *conn, void *owner)
     ASSERT(conn->type == CONN_PROXY);
     ASSERT(conn->owner == NULL);
 
-    conn->family = pool->family;
-    conn->addrlen = pool->addrlen;
-    conn->addr = pool->addr;
+    conn->family = pool->proxy_endpoint.family;
+    conn->addrlen = pool->proxy_endpoint.addrlen;
+    conn->addr = pool->proxy_endpoint.addr;
 
     pool->p_conn = conn;
 
@@ -139,7 +139,7 @@ proxy_listen(struct context *ctx, struct conn *p)
     status = proxy_reuse(p);
     if (status < 0) {
         log_error("reuse of addr '%.*s' for listening on p %d failed: %s",
-                  pool->addrstr.len, pool->addrstr.data, p->sd,
+                  pool->proxy_endpoint.pname.len, pool->proxy_endpoint.pname.data, p->sd,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -147,28 +147,28 @@ proxy_listen(struct context *ctx, struct conn *p)
     status = bind(p->sd, p->addr, p->addrlen);
     if (status < 0) {
         log_error("bind on p %d to addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
+                  pool->proxy_endpoint.pname.len, pool->proxy_endpoint.pname.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = listen(p->sd, pool->backlog);
     if (status < 0) {
         log_error("listen on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
+                  pool->proxy_endpoint.pname.len, pool->proxy_endpoint.pname.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = dn_set_nonblocking(p->sd);
     if (status < 0) {
         log_error("set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
+                  pool->proxy_endpoint.pname.len, pool->proxy_endpoint.pname.data, strerror(errno));
         return DN_ERROR;
     }
 
     status = event_add_conn(ctx->evb, p);
     if (status < 0) {
         log_error("event add conn p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->addrstr.len, pool->addrstr.data,
+                  p->sd, pool->proxy_endpoint.pname.len, pool->proxy_endpoint.pname.data,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -176,7 +176,7 @@ proxy_listen(struct context *ctx, struct conn *p)
     status = event_del_out(ctx->evb, p);
     if (status < 0) {
         log_error("event del out p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->addrstr.len, pool->addrstr.data,
+                  p->sd, pool->proxy_endpoint.pname.len, pool->proxy_endpoint.pname.data,
                   strerror(errno));
         return DN_ERROR;
     }
@@ -210,8 +210,8 @@ proxy_init(struct context *ctx)
     }
 
     log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'",
-              p->sd, pool->addrstr.len,
-              pool->addrstr.data,
+              p->sd, pool->proxy_endpoint.pname.len,
+              pool->proxy_endpoint.pname.data,
 			  log_datastore,
               pool->name.len, pool->name.data);
 

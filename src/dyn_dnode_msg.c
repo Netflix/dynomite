@@ -1030,7 +1030,7 @@ dmsg_parse(struct dmsg *dmsg)
       string_copy(&rnode->name, host_addr, host_addr_len);
       string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 
-      rnode->port = sp->d_port;
+      rnode->port = sp->dnode_proxy_endpoint.port;
       rnode->is_local = false;
       rnode->is_seed = false;
 

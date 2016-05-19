@@ -226,21 +226,21 @@ test_get_options(int argc, char **argv, struct instance *nci)
 
 
 static rstatus_t
-init_server(struct datastore *s)
+init_peer(struct node *s)
 {
     s->idx = 0;
     s->owner = NULL;
 
     struct string pname = string("127.0.0.1:8102");
-    string_copy(&s->pname, pname.data, pname.len);
+    string_copy(&s->endpoint.pname, pname.data, pname.len);
 
     struct string name = string("127.0.0.1");
     string_copy(&s->name, name.data, name.len);
 
     s->state = UNKNOWN;
 
-    s->port = (uint16_t)8102;
-    s->weight = (uint32_t)1;
+    s->endpoint.port = (uint16_t)8102;
+    s->endpoint.weight = (uint32_t)1;
 
     struct string rack = string("rack1");
     string_copy(&s->rack, rack.data, rack.len);
@@ -255,11 +255,11 @@ init_server(struct datastore *s)
     struct sockinfo *info = malloc(sizeof(struct sockinfo));
 
     memset(info, 0, sizeof(*info));
-    dn_resolve(&name, s->port, info);
+    dn_resolve(&name, s->endpoint.port, info);
 
-    s->family = info->family;
-    s->addrlen = info->addrlen;
-    s->addr = (struct sockaddr *)&info->addr;
+    s->endpoint.family = info->family;
+    s->endpoint.addrlen = info->addrlen;
+    s->endpoint.addr = (struct sockaddr *)&info->addr;
 
 
     s->ns_conn_q = 0;
@@ -583,10 +583,10 @@ main(int argc, char **argv)
     //rstatus_t status;
     init_test(argc, argv);
 
-    struct datastore *server = malloc(sizeof(struct datastore));
-    init_server(server);
+    struct node *peer = malloc(sizeof(struct datastore));
+    init_peer(peer);
 
-    struct conn *conn = conn_get_peer(server, false);
+    struct conn *conn = conn_get_peer(peer, false);
     struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     //test payload larger than mbuf_size
@@ -608,7 +608,7 @@ main(int argc, char **argv)
         goto err_out;
     }
 
-    ret = aes_msg_test(server);
+    ret = aes_msg_test(peer);
     if (ret != DN_OK) {
         loga("Error in testing aes_msg_test !!!");
         goto err_out;
