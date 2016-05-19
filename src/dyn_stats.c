@@ -242,8 +242,6 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
 static void
 stats_pool_reset(struct stats_pool *stp)
 {
-    uint32_t j, nserver;
-
     stats_metric_reset(&stp->metric);
 
     struct stats_server *sts = &stp->server;
@@ -451,7 +449,7 @@ stats_add_string(struct stats_buffer *buf, struct string *key, struct string *va
 }
 
 static rstatus_t
-stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
+stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, short last)
 {
     uint8_t *pos;
     size_t room;
@@ -460,8 +458,14 @@ stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
     pos = buf->data + buf->len;
     room = buf->size - buf->len - 1;
 
-    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
-                    val);
+    if (last == 0) {
+        n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
+                       val);
+    } else {
+        n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64"\n", key->len, key->data,
+                       val);
+    }
+
     if (n < 0 || n >= (int)room) {
         log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
         return DN_ERROR;
@@ -470,6 +474,18 @@ stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
     buf->len += (size_t)n;
 
     return DN_OK;
+}
+
+
+static rstatus_t
+stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
+{
+	if (stats_add_num_last(buf,key, val, 0) == DN_ERROR) {
+		return DN_ERROR;
+	}
+
+	return DN_OK;
+
 }
 
 static rstatus_t
@@ -664,8 +680,6 @@ stats_aggregate_metric(struct array *dst, struct array *src)
 static void
 stats_aggregate(struct stats *st)
 {
-    uint32_t j;
-
     if (st->aggregate == 0) {
         log_debug(LOG_PVERB, "skip aggregate of shadow to sum as generator is slow");
         return;
@@ -715,7 +729,6 @@ stats_make_info_rsp(struct stats *st)
     THROW_STATUS(stats_add_header(st));
 
     struct stats_pool *stp = &st->sum;
-    uint32_t j;
 
     THROW_STATUS(stats_begin_nesting(&st->buf, &stp->name, false));
     /* copy pool metric from sum(c) to buffer */
@@ -804,7 +817,7 @@ stats_add_node_details(struct stats *st, struct gossip_node *node)
     THROW_STATUS(stats_add_node_name(st, node));
     THROW_STATUS(stats_add_node_host(st, node));
     THROW_STATUS(stats_add_num(&st->clus_desc_buf, &port_str, node->port));
-    THROW_STATUS(stats_add_num(&st->clus_desc_buf, &token_str, *(node->token.mag)));
+    THROW_STATUS(stats_add_num_last(&st->clus_desc_buf, &token_str, *(node->token.mag), 1));
     return DN_OK;
 }
 
