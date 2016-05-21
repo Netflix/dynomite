@@ -22,6 +22,7 @@ dnode_ref(struct conn *conn, void *owner)
     conn->family = pool->dnode_proxy_endpoint.family;
     conn->addrlen = pool->dnode_proxy_endpoint.addrlen;
     conn->addr = pool->dnode_proxy_endpoint.addr;
+    string_duplicate(&conn->pname, &pool->dnode_proxy_endpoint.pname);
 
     pool->d_conn = conn;
 
@@ -76,100 +77,6 @@ dnode_close(struct context *ctx, struct conn *conn)
     conn_put(conn);
 }
 
-static rstatus_t
-dnode_reuse(struct conn *p)
-{
-    rstatus_t status;
-    struct sockaddr_un *un;
-
-    switch (p->family) {
-    case AF_INET:
-    case AF_INET6:
-        status = dn_set_reuseaddr(p->sd);
-        break;
-
-    case AF_UNIX:
-        /*
-         * bind() will fail if the pathname already exist. So, we call unlink()
-         * to delete the pathname, in case it already exists. If it does not
-         * exist, unlink() returns error, which we ignore
-         */
-        un = (struct sockaddr_un *) p->addr;
-        unlink(un->sun_path);
-        status = DN_OK;
-        break;
-
-    default:
-        NOT_REACHED();
-        status = DN_ERROR;
-    }
-
-    return status;
-}
-
-static rstatus_t
-dnode_listen(struct context *ctx, struct conn *p)
-{
-    rstatus_t status;
-    struct server_pool *pool = p->owner;
-
-    ASSERT(p->type == CONN_DNODE_PEER_PROXY);
-
-    p->sd = socket(p->family, SOCK_STREAM, 0);
-    if (p->sd < 0) {
-        log_error("dyn: socket failed: %s", strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = dnode_reuse(p);
-    if (status < 0) {
-        log_error("dyn: reuse of addr '%.*s' for listening on p %d failed: %s",
-                  pool->dnode_proxy_endpoint.pname.len,
-                  pool->dnode_proxy_endpoint.pname.data, p->sd,
-                  strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = bind(p->sd, p->addr, p->addrlen);
-    if (status < 0) {
-        log_error("dyn: bind on p %d to addr '%.*s' failed: %s", p->sd,
-                  pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data, strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = listen(p->sd, pool->backlog);
-    if (status < 0) {
-        log_error("dyn: listen on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data, strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = dn_set_nonblocking(p->sd);
-    if (status < 0) {
-        log_error("dyn: set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data, strerror(errno));
-        return DN_ERROR;
-    }
-
-    log_debug(LOG_INFO, "dyn: e %d with nevent %d", event_fd(ctx->evb), ctx->evb->nevent);
-    status = event_add_conn(ctx->evb, p);
-    if (status < 0) {
-        log_error("dyn: event add conn p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->dnode_proxy_endpoint.pname.len, pool->dnode_proxy_endpoint.pname.data,
-                  strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = event_del_out(ctx->evb, p);
-    if (status < 0) {
-        log_error("dyn: event del out p %d on addr '%.*s' failed: %s",
-                  strerror(errno));
-        return DN_ERROR;
-    }
-
-    return DN_OK;
-}
-
 rstatus_t
 dnode_init(struct context *ctx)
 {
@@ -180,7 +87,7 @@ dnode_init(struct context *ctx)
         return DN_ENOMEM;
     }
 
-    status = dnode_listen(pool->ctx, p);
+    status = conn_listen(pool->ctx, p);
     if (status != DN_OK) {
         conn_close(pool->ctx, p);
         return status;

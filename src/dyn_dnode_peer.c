@@ -32,6 +32,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->family = peer->endpoint.family;
     conn->addrlen = peer->endpoint.addrlen;
     conn->addr = peer->endpoint.addr;
+    string_duplicate(&conn->pname, &peer->endpoint.pname);
 
     peer->ns_conn_q++;
     TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
@@ -356,95 +357,6 @@ dnode_peer_conn(struct node *peer)
     return conn;
 }
 
-static rstatus_t
-dnode_peer_connect(struct context *ctx, struct node *peer, struct conn *conn)
-{
-    rstatus_t status;
-
-    if (log_loggable(LOG_VERB)) {
-        log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'",
-                  peer->endpoint.pname.len, peer->endpoint.pname.data);
-    }
-
-    if (ctx->admin_opt > 0)
-        return DN_OK;
-
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
-    if (conn->sd > 0) {
-        /* already connected on peer connection */
-        return DN_OK;
-    }
-
-    conn->sd = socket(conn->family, SOCK_STREAM, 0);
-    if (conn->sd < 0) {
-        log_error("dyn: socket for peer '%.*s' failed: %s", peer->endpoint.pname.len,
-                peer->endpoint.pname.data, strerror(errno));
-        status = DN_ERROR;
-        goto error;
-    }
-    log_debug(LOG_WARN, "dnode: connected to peer '%.*s' on p %d", peer->endpoint.pname.len,
-            peer->endpoint.pname.data, conn->sd);
-
-
-    status = dn_set_nonblocking(conn->sd);
-    if (status != DN_OK) {
-        log_error("dyn: set nonblock on s %d for peer '%.*s' failed: %s",
-                conn->sd,  peer->endpoint.pname.len, peer->endpoint.pname.data,
-                strerror(errno));
-        goto error;
-    }
-
-
-    if (peer->endpoint.pname.data[0] != '/') {
-        status = dn_set_tcpnodelay(conn->sd);
-        if (status != DN_OK) {
-            log_warn("dyn: set tcpnodelay on s %d for peer '%.*s' failed, ignored: %s",
-                    conn->sd, peer->endpoint.pname.len, peer->endpoint.pname.data,
-                    strerror(errno));
-        }
-    }
-
-    status = event_add_conn(ctx->evb, conn);
-    if (status != DN_OK) {
-        log_error("dyn: event add conn s %d for peer '%.*s' failed: %s",
-                conn->sd, peer->endpoint.pname.len, peer->endpoint.pname.data,
-                strerror(errno));
-        goto error;
-    }
-
-    ASSERT(!conn->connecting && !conn->connected);
-
-    status = connect(conn->sd, conn->addr, conn->addrlen);
-
-    if (status != DN_OK) {
-        if (errno == EINPROGRESS) {
-            conn->connecting = 1;
-            log_debug(LOG_DEBUG, "dyn: connecting on s %d to peer '%.*s'",
-                    conn->sd, peer->endpoint.pname.len, peer->endpoint.pname.data);
-            return DN_OK;
-        }
-
-        log_error("dyn: connect on s %d to peer '%.*s' failed: %s", conn->sd,
-                peer->endpoint.pname.len, peer->endpoint.pname.data, strerror(errno));
-
-        goto error;
-    }
-
-
-    ASSERT(!conn->connecting);
-    conn->connected = 1;
-    log_debug(LOG_WARN, "dyn: connected on s %d to peer '%.*s'", conn->sd,
-            peer->endpoint.pname.len, peer->endpoint.pname.data);
-
-
-    return DN_OK;
-
-    error:
-    conn->err = errno;
-    return status;
-}
-
 static void
 dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
@@ -667,7 +579,7 @@ dnode_peer_each_preconnect(void *elem, void *data)
         return DN_ENOMEM;
     }
 
-    status = dnode_peer_connect(sp->ctx, peer, conn);
+    status = conn_connect(sp->ctx, conn);
     if (status != DN_OK) {
         log_warn("dyn: connect to peer '%.*s' failed, ignored: %s",
                 peer->endpoint.pname.len, peer->endpoint.pname.data, strerror(errno));
@@ -757,7 +669,7 @@ dnode_peer_forward_state(void *rmsg)
         return DN_ERROR;
     }
 
-    status = dnode_peer_connect(sp->ctx, peer, conn);
+    status = conn_connect(sp->ctx, conn);
     if (status != DN_OK ) {
         dnode_peer_close(sp->ctx, conn);
         log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
@@ -831,7 +743,7 @@ dnode_peer_handshake_announcing(void *rmsg)
         }
 
 
-        status = dnode_peer_connect(sp->ctx, peer, conn);
+        status = conn_connect(sp->ctx, conn);
         if (status != DN_OK ) {
             dnode_peer_close(sp->ctx, conn);
             log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
@@ -1257,7 +1169,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
         log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
 
         dnode_peer_close_socket(ctx, conn);
-        status = dnode_peer_connect(ctx, peer, conn);
+        status = conn_connect(ctx, conn);
         if (status != DN_OK) {
             conn->err = EHOSTDOWN;
             dnode_peer_close(ctx, conn);
@@ -1269,7 +1181,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
         return conn;
     }
 
-    status = dnode_peer_connect(ctx, peer, conn);
+    status = conn_connect(ctx, conn);
     if (status != DN_OK) {
         dnode_peer_close(ctx, conn);
         return NULL;

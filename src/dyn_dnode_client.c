@@ -346,7 +346,6 @@ dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct ms
     //use only the 1st pool
     conn->omsg_count++;
     histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     stats_pool_incr(ctx, dnode_client_out_queue);
     stats_pool_incr_by(ctx, dnode_client_out_queue_bytes, msg->mlen);
 }
@@ -363,7 +362,6 @@ dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct ms
     //use the 1st pool
     conn->omsg_count--;
     histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     stats_pool_decr(ctx, dnode_client_out_queue);
     stats_pool_decr_by(ctx, dnode_client_out_queue_bytes, msg->mlen);
 }

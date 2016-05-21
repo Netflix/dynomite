@@ -168,6 +168,7 @@ _conn_get(void)
     conn->owner = NULL;
 
     conn->sd = -1;
+    string_init(&conn->pname);
     /* {family, addrlen, addr} are initialized in enqueue handler */
 
     TAILQ_INIT(&conn->imsg_q);
@@ -401,6 +402,185 @@ conn_deinit(void)
         conn_free(conn);
     }
     ASSERT(nfree_connq == 0);
+}
+
+static rstatus_t
+conn_reuse(struct conn *p)
+{
+    rstatus_t status;
+    struct sockaddr_un *un;
+
+    switch (p->family) {
+    case AF_INET:
+    case AF_INET6:
+        status = dn_set_reuseaddr(p->sd);
+        break;
+
+    case AF_UNIX:
+        /*
+         * bind() will fail if the pathname already exist. So, we call unlink()
+         * to delete the pathname, in case it already exists. If it does not
+         * exist, unlink() returns error, which we ignore
+         */
+        un = (struct sockaddr_un *) p->addr;
+        unlink(un->sun_path);
+        status = DN_OK;
+        break;
+
+    default:
+        NOT_REACHED();
+        status = DN_ERROR;
+    }
+
+    return status;
+}
+
+rstatus_t
+conn_listen(struct context *ctx, struct conn *p)
+{
+    rstatus_t status;
+    struct server_pool *pool = &ctx->pool;
+
+    ASSERT((p->type == CONN_PROXY) ||
+           (p->type == CONN_DNODE_PEER_PROXY));
+
+    p->sd = socket(p->family, SOCK_STREAM, 0);
+    if (p->sd < 0) {
+        log_error("socket failed: %s", strerror(errno));
+        return DN_ERROR;
+    }
+
+    status = conn_reuse(p);
+    if (status < 0) {
+        log_error("reuse of addr '%.*s' for listening on p %d failed: %s",
+                  p->pname.len, p->pname.data, p->sd,
+                  strerror(errno));
+        return DN_ERROR;
+    }
+
+    status = bind(p->sd, p->addr, p->addrlen);
+    if (status < 0) {
+        log_error("bind on p %d to addr '%.*s' failed: %s", p->sd,
+                  p->pname.len, p->pname.data, strerror(errno));
+        return DN_ERROR;
+    }
+
+    status = listen(p->sd, pool->backlog);
+    if (status < 0) {
+        log_error("listen on p %d on addr '%.*s' failed: %s", p->sd,
+                  p->pname.len, p->pname.data, strerror(errno));
+        return DN_ERROR;
+    }
+
+    status = dn_set_nonblocking(p->sd);
+    if (status < 0) {
+        log_error("set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
+                  p->pname.len, p->pname.data, strerror(errno));
+        return DN_ERROR;
+    }
+
+    status = event_add_conn(ctx->evb, p);
+    if (status < 0) {
+        log_error("event add conn p %d on addr '%.*s' failed: %s",
+                  p->sd, p->pname.len, p->pname.data,
+                  strerror(errno));
+        return DN_ERROR;
+    }
+
+    status = event_del_out(ctx->evb, p);
+    if (status < 0) {
+        log_error("event del out p %d on addr '%.*s' failed: %s",
+                  p->sd, p->pname.len, p->pname.data,
+                  strerror(errno));
+        return DN_ERROR;
+    }
+
+    return DN_OK;
+}
+
+rstatus_t
+conn_connect(struct context *ctx, struct conn *conn)
+{
+    rstatus_t status;
+    if ((conn->type == CONN_DNODE_PEER_SERVER)  &&
+        (ctx->admin_opt > 0))
+        return DN_OK;
+
+    ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
+           (conn->type == CONN_SERVER));
+
+    if (conn->sd > 0) {
+        /* already connected on peer connection */
+        return DN_OK;
+    }
+
+    conn->sd = socket(conn->family, SOCK_STREAM, 0);
+    if (conn->sd < 0) {
+        log_error("dyn: socket for '%.*s' failed: %s", conn->pname.len,
+                conn->pname.data, strerror(errno));
+        status = DN_ERROR;
+        goto error;
+    }
+    log_debug(LOG_WARN, "connected to '%.*s' on p %d", conn->pname.len,
+            conn->pname.data, conn->sd);
+
+
+    status = dn_set_nonblocking(conn->sd);
+    if (status != DN_OK) {
+        log_error("set nonblock on s %d for '%.*s' failed: %s",
+                conn->sd,  conn->pname.len, conn->pname.data,
+                strerror(errno));
+        goto error;
+    }
+
+
+    if (conn->pname.data[0] != '/') {
+        status = dn_set_tcpnodelay(conn->sd);
+        if (status != DN_OK) {
+            log_warn("set tcpnodelay on s %d for '%.*s' failed, ignored: %s",
+                    conn->sd, conn->pname.len, conn->pname.data,
+                    strerror(errno));
+        }
+    }
+
+    status = event_add_conn(ctx->evb, conn);
+    if (status != DN_OK) {
+        log_error("event add conn s %d for '%.*s' failed: %s",
+                conn->sd, conn->pname.len, conn->pname.data,
+                strerror(errno));
+        goto error;
+    }
+
+    ASSERT(!conn->connecting && !conn->connected);
+
+    status = connect(conn->sd, conn->addr, conn->addrlen);
+
+    if (status != DN_OK) {
+        if (errno == EINPROGRESS) {
+            conn->connecting = 1;
+            log_debug(LOG_DEBUG, "connecting on s %d to '%.*s'",
+                    conn->sd, conn->pname.len, conn->pname.data);
+            return DN_OK;
+        }
+
+        log_error("connect on s %d to '%.*s' failed: %s", conn->sd,
+                conn->pname.len, conn->pname.data, strerror(errno));
+
+        goto error;
+    }
+
+
+    ASSERT(!conn->connecting);
+    conn->connected = 1;
+    log_debug(LOG_WARN, "connected on s %d to '%.*s'", conn->sd,
+            conn->pname.len, conn->pname.data);
+
+
+    return DN_OK;
+
+    error:
+    conn->err = errno;
+    return status;
 }
 
 ssize_t

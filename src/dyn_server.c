@@ -41,6 +41,7 @@ server_ref(struct conn *conn, void *owner)
 	conn->family = server->endpoint.family;
 	conn->addrlen = server->endpoint.addrlen;
 	conn->addr = server->endpoint.addr;
+    string_duplicate(&conn->pname, &server->endpoint.pname);
 
 	server->ns_conn_q++;
 	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
@@ -199,7 +200,7 @@ datastore_preconnect(struct datastore *datastore)
 		return DN_ENOMEM;
 	}
 
-	status = server_connect(pool->ctx, datastore, conn);
+	status = conn_connect(pool->ctx, conn);
 	if (status != DN_OK) {
 		log_warn("connect to datastore '%.*s' failed, ignored: %s",
 				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
@@ -431,85 +432,6 @@ server_close(struct context *ctx, struct conn *conn)
 	conn_put(conn);
 }
 
-rstatus_t
-server_connect(struct context *ctx, struct datastore *server, struct conn *conn)
-{
-    rstatus_t status;
-
-    ASSERT(conn->type == CONN_SERVER);
-
-    if (conn->sd > 0) {
-        /* already connected on server connection */
-        return DN_OK;
-    }
-
-    if (log_loggable(LOG_VVERB)) {
-        log_debug(LOG_VVERB, "connect to server '%.*s'", server->endpoint.pname.len,
-                server->endpoint.pname.data);
-    }
-
-    conn->sd = socket(conn->family, SOCK_STREAM, 0);
-    if (conn->sd < 0) {
-        log_error("socket for server '%.*s' failed: %s", server->endpoint.pname.len,
-                server->endpoint.pname.data, strerror(errno));
-        status = DN_ERROR;
-        goto error;
-    }
-
-    status = dn_set_nonblocking(conn->sd);
-	if (status != DN_OK) {
-		log_error("set nonblock on s %d for server '%.*s' failed: %s",
-				conn->sd,  server->endpoint.pname.len, server->endpoint.pname.data,
-				strerror(errno));
-		goto error;
-	}
-
-	if (server->endpoint.pname.data[0] != '/') {
-		status = dn_set_tcpnodelay(conn->sd);
-		if (status != DN_OK) {
-			log_warn("set tcpnodelay on s %d for server '%.*s' failed, ignored: %s",
-					conn->sd, server->endpoint.pname.len, server->endpoint.pname.data,
-					strerror(errno));
-		}
-	}
-
-	status = event_add_conn(ctx->evb, conn);
-	if (status != DN_OK) {
-		log_error("event add conn s %d for server '%.*s' failed: %s",
-				conn->sd, server->endpoint.pname.len, server->endpoint.pname.data,
-				strerror(errno));
-		goto error;
-	}
-
-	ASSERT(!conn->connecting && !conn->connected);
-
-	status = connect(conn->sd, conn->addr, conn->addrlen);
-	if (status != DN_OK) {
-		if (errno == EINPROGRESS) {
-			conn->connecting = 1;
-			log_debug(LOG_DEBUG, "connecting on s %d to server '%.*s'",
-					conn->sd, server->endpoint.pname.len, server->endpoint.pname.data);
-			return DN_OK;
-		}
-
-		log_error("connect on s %d to server '%.*s' failed: %s", conn->sd,
-				server->endpoint.pname.len, server->endpoint.pname.data, strerror(errno));
-
-		goto error;
-	}
-
-	ASSERT(!conn->connecting);
-	conn->connected = 1;
-	log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-			server->endpoint.pname.len, server->endpoint.pname.data);
-
-	return DN_OK;
-
-	error:
-	conn->err = errno;
-	return status;
-}
-
 static void
 server_connected(struct context *ctx, struct conn *conn)
 {
@@ -616,7 +538,7 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 		return NULL;
 	}
 
-	status = server_connect(ctx, datastore, conn);
+	status = conn_connect(ctx, conn);
 	if (status != DN_OK) {
 		server_close(ctx, conn);
 		return NULL;
