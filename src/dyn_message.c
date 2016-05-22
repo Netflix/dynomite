@@ -150,6 +150,31 @@ static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
 uint8_t g_timeout_factor = 1;
+func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
+func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
+func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
+func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
+
+void
+set_datastore_ops(void)
+{
+    switch(g_data_store) {
+        case DATA_REDIS:
+            g_pre_splitcopy = redis_pre_splitcopy;
+            g_post_splitcopy = redis_post_splitcopy;
+            g_pre_coalesce = redis_pre_coalesce;
+            g_post_coalesce = redis_post_coalesce;
+            break;
+        case DATA_MEMCACHE:
+            g_pre_splitcopy = memcache_pre_splitcopy;
+            g_post_splitcopy = memcache_post_splitcopy;
+            g_pre_coalesce = memcache_pre_coalesce;
+            g_post_coalesce = memcache_post_coalesce;
+            break;
+        default:
+            return;
+    }
+}
 
 static inline rstatus_t
 msg_cant_handle_response(struct msg *req, struct msg *rsp)
@@ -288,11 +313,6 @@ done:
     msg->parser = NULL;
     msg->result = MSG_PARSE_OK;
 
-    msg->pre_splitcopy = NULL;
-    msg->post_splitcopy = NULL;
-    msg->pre_coalesce = NULL;
-    msg->post_coalesce = NULL;
-
     msg->type = MSG_UNKNOWN;
 
     msg->key_start = NULL;
@@ -373,10 +393,6 @@ msg_get(struct conn *conn, bool request, const char * const caller)
                msg->parser = redis_parse_rsp;
             }
         }
-        msg->pre_splitcopy = redis_pre_splitcopy;
-        msg->post_splitcopy = redis_post_splitcopy;
-        msg->pre_coalesce = redis_pre_coalesce;
-        msg->post_coalesce = redis_post_coalesce;
     } else if (g_data_store == DATA_MEMCACHE) {
         if (request) {
             if (conn->dyn_mode) {
@@ -391,10 +407,6 @@ msg_get(struct conn *conn, bool request, const char * const caller)
                msg->parser = memcache_parse_rsp;
             }
         }
-        msg->pre_splitcopy = memcache_pre_splitcopy;
-        msg->post_splitcopy = memcache_post_splitcopy;
-        msg->pre_coalesce = memcache_pre_coalesce;
-        msg->post_coalesce = memcache_post_coalesce;
     } else{
     	log_debug(LOG_VVERB,"incorrect selection of data store %d", g_data_store);
     	exit(0);
@@ -416,11 +428,6 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->request = src->request;
 
     target->parser = src->parser;
-    target->pre_splitcopy = src->pre_splitcopy;
-    target->post_splitcopy = src->post_splitcopy; 
-    target->pre_coalesce = src->pre_coalesce;
-    target->post_coalesce = src->post_coalesce;
-
     target->expect_datastore_reply = src->expect_datastore_reply;
     target->swallow = src->swallow;
     target->type = src->type;
@@ -748,12 +755,12 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
            (conn->type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request);
 
-    nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
+    nbuf = mbuf_split(&msg->mhdr, msg->pos, g_pre_splitcopy, msg);
     if (nbuf == NULL) {
         return DN_ENOMEM;
     }
 
-    status = msg->post_splitcopy(msg);
+    status = g_post_splitcopy(msg);
     if (status != DN_OK) {
         mbuf_put(nbuf);
         return status;

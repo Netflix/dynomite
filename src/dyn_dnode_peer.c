@@ -1371,7 +1371,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
     req->peer = rsp;
     rsp->peer = req;
 
-    rsp->pre_coalesce(rsp);
+    g_pre_coalesce(rsp);
 
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
                (c_conn->type == CONN_DNODE_PEER_CLIENT),
@@ -1562,7 +1562,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
     // establish msg <-> pmsg (response <-> request) link
     msg->peer = pmsg;
     pmsg->peer = msg;
-    pmsg->pre_coalesce(pmsg);
+    g_pre_coalesce(pmsg);
     pmsg->owner = p_conn;
 
     //dyn message's meta data

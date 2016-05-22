@@ -399,6 +399,12 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->hash_tag = cp->hash_tag;
 
     g_data_store = cp->data_store;
+    if ((g_data_store != DATA_REDIS) &&
+        (g_data_store != DATA_MEMCACHE)) {
+        log_error("Invalid datastore in conf file");
+        return DN_ERROR;
+    }
+    set_datastore_ops();
     sp->timeout = cp->timeout;
     sp->backlog = cp->backlog;
 

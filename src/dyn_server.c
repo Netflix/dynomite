@@ -902,7 +902,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     req->peer = rsp;
     rsp->peer = req;
 
-    rsp->pre_coalesce(rsp);
+    g_pre_coalesce(rsp);
 
     c_conn = req->owner;
     log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,

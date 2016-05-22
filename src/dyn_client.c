@@ -211,7 +211,7 @@ client_close(struct context *ctx, struct conn *conn)
     client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
     if (conn->sd < 0) {
-        client_unref_and_try_put(conn);
+        client_unref(conn);
         return;
     }
 
@@ -264,7 +264,7 @@ client_close(struct context *ctx, struct conn *conn)
         log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
-    client_unref_and_try_put(conn);
+    client_unref(conn);
 }
 
 // A response handler first deletes the link between the response and the

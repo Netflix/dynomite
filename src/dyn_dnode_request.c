@@ -45,9 +45,6 @@ static void
 dnode_peer_req_forward_stats(struct context *ctx, struct node *server, struct msg *msg)
 {
     ASSERT(msg->request);
-    //use only the 1st pool
-    //struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    struct server_pool *pool = server->owner;
     stats_pool_incr(ctx, peer_requests);
     stats_pool_incr_by(ctx, peer_request_bytes, msg->mlen);
 }
