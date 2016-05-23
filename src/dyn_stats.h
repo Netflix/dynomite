@@ -179,7 +179,7 @@ struct stats_server {
 struct stats_pool {
     struct string name;   /* pool name (ref) */
     struct array  metric; /* stats_metric[] for pool codec */
-    struct array  server; /* stats_server[] */
+    struct stats_server server; /* stats for datastore */
 };
 
 struct stats_buffer {
@@ -198,9 +198,9 @@ struct stats {
     struct stats_buffer       buf;            /* info buffer */
     struct stats_buffer       clus_desc_buf;  /* cluster_describe buffer */
 
-    struct array              current;        /* stats_pool[] (a) */
-    struct array              shadow;         /* stats_pool[] (b) */
-    struct array              sum;            /* stats_pool[] (c = a + b) */
+    struct stats_pool         current;        /* stats_pool[] (a) */
+    struct stats_pool         shadow;         /* stats_pool[] (b) */
+    struct stats_pool         sum;            /* stats_pool[] (c = a + b) */
 
     pthread_t                 tid;            /* stats aggregator thread */
     int                       sd;             /* stats descriptor */
@@ -241,6 +241,7 @@ struct stats {
     struct string             free_msgs_str;
     struct string             alloc_mbufs_str;
     struct string             free_mbufs_str;
+    struct string			  dyn_memory_str;
 
     struct string             rack_str;
     struct string             rack;
@@ -267,6 +268,7 @@ struct stats {
     size_t           free_msgs;
     uint64_t         alloc_mbufs;
     uint64_t         free_mbufs;
+    uint64_t         dyn_memory;
 
 };
 
@@ -412,7 +414,7 @@ void _stats_server_set_val(struct context *ctx, struct server *server, stats_ser
 int64_t _stats_server_get_val(struct context *ctx, struct server *server, stats_server_field_t fidx);
 
 struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,
-		                   struct array *server_pool, struct context *ctx);
+		                   struct server_pool *sp, struct context *ctx);
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
 

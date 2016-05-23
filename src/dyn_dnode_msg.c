@@ -31,7 +31,7 @@ dyn_parse_core(struct msg *r)
 {
    struct dmsg *dmsg;
    struct mbuf *b;
-   uint8_t *p, *token;
+   uint8_t *p = r->pos, *token;
    uint8_t ch = ' ';
    uint64_t num = 0;
 
@@ -369,6 +369,7 @@ dyn_parse_core(struct msg *r)
           }
           mbuf_insert(&r->mhdr, nbuf);
           mbuf_remove(&r->mhdr, b);
+          mbuf_put(b);
           r->pos = nbuf->pos;
           return false;
        }
@@ -1092,10 +1093,10 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 void
 data_store_parse_req(struct msg *r)
 {
-	if (r->data_store == DATA_REDIS) {
+	if (g_data_store == DATA_REDIS) {
 		return redis_parse_req(r);
 	}
-	else if (r->data_store == DATA_MEMCACHE){
+	else if (g_data_store == DATA_MEMCACHE){
 		return memcache_parse_req(r);
 	}
 	else{
@@ -1109,10 +1110,10 @@ data_store_parse_req(struct msg *r)
 void
 data_store_parse_rsp(struct msg *r)
 {
-	if (r->data_store == DATA_REDIS) {
+	if (g_data_store == DATA_REDIS) {
 		return redis_parse_rsp(r);
 	}
-	else if (r->data_store == DATA_MEMCACHE){
+	else if (g_data_store == DATA_MEMCACHE){
 		return memcache_parse_rsp(r);
 	}
 	else{

@@ -190,7 +190,6 @@ _conn_get(void)
     conn->eof = 0;
     conn->done = 0;
     conn->waiting_to_unref = 0;
-    conn->data_store = DATA_REDIS;
 
     /* for dynomite */
     conn->dyn_mode = 0;
@@ -246,7 +245,7 @@ test_conn_get(void)
 }
 
 struct conn *
-conn_get_peer(void *owner, bool client, int data_store)
+conn_get_peer(void *owner, bool client)
 {
     struct conn *conn;
 
@@ -255,7 +254,6 @@ conn_get_peer(void *owner, bool client, int data_store)
         return NULL;
     }
 
-    conn->data_store = data_store;
     conn->dyn_mode = 1;
 
     if (client) {
@@ -281,7 +279,7 @@ conn_get_peer(void *owner, bool client, int data_store)
 }
 
 struct conn *
-conn_get(void *owner, bool client, int data_store)
+conn_get(void *owner, bool client)
 {
     struct conn *conn;
 
@@ -291,7 +289,6 @@ conn_get(void *owner, bool client, int data_store)
     }
 
     /* connection handles the data store messages (redis, memcached or other) */
-    conn->data_store = data_store;
 
     conn->dyn_mode = 0;
 
@@ -319,7 +316,6 @@ conn_get(void *owner, bool client, int data_store)
 struct conn *
 conn_get_dnode(void *owner)
 {
-    struct server_pool *pool = owner;
     struct conn *conn;
 
     conn = _conn_get();
@@ -327,7 +323,6 @@ conn_get_dnode(void *owner)
         return NULL;
     }
 
-    conn->data_store = pool->data_store;
     conn->dyn_mode = 1;
     init_dnode_proxy_conn(conn);
     conn_ref(conn, owner);
@@ -340,7 +335,6 @@ conn_get_dnode(void *owner)
 struct conn *
 conn_get_proxy(void *owner)
 {
-    struct server_pool *pool = owner;
     struct conn *conn;
 
     conn = _conn_get();
@@ -348,7 +342,6 @@ conn_get_proxy(void *owner)
         return NULL;
     }
 
-    conn->data_store = pool->data_store;
 
     conn->dyn_mode = 0;
     init_proxy_conn(conn);
@@ -510,7 +503,6 @@ void
 conn_print(struct conn *conn)
 {
 	log_debug(LOG_VERB, "sd %d", conn->sd);
-	log_debug(LOG_VERB, "data store %d", conn->data_store);
 	log_debug(LOG_VERB, "Type: %s", conn_get_type_string(conn));
 
 	log_debug(LOG_VERB, "dyn_mode %d", conn->dyn_mode);

@@ -638,7 +638,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     conn_enqueue_inq(ctx, s_conn, msg);
     req_forward_stats(ctx, s_conn->owner, msg);
-    if(msg->data_store==DATA_REDIS){
+    if(g_data_store == DATA_REDIS){
     	req_redis_stats(ctx, s_conn->owner, msg);
 	}
 
@@ -731,8 +731,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
         if (string_compare(rack->name, &pool->rack) == 0 ) {
             rack_msg = msg;
         } else {
-            rack_msg = msg_get(c_conn, msg->request, msg->data_store,
-                               __FUNCTION__);
+            rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
             if (rack_msg == NULL) {
                 log_debug(LOG_VERB, "whelp, looks like yer screwed "
                         "now, buddy. no inter-rack messages for "
@@ -790,7 +789,7 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     if (rack == NULL)
         rack = array_get(&dc->racks, 0);
 
-    struct msg *rack_msg = msg_get(c_conn, msg->request, msg->data_store, __FUNCTION__);
+    struct msg *rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
     if (rack_msg == NULL) {
         log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
         msg_put(rack_msg);

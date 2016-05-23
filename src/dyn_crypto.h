@@ -27,7 +27,7 @@
 #define AES_KEYLEN 32
 
 
-rstatus_t crypto_init(struct context *ctx);
+rstatus_t crypto_init(struct server_pool *sp);
 rstatus_t crypto_init_for_test(void);
 rstatus_t crypto_deinit(void);
 

@@ -144,26 +144,13 @@ aes_init(void)
 }
 
 
-//only support loading one file at this time
-static rstatus_t
-crypto_pool_each_init(void *elem, void *data)
+rstatus_t
+crypto_init(struct server_pool *sp)
 {
-    struct server_pool *sp = elem;
-
     //init AES
     THROW_STATUS(aes_init());
-
     //init RSA
     THROW_STATUS(load_private_rsa_key(sp));
-
-    return DN_OK;
-}
-
-
-rstatus_t
-crypto_init(struct context *ctx)
-{
-    THROW_STATUS(array_each(&ctx->pool, crypto_pool_each_init, NULL));
     return DN_OK;
 }
 

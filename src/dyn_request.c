@@ -32,7 +32,7 @@ req_get(struct conn *conn)
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
 
-    msg = msg_get(conn, true, conn->data_store, __FUNCTION__);
+    msg = msg_get(conn, true, __FUNCTION__);
     if (msg == NULL) {
         conn->err = errno;
     }
