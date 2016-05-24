@@ -42,14 +42,11 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-dnode_peer_req_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
+dnode_peer_req_forward_stats(struct context *ctx, struct node *server, struct msg *msg)
 {
     ASSERT(msg->request);
-    //use only the 1st pool
-    //struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    struct server_pool *pool = server->owner;
-    stats_pool_incr(ctx, pool, peer_requests);
-    stats_pool_incr_by(ctx, pool, peer_request_bytes, msg->mlen);
+    stats_pool_incr(ctx, peer_requests);
+    stats_pool_incr_by(ctx, peer_request_bytes, msg->mlen);
 }
 
 
@@ -60,7 +57,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                        struct rack *rack, uint8_t *key, uint32_t keylen)
 {
 
-    struct server *server = p_conn->owner;
+    struct node *server = p_conn->owner;
     log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s' dc '%.*s' ",
               dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd),
               rack->name->len, rack->name->data,

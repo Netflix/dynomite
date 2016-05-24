@@ -16,7 +16,7 @@
 
 
 static bool
-is_same_dc(struct server_pool *sp, struct server *peer_node)
+is_same_dc(struct server_pool *sp, struct node *peer_node)
 {
     return string_compare(&sp->dc, &peer_node->dc) == 0;
 }
@@ -24,14 +24,15 @@ is_same_dc(struct server_pool *sp, struct server *peer_node)
 static void
 dnode_peer_ref(struct conn *conn, void *owner)
 {
-    struct server *peer = owner;
+    struct node *peer = owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner == NULL);
 
-    conn->family = peer->family;
-    conn->addrlen = peer->addrlen;
-    conn->addr = peer->addr;
+    conn->family = peer->endpoint.family;
+    conn->addrlen = peer->endpoint.addrlen;
+    conn->addr = peer->endpoint.addr;
+    string_duplicate(&conn->pname, &peer->endpoint.pname);
 
     peer->ns_conn_q++;
     TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
@@ -40,14 +41,14 @@ dnode_peer_ref(struct conn *conn, void *owner)
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
-                   peer->pname.len, peer->pname.data);
+                   peer->endpoint.pname.len, peer->endpoint.pname.data);
     }
 }
 
 static void
 dnode_peer_unref(struct conn *conn)
 {
-    struct server *peer;
+    struct node *peer;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner != NULL);
@@ -61,14 +62,14 @@ dnode_peer_unref(struct conn *conn)
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
-               peer->pname.len, peer->pname.data);
+               peer->endpoint.pname.len, peer->endpoint.pname.data);
     }
 }
 
 msec_t
 dnode_peer_timeout(struct msg *msg, struct conn *conn)
 {
-    struct server *server;
+    struct node *server;
     struct server_pool *pool;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
@@ -121,7 +122,7 @@ dnode_peer_active(struct conn *conn)
 static rstatus_t
 dnode_peer_each_set_owner(void *elem, void *data)
 {
-    struct server *s = elem;
+    struct node *s = elem;
     struct server_pool *sp = data;
 
     s->owner = sp;
@@ -130,42 +131,43 @@ dnode_peer_each_set_owner(void *elem, void *data)
 }
 
 static rstatus_t
-dnode_peer_add_local(struct server_pool *pool, struct server *peer)
+dnode_peer_add_local(struct server_pool *pool, struct node *self)
 {
-    ASSERT(peer != NULL);
-    peer->idx = 0; /* this might be psychotic, trying it for now */
+    ASSERT(self != NULL);
+    self->idx = 0; /* this might be psychotic, trying it for now */
 
-    peer->pname = pool->d_addrstr;
+    struct string *p_pname = &pool->dnode_proxy_endpoint.pname;
+    self->endpoint.pname = *p_pname;
 
-    uint8_t *p = pool->d_addrstr.data + pool->d_addrstr.len - 1;
-    uint8_t *start = pool->d_addrstr.data;
-    string_copy(&peer->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
+    uint8_t *p = p_pname->data + p_pname->len - 1;
+    uint8_t *start = p_pname->data;
+    string_copy(&self->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
 
-    //peer->name = pool->d_addrstr;
-    peer->port = pool->d_port;
+    //self->name = pool->d_addrstr;
+    self->endpoint.port = pool->dnode_proxy_endpoint.port;
 
-    peer->weight = 0;  /* hacking this out of the way for now */
-    peer->rack = pool->rack;
-    peer->is_local = true;
+    self->endpoint.weight = 0;  /* hacking this out of the way for now */
+    self->rack = pool->rack;
+    self->is_local = true;
     //TODO-jeb might need to copy over tokens, not sure if this is good enough
-    peer->tokens = pool->tokens;
+    self->tokens = pool->tokens;
 
-    peer->family = pool->d_family;
-    peer->addrlen = pool->d_addrlen;
-    peer->addr = pool->d_addr;
+    self->endpoint.family = pool->dnode_proxy_endpoint.family;
+    self->endpoint.addrlen = pool->dnode_proxy_endpoint.addrlen;
+    self->endpoint.addr = pool->dnode_proxy_endpoint.addr;
 
-    peer->ns_conn_q = 0;
-    TAILQ_INIT(&peer->s_conn_q);
+    self->ns_conn_q = 0;
+    TAILQ_INIT(&self->s_conn_q);
 
-    peer->next_retry = 0ULL;
-    peer->failure_count = 0;
-    peer->is_seed = 1;
-    peer->processed = 0;
-    string_copy(&peer->dc, pool->dc.data, pool->dc.len);
-    peer->owner = pool;
+    self->next_retry = 0ULL;
+    self->failure_count = 0;
+    self->is_seed = 1;
+    self->processed = 0;
+    string_copy(&self->dc, pool->dc.data, pool->dc.len);
+    self->owner = pool;
 
     log_debug(LOG_VERB, "dyn: transform to local node to peer %"PRIu32" '%.*s'",
-            peer->idx, pool->name.len, pool->name.data);
+            self->idx, pool->name.len, pool->name.data);
 
     return DN_OK;
 }
@@ -176,7 +178,7 @@ dnode_peer_deinit(struct array *nodes)
     uint32_t i, nnode;
 
     for (i = 0, nnode = array_n(nodes); i < nnode; i++) {
-        struct server *s;
+        struct node *s;
 
         s = array_pop(nodes);
         IGNORE_RET_VAL(s);
@@ -210,14 +212,14 @@ dnode_peer_init(struct context *ctx)
         log_debug(LOG_INFO, "dyn: look like you are running with no seeds defined. This is ok for running with just one node.");
 
         // add current node to peers array
-        status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct server));
+        status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct node));
         if (status != DN_OK) {
             return status;
         }
 
-        struct server *peer = array_push(peers);
-        ASSERT(peer != NULL);
-        status = dnode_peer_add_local(sp, peer);
+        struct node *self = array_push(peers);
+        ASSERT(self != NULL);
+        status = dnode_peer_add_local(sp, self);
         if (status != DN_OK) {
             dnode_peer_deinit(peers);
         }
@@ -227,7 +229,7 @@ dnode_peer_init(struct context *ctx)
 
     ASSERT(array_n(seeds) == 0);
 
-    status = array_init(seeds, nseed, sizeof(struct server));
+    status = array_init(seeds, nseed, sizeof(struct node));
     if (status != DN_OK) {
         return status;
     }
@@ -253,12 +255,12 @@ dnode_peer_init(struct context *ctx)
 
     // add current node to peers array
     uint32_t peer_cnt = nseed + 1;
-    status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct server));
+    status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct node));
     if (status != DN_OK) {
         return status;
     }
 
-    struct server *peer = array_push(peers);
+    struct node *peer = array_push(peers);
     ASSERT(peer != NULL);
     status = dnode_peer_add_local(sp, peer);
     if (status != DN_OK) {
@@ -292,7 +294,7 @@ dnode_peer_init(struct context *ctx)
 }
 
 static bool
-is_conn_secured(struct server_pool *sp, struct server *peer_node)
+is_conn_secured(struct server_pool *sp, struct node *peer_node)
 {
     //ASSERT(peer_server != NULL);
     //ASSERT(sp != NULL);
@@ -323,125 +325,36 @@ is_conn_secured(struct server_pool *sp, struct server *peer_node)
 }
 
 static struct conn *
-dnode_peer_conn(struct server *server)
+dnode_peer_conn(struct node *peer)
 {
     struct server_pool *pool;
     struct conn *conn;
 
-    pool = server->owner;
+    pool = peer->owner;
 
-    if (server->ns_conn_q < 1) {
-        conn = conn_get_peer(server, false);
-        if (is_conn_secured(pool, server)) {
+    if (peer->ns_conn_q < 1) {
+        conn = conn_get_peer(peer, false);
+        if (is_conn_secured(pool, peer)) {
             conn->dnode_secured = 1;
             conn->dnode_crypto_state = 0; //need to do a encryption handshake
         }
 
-        conn->same_dc = is_same_dc(pool, server)? 1 : 0;
+        conn->same_dc = is_same_dc(pool, peer)? 1 : 0;
 
         return conn;
     }
 
     /*
-     * Pick a server connection from the head of the queue and insert
+     * Pick a peer connection from the head of the queue and insert
      * it back into the tail of queue to maintain the lru order
      */
-    conn = TAILQ_FIRST(&server->s_conn_q);
+    conn = TAILQ_FIRST(&peer->s_conn_q);
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
-    TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
-    TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
+    TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
+    TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
 
     return conn;
-}
-
-static rstatus_t
-dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn)
-{
-    rstatus_t status;
-
-    if (log_loggable(LOG_VERB)) {
-        log_debug(LOG_VERB, "dnode_peer_connect dyn: connect to peer '%.*s'", server->pname.len,
-                server->pname.data);
-    }
-
-    if (ctx->admin_opt > 0)
-        return DN_OK;
-
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
-    if (conn->sd > 0) {
-        /* already connected on peer connection */
-        return DN_OK;
-    }
-
-    conn->sd = socket(conn->family, SOCK_STREAM, 0);
-    if (conn->sd < 0) {
-        log_error("dyn: socket for peer '%.*s' failed: %s", server->pname.len,
-                server->pname.data, strerror(errno));
-        status = DN_ERROR;
-        goto error;
-    }
-    log_debug(LOG_WARN, "dnode: connected to peer '%.*s' on p %d", server->pname.len,
-            server->pname.data, conn->sd);
-
-
-    status = dn_set_nonblocking(conn->sd);
-    if (status != DN_OK) {
-        log_error("dyn: set nonblock on s %d for peer '%.*s' failed: %s",
-                conn->sd,  server->pname.len, server->pname.data,
-                strerror(errno));
-        goto error;
-    }
-
-
-    if (server->pname.data[0] != '/') {
-        status = dn_set_tcpnodelay(conn->sd);
-        if (status != DN_OK) {
-            log_warn("dyn: set tcpnodelay on s %d for peer '%.*s' failed, ignored: %s",
-                    conn->sd, server->pname.len, server->pname.data,
-                    strerror(errno));
-        }
-    }
-
-    status = event_add_conn(ctx->evb, conn);
-    if (status != DN_OK) {
-        log_error("dyn: event add conn s %d for peer '%.*s' failed: %s",
-                conn->sd, server->pname.len, server->pname.data,
-                strerror(errno));
-        goto error;
-    }
-
-    ASSERT(!conn->connecting && !conn->connected);
-
-    status = connect(conn->sd, conn->addr, conn->addrlen);
-
-    if (status != DN_OK) {
-        if (errno == EINPROGRESS) {
-            conn->connecting = 1;
-            log_debug(LOG_DEBUG, "dyn: connecting on s %d to peer '%.*s'",
-                    conn->sd, server->pname.len, server->pname.data);
-            return DN_OK;
-        }
-
-        log_error("dyn: connect on s %d to peer '%.*s' failed: %s", conn->sd,
-                server->pname.len, server->pname.data, strerror(errno));
-
-        goto error;
-    }
-
-
-    ASSERT(!conn->connecting);
-    conn->connected = 1;
-    log_debug(LOG_WARN, "dyn: connected on s %d to peer '%.*s'", conn->sd,
-            server->pname.len, server->pname.data);
-
-
-    return DN_OK;
-
-    error:
-    conn->err = errno;
-    return status;
 }
 
 static void
@@ -492,7 +405,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 
 
 static void
-dnode_peer_failure(struct context *ctx, struct server *server)
+dnode_peer_failure(struct context *ctx, struct node *server)
 {
     struct server_pool *pool = server->owner;
     msec_t now;
@@ -502,7 +415,7 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 
     if (log_loggable(LOG_VERB)) {
        log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" ",
-                  server->pname.len, server->pname.data, server->failure_count);
+                  server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count);
     }
 
 
@@ -514,11 +427,11 @@ dnode_peer_failure(struct context *ctx, struct server *server)
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "dyn: update peer pool '%.*s' for peer '%.*s' "
                "for next %"PRIu32" secs", pool->name.len,
-               pool->name.data, server->pname.len, server->pname.data,
+               pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
                pool->server_retry_timeout_ms/1000);
     }
 
-    stats_pool_incr(ctx, pool, peer_ejects);
+    stats_pool_incr(ctx, peer_ejects);
 
     //if (server->failure_count == 3)
     //   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
@@ -533,22 +446,21 @@ dnode_peer_failure(struct context *ctx, struct server *server)
 static void
 dnode_peer_close_stats(struct context *ctx, struct conn *conn)
 {
-    struct server *server = conn->owner;
     if (conn->connected) {
-        stats_pool_decr(ctx, server->owner, peer_connections);
+        stats_pool_decr(ctx, peer_connections);
     }
 
     if (conn->eof) {
-        stats_pool_incr(ctx, server->owner, peer_eof);
+        stats_pool_incr(ctx, peer_eof);
         return;
     }
 
     switch (conn->err) {
     case ETIMEDOUT:
         if (conn->same_dc)
-            stats_pool_incr(ctx, server->owner, peer_timedout);
+            stats_pool_incr(ctx, peer_timedout);
         else
-            stats_pool_incr(ctx, server->owner, remote_peer_timedout);
+            stats_pool_incr(ctx, remote_peer_timedout);
         break;
     case EPIPE:
     case ECONNRESET:
@@ -560,7 +472,7 @@ dnode_peer_close_stats(struct context *ctx, struct conn *conn)
     case EHOSTDOWN:
     case EHOSTUNREACH:
     default:
-        stats_pool_incr(ctx, server->owner, peer_err);
+        stats_pool_incr(ctx, peer_err);
         break;
     }
 }
@@ -572,10 +484,10 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    struct server *server = conn->owner;
+    struct node *peer = conn->owner;
 
-    log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", server->pname.len,
-            server->pname.data);
+    log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", peer->endpoint.pname.len,
+            peer->endpoint.pname.data);
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
@@ -591,7 +503,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
-        /* dequeue the message (request) from server outq */
+        /* dequeue the message (request) from peer outq */
         conn_dequeue_outq(ctx, conn, msg);
         dnode_peer_ack_err(ctx, conn, msg);
         out_counter++;
@@ -603,7 +515,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
         nmsg = TAILQ_NEXT(msg, s_tqe);
 
-        /* dequeue the message (request) from server inq */
+        /* dequeue the message (request) from peer inq */
         conn_dequeue_inq(ctx, conn, msg);
         // We should also remove the msg from the timeout rbtree.
         // for outq, its already taken care of
@@ -611,7 +523,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         dnode_peer_ack_err(ctx, conn, msg);
         in_counter++;
 
-        stats_pool_incr(ctx, server->owner, peer_dropped_requests);
+        stats_pool_incr(ctx, peer_dropped_requests);
     }
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
@@ -652,7 +564,7 @@ static rstatus_t
 dnode_peer_each_preconnect(void *elem, void *data)
 {
     rstatus_t status;
-    struct server *peer;
+    struct node *peer;
     struct server_pool *sp;
     struct conn *conn;
 
@@ -667,10 +579,10 @@ dnode_peer_each_preconnect(void *elem, void *data)
         return DN_ENOMEM;
     }
 
-    status = dnode_peer_connect(sp->ctx, peer, conn);
+    status = conn_connect(sp->ctx, conn);
     if (status != DN_OK) {
         log_warn("dyn: connect to peer '%.*s' failed, ignored: %s",
-                peer->pname.len, peer->pname.data, strerror(errno));
+                peer->endpoint.pname.len, peer->endpoint.pname.data, strerror(errno));
         dnode_peer_close(sp->ctx, conn);
     }
 
@@ -680,7 +592,7 @@ dnode_peer_each_preconnect(void *elem, void *data)
 static rstatus_t
 dnode_peer_each_disconnect(void *elem, void *data)
 {
-    struct server *server;
+    struct node *server;
     struct server_pool *pool;
 
     server = elem;
@@ -746,7 +658,7 @@ dnode_peer_forward_state(void *rmsg)
     if (ran_index == 0)
        ran_index += 1;
 
-    struct server *peer = (struct server *) array_get(peers, ran_index);
+    struct node *peer = (struct node *) array_get(peers, ran_index);
 
     //log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
@@ -757,7 +669,7 @@ dnode_peer_forward_state(void *rmsg)
         return DN_ERROR;
     }
 
-    status = dnode_peer_connect(sp->ctx, peer, conn);
+    status = conn_connect(sp->ctx, conn);
     if (status != DN_OK ) {
         dnode_peer_close(sp->ctx, conn);
         log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
@@ -817,7 +729,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
     //for each peer, send a registered msg
     for (i = 0; i < nelem; i++) {
-        struct server *peer = (struct server *) array_get(peers, i);
+        struct node *peer = (struct node *) array_get(peers, i);
         if (peer->is_local)
             continue;
 
@@ -831,7 +743,7 @@ dnode_peer_handshake_announcing(void *rmsg)
         }
 
 
-        status = dnode_peer_connect(sp->ctx, peer, conn);
+        status = conn_connect(sp->ctx, conn);
         if (status != DN_OK ) {
             dnode_peer_close(sp->ctx, conn);
             log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
@@ -859,7 +771,7 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
     uint32_t i,nelem;
     nelem = array_n(peers);
     for (i = 0; i < nelem; i++) {
-        struct server *peer = (struct server *) array_get(peers, i);
+        struct node *peer = (struct node *) array_get(peers, i);
         struct conn *conn, *nconn;
         for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
                 conn = nconn) {
@@ -872,27 +784,27 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
 
 
 static rstatus_t
-dnode_peer_add_node(struct server_pool *sp, struct node *node)
+dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
 {
     rstatus_t status;
     struct array *peers = &sp->peers;
-    struct server *s = array_push(peers);
+    struct node *s = array_push(peers);
 
     s->owner = sp;
     s->idx = array_idx(peers, s);
 
     //log_debug(LOG_VERB, "node rack_name         : '%.*s'", node->rack.len, node->rack.data);
     //log_debug(LOG_VERB, "node dc_name        : '%.*s'", node->dc.len, node->dc.data);
-    //log_debug(LOG_VERB, "node address          : '%.*s'", node->pname.len, node->pname.data);
+    //log_debug(LOG_VERB, "node address          : '%.*s'", node->endpoint.pname.len, node->endpoint.pname.data);
     //log_debug(LOG_VERB, "node ip         : '%.*s'", node->name.len, node->name.data);
 
 
-    string_copy(&s->pname, node->pname.data, node->pname.len);
+    string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
     string_copy(&s->name, node->name.data, node->name.len);
     string_copy(&s->rack, node->rack.data, node->rack.len);
     string_copy(&s->dc, node->dc.data, node->dc.len);
 
-    s->port = (uint16_t) node->port;
+    s->endpoint.port = (uint16_t) node->port;
     s->is_local = node->is_local;
     s->state = node->state;
     s->processed = 0;
@@ -903,10 +815,10 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
     copy_dyn_token(src_token, dst_token);
 
     struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
-    dn_resolve(&s->name, s->port, info);
-    s->family = info->family;
-    s->addrlen = info->addrlen;
-    s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+    dn_resolve(&s->name, s->endpoint.port, info);
+    s->endpoint.family = info->family;
+    s->endpoint.addrlen = info->addrlen;
+    s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
@@ -915,7 +827,7 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
     s->is_seed = node->is_seed;
 
     log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
-            s->idx, s->pname.len, s->pname.data);
+            s->idx, s->endpoint.pname.len, s->endpoint.pname.data);
 
     dnode_peer_relink_conn_owner(sp);
 
@@ -934,7 +846,7 @@ dnode_peer_add(void *rmsg)
     rstatus_t status;
     struct ring_msg *msg = rmsg;
     struct server_pool *sp = msg->sp;
-    struct node *node = array_get(&msg->nodes, 0);
+    struct gossip_node *node = array_get(&msg->nodes, 0);
     log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
     status = dnode_peer_add_node(sp, node);
 
@@ -943,7 +855,7 @@ dnode_peer_add(void *rmsg)
 
 /*
 rstatus_t
-dnode_peer_add(struct server_pool *sp, struct node *node)
+dnode_peer_add(struct server_pool *sp, struct gossip_node *node)
 {
     rstatus_t status;
 
@@ -960,16 +872,16 @@ dnode_peer_replace(void *rmsg)
     //rstatus_t status;
     struct ring_msg *msg = rmsg;
     struct server_pool *sp = msg->sp;
-    struct node *node = array_get(&msg->nodes, 0);
+    struct gossip_node *node = array_get(&msg->nodes, 0);
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
     struct array *peers = &sp->peers;
-    struct server *s = NULL;
+    struct node *s = NULL;
 
     uint32_t i,nelem;
     //bool node_exist = false;
     //TODOs: use hash table here
     for (i=1, nelem = array_n(peers); i< nelem; i++) {
-        struct server * peer = (struct server *) array_get(peers, i);
+        struct node * peer = (struct node *) array_get(peers, i);
         if (string_compare(&peer->rack, &node->rack) == 0) {
             //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
             struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
@@ -986,21 +898,21 @@ dnode_peer_replace(void *rmsg)
         log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
         log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
 
-        string_deinit(&s->pname);
+        string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
-        string_copy(&s->pname, node->pname.data, node->pname.len);
+        string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
         string_copy(&s->name, node->name.data, node->name.len);
 
-        //TODOs: need to free the previous s->addr?
-        //if (s->addr != NULL) {
-        //   dn_free(s->addr);
+        //TODOs: need to free the previous s->endpoint.addr?
+        //if (s->endpoint.addr != NULL) {
+        //   dn_free(s->endpoint.addr);
         //}
 
         struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
-        dn_resolve(&s->name, s->port, info);
-        s->family = info->family;
-        s->addrlen = info->addrlen;
-        s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+        dn_resolve(&s->name, s->endpoint.port, info);
+        s->endpoint.family = info->family;
+        s->endpoint.addrlen = info->addrlen;
+        s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
 
 
         dnode_peer_each_disconnect(s, NULL);
@@ -1015,18 +927,18 @@ dnode_peer_replace(void *rmsg)
 
 /*
 rstatus_t
-dnode_peer_replace(struct server_pool *sp, struct node *node)
+dnode_peer_replace(struct server_pool *sp, struct gossip_node *node)
 {
     //rstatus_t status;
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
     struct array *peers = &sp->peers;
-    struct server *s = NULL;
+    struct node *s = NULL;
 
     uint32_t i,nelem;
     //bool node_exist = false;
     //TODOs: use hash table here
     for (i=1, nelem = array_n(peers); i< nelem; i++) {
-        struct server * peer = (struct server *) array_get(peers, i);
+        struct node * peer = (struct node *) array_get(peers, i);
         if (string_compare(&peer->rack, &node->rack) == 0) {
             //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
             struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
@@ -1043,21 +955,21 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
         log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
         log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
 
-        string_deinit(&s->pname);
+        string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
-        string_copy(&s->pname, node->pname.data, node->pname.len);
+        string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
         string_copy(&s->name, node->name.data, node->name.len);
 
-        //TODOs: need to free the previous s->addr?
-        //if (s->addr != NULL) {
-        //   dn_free(s->addr);
+        //TODOs: need to free the previous s->endpoint.addr?
+        //if (s->endpoint.addr != NULL) {
+        //   dn_free(s->endpoint.addr);
         //}
 
         struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
-        dn_resolve(&s->name, s->port, info);
-        s->family = info->family;
-        s->addrlen = info->addrlen;
-        s->addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
+        dn_resolve(&s->name, s->endpoint.port, info);
+        s->endpoint.family = info->family;
+        s->endpoint.addrlen = info->addrlen;
+        s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
 
 
         dnode_peer_each_disconnect(s, NULL);
@@ -1074,33 +986,33 @@ dnode_peer_replace(struct server_pool *sp, struct node *node)
 void
 dnode_peer_connected(struct context *ctx, struct conn *conn)
 {
-    struct server *server = conn->owner;
+    struct node *server = conn->owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connecting && !conn->connected);
 
-    stats_pool_incr(ctx, server->owner, peer_connections);
+    stats_pool_incr(ctx, peer_connections);
 
     conn->connecting = 0;
     conn->connected = 1;
 
         if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->sd,
-              server->pname.len, server->pname.data);
+              server->endpoint.pname.len, server->endpoint.pname.data);
         }
 }
 
 static void
 dnode_peer_ok(struct context *ctx, struct conn *conn)
 {
-    struct server *server = conn->owner;
+    struct node *server = conn->owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connected);
 
     if (server->failure_count != 0) {
         log_debug(LOG_VERB, "dyn: reset peer '%.*s' failure count from %"PRIu32
-                " to 0", server->pname.len, server->pname.data,
+                " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
                 server->failure_count);
         server->failure_count = 0;
         server->next_retry = 0ULL;
@@ -1145,11 +1057,11 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     return token;
 }
 
-static struct server *
+static struct node *
 dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
     uint32_t pos = 0;
-    struct server *server = NULL;
+    struct node *server = NULL;
     struct continuum *entry;
 
     if (rack->ncontinuum > 1) {
@@ -1165,11 +1077,11 @@ dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint
     return server;
 }
 
-static struct server *
+static struct node *
 dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
                        uint8_t *key, uint32_t keylen)
 {
-    struct server *server;
+    struct node *server;
     uint32_t idx;
     struct dyn_token *token = NULL;
 
@@ -1203,7 +1115,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
 
     if (log_loggable(LOG_VERB)) {
         log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
-                key, pool->dist_type, server->pname.len, server->pname.data);
+                key, pool->dist_type, server->endpoint.pname.len, server->endpoint.pname.data);
     }
 
     return server;
@@ -1215,7 +1127,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
                      uint8_t msg_type)
 {
     rstatus_t status;
-    struct server *server;
+    struct node *peer;
     struct conn *conn;
 
     log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
@@ -1227,49 +1139,49 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
     }
 
     if (msg_type == 1) {  //always local
-        server = array_get(&pool->peers, 0);
+        peer = array_get(&pool->peers, 0);
     } else {
-        /* from a given {key, keylen} pick a server from pool */
-        server = dnode_peer_pool_server(pool, rack, key, keylen);
-        if (server == NULL) {
-            log_debug(LOG_VERB, "What? There is no such server in rack '%.*s' for key '%.*s'",
+        /* from a given {key, keylen} pick a peer from pool */
+        peer = dnode_peer_pool_server(pool, rack, key, keylen);
+        if (peer == NULL) {
+            log_debug(LOG_VERB, "What? There is no such peer in rack '%.*s' for key '%.*s'",
                     rack->name, keylen, key);
             return NULL;
         }
     }
 
-    /* pick a connection to a given server */
-    conn = dnode_peer_conn(server);
+    /* pick a connection to a given peer */
+    conn = dnode_peer_conn(peer);
     if (conn == NULL) {
         return NULL;
     }
 
-    if (server->is_local) {
+    if (peer->is_local) {
         return conn; //Don't bother to connect
     }
 
-    if (server->state == DOWN) {
-        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Down", server->name);
+    if (peer->state == DOWN) {
+        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Down", peer->name);
         conn->err = EHOSTDOWN;
         dnode_peer_close(ctx, conn);
         return NULL;
-    } else if (server->state == RESET) {
-        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", server->name);
+    } else if (peer->state == RESET) {
+        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
 
         dnode_peer_close_socket(ctx, conn);
-        status = dnode_peer_connect(ctx, server, conn);
+        status = conn_connect(ctx, conn);
         if (status != DN_OK) {
             conn->err = EHOSTDOWN;
             dnode_peer_close(ctx, conn);
             return NULL;
         }
 
-        server->state = NORMAL;
-        log_debug(LOG_WARN, "after setting back server's state to NORMAL");
+        peer->state = NORMAL;
+        log_debug(LOG_WARN, "after setting back peer's state to NORMAL");
         return conn;
     }
 
-    status = dnode_peer_connect(ctx, server, conn);
+    status = conn_connect(ctx, conn);
     if (status != DN_OK) {
         dnode_peer_close(ctx, conn);
         return NULL;
@@ -1305,11 +1217,7 @@ dnode_peer_pool_disconnect(struct context *ctx)
     struct server_pool *sp = &ctx->pool;
 
     status = array_each(&sp->peers, dnode_peer_each_disconnect, NULL);
-    if (status != DN_OK) {
-        return status;
-    }
-
-    return DN_OK;
+    IGNORE_RET_VAL(status);
 }
 
 /*
@@ -1378,11 +1286,11 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-dnode_rsp_forward_stats(struct context *ctx, struct server *server, struct msg *msg)
+dnode_rsp_forward_stats(struct context *ctx, struct msg *msg)
 {
     ASSERT(!msg->request);
-    stats_pool_incr(ctx, server->owner, peer_responses);
-    stats_pool_incr_by(ctx, server->owner, peer_response_bytes, msg->mlen);
+    stats_pool_incr(ctx, peer_responses);
+    stats_pool_incr_by(ctx, peer_response_bytes, msg->mlen);
 }
 
 static void
@@ -1463,13 +1371,13 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
     req->peer = rsp;
     rsp->peer = req;
 
-    rsp->pre_coalesce(rsp);
+    g_pre_coalesce(rsp);
 
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
                (c_conn->type == CONN_DNODE_PEER_CLIENT),
                "c_conn type %s", conn_get_type_string(c_conn));
 
-    dnode_rsp_forward_stats(ctx, peer_conn->owner, rsp);
+    dnode_rsp_forward_stats(ctx, rsp);
     // c_conn owns respnse now
     status = conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
                                   rsp);
@@ -1519,7 +1427,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
                   peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
                   rsp->parent_id);
         if (c_conn && conn_to_ctx(c_conn))
-            stats_pool_incr(conn_to_ctx(c_conn), c_conn->owner,
+            stats_pool_incr(conn_to_ctx(c_conn),
                     peer_mismatch_requests);
 
         // TODO : should you be worried about message id getting wrapped around to 0?
@@ -1654,7 +1562,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
     // establish msg <-> pmsg (response <-> request) link
     msg->peer = pmsg;
     pmsg->peer = msg;
-    pmsg->pre_coalesce(pmsg);
+    g_pre_coalesce(pmsg);
     pmsg->owner = p_conn;
 
     //dyn message's meta data
@@ -1687,7 +1595,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
         }
     }
 
-    //dnode_rsp_forward_stats(ctx, s_conn->owner, msg);
+    //dnode_rsp_forward_stats(ctx, msg);
 }
 
 */
@@ -1758,15 +1666,14 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
 
     conn->imsg_count++;
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     if (conn->same_dc) {
         histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
-        stats_pool_incr(ctx, pool, peer_in_queue);
-        stats_pool_incr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
+        stats_pool_incr(ctx, peer_in_queue);
+        stats_pool_incr_by(ctx, peer_in_queue_bytes, msg->mlen);
     } else {
         histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
-        stats_pool_incr(ctx, pool, remote_peer_in_queue);
-        stats_pool_incr_by(ctx, pool, remote_peer_in_queue_bytes, msg->mlen);
+        stats_pool_incr(ctx, remote_peer_in_queue);
+        stats_pool_incr_by(ctx, remote_peer_in_queue_bytes, msg->mlen);
     }
 
 }
@@ -1781,15 +1688,14 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
 
     conn->imsg_count--;
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     if (conn->same_dc) {
         histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
-        stats_pool_decr(ctx, pool, peer_in_queue);
-        stats_pool_decr_by(ctx, pool, peer_in_queue_bytes, msg->mlen);
+        stats_pool_decr(ctx, peer_in_queue);
+        stats_pool_decr_by(ctx, peer_in_queue_bytes, msg->mlen);
     } else {
         histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
-        stats_pool_decr(ctx, pool, remote_peer_in_queue);
-        stats_pool_decr_by(ctx, pool, remote_peer_in_queue_bytes, msg->mlen);
+        stats_pool_decr(ctx, remote_peer_in_queue);
+        stats_pool_decr_by(ctx, remote_peer_in_queue_bytes, msg->mlen);
     }
 }
 
@@ -1802,17 +1708,15 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
 
-    //use only the 1st pool
     conn->omsg_count++;
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     if (conn->same_dc) {
         histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
-        stats_pool_incr(ctx, pool, peer_out_queue);
-        stats_pool_incr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+        stats_pool_incr(ctx, peer_out_queue);
+        stats_pool_incr_by(ctx, peer_out_queue_bytes, msg->mlen);
     } else {
         histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
-        stats_pool_incr(ctx, pool, remote_peer_out_queue);
-        stats_pool_incr_by(ctx, pool, remote_peer_out_queue_bytes, msg->mlen);
+        stats_pool_incr(ctx, remote_peer_out_queue);
+        stats_pool_incr_by(ctx, remote_peer_out_queue_bytes, msg->mlen);
     }
 }
 
@@ -1827,17 +1731,15 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VVERB, "conn %p dequeue outq %p", conn, msg);
 
-    //use the 1st pool
     conn->omsg_count--;
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
     if (conn->same_dc) {
         histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
-        stats_pool_decr(ctx, pool, peer_out_queue);
-        stats_pool_decr_by(ctx, pool, peer_out_queue_bytes, msg->mlen);
+        stats_pool_decr(ctx, peer_out_queue);
+        stats_pool_decr_by(ctx, peer_out_queue_bytes, msg->mlen);
     } else {
         histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
-        stats_pool_decr(ctx, pool, remote_peer_out_queue);
-        stats_pool_decr_by(ctx, pool, remote_peer_out_queue_bytes, msg->mlen);
+        stats_pool_decr(ctx, remote_peer_out_queue);
+        stats_pool_decr_by(ctx, remote_peer_out_queue_bytes, msg->mlen);
     }
 }
 

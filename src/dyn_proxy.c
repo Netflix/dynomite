@@ -34,9 +34,10 @@ proxy_ref(struct conn *conn, void *owner)
     ASSERT(conn->type == CONN_PROXY);
     ASSERT(conn->owner == NULL);
 
-    conn->family = pool->family;
-    conn->addrlen = pool->addrlen;
-    conn->addr = pool->addr;
+    conn->family = pool->proxy_endpoint.family;
+    conn->addrlen = pool->proxy_endpoint.addrlen;
+    conn->addr = pool->proxy_endpoint.addr;
+    string_duplicate(&conn->pname, &pool->proxy_endpoint.pname);
 
     pool->p_conn = conn;
 
@@ -91,99 +92,6 @@ proxy_close(struct context *ctx, struct conn *conn)
     conn_put(conn);
 }
 
-static rstatus_t
-proxy_reuse(struct conn *p)
-{
-    rstatus_t status;
-    struct sockaddr_un *un;
-
-    switch (p->family) {
-    case AF_INET:
-    case AF_INET6:
-        status = dn_set_reuseaddr(p->sd);
-        break;
-
-    case AF_UNIX:
-        /*
-         * bind() will fail if the pathname already exist. So, we call unlink()
-         * to delete the pathname, in case it already exists. If it does not
-         * exist, unlink() returns error, which we ignore
-         */
-        un = (struct sockaddr_un *) p->addr;
-        unlink(un->sun_path);
-        status = DN_OK;
-        break;
-
-    default:
-        NOT_REACHED();
-        status = DN_ERROR;
-    }
-
-    return status;
-}
-
-static rstatus_t
-proxy_listen(struct context *ctx, struct conn *p)
-{
-    rstatus_t status;
-    struct server_pool *pool = p->owner;
-
-    ASSERT(p->type == CONN_PROXY);
-
-    p->sd = socket(p->family, SOCK_STREAM, 0);
-    if (p->sd < 0) {
-        log_error("socket failed: %s", strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = proxy_reuse(p);
-    if (status < 0) {
-        log_error("reuse of addr '%.*s' for listening on p %d failed: %s",
-                  pool->addrstr.len, pool->addrstr.data, p->sd,
-                  strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = bind(p->sd, p->addr, p->addrlen);
-    if (status < 0) {
-        log_error("bind on p %d to addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = listen(p->sd, pool->backlog);
-    if (status < 0) {
-        log_error("listen on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = dn_set_nonblocking(p->sd);
-    if (status < 0) {
-        log_error("set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
-                  pool->addrstr.len, pool->addrstr.data, strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = event_add_conn(ctx->evb, p);
-    if (status < 0) {
-        log_error("event add conn p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->addrstr.len, pool->addrstr.data,
-                  strerror(errno));
-        return DN_ERROR;
-    }
-
-    status = event_del_out(ctx->evb, p);
-    if (status < 0) {
-        log_error("event del out p %d on addr '%.*s' failed: %s",
-                  p->sd, pool->addrstr.len, pool->addrstr.data,
-                  strerror(errno));
-        return DN_ERROR;
-    }
-
-    return DN_OK;
-}
-
 rstatus_t
 proxy_init(struct context *ctx)
 {
@@ -195,7 +103,7 @@ proxy_init(struct context *ctx)
         return DN_ENOMEM;
     }
 
-    status = proxy_listen(pool->ctx, p);
+    status = conn_listen(pool->ctx, p);
     if (status != DN_OK) {
         conn_close(pool->ctx, p);
         return status;
@@ -210,8 +118,8 @@ proxy_init(struct context *ctx)
     }
 
     log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'",
-              p->sd, pool->addrstr.len,
-              pool->addrstr.data,
+              p->sd, pool->proxy_endpoint.pname.len,
+              pool->proxy_endpoint.pname.data,
 			  log_datastore,
               pool->name.len, pool->name.data);
 
@@ -281,7 +189,7 @@ proxy_accept(struct context *ctx, struct conn *p)
     }
     c->sd = sd;
 
-    stats_pool_incr(ctx, c->owner, client_connections);
+    stats_pool_incr(ctx, client_connections);
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {

@@ -140,9 +140,9 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         req->selected_rsp = rsp;
         log_error("creating new error rsp %p", rsp);
         if (conn->dyn_mode) {
-      	  stats_pool_incr(ctx, conn->owner, peer_forward_error);
+      	  stats_pool_incr(ctx, peer_forward_error);
         } else {
-      	  stats_pool_incr(ctx, conn->owner, forward_error);
+      	  stats_pool_incr(ctx, forward_error);
         }
     } else {
         rsp = req->selected_rsp;
