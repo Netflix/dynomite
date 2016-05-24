@@ -102,6 +102,7 @@ struct instance;
 struct event_base;
 struct rack;
 struct dyn_ring;
+struct topology;
 
 #include <stddef.h>
 #include <stdint.h>
@@ -142,6 +143,7 @@ struct dyn_ring;
 #define ENCRYPTION 1
 
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
+struct datacenter;
 
 typedef enum dyn_state {
 	INIT        = 0,
@@ -166,6 +168,12 @@ typedef enum data_store {
 
 extern data_store_t g_data_store;
 
+struct continuum {
+	uint32_t index;  /* dyn_peer index */
+	uint32_t value;  /* hash value, used by ketama */
+	struct dyn_token *token;  /* used in vnode/dyn_token situations */
+};
+
 struct instance {
     struct context  *ctx;                        /* active context */
     int             log_level;                   /* log level */
@@ -181,30 +189,6 @@ struct instance {
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
 };
-
-
-struct continuum {
-	uint32_t index;  /* dyn_peer index */
-	uint32_t value;  /* hash value, used by ketama */
-	struct dyn_token *token;  /* used in vnode/dyn_token situations */
-};
-
-struct rack {
-	struct string      *name;
-	struct string      *dc;
-	uint32_t           ncontinuum;           /* # continuum points */
-	uint32_t           nserver_continuum;    /* # servers - live and dead on continuum (const) */
-	struct continuum   *continuum;           /* continuum */
-};
-
-
-struct datacenter {
-	struct string      *name;            /* datacenter name */
-	struct array       racks;           /* list of racks in a datacenter */
-    struct rack        *preselected_rack_for_replication;
-	dict               *dict_rack;
-};
-
 struct endpoint {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
     uint16_t           port;          /* port */
@@ -258,7 +242,7 @@ struct server_pool {
     struct conn_tqh    c_conn_q;             /* client connection q */
 
     struct datastore   *datastore;               /* underlying datastore */
-    struct array       datacenters;                /* racks info  */
+    struct topology    *topo;                 /* current active topology */
     uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
 
@@ -288,11 +272,13 @@ struct server_pool {
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
     uint32_t           peer_connections;     /* maximum # peer connections */
-    struct string      rack;                 /* the rack for this node */
+    struct string      rack_name;                 /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 
     int                g_interval;           /* gossip interval */
-    struct string      dc;                   /* server's dc */
+    struct string      dc_name;                   /* server's dc */
+    struct datacenter  *my_dc;
+    struct rack        *my_rack;
     struct string      env;                  /* aws, network, ect */
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     secure_server_option_t secure_server_option;

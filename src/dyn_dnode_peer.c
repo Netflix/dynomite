@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
@@ -18,7 +19,7 @@
 static bool
 is_same_dc(struct server_pool *sp, struct node *peer_node)
 {
-    return string_compare(&sp->dc, &peer_node->dc) == 0;
+    return string_compare(&sp->dc_name, &peer_node->dc) == 0;
 }
 
 static void
@@ -147,7 +148,7 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     self->endpoint.port = pool->dnode_proxy_endpoint.port;
 
     self->endpoint.weight = 0;  /* hacking this out of the way for now */
-    self->rack = pool->rack;
+    string_copy(&self->rack, pool->rack_name.data, pool->rack_name.len);
     self->is_local = true;
     //TODO-jeb might need to copy over tokens, not sure if this is good enough
     self->tokens = pool->tokens;
@@ -163,7 +164,7 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     self->failure_count = 0;
     self->is_seed = 1;
     self->processed = 0;
-    string_copy(&self->dc, pool->dc.data, pool->dc.len);
+    string_copy(&self->dc, pool->dc_name.data, pool->dc_name.len);
     self->owner = pool;
 
     log_debug(LOG_VERB, "dyn: transform to local node to peer %"PRIu32" '%.*s'",
@@ -307,14 +308,14 @@ is_conn_secured(struct server_pool *sp, struct node *peer_node)
         case SECURE_OPTION_RACK:
             // if rack-secured mode then communication only between nodes in different rack is secured.
             // communication secured between nodes if they are in rack with same name across dcs.
-            if (string_compare(&sp->rack, &peer_node->rack) != 0
-                    || string_compare(&sp->dc, &peer_node->dc) != 0) {
+            if (string_compare(&sp->rack_name, &peer_node->rack) != 0
+                    || string_compare(&sp->dc_name, &peer_node->dc) != 0) {
                 return true;
             }
             return false;
         case SECURE_OPTION_DC:
             // if dc-secured mode then communication only between nodes in different dc is secured     
-            if (string_compare(&sp->dc, &peer_node->dc) != 0) {
+            if (string_compare(&sp->dc_name, &peer_node->dc) != 0) {
                 return true;
             }
             return false;
@@ -705,9 +706,9 @@ dnode_peer_handshake_announcing(void *rmsg)
     }
 
     //annoucing myself by sending msg: 'dc$rack$token,started_ts,node_state,node_dns'
-    mbuf_write_string(mbuf, &sp->dc);
+    mbuf_write_string(mbuf, &sp->dc_name);
     mbuf_write_char(mbuf, '$');
-    mbuf_write_string(mbuf, &sp->rack);
+    mbuf_write_string(mbuf, &sp->rack_name);
     mbuf_write_char(mbuf, '$');
     struct dyn_token *token = (struct dyn_token *) array_get(&sp->tokens, 0);
     if (token == NULL) {
@@ -1783,14 +1784,20 @@ void
 preselect_remote_rack_for_replication(struct context *ctx)
 {
     struct server_pool *sp = &ctx->pool;
-    uint32_t dc_cnt = array_n(&sp->datacenters);
+    struct topology *topo = sp->topo;
+    uint32_t dc_cnt = array_n(&topo->datacenters);
     uint32_t dc_index;
     uint32_t my_rack_index = 0;
+
+    // Get the index of my rack in the current dc.
+    // While at it, also sort other DC racks.
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
-        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        struct datacenter *dc = array_get(&topo->datacenters, dc_index);
         // sort the racks.
         array_sort(&dc->racks, rack_name_cmp);
-        if (string_compare(dc->name, &sp->dc) != 0)
+
+        // skip if its not a local dc.
+        if (sp->my_dc != dc)
             continue;
 
         // if the dc is a local dc, get the rack_idx
@@ -1798,7 +1805,7 @@ preselect_remote_rack_for_replication(struct context *ctx)
         uint32_t rack_cnt = array_n(&dc->racks);
         for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
             struct rack *rack = array_get(&dc->racks, rack_index);
-            if (string_compare(rack->name, &sp->rack) == 0) {
+            if (string_compare(rack->name, &sp->rack_name) == 0) {
                 my_rack_index = rack_index;
                 log_notice("my rack index %u", my_rack_index);
                 break;
@@ -1807,11 +1814,11 @@ preselect_remote_rack_for_replication(struct context *ctx)
     }
 
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
-        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        struct datacenter *dc = array_get(&topo->datacenters, dc_index);
         dc->preselected_rack_for_replication = NULL;
 
         // Nothing to do for local DC, continue;
-        if (string_compare(dc->name, &sp->dc) == 0)
+        if (sp->my_dc == dc)
             continue;
 
         // if no racks, keep preselected_rack_for_replication as NULL

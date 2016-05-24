@@ -71,17 +71,14 @@ msec_t server_timeout(struct conn *conn);
 rstatus_t server_init(struct server_pool *sp, struct array *conf_server);
 rstatus_t server_connect(struct context *ctx, struct datastore *server, struct conn *conn);
 
-struct datacenter *server_get_dc(struct server_pool *pool, struct string *dcname);
-struct rack *server_get_rack(struct datacenter *dc, struct string *rackname);
-struct rack *server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname);
-
 rstatus_t datacenter_destroy(void *elem, void *data);
 
 struct conn *get_datastore_conn(struct context *ctx, struct server_pool *pool);
-rstatus_t server_pool_preconnect(struct context *ctx);
-void server_pool_disconnect(struct context *ctx);
+rstatus_t datastore_preconnect(struct datastore *datastore);
+void datastore_disconnect(struct datastore *datastore);
 rstatus_t server_pool_init(struct server_pool *server_pool, struct conf_pool *conf_pool, struct context *ctx);
 void server_pool_deinit(struct server_pool *server_pool);
+rstatus_t server_pool_init_my_dc_rack(struct server_pool *sp);
 void init_server_conn(struct conn *conn);
 
 #endif

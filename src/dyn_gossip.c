@@ -11,6 +11,7 @@
 #include <ctype.h>
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_dict.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
@@ -875,6 +876,7 @@ gossip_pool_init(struct context *ctx)
 {
     rstatus_t status;
     struct server_pool *sp = &ctx->pool;
+    struct topology *topo = sp->topo;
 
     gn_pool.ctx = sp->ctx;
     gn_pool.name = &sp->name;
@@ -886,7 +888,7 @@ gossip_pool_init(struct context *ctx)
 
     gossip_set_seeds_provider(&sp->seed_provider);
 
-    uint32_t n_dc = array_n(&sp->datacenters);
+    uint32_t n_dc = array_n(&topo->datacenters);
     if (n_dc == 0)
         return DN_OK;
 
@@ -898,10 +900,10 @@ gossip_pool_init(struct context *ctx)
     }
 
     //add racks and datacenters
-    uint32_t dc_cnt = array_n(&sp->datacenters);
+    uint32_t dc_cnt = array_n(&topo->datacenters);
     uint32_t dc_index;
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
-        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        struct datacenter *dc = array_get(&topo->datacenters, dc_index);
         uint32_t rack_cnt = array_n(&dc->racks);
         uint32_t rack_index;
         for(rack_index = 0; rack_index < rack_cnt; rack_index++) {

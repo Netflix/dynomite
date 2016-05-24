@@ -43,6 +43,7 @@
  */
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_server.h"
 #include "dyn_client.h"
 #include "dyn_dnode_peer.h"
@@ -728,7 +729,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
         struct msg *rack_msg;
         // clone message even for local node
         struct server_pool *pool = c_conn->owner;
-        if (string_compare(rack->name, &pool->rack) == 0 ) {
+        if (string_compare(rack->name, &pool->rack_name) == 0 ) {
             rack_msg = msg;
         } else {
             rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
@@ -819,9 +820,7 @@ req_forward_local_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
         // send request to only local token owner
         ASSERT(msg->is_read);
         msg->rsp_handler = msg_get_rsp_handler(msg);
-        struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack,
-                                                        &pool->dc);
-        remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
+        remote_req_forward(ctx, c_conn, msg, pool->my_rack, key, keylen);
     }
 
 }
@@ -873,8 +872,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
     if (ctx->admin_opt == 1) {
         if (msg->type == MSG_REQ_REDIS_DEL || msg->type == MSG_REQ_MC_DELETE) {
-          struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
-          admin_local_req_forward(ctx, c_conn, msg, rack, key, keylen);
+          admin_local_req_forward(ctx, c_conn, msg, pool->my_rack, key, keylen);
           return;
         }
     }
@@ -886,18 +884,19 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     }
 
     /* forward the request */
-    uint32_t dc_cnt = array_n(&pool->datacenters);
+    struct topology *topo = pool->topo;
+    uint32_t dc_cnt = array_n(&topo->datacenters);
     uint32_t dc_index;
 
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
 
-        struct datacenter *dc = array_get(&pool->datacenters, dc_index);
+        struct datacenter *dc = array_get(&topo->datacenters, dc_index);
         if (dc == NULL) {
             log_error("Wow, this is very bad, dc is NULL");
             return;
         }
 
-        if (string_compare(dc->name, &pool->dc) == 0)
+        if (pool->my_dc == dc)
             req_forward_local_dc(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
         else if (request_send_to_all_dcs(msg)) {
             req_forward_remote_dc(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);

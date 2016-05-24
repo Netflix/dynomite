@@ -22,6 +22,7 @@
  */
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
@@ -147,7 +148,7 @@ conf_server_deinit(struct conf_server *cs)
     log_debug(LOG_VVERB, "deinit conf server %p", cs);
 }
 
-// copy from struct conf_server to struct server
+// copy from struct conf_server to struct datastore
 static rstatus_t
 conf_datastore_transform(struct datastore *s, struct conf_server *cs)
 {
@@ -377,8 +378,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->p_conn = NULL;
     sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
+    sp->topo = topo_create();
 
-    array_null(&sp->datacenters);
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
     /* sp->continuum = NULL; */
@@ -433,8 +434,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->dnode_proxy_endpoint.addrlen = cp->dyn_listen.info.addrlen;
     sp->dnode_proxy_endpoint.addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
     sp->peer_connections = (uint32_t)cp->dyn_connections;
-    sp->rack = cp->rack;
-    sp->dc = cp->dc;
+    sp->rack_name = cp->rack;
+    sp->dc_name = cp->dc;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
 
@@ -443,7 +444,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     array_null(&sp->seeds);
     array_null(&sp->peers);
-    array_init(&sp->datacenters, 1, sizeof(struct datacenter));
     sp->conf_pool = cp;
 
     /* gossip */

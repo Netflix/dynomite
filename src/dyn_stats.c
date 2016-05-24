@@ -1393,10 +1393,10 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     string_set_text(&st->rack_str, "rack");
 
-    string_copy(&st->rack, sp->rack.data, sp->rack.len);
+    string_copy(&st->rack, sp->rack_name.data, sp->rack_name.len);
 
     string_set_text(&st->dc_str, "dc");
-    string_copy(&st->dc, sp->dc.data, sp->dc.len);
+    string_copy(&st->dc, sp->dc_name.data, sp->dc_name.len);
 
     st->updated = 0;
     st->aggregate = 0;

@@ -4,6 +4,7 @@
  */ 
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_server.h"
 #include "dyn_dnode_client.h"
 
@@ -272,15 +273,14 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
        local_req_forward(ctx, conn, msg, key, keylen);
     } else if (msg->dmsg->type == DMSG_REQ_FORWARD) {
         struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
-        struct datacenter *dc = server_get_dc(pool, &pool->dc);
-        uint32_t rack_cnt = array_n(&dc->racks);
+        uint32_t rack_cnt = array_n(&pool->my_dc->racks);
         uint32_t rack_index;
         for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
-            struct rack *rack = array_get(&dc->racks, rack_index);
+            struct rack *rack = array_get(&pool->my_dc->racks, rack_index);
             //log_debug(LOG_DEBUG, "forwarding to rack  '%.*s'",
             //            rack->name->len, rack->name->data);
             struct msg *rack_msg;
-            if (string_compare(rack->name, &pool->rack) == 0 ) {
+            if (rack == pool->my_rack) {
                 rack_msg = msg;
             } else {
                 rack_msg = msg_get(conn, msg->request, __FUNCTION__);

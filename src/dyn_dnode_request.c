@@ -4,6 +4,7 @@
  */ 
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_mbuf.h"
 #include "dyn_server.h"
@@ -90,7 +91,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     }
 
     struct server_pool *pool = c_conn->owner;
-    dmsg_type_t msg_type = (string_compare(&pool->dc, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
+    dmsg_type_t msg_type = (string_compare(&pool->dc_name, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
 
     if (p_conn->dnode_secured) {
         //Encrypting and adding header for a request

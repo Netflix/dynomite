@@ -26,6 +26,7 @@
 
 #include <dyn_dnode_peer.h>
 #include <dyn_core.h>
+#include <dyn_topology.h>
 #include <dyn_server.h>
 #include <dyn_hashkit.h>
 
@@ -60,7 +61,7 @@ vnode_update(struct server_pool *sp)
 {
     ASSERT(array_n(&sp->peers) > 0);
 
-    int i, len;
+    uint32_t i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
         struct node *peer = array_get(&sp->peers, i);
 
@@ -80,8 +81,8 @@ vnode_update(struct server_pool *sp)
 
         peer->processed = 1;
 
-        struct datacenter *dc = server_get_dc(sp, &peer->dc);
-        struct rack *rack = server_get_rack(dc, &peer->rack);
+        struct datacenter *dc = topo_get_dc(sp->topo, &peer->dc);
+        struct rack *rack = topo_get_rack(dc, &peer->rack);
 
         ASSERT(rack != NULL);
 
@@ -100,7 +101,7 @@ vnode_update(struct server_pool *sp)
         }
         rack->nserver_continuum = new_cnt;
 
-        int j;
+        uint32_t j;
         for (j = 0; j < token_cnt; j++) {
             struct continuum *c = &rack->continuum[orig_cnt + j];
             c->index = i;

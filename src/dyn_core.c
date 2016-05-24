@@ -51,6 +51,7 @@ core_gossip_pool_init(struct context *ctx)
 	CBUF_Init(C2S_OutQ);
 
     THROW_STATUS(gossip_pool_init(ctx));
+    THROW_STATUS(server_pool_init_my_dc_rack(&ctx->pool));
     THROW_STATUS(core_init_last(ctx));
     return DN_OK;
 }
@@ -100,9 +101,11 @@ core_proxy_init(struct context *ctx)
 }
 
 static rstatus_t
-core_server_pool_preconnect(struct context *ctx)
+core_datastore_preconnect(struct context *ctx)
 {
-	THROW_STATUS(server_pool_preconnect(ctx));
+	if (ctx->pool.preconnect) {
+	    THROW_STATUS(datastore_preconnect(ctx->pool.datastore));
+    }
 
      rstatus_t status = core_proxy_init(ctx);
      if (status != DN_OK)
@@ -119,9 +122,9 @@ core_event_base_create(struct context *ctx)
 		loga("Failed to create socket event handling!!!");
 		return DN_ERROR;
 	}
-    rstatus_t status = core_server_pool_preconnect(ctx);
+    rstatus_t status = core_datastore_preconnect(ctx);
     if (status != DN_OK)
-		server_pool_disconnect(ctx);
+        datastore_disconnect(ctx->pool.datastore);
     return status;
 }
 
@@ -205,7 +208,7 @@ static void
 core_ctx_destroy(struct context *ctx)
 {
 	proxy_deinit(ctx);
-	server_pool_disconnect(ctx);
+    datastore_disconnect(ctx->pool.datastore);
 	event_base_destroy(ctx->evb);
 	stats_destroy(ctx->stats);
 	server_pool_deinit(&ctx->pool);
@@ -472,21 +475,7 @@ core_debug(struct context *ctx)
             print_dyn_token(token, 12);
         }
     }
-
-    log_debug(LOG_VERB, "Peers Datacenters/racks/nodes .................................................");
-    uint32_t dc_index, dc_len;
-    for(dc_index = 0, dc_len = array_n(&sp->datacenters); dc_index < dc_len; dc_index++) {
-        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
-        log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
-        uint32_t rack_index, rack_len;
-        for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
-            struct rack *rack = array_get(&dc->racks, rack_index);
-            log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
-            log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
-            log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
-        }
-    }
-	log_debug(LOG_VERB, "...............................................................................");
+    topo_print(sp->topo);
 }
 
 

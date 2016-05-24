@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_server.h"
 #include "dyn_conf.h"
 #include "dyn_token.h"
@@ -161,7 +162,11 @@ server_pool_run(struct server_pool *pool)
 {
 	ASSERT(pool->datastore != NULL);
 
-	switch (pool->dist_type) {
+	/* SH: Everything is commented out in the individual functions,
+     * So commenting the whole thing here. */
+
+    /*
+    switch (pool->dist_type) {
 	case DIST_KETAMA:
 		return ketama_update(pool);
 
@@ -181,12 +186,12 @@ server_pool_run(struct server_pool *pool)
 	default:
 		NOT_REACHED();
 		return DN_ERROR;
-	}
+	}*/
 
 	return DN_OK;
 }
 
-static rstatus_t
+rstatus_t
 datastore_preconnect(struct datastore *datastore)
 {
 	rstatus_t status;
@@ -210,7 +215,7 @@ datastore_preconnect(struct datastore *datastore)
 	return DN_OK;
 }
 
-static rstatus_t
+void
 datastore_disconnect(struct datastore *datastore)
 {
 	struct server_pool *pool = datastore->owner;
@@ -224,7 +229,7 @@ datastore_disconnect(struct datastore *datastore)
 		conn_close(pool->ctx, conn);
 	}
 
-	return DN_OK;
+	return;
 }
 
 static void
@@ -548,21 +553,6 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 }
 
 rstatus_t
-server_pool_preconnect(struct context *ctx)
-{
-	if (!ctx->pool.preconnect) {
-		return DN_OK;
-	}
-    return datastore_preconnect(ctx->pool.datastore);
-}
-
-void
-server_pool_disconnect(struct context *ctx)
-{
-    datastore_disconnect(ctx->pool.datastore);
-}
-
-rstatus_t
 server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *ctx)
 {
 	THROW_STATUS(conf_pool_transform(sp, cp));
@@ -585,170 +575,12 @@ server_pool_deinit(struct server_pool *sp)
 }
 
 
-dictType dc_string_dict_type = {
-		dict_string_hash,            /* hash function */
-		NULL,                        /* key dup */
-		NULL,                        /* val dup */
-		dict_string_key_compare,     /* key compare */
-		dict_string_destructor,      /* key destructor */
-		NULL                         /* val destructor */
-};
-
-
-static rstatus_t
-rack_init(struct rack *rack)
-{
-	rack->continuum = dn_alloc(sizeof(struct continuum));
-	rack->ncontinuum = 0;
-	rack->nserver_continuum = 0;
-	rack->name = dn_alloc(sizeof(struct string));
-	string_init(rack->name);
-
-	rack->dc = dn_alloc(sizeof(struct string));
-	string_init(rack->dc);
-
-	return DN_OK;
-}
-
-
-static rstatus_t
-rack_deinit(struct rack *rack)
-{
-	if (rack->continuum != NULL) {
-		dn_free(rack->continuum);
-	}
-
-	return DN_OK;
-}
-
-
-static rstatus_t
-dc_init(struct datacenter *dc)
-{
-	rstatus_t status;
-
-	dc->dict_rack = dictCreate(&dc_string_dict_type, NULL);
-	dc->name = dn_alloc(sizeof(struct string));
-	string_init(dc->name);
-    dc->preselected_rack_for_replication = NULL;
-
-	status = array_init(&dc->racks, 3, sizeof(struct rack));
-
-	return status;
-}
-
-static rstatus_t
-rack_destroy(void *elem, void *data)
-{
-	struct rack *rack = elem;
-	return rack_deinit(rack);
-}
-
-static rstatus_t
-dc_deinit(struct datacenter *dc)
-{
-	array_each(&dc->racks, rack_destroy, NULL);
-	string_deinit(dc->name);
-	//dictRelease(dc->dict_rack);
-	return DN_OK;
-}
-
 rstatus_t
-datacenter_destroy(void *elem, void *data)
+server_pool_init_my_dc_rack(struct server_pool *sp)
 {
-	struct datacenter *dc = elem;
-	dc_deinit(dc);
-
-	return DN_OK;
-}
-
-
-struct datacenter *
-server_get_dc(struct server_pool *pool, struct string *dcname)
-{
-	struct datacenter *dc;
-	uint32_t i, len;
-
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc dc '%.*s'",
-				dcname->len, dcname->data);
-	}
-
-	for (i = 0, len = array_n(&pool->datacenters); i < len; i++) {
-		dc = (struct datacenter *) array_get(&pool->datacenters, i);
-		ASSERT(dc != NULL);
-		ASSERT(dc->name != NULL);
-
-		if (string_compare(dc->name, dcname) == 0) {
-			return dc;
-		}
-	}
-
-	dc = array_push(&pool->datacenters);
-	dc_init(dc);
-	string_copy(dc->name, dcname->data, dcname->len);
-
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc about to exit dc '%.*s'",
-				dc->name->len, dc->name->data);
-	}
-
-	return dc;
-}
-
-
-struct rack *
-server_get_rack(struct datacenter *dc, struct string *rackname)
-{
-	ASSERT(dc != NULL);
-	ASSERT(dc->dict_rack != NULL);
-	ASSERT(dc->name != NULL);
-
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
-	}
-	/*
-   struct rack *rack = dictFetchValue(dc->dict_rack, rackname);
-   if (rack == NULL) {
-      rack = array_push(&dc->racks);
-      rack_init(rack);
-      string_copy(rack->name, rackname->data, rackname->len);
-      string_copy(rack->dc, dc->name->data, dc->name->len);
-      rack->continuum = dn_alloc(sizeof(struct continuum));
-
-   	dictAdd(dc->dict_rack, rackname, rack);
-   }
-	 */
-
-	struct rack *rack;
-	uint32_t i, len;
-	for (i = 0, len = array_n(&dc->racks); i < len; i++) {
-		rack = (struct rack *) array_get(&dc->racks, i);
-
-		if (string_compare(rack->name, rackname) == 0) {
-			return rack;
-		}
-	}
-
-	rack = array_push(&dc->racks);
-	rack_init(rack);
-	string_copy(rack->name, rackname->data, rackname->len);
-	string_copy(rack->dc, dc->name->data, dc->name->len);
-
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_rack exiting  '%.*s'",
-				rack->name->len, rack->name->data);
-	}
-
-	return rack;
-}
-
-
-struct rack *
-server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, struct string *dcname)
-{
-	struct datacenter *dc = server_get_dc(sp, dcname);
-	return server_get_rack(dc, rackname);
+    sp->my_dc = topo_get_dc(sp->topo, &sp->dc_name);
+	sp->my_rack = topo_get_rack(sp->my_dc, &sp->rack_name);
+    return DN_OK;
 }
 
 struct msg *
