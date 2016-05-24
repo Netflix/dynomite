@@ -72,7 +72,6 @@ datacenter_destroy(void *elem, void *data)
 {
 	struct datacenter *dc = elem;
 	dc_deinit(dc);
-
 	return DN_OK;
 }
 
@@ -182,6 +181,6 @@ topo_create(void)
 {
     struct topology *t = dn_zalloc(sizeof(struct topology));
     array_null(&t->datacenters);
-    //array_init(&t->datacenters, 1, sizeof(struct datacenter));
+    array_init(&t->datacenters, 1, sizeof(struct datacenter));
     return t;
 }
