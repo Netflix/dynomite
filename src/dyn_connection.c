@@ -122,7 +122,7 @@ struct context *
 conn_to_ctx(struct conn *conn)
 {
     struct datastore *server;
-    struct node *peer;
+    struct peer *peer;
     struct server_pool *pool;
     switch(conn->type) {
         case CONN_PROXY:

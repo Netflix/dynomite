@@ -456,7 +456,7 @@ core_debug(struct context *ctx)
     uint32_t j, n;
     for (j = 0, n = array_n(&sp->peers); j < n; j++) {
         log_debug(LOG_VERB, "==============================================");
-        struct node *peer = (struct node *) array_get(&sp->peers, j);
+        struct peer *peer = (struct peer *) array_get(&sp->peers, j);
         log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",peer ->dc);
         log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", peer->rack);
 

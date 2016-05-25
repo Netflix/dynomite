@@ -12,6 +12,28 @@
 #define WAIT_BEFORE_RECONNECT_IN_MILLIS      30000
 #define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
 
+struct peer {
+    uint32_t           idx;           /* server index */
+    struct server_pool *owner;        /* owner pool */
+    struct endpoint     endpoint;
+    struct string      name;          /* name (ref in conf_server) */
+
+    uint32_t           ns_conn_q;     /* # server connection */
+    struct conn_tqh    s_conn_q;      /* server connection q */
+
+    msec_t             next_retry;    /* next retry time in msec */
+    uint32_t           failure_count; /* # consecutive failures */
+
+    struct string      rack;          /* logical rack */
+    struct string      dc;            /* server's dc */
+    struct array       tokens;        /* DHT tokens this peer owns */
+    bool               is_local;      /* is this peer the current running node?  */
+    unsigned           is_seed:1;     /* seed? */
+    unsigned           processed:1;   /* flag to indicate whether this has been processed */
+    unsigned           is_secure:1;   /* is the connection to the server secure? */
+    dyn_state_t        state;         /* state of the server - used mainly in peers  */
+};
+
 msec_t dnode_peer_timeout(struct msg *msg, struct conn *conn);
 rstatus_t dnode_peer_init(struct context *ctx);
 void dnode_peer_deinit(struct array *nodes);

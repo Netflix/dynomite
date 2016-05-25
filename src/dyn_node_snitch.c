@@ -9,6 +9,7 @@
 
 #include "dyn_node_snitch.h"
 #include "dyn_core.h"
+#include "dyn_dnode_peer.h"
 #include "dyn_conf.h"
 #include "dyn_string.h"
 #include "dyn_util.h"
@@ -67,7 +68,7 @@ char *get_broadcast_address(struct server_pool *sp)
            return broadcast_address;
     }
 
-	struct node *peer = (struct node *) array_get(&sp->peers, 0);
+	struct peer *peer = (struct peer *) array_get(&sp->peers, 0);
 	broadcast_address = (char *) peer->name.data;
 	return broadcast_address;
 }
@@ -87,7 +88,7 @@ char *get_public_hostname(struct server_pool *sp)
     	   return public_hostname;
 	}
 
-    struct node *peer = (struct node *) array_get(&sp->peers, 0);
+    struct peer *peer = (struct peer *) array_get(&sp->peers, 0);
     char c = (char) peer->name.data[0];
     if ((peer != NULL) && (peer->name.data != NULL) && !isdigit(c) ) {
     	public_hostname = (char *) peer->name.data;
@@ -112,7 +113,7 @@ char *get_public_ip4(struct server_pool *sp)
 		   return public_ip4;
 	}
 
-    struct node *peer = (struct node *) array_get(&sp->peers, 0);
+    struct peer *peer = (struct peer *) array_get(&sp->peers, 0);
     if ((peer != NULL) && (peer->name.data != NULL)) {
         char c = (char) peer->name.data[0];
         if (isdigit(c))

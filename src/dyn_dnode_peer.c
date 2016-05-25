@@ -17,7 +17,7 @@
 
 
 static bool
-is_same_dc(struct server_pool *sp, struct node *peer_node)
+is_same_dc(struct server_pool *sp, struct peer *peer_node)
 {
     return string_compare(&sp->dc_name, &peer_node->dc) == 0;
 }
@@ -25,7 +25,7 @@ is_same_dc(struct server_pool *sp, struct node *peer_node)
 static void
 dnode_peer_ref(struct conn *conn, void *owner)
 {
-    struct node *peer = owner;
+    struct peer *peer = owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner == NULL);
@@ -49,7 +49,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
 static void
 dnode_peer_unref(struct conn *conn)
 {
-    struct node *peer;
+    struct peer *peer;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner != NULL);
@@ -70,7 +70,7 @@ dnode_peer_unref(struct conn *conn)
 msec_t
 dnode_peer_timeout(struct msg *msg, struct conn *conn)
 {
-    struct node *server;
+    struct peer *server;
     struct server_pool *pool;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
@@ -123,7 +123,7 @@ dnode_peer_active(struct conn *conn)
 static rstatus_t
 dnode_peer_each_set_owner(void *elem, void *data)
 {
-    struct node *s = elem;
+    struct peer *s = elem;
     struct server_pool *sp = data;
 
     s->owner = sp;
@@ -132,7 +132,7 @@ dnode_peer_each_set_owner(void *elem, void *data)
 }
 
 static rstatus_t
-dnode_peer_add_local(struct server_pool *pool, struct node *self)
+dnode_peer_add_local(struct server_pool *pool, struct peer *self)
 {
     ASSERT(self != NULL);
     self->idx = 0; /* this might be psychotic, trying it for now */
@@ -179,7 +179,7 @@ dnode_peer_deinit(struct array *nodes)
     uint32_t i, nnode;
 
     for (i = 0, nnode = array_n(nodes); i < nnode; i++) {
-        struct node *s;
+        struct peer *s;
 
         s = array_pop(nodes);
         IGNORE_RET_VAL(s);
@@ -213,12 +213,12 @@ dnode_peer_init(struct context *ctx)
         log_debug(LOG_INFO, "dyn: look like you are running with no seeds defined. This is ok for running with just one node.");
 
         // add current node to peers array
-        status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct node));
+        status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct peer));
         if (status != DN_OK) {
             return status;
         }
 
-        struct node *self = array_push(peers);
+        struct peer *self = array_push(peers);
         ASSERT(self != NULL);
         status = dnode_peer_add_local(sp, self);
         if (status != DN_OK) {
@@ -230,7 +230,7 @@ dnode_peer_init(struct context *ctx)
 
     ASSERT(array_n(seeds) == 0);
 
-    status = array_init(seeds, nseed, sizeof(struct node));
+    status = array_init(seeds, nseed, sizeof(struct peer));
     if (status != DN_OK) {
         return status;
     }
@@ -256,12 +256,12 @@ dnode_peer_init(struct context *ctx)
 
     // add current node to peers array
     uint32_t peer_cnt = nseed + 1;
-    status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct node));
+    status = array_init(peers, CONF_DEFAULT_PEERS, sizeof(struct peer));
     if (status != DN_OK) {
         return status;
     }
 
-    struct node *peer = array_push(peers);
+    struct peer *peer = array_push(peers);
     ASSERT(peer != NULL);
     status = dnode_peer_add_local(sp, peer);
     if (status != DN_OK) {
@@ -295,7 +295,7 @@ dnode_peer_init(struct context *ctx)
 }
 
 static bool
-is_conn_secured(struct server_pool *sp, struct node *peer_node)
+is_conn_secured(struct server_pool *sp, struct peer *peer_node)
 {
     //ASSERT(peer_server != NULL);
     //ASSERT(sp != NULL);
@@ -326,7 +326,7 @@ is_conn_secured(struct server_pool *sp, struct node *peer_node)
 }
 
 static struct conn *
-dnode_peer_conn(struct node *peer)
+dnode_peer_conn(struct peer *peer)
 {
     struct server_pool *pool;
     struct conn *conn;
@@ -406,7 +406,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 
 
 static void
-dnode_peer_failure(struct context *ctx, struct node *server)
+dnode_peer_failure(struct context *ctx, struct peer *server)
 {
     struct server_pool *pool = server->owner;
     msec_t now;
@@ -485,7 +485,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    struct node *peer = conn->owner;
+    struct peer *peer = conn->owner;
 
     log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", peer->endpoint.pname.len,
             peer->endpoint.pname.data);
@@ -565,7 +565,7 @@ static rstatus_t
 dnode_peer_each_preconnect(void *elem, void *data)
 {
     rstatus_t status;
-    struct node *peer;
+    struct peer *peer;
     struct server_pool *sp;
     struct conn *conn;
 
@@ -593,7 +593,7 @@ dnode_peer_each_preconnect(void *elem, void *data)
 static rstatus_t
 dnode_peer_each_disconnect(void *elem, void *data)
 {
-    struct node *server;
+    struct peer *server;
     struct server_pool *pool;
 
     server = elem;
@@ -659,7 +659,7 @@ dnode_peer_forward_state(void *rmsg)
     if (ran_index == 0)
        ran_index += 1;
 
-    struct node *peer = (struct node *) array_get(peers, ran_index);
+    struct peer *peer = (struct peer *) array_get(peers, ran_index);
 
     //log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
@@ -730,7 +730,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
     //for each peer, send a registered msg
     for (i = 0; i < nelem; i++) {
-        struct node *peer = (struct node *) array_get(peers, i);
+        struct peer *peer = (struct peer *) array_get(peers, i);
         if (peer->is_local)
             continue;
 
@@ -772,7 +772,7 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
     uint32_t i,nelem;
     nelem = array_n(peers);
     for (i = 0; i < nelem; i++) {
-        struct node *peer = (struct node *) array_get(peers, i);
+        struct peer *peer = (struct peer *) array_get(peers, i);
         struct conn *conn, *nconn;
         for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
                 conn = nconn) {
@@ -789,7 +789,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
 {
     rstatus_t status;
     struct array *peers = &sp->peers;
-    struct node *s = array_push(peers);
+    struct peer *s = array_push(peers);
 
     s->owner = sp;
     s->idx = array_idx(peers, s);
@@ -876,13 +876,13 @@ dnode_peer_replace(void *rmsg)
     struct gossip_node *node = array_get(&msg->nodes, 0);
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
     struct array *peers = &sp->peers;
-    struct node *s = NULL;
+    struct peer *s = NULL;
 
     uint32_t i,nelem;
     //bool node_exist = false;
     //TODOs: use hash table here
     for (i=1, nelem = array_n(peers); i< nelem; i++) {
-        struct node * peer = (struct node *) array_get(peers, i);
+        struct peer * peer = (struct peer *) array_get(peers, i);
         if (string_compare(&peer->rack, &node->rack) == 0) {
             //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
             struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
@@ -933,13 +933,13 @@ dnode_peer_replace(struct server_pool *sp, struct gossip_node *node)
     //rstatus_t status;
     log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
     struct array *peers = &sp->peers;
-    struct node *s = NULL;
+    struct peer *s = NULL;
 
     uint32_t i,nelem;
     //bool node_exist = false;
     //TODOs: use hash table here
     for (i=1, nelem = array_n(peers); i< nelem; i++) {
-        struct node * peer = (struct node *) array_get(peers, i);
+        struct peer * peer = (struct peer *) array_get(peers, i);
         if (string_compare(&peer->rack, &node->rack) == 0) {
             //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
             struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
@@ -987,7 +987,7 @@ dnode_peer_replace(struct server_pool *sp, struct gossip_node *node)
 void
 dnode_peer_connected(struct context *ctx, struct conn *conn)
 {
-    struct node *server = conn->owner;
+    struct peer *server = conn->owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connecting && !conn->connected);
@@ -1006,7 +1006,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 static void
 dnode_peer_ok(struct context *ctx, struct conn *conn)
 {
-    struct node *server = conn->owner;
+    struct peer *server = conn->owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connected);
@@ -1058,11 +1058,11 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     return token;
 }
 
-static struct node *
+static struct peer *
 dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
 {
     uint32_t pos = 0;
-    struct node *server = NULL;
+    struct peer *server = NULL;
     struct continuum *entry;
 
     if (rack->ncontinuum > 1) {
@@ -1078,11 +1078,11 @@ dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint
     return server;
 }
 
-static struct node *
+static struct peer *
 dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
                        uint8_t *key, uint32_t keylen)
 {
-    struct node *server;
+    struct peer *server;
     uint32_t idx;
     struct dyn_token *token = NULL;
 
@@ -1128,7 +1128,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
                      uint8_t msg_type)
 {
     rstatus_t status;
-    struct node *peer;
+    struct peer *peer;
     struct conn *conn;
 
     log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");

@@ -668,7 +668,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
         return;
     }
 
-    struct node *peer = p_conn->owner;
+    struct peer *peer = p_conn->owner;
 
     if (peer->is_local) {
         send_rsp_integer(ctx, c_conn, msg);
@@ -695,7 +695,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct node *peer = p_conn->owner;
+    struct peer *peer = p_conn->owner;
 
     if (peer->is_local) {
         log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,

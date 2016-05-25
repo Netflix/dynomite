@@ -14,6 +14,7 @@
 #include <sys/utsname.h>
 
 #include "dyn_core.h"
+#include "dyn_dnode_peer.h"
 #include "dyn_conf.h"
 #include "dyn_signal.h"
 
@@ -226,7 +227,7 @@ test_get_options(int argc, char **argv, struct instance *nci)
 
 
 static rstatus_t
-init_peer(struct node *s)
+init_peer(struct peer *s)
 {
     s->idx = 0;
     s->owner = NULL;
@@ -484,7 +485,7 @@ aes_test(void)
 
 /* Inspection test */
 static rstatus_t
-aes_msg_test(struct node *server)
+aes_msg_test(struct peer *server)
 {
     //unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get_peer(server, false);
@@ -521,7 +522,7 @@ aes_msg_test(struct node *server)
 /*
 
 static rstatus_t
-aes_msg_test2(struct node *server)
+aes_msg_test2(struct peer *server)
 {
     unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get_peer(server, false, true);
@@ -583,7 +584,7 @@ main(int argc, char **argv)
     //rstatus_t status;
     init_test(argc, argv);
 
-    struct node *peer = malloc(sizeof(struct datastore));
+    struct peer *peer = malloc(sizeof(struct peer));
     init_peer(peer);
 
     struct conn *conn = conn_get_peer(peer, false);

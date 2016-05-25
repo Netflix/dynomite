@@ -169,7 +169,7 @@ typedef enum data_store {
 extern data_store_t g_data_store;
 
 struct continuum {
-	uint32_t index;  /* dyn_peer index */
+	uint32_t index;  /* index in peers array in server_pool */
 	uint32_t value;  /* hash value, used by ketama */
 	struct dyn_token *token;  /* used in vnode/dyn_token situations */
 };
@@ -189,6 +189,7 @@ struct instance {
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
 };
+
 struct endpoint {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
     uint16_t           port;          /* port */
@@ -209,28 +210,6 @@ struct datastore {
 
     msec_t             next_retry;    /* next retry time in msec */
     uint32_t           failure_count; /* # consecutive failures */
-};
-
-struct node {
-    uint32_t           idx;           /* server index */
-    struct server_pool *owner;        /* owner pool */
-    struct endpoint     endpoint;
-    struct string      name;          /* name (ref in conf_server) */
-
-    uint32_t           ns_conn_q;     /* # server connection */
-    struct conn_tqh    s_conn_q;      /* server connection q */
-
-    msec_t             next_retry;    /* next retry time in msec */
-    uint32_t           failure_count; /* # consecutive failures */
-
-    struct string      rack;          /* logical rack */
-    struct string      dc;            /* server's dc */
-    struct array       tokens;        /* DHT tokens this peer owns */
-    bool               is_local;      /* is this peer the current running node?  */
-    unsigned           is_seed:1;     /* seed? */
-    unsigned           processed:1;   /* flag to indicate whether this has been processed */
-    unsigned           is_secure:1;   /* is the connection to the server secure? */
-    dyn_state_t        state;         /* state of the server - used mainly in peers  */
 };
 
 struct server_pool {
