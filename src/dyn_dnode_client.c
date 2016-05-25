@@ -280,7 +280,9 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
             //log_debug(LOG_DEBUG, "forwarding to rack  '%.*s'",
             //            rack->name->len, rack->name->data);
             struct msg *rack_msg;
-            if (rack == pool->my_rack) {
+            // TODO: SHAILESH Not sure why using this line causes data corruption.
+            //if (rack == pool->my_rack) {
+            if (string_compare(rack->name, &pool->rack_name) == 0 ) {
                 rack_msg = msg;
             } else {
                 rack_msg = msg_get(conn, msg->request, __FUNCTION__);
