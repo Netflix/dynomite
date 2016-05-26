@@ -121,6 +121,18 @@ dnode_peer_active(struct conn *conn)
 }
 
 static rstatus_t
+dnode_peer_each_set_evb(void *elem, void *data)
+{
+    struct peer *s = elem;
+    struct context *ctx = data;
+
+    // One could assign the peers to difference evb
+    s->evb = ctx->evb;
+
+    return DN_OK;
+}
+
+static rstatus_t
 dnode_peer_each_set_owner(void *elem, void *data)
 {
     struct peer *s = elem;
@@ -280,6 +292,13 @@ dnode_peer_init(struct context *ctx)
     ASSERT(array_n(peers) == peer_cnt);
 
     status = array_each(peers, dnode_peer_each_set_owner, sp);
+    if (status != DN_OK) {
+        dnode_peer_deinit(seeds);
+        dnode_peer_deinit(peers);
+        return status;
+    }
+
+    status = array_each(peers, dnode_peer_each_set_evb, ctx);
     if (status != DN_OK) {
         dnode_peer_deinit(seeds);
         dnode_peer_deinit(peers);
@@ -1679,7 +1698,8 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
         }
 
         //requeue
-        status = event_add_out(ctx->evb, conn);
+        struct peer *peer = conn->owner;
+        status = event_add_out(peer->evb, conn);
         IGNORE_RET_VAL(status);
 
         return NULL;
@@ -1823,7 +1843,8 @@ dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *ms
         return;
     ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
     if (req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-        status = event_add_out(ctx->evb, p_conn);
+        struct peer *peer = p_conn->owner;
+        status = event_add_out(peer->evb, p_conn);
         if (status != DN_OK) {
             p_conn->err = errno;
         }
@@ -1864,7 +1885,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
-    status = event_add_out(ctx->evb, p_conn);
+    status = event_add_out(peer->evb, p_conn);
     if (status != DN_OK) {
         log_warn("Error on connection to '%.*s'. Marking it to RESET", peer->name);
         dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);

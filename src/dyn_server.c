@@ -537,7 +537,7 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 		return NULL;
 	}
 
-	/* pick a connection to a given server */
+	/* pick a connection to the datastore */
 	conn = server_conn(datastore);
 	if (conn == NULL) {
 		return NULL;

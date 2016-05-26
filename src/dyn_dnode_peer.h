@@ -16,6 +16,7 @@ struct peer {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint     endpoint;
+    struct event_base  *evb;          /* event base this peer belongs to*/
     struct string      name;          /* name (ref in conf_server) */
 
     uint32_t           ns_conn_q;     /* # server connection */

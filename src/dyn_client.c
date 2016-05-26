@@ -847,6 +847,15 @@ req_forward_local_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
 }
 
 static void
+incr_client_stats(struct context *ctx, struct msg *msg)
+{
+    if (msg->is_read)
+        stats_pool_incr(ctx, client_read_requests);
+    else
+        stats_pool_incr(ctx, client_write_requests);
+}
+
+static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
     struct server_pool *pool = c_conn->owner;
@@ -854,11 +863,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     uint32_t keylen;
 
     ASSERT(c_conn->type == CONN_CLIENT);
-
-    if (msg->is_read)
-        stats_pool_incr(ctx, client_read_requests);
-    else
-        stats_pool_incr(ctx, client_write_requests);
+    incr_client_stats(ctx, msg);
 
     key = NULL;
     keylen = 0;
@@ -867,25 +872,9 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     log_debug(LOG_DEBUG, "conn %p adding message %d:%d", c_conn, msg->id, msg->parent_id);
     dictAdd(c_conn->outstanding_msgs_dict, &msg->id, msg);
 
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
-        uint8_t *tag_start, *tag_end;
-
-        tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
-
-    if (keylen == 0) {
-        key = msg->key_start;
-        keylen = (uint32_t)(msg->key_end - msg->key_start);
-    }
-
+    // extract key for msg, either using the hash_tag what the parser got
+    key = g_msg_get_key(msg, &pool->hash_tag, &keylen);
+    //ASSERT(key != NULL);
     // need to capture the initial mbuf location as once we add in the dynomite
     // headers (as mbufs to the src msg), that will bork the request sent to
     // secondary racks

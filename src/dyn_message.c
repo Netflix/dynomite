@@ -154,10 +154,37 @@ func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
 func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
+func_msg_get_key     g_msg_get_key;     /* message get key for the msg */
+
+static uint8_t *
+msg_get_key(struct msg *msg, struct string *hash_tag, uint32_t *keylen)
+{
+    uint8_t *key;
+    if (!string_empty(hash_tag)) {
+        struct string *tag = hash_tag;
+        uint8_t *tag_start, *tag_end;
+
+        tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
+        if (tag_start != NULL) {
+            tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
+            if (tag_end != NULL) {
+                key = tag_start + 1;
+                *keylen = (uint32_t)(tag_end - key);
+            }
+        }
+    }
+
+    if (*keylen == 0) {
+        key = msg->key_start;
+        *keylen = (uint32_t)(msg->key_end - msg->key_start);
+    }
+    return key;
+}
 
 void
 set_datastore_ops(void)
 {
+    g_msg_get_key = msg_get_key;
     switch(g_data_store) {
         case DATA_REDIS:
             g_pre_splitcopy = redis_pre_splitcopy;

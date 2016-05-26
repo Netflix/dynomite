@@ -40,12 +40,14 @@ typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef rstatus_t (*func_msg_reply_t)(struct msg *r);
 typedef bool (*func_msg_failure_t)(struct msg *r);
+typedef uint8_t *(*func_msg_get_key)(struct msg *r, struct string *hash_tag,
+                                     uint32_t *keylen);
 void set_datastore_ops(void);
 extern func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
 extern func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
-
+extern func_msg_get_key     g_msg_get_key;     /* message get key for the msg */
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
