@@ -616,17 +616,17 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         }
     } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
         log_debug(LOG_INFO, "Node is in STANDBY state. Drop write/read requests");
-        req_forward_error(ctx, c_conn, msg, errno);
+        req_forward_error(ctx, c_conn, msg, DN_EHOST_STATE_INVALID);
         return;
     } else if (ctx->dyn_state == WRITES_ONLY && msg->is_read) {
         //no reads from peers/clients but allow writes from peers/clients
         log_debug(LOG_INFO, "Node is in WRITES_ONLY state. Drop read requests");
-        req_forward_error(ctx, c_conn, msg, errno);
+        req_forward_error(ctx, c_conn, msg, DN_EHOST_STATE_INVALID);
         return;
     } else if (ctx->dyn_state == RESUMING) {
         log_debug(LOG_INFO, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
         if (msg->is_read) {
-            req_forward_error(ctx, c_conn, msg, errno);
+            req_forward_error(ctx, c_conn, msg, DN_EHOST_STATE_INVALID);
             return;
         }
 

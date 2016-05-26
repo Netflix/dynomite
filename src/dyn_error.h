@@ -8,6 +8,7 @@
 #define DN_ENO_IMPL -4
 #define DN_ENOHOST  -5
 #define DN_EHOST_DOWN -6
+#define DN_EHOST_STATE_INVALID -7
 
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
