@@ -390,8 +390,6 @@ void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg
 void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 		                struct rack *rack, uint8_t *key, uint32_t keylen);
 void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
-void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
-		                struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen);
 
 //void peer_gossip_forward(struct context *ctx, struct conn *conn, struct string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *data);

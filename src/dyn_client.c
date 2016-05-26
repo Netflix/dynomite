@@ -443,7 +443,7 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
                  "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
-                 strerror(err));
+                 dn_strerror(err));
     }
 
     msg->done = 1;
@@ -458,7 +458,7 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
     if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
         status = event_add_out(ctx->evb, conn);
         if (status != DN_OK) {
-            conn->err = err;
+            conn->err = status;
         }
     }
 
@@ -678,7 +678,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     }
 }
 
-void
+/*void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
@@ -707,6 +707,32 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
                   msg->id, msg->parent_id, p_conn);
         dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
     }
+}*/
+
+void
+remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
+                        struct rack *rack, uint8_t *key, uint32_t keylen)
+{
+    struct peer *peer;
+
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+
+    peer = get_dnode_peer_in_rack_for_key(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    if (peer == NULL) {
+        req_forward_error(ctx, c_conn, msg, DN_ENOHOST);
+        return;
+    }
+
+    if (peer->is_local) {
+        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
+                  msg->id, msg->parent_id);
+        local_req_forward(ctx, c_conn, msg, key, keylen);
+    } else {
+        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to peer %p", c_conn,
+                  msg->id, msg->parent_id, peer);
+        dnode_peer_req_forward(ctx, c_conn, peer, msg, key, keylen);
+    }
 }
 
 static void
@@ -714,29 +740,24 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
                             struct msg *msg, struct mbuf *orig_mbuf,
                             uint8_t *key, uint32_t keylen, struct datacenter *dc)
 {
-    //log_debug(LOG_DEBUG, "dc name  '%.*s'",
-    //            dc->name->len, dc->name->data);
     uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
     uint8_t rack_index;
     msg->rsp_handler = msg_get_rsp_handler(msg);
     init_response_mgr(&msg->rspmgr, msg, msg->is_read, rack_cnt, c_conn);
     log_info("msg %d:%d same DC racks:%d expect replies %d",
-             msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
-    for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+             msg->id, msg->parent_id, rack_cnt, msg->rspmgr.quorum_responses);
+    for(rack_index = 0; rack_index < rack_cnt; rack_index++)
+    {
         struct rack *rack = array_get(&dc->racks, rack_index);
-        //log_debug(LOG_DEBUG, "rack name '%.*s'",
-        //            rack->name->len, rack->name->data);
         struct msg *rack_msg;
-        // clone message even for local node
         struct server_pool *pool = c_conn->owner;
         if (string_compare(rack->name, &pool->rack_name) == 0 ) {
             rack_msg = msg;
         } else {
             rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
             if (rack_msg == NULL) {
-                log_debug(LOG_VERB, "whelp, looks like yer screwed "
-                        "now, buddy. no inter-rack messages for "
-                        "you!");
+                log_error("whelp, looks like yer screwed "
+                          "now, buddy. no inter-rack messages for you!");
                 continue;
             }
 

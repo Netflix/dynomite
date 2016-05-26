@@ -613,14 +613,12 @@ dnode_peer_each_disconnect(void *elem, void *data)
 }
 
 static void
-dnode_peer_close_socket(struct context *ctx, struct conn *conn)
+dnode_peer_close_socket(struct conn *conn)
 {
     rstatus_t status;
-        if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "In dnode_peer_close_socket");
-        }
+    log_debug(LOG_VERB, "In %s", __FUNCTION__);
 
-    if (conn != NULL) {
+    if ((conn != NULL) && (conn->sd >= 0)) {
         status = close(conn->sd);
         if (status < 0) {
             log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
@@ -1122,6 +1120,37 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
     return server;
 }
 
+struct peer*
+get_dnode_peer_in_rack_for_key(struct context *ctx, struct server_pool *pool,
+                               struct rack *rack, uint8_t *key, uint32_t keylen,
+                               uint8_t msg_type)
+{
+    rstatus_t status;
+    struct peer *peer;
+
+    log_debug(LOG_VERB, "Entering %s.....................", __FUNCTION__);
+
+    status = dnode_peer_pool_update(pool);
+    if (status != DN_OK) {
+        loga("status is not OK");
+        return NULL;
+    }
+
+    if (msg_type == 1) {  //always local
+        peer = array_get(&pool->peers, 0);
+    } else {
+        /* from a given {key, keylen} pick a peer from pool */
+        peer = dnode_peer_pool_server(pool, rack, key, keylen);
+        if (peer == NULL) {
+            log_debug(LOG_VERB, "What? There is no such peer in rack '%.*s' for key '%.*s'",
+                    rack->name, keylen, key);
+            return NULL;
+        }
+    }
+
+    return peer;
+}
+
 struct conn *
 dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
                      struct rack *rack, uint8_t *key, uint32_t keylen,
@@ -1169,7 +1198,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
     } else if (peer->state == RESET) {
         log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
 
-        dnode_peer_close_socket(ctx, conn);
+        dnode_peer_close_socket(conn);
         status = conn_connect(ctx, conn);
         if (status != DN_OK) {
             conn->err = EHOSTDOWN;
@@ -1191,6 +1220,30 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
     return conn;
 }
 
+static struct conn *
+dnode_peer_active_conn(struct context *ctx, struct peer *peer)
+{
+    if (peer->state == DOWN) {
+        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Down", peer->name);
+        return NULL;
+    }
+    struct conn *p_conn = dnode_peer_conn(peer);
+    if (peer->state == RESET) {
+        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset. Disconnecting and Reconnecting", peer->name);
+        // close existing connection and recreate it.
+        dnode_peer_close_socket(p_conn);
+    }
+
+    rstatus_t status = conn_connect(ctx, p_conn);
+    if (status != DN_OK) {
+        p_conn->err = EHOSTDOWN;
+        dnode_peer_close(ctx, p_conn);
+        return NULL;
+    }
+
+    peer->state = NORMAL;
+    return p_conn;
+}
 
 rstatus_t
 dnode_peer_pool_preconnect(struct context *ctx)
@@ -1743,6 +1796,137 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
         stats_pool_decr_by(ctx, remote_peer_out_queue_bytes, msg->mlen);
     }
 }
+
+static void
+dnode_peer_req_forward_stats(struct context *ctx, struct msg *msg)
+{
+    ASSERT(msg->request);
+    stats_pool_incr(ctx, peer_requests);
+    stats_pool_incr_by(ctx, peer_request_bytes, msg->mlen);
+}
+
+void
+dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *msg,
+                        err_t error)
+{
+    rstatus_t status;
+
+    msg->done = msg->error = 1;
+    msg->err = error;
+
+    if (!msg->expect_datastore_reply || msg->swallow) {
+        req_put(msg);
+        return;
+    }
+
+    if (!p_conn)
+        return;
+    ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
+    if (req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
+        status = event_add_out(ctx->evb, p_conn);
+        if (status != DN_OK) {
+            p_conn->err = errno;
+        }
+    }
+}
+
+/* Forward request msg to peer on rack rack.*/
+/* Requirements: peer is not a local node. So it will put the msg on the outQ
+ */
+void
+dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
+                       struct peer *peer, struct msg *msg,
+                       uint8_t *key, uint32_t keylen)
+{
+    /* enqueue message (request) into client outq, if response is expected */
+    // TODO: SHAILESH: Not the right place to do this.
+    if (msg->expect_datastore_reply && !msg->swallow) {
+        conn_enqueue_outq(ctx, c_conn, msg);
+    }
+
+    struct conn *p_conn = dnode_peer_active_conn(ctx, peer);
+    if (p_conn == NULL)
+    {
+        // No active connection to this peer. Mark the message as err
+        // TODO: SHAILESH How does the client connection know that it is supposed to
+        // read from its outqueue i.e a message is done??
+        dnode_req_forward_error(ctx, NULL, msg, DN_EHOST_DOWN);
+        return;
+    }
+
+    log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%.*s' on rack '%.*s' dc '%.*s' ",
+              dn_unresolve_peer_desc(c_conn->sd), peer->name.len, peer->name.data,
+              peer->rack.len, peer->rack.data,
+              peer->dc.len, peer->dc.data);
+
+    rstatus_t status;
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+
+    /* enqueue the message (request) into peer inq */
+    status = event_add_out(ctx->evb, p_conn);
+    if (status != DN_OK) {
+        log_warn("Error on connection to '%.*s'. Marking it to RESET", peer->name);
+        dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);
+        peer->state = RESET;
+        p_conn->err = errno;
+        return;
+    }
+
+    struct mbuf *header_buf = mbuf_get();
+    if (header_buf == NULL) {
+        loga("Unable to obtain an mbuf for dnode msg's header!");
+        dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);
+        return;
+    }
+
+    //struct server_pool *pool = &ctx->pool;
+    //dmsg_type_t msg_type = (string_compare(&pool->dc_name, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
+    dmsg_type_t msg_type = !p_conn->same_dc ? DMSG_REQ_FORWARD : DMSG_REQ;
+
+    if (p_conn->dnode_secured) {
+        //Encrypting and adding header for a request
+        log_debug(LOG_VVERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
+
+        //write dnode header
+        if (ENCRYPTION) {
+            status = dyn_aes_encrypt_msg(msg, p_conn->aes_key);
+            if (status == DN_ERROR) {
+                loga("OOM to obtain an mbuf for encryption!");
+                mbuf_put(header_buf);
+                dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);
+                return;
+            }
+
+            log_debug(LOG_VVERB, "#encrypted bytes : %d", status);
+
+            dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
+        } else {
+            log_debug(LOG_VVERB, "no encryption on the msg payload");
+            dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
+        }
+
+    } else {
+        //write dnode header
+        dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
+    }
+
+    mbuf_insert_head(&msg->mhdr, header_buf);
+
+    if (log_loggable(LOG_VVERB)) {
+        log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
+        msg_dump(msg);
+    }
+
+    conn_enqueue_inq(ctx, p_conn, msg);
+
+    dnode_peer_req_forward_stats(ctx, msg);
+
+    log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
+              msg->mlen, msg->type, keylen, key);
+}
+
 
 
 struct conn_ops dnode_peer_ops = {

@@ -39,6 +39,12 @@ rstatus_t dnode_peer_init(struct context *ctx);
 void dnode_peer_deinit(struct array *nodes);
 void dnode_peer_connected(struct context *ctx, struct conn *conn);
 
+struct peer *get_dnode_peer_in_rack_for_key(struct context *ctx, struct server_pool *pool,
+                               struct rack *rack, uint8_t *key, uint32_t keylen,
+                               uint8_t msg_type);
+void dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *msg, err_t error);
+void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct peer *peer,
+		                    struct msg *msg, uint8_t *key, uint32_t keylen);
 struct conn *dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen, uint8_t msg_type);
 rstatus_t dnode_peer_pool_preconnect(struct context *ctx);
 void dnode_peer_pool_disconnect(struct context *ctx);

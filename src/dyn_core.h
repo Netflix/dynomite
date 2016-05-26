@@ -63,17 +63,6 @@
 # define DN_HAVE_BACKTRACE 1
 #endif
 
-#define DN_NOOPS     1
-#define DN_OK        0
-#define DN_ERROR    -1
-#define DN_EAGAIN   -2
-#define DN_ENOMEM   -3
-#define DN_ENO_IMPL -4
-
-
-typedef int rstatus_t; /* return type */
-typedef int err_t;     /* error type */
-
 #define THROW_STATUS(s)                                             \
                 {                                                   \
                     rstatus_t __ret = (s);                          \
@@ -121,6 +110,7 @@ struct topology;
 #include <sys/time.h>
 #include <netinet/in.h>
 
+#include "dyn_error.h"
 #include "dyn_types.h"
 #include "dyn_array.h"
 #include "dyn_dict.h"
