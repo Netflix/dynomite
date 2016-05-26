@@ -363,6 +363,12 @@ get_secure_server_option(struct string option)
     return SECURE_OPTION_NONE;
 }
 
+static rstatus_t
+conf_topo_transform(struct topology *topo, struct conf_pool *cp)
+{
+    string_duplicate(&topo->seed_provider, &cp->dyn_seed_provider);
+}
+
 rstatus_t
 conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 {
@@ -375,7 +381,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->p_conn = NULL;
     sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
-    sp->topo = topo_create();
 
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
@@ -424,7 +429,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 			  sp->name.len, sp->name.data);
 
     /* dynomite init */
-    sp->seed_provider = cp->dyn_seed_provider;
     sp->dnode_proxy_endpoint.pname = cp->dyn_listen.pname;
     sp->dnode_proxy_endpoint.port = (uint16_t)cp->dyn_listen.port;
     sp->dnode_proxy_endpoint.family = cp->dyn_listen.info.family;
@@ -447,6 +451,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->g_interval = cp->gos_interval;
 
     set_msgs_per_sec(cp->conn_msg_rate);
+    sp->topo = topo_create();
+    conf_topo_transform(sp->topo, cp);
 
     log_debug(LOG_VERB, "transform to pool '%.*s'", sp->name.len, sp->name.data);
 

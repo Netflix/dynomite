@@ -182,5 +182,6 @@ topo_create(void)
     struct topology *t = dn_zalloc(sizeof(struct topology));
     array_null(&t->datacenters);
     array_init(&t->datacenters, 1, sizeof(struct datacenter));
+    string_init(&t->seed_provider);
     return t;
 }

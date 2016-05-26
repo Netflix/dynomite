@@ -886,7 +886,7 @@ gossip_pool_init(struct context *ctx)
     //dictDisableResize();
     gn_pool.dict_dc = dictCreate(&string_table_dict_type, NULL);
 
-    gossip_set_seeds_provider(&sp->seed_provider);
+    gossip_set_seeds_provider(&topo->seed_provider);
 
     uint32_t n_dc = array_n(&topo->datacenters);
     if (n_dc == 0)

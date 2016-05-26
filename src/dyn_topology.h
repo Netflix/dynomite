@@ -19,6 +19,7 @@ struct datacenter {
 struct topology
 {
     struct array datacenters;
+    struct string      seed_provider;
 };
 struct datacenter *topo_get_dc(struct topology *topo, struct string *dcname);
 struct rack *topo_get_rack(struct datacenter *dc, struct string *rackname);

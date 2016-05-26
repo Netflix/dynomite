@@ -228,7 +228,6 @@ struct server_pool {
     unsigned           preconnect:1;         /* preconnect? */
 
     /* dynomite */
-    struct string      seed_provider;
     struct array       seeds;                /*dyn seeds */
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
