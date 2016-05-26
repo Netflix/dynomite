@@ -44,9 +44,6 @@ server_ref(struct conn *conn, void *owner)
 	conn->addr = server->endpoint.addr;
     string_duplicate(&conn->pname, &server->endpoint.pname);
 
-	server->ns_conn_q++;
-	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
-
 	conn->owner = owner;
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
@@ -63,10 +60,6 @@ server_unref(struct conn *conn)
 
 	server = conn->owner;
 	conn->owner = NULL;
-
-	ASSERT(server->ns_conn_q != 0);
-	server->ns_conn_q--;
-	TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -122,7 +115,8 @@ server_deinit(struct datastore **pdatastore)
     if (!pdatastore || !*pdatastore)
         return;
     struct datastore *s = *pdatastore;
-    ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
+    dn_free(s);
+    *pdatastore = NULL;
 }
 
 static struct conn *
@@ -139,22 +133,7 @@ server_conn(struct datastore *datastore)
 	 * 'server_connections:' > 0 key
 	 */
 
-	if (datastore->ns_conn_q < pool->server_connections) {
-		return conn_get(datastore, false);
-	}
-	ASSERT(datastore->ns_conn_q == pool->server_connections);
-
-	/*
-	 * Pick a server connection from the head of the queue and insert
-	 * it back into the tail of queue to maintain the lru order
-	 */
-	conn = TAILQ_FIRST(&datastore->s_conn_q);
-	ASSERT(conn->type == CONN_SERVER);
-
-	TAILQ_REMOVE(&datastore->s_conn_q, conn, conn_tqe);
-	TAILQ_INSERT_TAIL(&datastore->s_conn_q, conn, conn_tqe);
-
-	return conn;
+    return conn_get(datastore, false);
 }
 
 static rstatus_t
@@ -219,17 +198,12 @@ void
 datastore_disconnect(struct datastore *datastore)
 {
 	struct server_pool *pool = datastore->owner;
+    struct context *ctx = pool->ctx;
 
-	while (!TAILQ_EMPTY(&datastore->s_conn_q)) {
-		struct conn *conn;
-
-		ASSERT(datastore->ns_conn_q > 0);
-
-		conn = TAILQ_FIRST(&datastore->s_conn_q);
-		conn_close(pool->ctx, conn);
-	}
-
-	return;
+    if (ctx->datastore_conn) {
+        conn_close(pool->ctx, ctx->datastore_conn);
+        ctx->datastore_conn = NULL;
+    }
 }
 
 static void

@@ -588,7 +588,9 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         conn_enqueue_outq(ctx, c_conn, msg);
     }
 
-    s_conn = get_datastore_conn(ctx, c_conn->owner);
+    if (!ctx->datastore_conn)
+        ctx->datastore_conn = get_datastore_conn(ctx, c_conn->owner);
+    s_conn = ctx->datastore_conn;
     log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
         req_forward_error(ctx, c_conn, msg, errno);

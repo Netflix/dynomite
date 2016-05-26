@@ -195,9 +195,6 @@ struct datastore {
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    uint32_t           ns_conn_q;     /* # server connection */
-    struct conn_tqh    s_conn_q;      /* server connection q */
-
     msec_t             next_retry;    /* next retry time in msec */
     uint32_t           failure_count; /* # consecutive failures */
 };
@@ -260,6 +257,7 @@ struct context {
     struct stats       *stats;      /* stats */
 
     struct server_pool pool;        /* server_pool[] */
+    struct conn        *datastore_conn;
     struct event_base  *evb;        /* event base */
     int                max_timeout; /* max timeout in msec */
     int                timeout;     /* timeout in msec */

@@ -172,7 +172,7 @@ core_ctx_create(struct instance *nci)
 
 	srand((unsigned) time(NULL));
 
-	ctx = dn_alloc(sizeof(*ctx));
+	ctx = dn_zalloc(sizeof(*ctx));
 	if (ctx == NULL) {
 		loga("Failed to create context!!!");
 		return DN_ERROR;
