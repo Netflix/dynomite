@@ -93,6 +93,7 @@ typedef enum connection_type {
 struct conn {
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
     void               *owner;        /* connection owner - server_pool / server */
+    struct event_base  *evb;          /* event base this connection belongs to */
 
     int                sd;            /* socket descriptor */
     struct string      pname;
@@ -201,6 +202,9 @@ struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 rstatus_t conn_listen(struct context *ctx, struct conn *p);
 rstatus_t conn_connect(struct context *ctx, struct conn *conn);
+rstatus_t conn_add_out(struct conn *conn);
+rstatus_t conn_del_out(struct conn *conn);
+rstatus_t conn_add_to_epoll(struct conn *conn);
 
 ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv_data(struct conn *conn, struct array *sendv, size_t nsend);

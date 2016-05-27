@@ -39,7 +39,7 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
     mbuf_insert_head(&msg->mhdr, nbuf);
 
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_add_out(conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg);
             conn->err = errno;
@@ -135,7 +135,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     /* enqueue the message (request) into peer inq */
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_add_out(conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg, errno);
             conn->err = errno;

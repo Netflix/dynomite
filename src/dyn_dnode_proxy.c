@@ -28,6 +28,7 @@ dnode_ref(struct conn *conn, void *owner)
 
     /* owner of the proxy connection is the server pool */
     conn->owner = owner;
+    conn->evb = pool->ctx->evb;
 
     log_debug(LOG_VVERB, "ref conn %p owner %p", conn, pool);
 }
@@ -200,7 +201,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         }
     }
 
-    status = event_add_conn(ctx->evb, c);
+    status = conn_add_to_epoll(c);
     if (status < 0) {
         log_error("dyn: event add conn from %s %d failed: %s",
                   conn_get_type_string(p), p->sd, strerror(errno));

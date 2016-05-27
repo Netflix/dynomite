@@ -300,7 +300,7 @@ core_close(struct context *ctx, struct conn *conn)
 
     core_close_log(conn);
 
-	status = event_del_conn(ctx->evb, conn);
+	status = conn_del_from_epoll(conn);
 	if (status < 0) {
 		log_warn("event del conn %d failed, ignored: %s",
 		          conn->sd, strerror(errno));

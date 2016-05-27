@@ -45,6 +45,7 @@ server_ref(struct conn *conn, void *owner)
     string_duplicate(&conn->pname, &server->endpoint.pname);
 
 	conn->owner = owner;
+    conn->evb = server->owner->ctx->evb;
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -762,7 +763,7 @@ req_send_next(struct context *ctx, struct conn *conn)
     nmsg = TAILQ_FIRST(&conn->imsg_q);
     if (nmsg == NULL) {
         /* nothing to send as the server inq is empty */
-        status = event_del_out(ctx->evb, conn);
+        status = conn_del_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }

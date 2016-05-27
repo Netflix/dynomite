@@ -99,6 +99,7 @@ client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
+    conn->evb = pool->ctx->evb;
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->waiting_to_unref = 0;
 
@@ -313,7 +314,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
         }
     } else if (status == DN_OK) {
         struct context *ctx = conn_to_ctx(conn);
-        status = event_add_out(ctx->evb, conn);
+        status = conn_add_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }
@@ -430,7 +431,7 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 
     req->done = 1;
     //req->pre_coalesce(req);
-    rstatus_t status = event_add_out(ctx->evb, c_conn);
+    rstatus_t status = conn_add_out(c_conn);
     IGNORE_RET_VAL(status);
 }
 
@@ -456,7 +457,7 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
     }
 
     if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_add_out(conn);
         if (status != DN_OK) {
             conn->err = status;
         }
@@ -606,7 +607,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */
         if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-            status = event_add_out(ctx->evb, s_conn);
+            status = conn_add_out(s_conn);
 
             if (status != DN_OK) {
                 req_forward_error(ctx, c_conn, msg, errno);
@@ -630,7 +631,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
             return;
         }
 
-        status = event_add_out(ctx->evb, s_conn);
+        status = conn_add_out(s_conn);
 
         if (status != DN_OK) {
             req_forward_error(ctx, c_conn, msg, errno);

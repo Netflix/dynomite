@@ -166,6 +166,7 @@ _conn_get(void)
     }
 
     conn->owner = NULL;
+    conn->evb = NULL;
 
     conn->sd = -1;
     string_init(&conn->pname);
@@ -479,7 +480,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = event_add_conn(ctx->evb, p);
+    status = conn_add_to_epoll(p);
     if (status < 0) {
         log_error("event add conn p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -487,7 +488,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = event_del_out(ctx->evb, p);
+    status = conn_del_out(p);
     if (status < 0) {
         log_error("event del out p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -543,7 +544,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         }
     }
 
-    status = event_add_conn(ctx->evb, conn);
+    status = conn_add_to_epoll(conn);
     if (status != DN_OK) {
         log_error("event add conn s %d for '%.*s' failed: %s",
                 conn->sd, conn->pname.len, conn->pname.data,
@@ -581,6 +582,30 @@ conn_connect(struct context *ctx, struct conn *conn)
     error:
     conn->err = errno;
     return status;
+}
+
+rstatus_t
+conn_add_to_epoll(struct conn *conn)
+{
+    return event_add_conn(conn->evb, conn);
+}
+
+rstatus_t
+conn_del_from_epoll(struct conn *conn)
+{
+    return event_del_conn(conn->evb, conn);
+}
+
+rstatus_t
+conn_add_out(struct conn *conn)
+{
+    return event_add_out(conn->evb, conn);
+}
+
+rstatus_t
+conn_del_out(struct conn *conn)
+{
+    return event_del_out(conn->evb, conn);
 }
 
 ssize_t
