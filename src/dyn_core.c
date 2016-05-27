@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_proxy.h"
@@ -66,10 +67,10 @@ core_dnode_peer_pool_preconnect(struct context *ctx)
     return status;
 }
 static rstatus_t
-core_dnode_peer_init(struct context *ctx)
+core_topo_init_seeds_peers(struct context *ctx)
 {
 	/* initialize peers */
-	THROW_STATUS(dnode_peer_init(ctx));
+	THROW_STATUS(topo_init_seeds_peers(ctx));
 	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK)
 	    dnode_peer_pool_disconnect(ctx);
@@ -83,9 +84,9 @@ core_dnode_init(struct context *ctx)
     THROW_STATUS(dnode_init(ctx));
 
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
-    rstatus_t status = core_dnode_peer_init(ctx);
+    rstatus_t status = core_topo_init_seeds_peers(ctx);
     if (status != DN_OK)
-        dnode_peer_deinit(&ctx->pool.peers);
+        topo_deinit_seeds_peers(ctx);
     return status;
 }
 
@@ -450,32 +451,11 @@ core_core(void *arg, uint32_t events)
 void
 core_debug(struct context *ctx)
 {
+    struct server_pool *sp = ctx_get_pool(ctx);
+    struct topology *topo = ctx_get_topology(ctx);
 	log_debug(LOG_VERB, "=====================Peers info=====================");
-    struct server_pool *sp = &ctx->pool;
     log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
-    uint32_t j, n;
-    for (j = 0, n = array_n(&sp->peers); j < n; j++) {
-        log_debug(LOG_VERB, "==============================================");
-        struct peer *peer = (struct peer *) array_get(&sp->peers, j);
-        log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",peer ->dc);
-        log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", peer->rack);
-
-        log_debug(LOG_VERB, "\tPeer name          : '%.*s'", peer->name);
-        log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", peer->endpoint.pname);
-
-        log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", peer->state);
-        log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", peer->endpoint.port);
-        log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", peer->is_local);
-        log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", peer->failure_count);
-        log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&peer->tokens));
-
-        uint32_t k;
-        for (k = 0; k < array_n(&peer->tokens); k++) {
-            struct dyn_token *token = (struct dyn_token *) array_get(&peer->tokens, k);
-            print_dyn_token(token, 12);
-        }
-    }
-    topo_print(sp->topo);
+    topo_print(topo);
 }
 
 

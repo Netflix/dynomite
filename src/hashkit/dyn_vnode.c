@@ -57,13 +57,13 @@ vnode_rack_verify_continuum(void *elem, void *data)
 }
 
 rstatus_t
-vnode_update(struct server_pool *sp)
+vnode_update(struct topology *topo)
 {
-    ASSERT(array_n(&sp->peers) > 0);
+    ASSERT(array_n(&topo->peers) > 0);
 
     uint32_t i, len;
-    for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-        struct peer *peer = array_get(&sp->peers, i);
+    for (i = 0, len = array_n(&topo->peers); i < len; i++) {
+        struct peer *peer = array_get(&topo->peers, i);
 
         log_debug(LOG_VERB, "peer name       : '%.*s'", peer->name.len, peer->name.data);
         log_debug(LOG_VERB, "peer rack       : '%.*s'", peer->rack.len, peer->rack.data);
@@ -72,7 +72,7 @@ vnode_update(struct server_pool *sp)
 
         //update its own state
         if (i == 0) {
-           peer->state = sp->ctx->dyn_state;
+           peer->state = topo->ctx->dyn_state;
         }
 
         if (peer->processed) {
@@ -81,7 +81,7 @@ vnode_update(struct server_pool *sp)
 
         peer->processed = 1;
 
-        struct datacenter *dc = topo_get_dc(sp->topo, &peer->dc);
+        struct datacenter *dc = topo_get_dc(topo, &peer->dc);
         struct rack *rack = topo_get_rack(dc, &peer->rack);
 
         ASSERT(rack != NULL);

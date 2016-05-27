@@ -367,6 +367,7 @@ static rstatus_t
 conf_topo_transform(struct topology *topo, struct conf_pool *cp)
 {
     string_duplicate(&topo->seed_provider, &cp->dyn_seed_provider);
+    return DN_OK;
 }
 
 rstatus_t
@@ -443,8 +444,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
 
-    array_null(&sp->seeds);
-    array_null(&sp->peers);
     sp->conf_pool = cp;
 
     /* gossip */

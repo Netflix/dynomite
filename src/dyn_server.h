@@ -71,8 +71,6 @@ msec_t server_timeout(struct conn *conn);
 rstatus_t server_init(struct server_pool *sp, struct array *conf_server);
 rstatus_t server_connect(struct context *ctx, struct datastore *server, struct conn *conn);
 
-rstatus_t datacenter_destroy(void *elem, void *data);
-
 struct conn *get_datastore_conn(struct context *ctx, struct server_pool *pool);
 rstatus_t datastore_preconnect(struct datastore *datastore);
 void datastore_disconnect(struct datastore *datastore);

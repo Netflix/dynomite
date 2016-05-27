@@ -228,8 +228,6 @@ struct server_pool {
     unsigned           preconnect:1;         /* preconnect? */
 
     /* dynomite */
-    struct array       seeds;                /*dyn seeds */
-    struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
     struct endpoint    dnode_proxy_endpoint;
     int                d_timeout;            /* peer timeout in msec */
@@ -266,7 +264,17 @@ struct context {
     unsigned           admin_opt;   /* admin mode */
 };
 
+static inline struct server_pool *
+ctx_get_pool(struct context *ctx)
+{
+    return &ctx->pool;
+}
 
+static inline struct topology *
+ctx_get_topology(struct context *ctx)
+{
+    return ctx->pool.topo;
+}
 
 rstatus_t core_start(struct instance *nci);
 void core_stop(struct context *ctx);

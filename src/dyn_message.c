@@ -29,7 +29,6 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 #include "proto/dyn_proto.h"
-#include "hashkit/dyn_hashkit.h"
 
 #if (IOV_MAX > 128)
 #define DN_IOV_MAX 128

@@ -30,6 +30,7 @@
 #include <netinet/in.h>
 
 #include "dyn_core.h"
+#include "dyn_topology.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_histogram.h"
 #include "dyn_server.h"
@@ -869,7 +870,7 @@ stats_resize_clus_desc_buf(struct stats *st)
 {
     struct server_pool *sp = &st->ctx->pool;
     ASSERT(sp);
-    size_t size = 1024 * array_n(&sp->peers);
+    size_t size = 1024 * array_n(&sp->topo->peers);
     size = DN_ALIGN(size, DN_ALIGNMENT);
     if (st->clus_desc_buf.size < size) {
         stats_destroy_buf(&st->clus_desc_buf);
@@ -1172,17 +1173,17 @@ stats_send_rsp(struct stats *st)
         dn_sprintf(rsp, "Timeout factor: %d\n", g_timeout_factor);
         return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_SET_TIMEOUT_FACTOR) {
-        int8_t timeout_factor = 0;
+        uint8_t timeout_factor = 0;
         log_warn("st_cmd.req_data '%.*s' ", st_cmd.req_data);
-        sscanf(st_cmd.req_data.data, "%d", &timeout_factor);
-        log_warn("timeout factor = %d", timeout_factor);
+        sscanf(st_cmd.req_data.data, "%u", &timeout_factor);
+        log_warn("timeout factor = %u", timeout_factor);
         // make sure timeout factor is within a range
         if (timeout_factor < 1)
             timeout_factor = 1;
         if (timeout_factor > 10)
             timeout_factor = 10;
         g_timeout_factor = timeout_factor;
-        log_warn("setting timeout_factor to %d", g_timeout_factor);
+        log_warn("setting timeout_factor to %u", g_timeout_factor);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
         log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
@@ -1190,8 +1191,8 @@ stats_send_rsp(struct stats *st)
         uint32_t i, len;
 
         //I think it is ok to keep this simple without a synchronization
-        for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-            struct peer *peer = array_get(&sp->peers, i);
+        for (i = 0, len = array_n(&sp->topo->peers); i < len; i++) {
+            struct peer *peer = array_get(&sp->topo->peers, i);
             log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
 
             if (string_compare(&st_cmd.req_data, &all) == 0) {

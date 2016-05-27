@@ -122,11 +122,6 @@ server_deinit(struct datastore **pdatastore)
 static struct conn *
 server_conn(struct datastore *datastore)
 {
-	struct server_pool *pool;
-	struct conn *conn;
-
-	pool = datastore->owner;
-
 	/*
 	 * FIXME: handle multiple server connections per server and do load
 	 * balancing on it. Support multiple algorithms for
@@ -531,6 +526,7 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 {
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
+    sp->topo->ctx = ctx;
     THROW_STATUS(server_pool_run(sp));
 	log_debug(LOG_DEBUG, "inited server pool");
 	return DN_OK;

@@ -926,8 +926,8 @@ gossip_pool_init(struct context *ctx)
     }
 
     uint32_t i, nelem;
-    for (i = 0, nelem = array_n(&sp->peers); i < nelem; i++) {
-        struct peer *peer = array_get(&sp->peers, i);
+    for (i = 0, nelem = array_n(&sp->topo->peers); i < nelem; i++) {
+        struct peer *peer = array_get(&sp->topo->peers, i);
         struct gossip_dc *g_dc = dictFetchValue(gn_pool.dict_dc, &peer->dc);
         struct gossip_rack *g_rack = dictFetchValue(g_dc->dict_rack, &peer->rack);
         struct gossip_node *gnode = array_push(&g_rack->nodes);
