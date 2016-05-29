@@ -635,15 +635,15 @@ stats_copy_metric(struct stats *st, struct array *metric, bool trim_comma)
 {
     uint32_t i;
 
-	// Do not include last element in loop as we need to check if it gets a comma
-	for (i = 0; i < array_n(metric) - 1; i++) {
-		struct stats_metric *stm = array_get(metric, i);
-		THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
-	}
+    // Do not include last element in loop as we need to check if it gets a comma
+    for (i = 0; i < array_n(metric) - 1; i++) {
+        struct stats_metric *stm = array_get(metric, i);
+        THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
+    }
 
-	// Last metric inside dyn_o_mite:{} does not get a comma
-	struct stats_metric *stm = array_get(metric, array_n(metric) - 1);
-	THROW_STATUS(stats_add_num_last(&st->buf, &stm->name, stm->value.counter, trim_comma));
+    // Last metric inside dyn_o_mite:{} does not get a comma
+    struct stats_metric *stm = array_get(metric, array_n(metric) - 1);
+    THROW_STATUS(stats_add_num_last(&st->buf, &stm->name, stm->value.counter, trim_comma));
 
     return DN_OK;
 }
