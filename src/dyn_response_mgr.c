@@ -84,10 +84,10 @@ static void
 rspmgr_incr_non_quorum_responses_stats(struct response_mgr *rspmgr)
 {
     if (rspmgr->is_read)
-        stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
+        stats_pool_incr(conn_to_ctx(rspmgr->conn),
                         client_non_quorum_r_responses);
     else
-        stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
+        stats_pool_incr(conn_to_ctx(rspmgr->conn),
                         client_non_quorum_w_responses);
 
 }

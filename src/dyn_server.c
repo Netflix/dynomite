@@ -33,14 +33,15 @@ static void server_close(struct context *ctx, struct conn *conn);
 static void
 server_ref(struct conn *conn, void *owner)
 {
-	struct server *server = owner;
+	struct datastore *server = owner;
 
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->owner == NULL);
 
-	conn->family = server->family;
-	conn->addrlen = server->addrlen;
-	conn->addr = server->addr;
+	conn->family = server->endpoint.family;
+	conn->addrlen = server->endpoint.addrlen;
+	conn->addr = server->endpoint.addr;
+    string_duplicate(&conn->pname, &server->endpoint.pname);
 
 	server->ns_conn_q++;
 	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
@@ -48,13 +49,13 @@ server_ref(struct conn *conn, void *owner)
 	conn->owner = owner;
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
-			server->pname.len, server->pname.data);
+			server->endpoint.pname.len, server->endpoint.pname.data);
 }
 
 static void
 server_unref(struct conn *conn)
 {
-	struct server *server;
+	struct datastore *server;
 
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->owner != NULL);
@@ -67,13 +68,13 @@ server_unref(struct conn *conn)
 	TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
-			server->pname.len, server->pname.data);
+			server->endpoint.pname.len, server->endpoint.pname.data);
 }
 
 msec_t
 server_timeout(struct conn *conn)
 {
-	struct server *server;
+	struct datastore *server;
 	struct server_pool *pool;
 
     ASSERT(conn->type == CONN_SERVER);
@@ -115,21 +116,21 @@ server_active(struct conn *conn)
 }
 
 static void
-server_deinit(struct server **pdatastore)
+server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
-    struct server *s = *pdatastore;
+    struct datastore *s = *pdatastore;
     ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 }
 
 static struct conn *
-server_conn(struct server *server)
+server_conn(struct datastore *datastore)
 {
 	struct server_pool *pool;
 	struct conn *conn;
 
-	pool = server->owner;
+	pool = datastore->owner;
 
 	/*
 	 * FIXME: handle multiple server connections per server and do load
@@ -137,26 +138,56 @@ server_conn(struct server *server)
 	 * 'server_connections:' > 0 key
 	 */
 
-	if (server->ns_conn_q < pool->server_connections) {
-		return conn_get(server, false);
+	if (datastore->ns_conn_q < pool->server_connections) {
+		return conn_get(datastore, false);
 	}
-	ASSERT(server->ns_conn_q == pool->server_connections);
+	ASSERT(datastore->ns_conn_q == pool->server_connections);
 
 	/*
 	 * Pick a server connection from the head of the queue and insert
 	 * it back into the tail of queue to maintain the lru order
 	 */
-	conn = TAILQ_FIRST(&server->s_conn_q);
+	conn = TAILQ_FIRST(&datastore->s_conn_q);
 	ASSERT(conn->type == CONN_SERVER);
 
-	TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
-	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
+	TAILQ_REMOVE(&datastore->s_conn_q, conn, conn_tqe);
+	TAILQ_INSERT_TAIL(&datastore->s_conn_q, conn, conn_tqe);
 
 	return conn;
 }
 
 static rstatus_t
-datastore_preconnect(struct server *datastore)
+server_pool_run(struct server_pool *pool)
+{
+	ASSERT(pool->datastore != NULL);
+
+	switch (pool->dist_type) {
+	case DIST_KETAMA:
+		return ketama_update(pool);
+
+	case DIST_VNODE:
+		//return vnode_update(pool);
+		break;
+
+	case DIST_MODULA:
+		return modula_update(pool);
+
+	case DIST_RANDOM:
+		return random_update(pool);
+
+	case DIST_SINGLE:
+		return DN_OK;
+
+	default:
+		NOT_REACHED();
+		return DN_ERROR;
+	}
+
+	return DN_OK;
+}
+
+static rstatus_t
+datastore_preconnect(struct datastore *datastore)
 {
 	rstatus_t status;
 	struct server_pool *pool;
@@ -169,10 +200,10 @@ datastore_preconnect(struct server *datastore)
 		return DN_ENOMEM;
 	}
 
-	status = server_connect(pool->ctx, datastore, conn);
+	status = conn_connect(pool->ctx, conn);
 	if (status != DN_OK) {
 		log_warn("connect to datastore '%.*s' failed, ignored: %s",
-				datastore->pname.len, datastore->pname.data, strerror(errno));
+				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
 		server_close(pool->ctx, conn);
 	}
 
@@ -180,7 +211,7 @@ datastore_preconnect(struct server *datastore)
 }
 
 static rstatus_t
-datastore_disconnect(struct server *datastore)
+datastore_disconnect(struct datastore *datastore)
 {
 	struct server_pool *pool = datastore->owner;
 
@@ -197,7 +228,7 @@ datastore_disconnect(struct server *datastore)
 }
 
 static void
-server_failure(struct context *ctx, struct server *server)
+server_failure(struct context *ctx, struct datastore *server)
 {
 	struct server_pool *pool = server->owner;
 	msec_t now, next;
@@ -210,7 +241,7 @@ server_failure(struct context *ctx, struct server *server)
 	server->failure_count++;
 
 	log_debug(LOG_VERB, "server '%.*s' failure count %"PRIu32" limit %"PRIu32,
-			server->pname.len, server->pname.data, server->failure_count,
+			server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count,
 			pool->server_failure_limit);
 
 	if (server->failure_count < pool->server_failure_limit) {
@@ -222,16 +253,16 @@ server_failure(struct context *ctx, struct server *server)
 		return;
 	}
 
-	stats_server_set_ts(ctx, server, server_ejected_at, now);
+	stats_server_set_ts(ctx, server_ejected_at, now);
 
 	next = now + pool->server_retry_timeout_ms;
 
 	log_debug(LOG_INFO, "update pool '%.*s' to delete server '%.*s' "
 			"for next %"PRIu32" secs", pool->name.len,
-			pool->name.data, server->pname.len, server->pname.data,
+			pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
 			pool->server_retry_timeout_ms/1000);
 
-	stats_pool_incr(ctx, pool, server_ejects);
+	stats_pool_incr(ctx, server_ejects);
 
 	server->failure_count = 0;
 	server->next_retry = next;
@@ -244,21 +275,21 @@ server_failure(struct context *ctx, struct server *server)
 }
 
 static void
-server_close_stats(struct context *ctx, struct server *server, err_t err,
+server_close_stats(struct context *ctx, struct datastore *server, err_t err,
 		unsigned eof, unsigned connected)
 {
 	if (connected) {
-		stats_server_decr(ctx, server, server_connections);
+		stats_server_decr(ctx, server_connections);
 	}
 
 	if (eof) {
-		stats_server_incr(ctx, server, server_eof);
+		stats_server_incr(ctx, server_eof);
 		return;
 	}
 
 	switch (err) {
 	case ETIMEDOUT:
-		stats_server_incr(ctx, server, server_timedout);
+		stats_server_incr(ctx, server_timedout);
 		break;
 	case EPIPE:
 	case ECONNRESET:
@@ -270,7 +301,7 @@ server_close_stats(struct context *ctx, struct server *server, err_t err,
 	case EHOSTDOWN:
 	case EHOSTUNREACH:
 	default:
-		stats_server_incr(ctx, server, server_err);
+		stats_server_incr(ctx, server_err);
 		break;
 	}
 }
@@ -366,7 +397,7 @@ server_close(struct context *ctx, struct conn *conn)
         server_ack_err(ctx, conn, msg);
         in_counter++;
 
-		stats_server_incr(ctx, conn->owner, server_dropped_requests);
+		stats_server_incr(ctx, server_dropped_requests);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
@@ -401,108 +432,29 @@ server_close(struct context *ctx, struct conn *conn)
 	conn_put(conn);
 }
 
-rstatus_t
-server_connect(struct context *ctx, struct server *server, struct conn *conn)
-{
-	rstatus_t status;
-
-    ASSERT(conn->type == CONN_SERVER);
-
-	if (conn->sd > 0) {
-		/* already connected on server connection */
-		return DN_OK;
-	}
-
-        if (log_loggable(LOG_VVERB)) {
-	   log_debug(LOG_VVERB, "connect to server '%.*s'", server->pname.len,
-		   	server->pname.data);
-        }
-
-	conn->sd = socket(conn->family, SOCK_STREAM, 0);
-	if (conn->sd < 0) {
-		log_error("socket for server '%.*s' failed: %s", server->pname.len,
-				server->pname.data, strerror(errno));
-		status = DN_ERROR;
-		goto error;
-	}
-
-	status = dn_set_nonblocking(conn->sd);
-	if (status != DN_OK) {
-		log_error("set nonblock on s %d for server '%.*s' failed: %s",
-				conn->sd,  server->pname.len, server->pname.data,
-				strerror(errno));
-		goto error;
-	}
-
-	if (server->pname.data[0] != '/') {
-		status = dn_set_tcpnodelay(conn->sd);
-		if (status != DN_OK) {
-			log_warn("set tcpnodelay on s %d for server '%.*s' failed, ignored: %s",
-					conn->sd, server->pname.len, server->pname.data,
-					strerror(errno));
-		}
-	}
-
-	status = event_add_conn(ctx->evb, conn);
-	if (status != DN_OK) {
-		log_error("event add conn s %d for server '%.*s' failed: %s",
-				conn->sd, server->pname.len, server->pname.data,
-				strerror(errno));
-		goto error;
-	}
-
-	ASSERT(!conn->connecting && !conn->connected);
-
-	status = connect(conn->sd, conn->addr, conn->addrlen);
-	if (status != DN_OK) {
-		if (errno == EINPROGRESS) {
-			conn->connecting = 1;
-			log_debug(LOG_DEBUG, "connecting on s %d to server '%.*s'",
-					conn->sd, server->pname.len, server->pname.data);
-			return DN_OK;
-		}
-
-		log_error("connect on s %d to server '%.*s' failed: %s", conn->sd,
-				server->pname.len, server->pname.data, strerror(errno));
-
-		goto error;
-	}
-
-	ASSERT(!conn->connecting);
-	conn->connected = 1;
-	log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-			server->pname.len, server->pname.data);
-
-	return DN_OK;
-
-	error:
-	conn->err = errno;
-	return status;
-}
-
 static void
 server_connected(struct context *ctx, struct conn *conn)
 {
-	struct server *server = conn->owner;
+	struct datastore *server = conn->owner;
 
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connecting && !conn->connected);
 
-	stats_server_incr(ctx, server, server_connections);
+	stats_server_incr(ctx, server_connections);
 
 	conn->connecting = 0;
 	conn->connected = 1;
 
         if (log_loggable(LOG_INFO)) {
 	   log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-		   	server->pname.len, server->pname.data);
+		   	server->endpoint.pname.len, server->endpoint.pname.data);
         }
 }
 
 static void
 server_ok(struct context *ctx, struct conn *conn)
 {
-	struct server *server = conn->owner;
+	struct datastore *server = conn->owner;
 
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connected);
@@ -510,7 +462,7 @@ server_ok(struct context *ctx, struct conn *conn)
 	if (server->failure_count != 0) {
            if (log_loggable(LOG_VERB)) {
 		   log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
-				 " to 0", server->pname.len, server->pname.data,
+				 " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
 				 server->failure_count);
            }
            server->failure_count = 0;
@@ -563,19 +515,11 @@ server_pool_update(struct server_pool *pool)
 	return DN_OK;
 }
 
-static struct server *
-server_pool_server(struct server_pool *pool, uint8_t *key, uint32_t keylen)
-{
-    ASSERT(pool->datastore != NULL);
-    return pool->datastore;
-}
-
 struct conn *
-server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
-		uint32_t keylen)
+get_datastore_conn(struct context *ctx, struct server_pool *pool)
 {
 	rstatus_t status;
-	struct server *server;
+	struct datastore *datastore;
 	struct conn *conn;
 
 	status = server_pool_update(pool);
@@ -583,19 +527,18 @@ server_pool_conn(struct context *ctx, struct server_pool *pool, uint8_t *key,
 		return NULL;
 	}
 
-	/* from a given {key, keylen} pick a server from pool */
-	server = server_pool_server(pool, key, keylen);
-	if (server == NULL) {
+	datastore = pool->datastore;
+	if (datastore == NULL) {
 		return NULL;
 	}
 
 	/* pick a connection to a given server */
-	conn = server_conn(server);
+	conn = server_conn(datastore);
 	if (conn == NULL) {
 		return NULL;
 	}
 
-	status = server_connect(ctx, server, conn);
+	status = conn_connect(ctx, conn);
 	if (status != DN_OK) {
 		server_close(ctx, conn);
 		return NULL;
@@ -617,36 +560,6 @@ void
 server_pool_disconnect(struct context *ctx)
 {
     datastore_disconnect(ctx->pool.datastore);
-}
-
-rstatus_t
-server_pool_run(struct server_pool *pool)
-{
-	ASSERT(pool->datastore != NULL);
-
-	switch (pool->dist_type) {
-	case DIST_KETAMA:
-		return ketama_update(pool);
-
-	case DIST_VNODE:
-		//return vnode_update(pool);
-		break;
-
-	case DIST_MODULA:
-		return modula_update(pool);
-
-	case DIST_RANDOM:
-		return random_update(pool);
-
-	case DIST_SINGLE:
-		return DN_OK;
-
-	default:
-		NOT_REACHED();
-		return DN_ERROR;
-	}
-
-	return DN_OK;
 }
 
 rstatus_t
@@ -953,17 +866,16 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-server_rsp_forward_stats(struct context *ctx, struct server *server,
-                         struct msg *msg)
+server_rsp_forward_stats(struct context *ctx, struct msg *msg)
 {
 	ASSERT(!msg->request);
 
 	if (msg->is_read) {
-		stats_server_incr(ctx, server, read_responses);
-		stats_server_incr_by(ctx, server, read_response_bytes, msg->mlen);
+		stats_server_incr(ctx, read_responses);
+		stats_server_incr_by(ctx, read_response_bytes, msg->mlen);
 	} else {
-		stats_server_incr(ctx, server, write_responses);
-		stats_server_incr_by(ctx, server, write_response_bytes, msg->mlen);
+		stats_server_incr(ctx, write_responses);
+		stats_server_incr_by(ctx, write_response_bytes, msg->mlen);
 	}
 }
 
@@ -990,7 +902,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     req->peer = rsp;
     rsp->peer = req;
 
-    rsp->pre_coalesce(rsp);
+    g_pre_coalesce(rsp);
 
     c_conn = req->owner;
     log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
@@ -999,7 +911,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    server_rsp_forward_stats(ctx, s_conn->owner, rsp);
+    server_rsp_forward_stats(ctx, rsp);
     // this should really be the message's response handler be doing it
     if (req_done(c_conn, req)) {
         // handler owns the response now
@@ -1129,8 +1041,8 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     conn->imsg_count++;
     histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
-    stats_server_incr(ctx, conn->owner, in_queue);
-    stats_server_incr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    stats_server_incr(ctx, in_queue);
+    stats_server_incr_by(ctx, in_queue_bytes, msg->mlen);
 }
 
 static void
@@ -1144,8 +1056,8 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     conn->imsg_count--;
     histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
-    stats_server_decr(ctx, conn->owner, in_queue);
-    stats_server_decr_by(ctx, conn->owner, in_queue_bytes, msg->mlen);
+    stats_server_decr(ctx, in_queue);
+    stats_server_decr_by(ctx, in_queue_bytes, msg->mlen);
 }
 
 static void
@@ -1159,8 +1071,8 @@ req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     conn->omsg_count++;
     histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
-    stats_server_incr(ctx, conn->owner, out_queue);
-    stats_server_incr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
+    stats_server_incr(ctx, out_queue);
+    stats_server_incr_by(ctx, out_queue_bytes, msg->mlen);
 }
 
 static void
@@ -1176,8 +1088,8 @@ req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     conn->omsg_count--;
     histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
-    stats_server_decr(ctx, conn->owner, out_queue);
-    stats_server_decr_by(ctx, conn->owner, out_queue_bytes, msg->mlen);
+    stats_server_decr(ctx, out_queue);
+    stats_server_decr_by(ctx, out_queue_bytes, msg->mlen);
 }
 
 struct conn_ops server_ops = {

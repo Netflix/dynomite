@@ -95,6 +95,7 @@ struct conn {
     void               *owner;        /* connection owner - server_pool / server */
 
     int                sd;            /* socket descriptor */
+    struct string      pname;
     int                family;        /* socket address family */
     socklen_t          addrlen;       /* socket length */
     struct sockaddr    *addr;         /* socket address (ref in server or server_pool) */
@@ -198,6 +199,9 @@ struct conn *conn_get_proxy(void *owner);
 struct conn *conn_get_peer(void *owner, bool client);
 struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
+rstatus_t conn_listen(struct context *ctx, struct conn *p);
+rstatus_t conn_connect(struct context *ctx, struct conn *conn);
+
 ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv_data(struct conn *conn, struct array *sendv, size_t nsend);
 void conn_init(void);

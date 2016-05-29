@@ -287,8 +287,6 @@ typedef enum stats_server_field {
 } stats_server_field_t;
 #undef DEFINE_ACTION
 
-
-
 struct stats_cmd {
 	stats_cmd_t cmd;
 	struct string req_data;
@@ -297,96 +295,96 @@ struct stats_cmd {
 
 #if defined DN_STATS && DN_STATS == 1
 
-#define stats_pool_incr(_ctx, _pool, _name) do {                        \
-    _stats_pool_incr(_ctx, _pool, STATS_POOL_##_name);                  \
+#define stats_pool_incr(_ctx, _name) do {                        \
+    _stats_pool_incr(_ctx, STATS_POOL_##_name);                  \
 } while (0)
 
-#define stats_pool_decr(_ctx, _pool, _name) do {                        \
-    _stats_pool_decr(_ctx, _pool, STATS_POOL_##_name);                  \
+#define stats_pool_decr(_ctx, _name) do {                        \
+    _stats_pool_decr(_ctx, STATS_POOL_##_name);                  \
 } while (0)
 
-#define stats_pool_incr_by(_ctx, _pool, _name, _val) do {               \
-    _stats_pool_incr_by(_ctx, _pool, STATS_POOL_##_name, _val);         \
+#define stats_pool_incr_by(_ctx, _name, _val) do {               \
+    _stats_pool_incr_by(_ctx, STATS_POOL_##_name, _val);         \
 } while (0)
 
-#define stats_pool_decr_by(_ctx, _pool, _name, _val) do {               \
-    _stats_pool_decr_by(_ctx, _pool, STATS_POOL_##_name, _val);         \
+#define stats_pool_decr_by(_ctx, _name, _val) do {               \
+    _stats_pool_decr_by(_ctx, STATS_POOL_##_name, _val);         \
 } while (0)
 
-#define stats_pool_set_ts(_ctx, _pool, _name, _val) do {                \
-    _stats_pool_set_ts(_ctx, _pool, STATS_POOL_##_name, _val);          \
+#define stats_pool_set_ts(_ctx, _name, _val) do {                \
+    _stats_pool_set_ts(_ctx, STATS_POOL_##_name, _val);          \
 } while (0)
 
-#define stats_pool_get_ts(_ctx, _pool, _name)                           \
-    _stats_pool_get_ts(_ctx, _pool, STATS_POOL_##_name)
+#define stats_pool_get_ts(_ctx, _name)                           \
+    _stats_pool_get_ts(_ctx, STATS_POOL_##_name)
 
-#define stats_pool_set_val(_ctx, _pool, _name, _val) do {                \
-    _stats_pool_set_val(_ctx, _pool, STATS_POOL_##_name, _val);          \
+#define stats_pool_set_val(_ctx, _name, _val) do {                \
+    _stats_pool_set_val(_ctx, STATS_POOL_##_name, _val);          \
 } while (0)
 
-#define stats_pool_get_val(_ctx, _pool, _name)                          \
-    _stats_pool_get_val(_ctx, _pool, STATS_POOL_##_name)
+#define stats_pool_get_val(_ctx, _name)                          \
+    _stats_pool_get_val(_ctx, STATS_POOL_##_name)
 
-#define stats_server_incr(_ctx, _server, _name) do {                    \
-    _stats_server_incr(_ctx, _server, STATS_SERVER_##_name);            \
+#define stats_server_incr(_ctx, _name) do {                    \
+    _stats_server_incr(_ctx, STATS_SERVER_##_name);            \
 } while (0)
 
-#define stats_server_decr(_ctx, _server, _name) do {                    \
-    _stats_server_decr(_ctx, _server, STATS_SERVER_##_name);            \
+#define stats_server_decr(_ctx, _name) do {                    \
+    _stats_server_decr(_ctx, STATS_SERVER_##_name);            \
 } while (0)
 
-#define stats_server_incr_by(_ctx, _server, _name, _val) do {           \
-    _stats_server_incr_by(_ctx, _server, STATS_SERVER_##_name, _val);   \
+#define stats_server_incr_by(_ctx, _name, _val) do {           \
+    _stats_server_incr_by(_ctx, STATS_SERVER_##_name, _val);   \
 } while (0)
 
-#define stats_server_decr_by(_ctx, _server, _name, _val) do {           \
-    _stats_server_decr_by(_ctx, _server, STATS_SERVER_##_name, _val);   \
+#define stats_server_decr_by(_ctx, _name, _val) do {           \
+    _stats_server_decr_by(_ctx, STATS_SERVER_##_name, _val);   \
 } while (0)
 
-#define stats_server_set_ts(_ctx, _server, _name, _val) do {            \
-     _stats_server_set_ts(_ctx, _server, STATS_SERVER_##_name, _val);   \
+#define stats_server_set_ts(_ctx, _name, _val) do {            \
+     _stats_server_set_ts(_ctx, STATS_SERVER_##_name, _val);   \
 } while (0)
 
-#define stats_server_get_ts(_ctx, _server, _name)                       \
-     _stats_server_get_ts(_ctx, _server, STATS_SERVER_##_name)
+#define stats_server_get_ts(_ctx, _name)                       \
+     _stats_server_get_ts(_ctx, STATS_SERVER_##_name)
 
-#define stats_server_set_val(_ctx, _server, _name, _val) do {           \
-     _stats_server_set_val(_ctx, _server, STATS_SERVER_##_name, _val);  \
+#define stats_server_set_val(_ctx, _name, _val) do {           \
+     _stats_server_set_val(_ctx, STATS_SERVER_##_name, _val);  \
 } while (0)
 
-#define stats_server_get_val(_ctx, _server, _name)                      \
-     _stats_server_get_val(_ctx, _server, STATS_SERVER_##_name)
+#define stats_server_get_val(_ctx, _name)                      \
+     _stats_server_get_val(_ctx, STATS_SERVER_##_name)
 
 
 #else
 
-#define stats_pool_incr(_ctx, _pool, _name)
+#define stats_pool_incr(_ctx, _name)
 
-#define stats_pool_decr(_ctx, _pool, _name)
+#define stats_pool_decr(_ctx, _name)
 
-#define stats_pool_incr_by(_ctx, _pool, _name, _val)
+#define stats_pool_incr_by(_ctx, _name, _val)
 
-#define stats_pool_decr_by(_ctx, _pool, _name, _val)
+#define stats_pool_decr_by(_ctx, _name, _val)
 
-#define stats_pool_set_val(_ctx, _pool, _name, _val)
+#define stats_pool_set_val(_ctx, _name, _val)
 
-#define stats_pool_get_val(_ctx, _pool, _name)
+#define stats_pool_get_val(_ctx, _name)
 
-#define stats_server_incr(_ctx, _server, _name)
+#define stats_server_incr(_ctx, _name)
 
-#define stats_server_decr(_ctx, _server, _name)
+#define stats_server_decr(_ctx, _name)
 
-#define stats_server_incr_by(_ctx, _server, _name, _val)
+#define stats_server_incr_by(_ctx, _name, _val)
 
-#define stats_server_decr_by(_ctx, _server, _name, _val)
+#define stats_server_decr_by(_ctx, _name, _val)
 
-#define stats_server_set_ts(_ctx, _server, _name, _val)
+#define stats_server_set_ts(_ctx, _name, _val)
 
-#define stats_server_get_ts(_ctx, _server, _name)
+#define stats_server_get_ts(_ctx, _name)
 
-#define stats_server_set_val(_ctx, _server, _name, _val)
+#define stats_server_set_val(_ctx, _name, _val)
 
-#define stats_server_get_val(_ctx, _server, _name)
+#define stats_server_get_val(_ctx, _name)
 
 #endif
 
@@ -394,24 +392,24 @@ struct stats_cmd {
 
 void stats_describe(void);
 
-void _stats_pool_incr(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx);
-void _stats_pool_decr(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx);
-void _stats_pool_incr_by(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
-void _stats_pool_decr_by(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
-void _stats_pool_set_ts(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
-uint64_t _stats_pool_get_ts(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx);
-void _stats_pool_set_val(struct context *ctx, struct server_pool *pool, stats_pool_field_t fidx, int64_t val);
-int64_t _stats_pool_get_val(struct context *ctx, struct server_pool *pool,
+void _stats_pool_incr(struct context *ctx, stats_pool_field_t fidx);
+void _stats_pool_decr(struct context *ctx, stats_pool_field_t fidx);
+void _stats_pool_incr_by(struct context *ctx, stats_pool_field_t fidx, int64_t val);
+void _stats_pool_decr_by(struct context *ctx, stats_pool_field_t fidx, int64_t val);
+void _stats_pool_set_ts(struct context *ctx, stats_pool_field_t fidx, int64_t val);
+uint64_t _stats_pool_get_ts(struct context *ctx,stats_pool_field_t fidx);
+void _stats_pool_set_val(struct context *ctx,stats_pool_field_t fidx, int64_t val);
+int64_t _stats_pool_get_val(struct context *ctx,
 		                 stats_pool_field_t fidx);
 
-void _stats_server_incr(struct context *ctx, struct server *server, stats_server_field_t fidx);
-void _stats_server_decr(struct context *ctx, struct server *server, stats_server_field_t fidx);
-void _stats_server_incr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
-void _stats_server_decr_by(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
-void _stats_server_set_ts(struct context *ctx, struct server *server, stats_server_field_t fidx, uint64_t val);
-uint64_t _stats_server_get_ts(struct context *ctx, struct server *server, stats_server_field_t fidx);
-void _stats_server_set_val(struct context *ctx, struct server *server, stats_server_field_t fidx, int64_t val);
-int64_t _stats_server_get_val(struct context *ctx, struct server *server, stats_server_field_t fidx);
+void _stats_server_incr(struct context *ctx, stats_server_field_t fidx);
+void _stats_server_decr(struct context *ctx, stats_server_field_t fidx);
+void _stats_server_incr_by(struct context *ctx, stats_server_field_t fidx, int64_t val);
+void _stats_server_decr_by(struct context *ctx, stats_server_field_t fidx, int64_t val);
+void _stats_server_set_ts(struct context *ctx, stats_server_field_t fidx, uint64_t val);
+uint64_t _stats_server_get_ts(struct context *ctx, stats_server_field_t fidx);
+void _stats_server_set_val(struct context *ctx, stats_server_field_t fidx, int64_t val);
+int64_t _stats_server_get_val(struct context *ctx, stats_server_field_t fidx);
 
 struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,
 		                   struct server_pool *sp, struct context *ctx);
