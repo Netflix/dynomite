@@ -641,14 +641,9 @@ stats_copy_metric(struct stats *st, struct array *metric, bool trim_comma)
 		THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
 	}
 
-	// Last metric
+	// Last metric inside dyn_o_mite:{} does not get a comma
 	struct stats_metric *stm = array_get(metric, array_n(metric) - 1);
-    if (trim_comma) {
-		// Last metric inside dyn_o_mite:{} does not get a comma
-		THROW_STATUS(stats_add_num_last(&st->buf, &stm->name, stm->value.counter, true));
-	} else {
-		THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
-	}
+	THROW_STATUS(stats_add_num_last(&st->buf, &stm->name, stm->value.counter, trim_comma));
 
     return DN_OK;
 }
