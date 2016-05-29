@@ -631,13 +631,25 @@ stats_end_nesting(struct stats_buffer *buf, bool arr)
 }
 
 static rstatus_t
-stats_copy_metric(struct stats *st, struct array *metric)
+stats_copy_metric(struct stats *st, struct array *metric, bool trim_comma)
 {
     uint32_t i;
 
-    for (i = 0; i < array_n(metric); i++) {
-        struct stats_metric *stm = array_get(metric, i);
-        THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
+    // Check for trim_comma is outside of loop to avoid an extra condition within the loop.
+    if (!trim_comma) {
+        for (i = 0; i < array_n(metric); i++) {
+            struct stats_metric *stm = array_get(metric, i);
+            THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
+        }
+    } else {
+        for (i = 0; i < array_n(metric); i++) {
+            struct stats_metric *stm = array_get(metric, i);
+            if (i == array_n(metric) - 1) {
+                THROW_STATUS(stats_add_num_last(&st->buf, &stm->name, stm->value.counter, true));
+            } else {
+                THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
+            }
+        }
     }
 
     return DN_OK;
@@ -732,13 +744,13 @@ stats_make_info_rsp(struct stats *st)
 
     THROW_STATUS(stats_begin_nesting(&st->buf, &stp->name, false));
     /* copy pool metric from sum(c) to buffer */
-    THROW_STATUS(stats_copy_metric(st, &stp->metric));
+    THROW_STATUS(stats_copy_metric(st, &stp->metric, false));
 
     struct stats_server *sts = &stp->server;
 
     THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
     /* copy server metric from sum(c) to buffer */
-    THROW_STATUS(stats_copy_metric(st, &sts->metric));
+    THROW_STATUS(stats_copy_metric(st, &sts->metric, true));
     THROW_STATUS(stats_end_nesting(&st->buf, false));
 
     THROW_STATUS(stats_end_nesting(&st->buf, false));
