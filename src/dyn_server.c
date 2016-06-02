@@ -45,7 +45,7 @@ server_ref(struct conn *conn, void *owner)
     string_duplicate(&conn->pname, &server->endpoint.pname);
 
 	conn->owner = owner;
-    conn->evb = server->owner->ctx->evb;
+    conn->evb = core_get_evb_for_connection(server->owner->ctx, conn->type);
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);

@@ -580,7 +580,7 @@ dn_run(struct instance *nci)
 {
     rstatus_t status;
 
-    THROW_STATUS(core_start(nci));
+    THROW_STATUS(core_create(nci));
 
     struct context *ctx = nci->ctx;
     ctx->enable_gossip = enable_gossip;
@@ -589,6 +589,7 @@ dn_run(struct instance *nci)
     if (!ctx->enable_gossip)
     	ctx->dyn_state = NORMAL;
 
+    // Start thread per thread_ctx
     /* run rabbit run */
     for (;;) {
         status = core_loop(ctx);
@@ -597,7 +598,7 @@ dn_run(struct instance *nci)
         }
     }
 
-    core_stop(ctx);
+    core_destroy(ctx);
     return DN_OK;
 }
 

@@ -99,7 +99,7 @@ client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
-    conn->evb = pool->ctx->evb;
+    conn->evb = core_get_evb_for_connection(pool->ctx, conn->type);
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->waiting_to_unref = 0;
 

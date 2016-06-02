@@ -255,13 +255,14 @@ struct context {
 
     struct server_pool pool;        /* server_pool[] */
     struct conn        *datastore_conn;
-    struct event_base  *evb;        /* event base */
+    //struct event_base  *evb;        /* event base */
     int                max_timeout; /* max timeout in msec */
     int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     unsigned           enable_gossip:1;   /* enable/disable gossip */
     unsigned           admin_opt;   /* admin mode */
+    struct array       thread_ctxs;  /* array of all thread contexts in the system*/
 };
 
 static inline struct server_pool *
@@ -276,10 +277,9 @@ ctx_get_topology(struct context *ctx)
     return ctx->pool.topo;
 }
 
-rstatus_t core_start(struct instance *nci);
-void core_stop(struct context *ctx);
-rstatus_t core_core(void *arg, uint32_t events);
+rstatus_t core_create(struct instance *nci);
+void core_destroy(struct context *ctx);
 rstatus_t core_loop(struct context *ctx);
-void core_debug(struct context *ctx);
+struct event_base *core_get_evb_for_connection(struct context *ctx, connection_type_t type);
 
 #endif

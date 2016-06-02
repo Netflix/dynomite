@@ -25,12 +25,23 @@
 
 #include "dyn_core.h"
 #include "dyn_topology.h"
+#include "dyn_thread_ctx.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
 #include "dyn_proxy.h"
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
+
+static void
+core_debug(struct context *ctx)
+{
+    struct server_pool *sp = ctx_get_pool(ctx);
+    struct topology *topo = ctx_get_topology(ctx);
+	log_debug(LOG_VERB, "=====================Peers info=====================");
+    log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
+    topo_print(topo);
+}
 
 static rstatus_t
 core_init_last(struct context *ctx)
@@ -115,14 +126,9 @@ core_datastore_preconnect(struct context *ctx)
 }
 
 static rstatus_t
-core_event_base_create(struct context *ctx)
+core_thread_ctx_init(struct context *ctx)
 {
-	/* initialize event handling for client, proxy and server */
-	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
-	if (ctx->evb == NULL) {
-		loga("Failed to create socket event handling!!!");
-		return DN_ERROR;
-	}
+    THROW_STATUS(thread_ctx_init(ctx));
     rstatus_t status = core_datastore_preconnect(ctx);
     if (status != DN_OK)
         datastore_disconnect(ctx->pool.datastore);
@@ -139,9 +145,9 @@ core_stats_create(struct context *ctx)
 		loga("Failed to create stats!!!");
 		return DN_ERROR;
 	}
-    rstatus_t status = core_event_base_create(ctx);
+    rstatus_t status = core_thread_ctx_init(ctx);
     if (status != DN_OK)
-        event_base_destroy(ctx->evb);
+        thread_ctx_deinit(ctx);
     return status;
 }
 
@@ -167,6 +173,17 @@ core_server_pool_init(struct context *ctx)
 }
 
 static rstatus_t
+ctx_init(struct context *ctx, struct instance *nci)
+{
+	ctx->max_timeout = nci->stats_interval;
+	ctx->timeout = ctx->max_timeout;
+	ctx->dyn_state = INIT;
+    ctx->admin_opt = 0;
+    return DN_OK;
+
+}
+
+static rstatus_t
 core_ctx_create(struct instance *nci)
 {
 	struct context *ctx;
@@ -178,15 +195,9 @@ core_ctx_create(struct instance *nci)
 		loga("Failed to create context!!!");
 		return DN_ERROR;
 	}
+    THROW_STATUS(ctx_init(ctx, nci));
     nci->ctx = ctx;
     ctx->instance = nci;
-	ctx->cf = NULL;
-	ctx->stats = NULL;
-	ctx->evb = NULL;
-	ctx->max_timeout = nci->stats_interval;
-	ctx->timeout = ctx->max_timeout;
-	ctx->dyn_state = INIT;
-
 	/* parse and create configuration */
     ctx->cf = conf_create(nci->conf_filename);
 	if (ctx->cf == NULL) {
@@ -210,7 +221,6 @@ core_ctx_destroy(struct context *ctx)
 {
 	proxy_deinit(ctx);
     datastore_disconnect(ctx->pool.datastore);
-	event_base_destroy(ctx->evb);
 	stats_destroy(ctx->stats);
 	server_pool_deinit(&ctx->pool);
 	conf_destroy(ctx->cf);
@@ -218,7 +228,7 @@ core_ctx_destroy(struct context *ctx)
 }
 
 rstatus_t
-core_start(struct instance *nci)
+core_create(struct instance *nci)
 {
 	mbuf_init(nci);
 	msg_init(nci);
@@ -236,92 +246,13 @@ core_start(struct instance *nci)
 }
 
 void
-core_stop(struct context *ctx)
+core_destroy(struct context *ctx)
 {
 	conn_deinit();
 	msg_deinit();
 	dmsg_deinit();
 	mbuf_deinit();
 	core_ctx_destroy(ctx);
-}
-
-static rstatus_t
-core_recv(struct context *ctx, struct conn *conn)
-{
-	rstatus_t status;
-
-	status = conn_recv(ctx, conn);
-	if (status != DN_OK) {
-		log_info("recv on %s %d failed: %s", conn_get_type_string(conn),
-				 conn->sd, strerror(errno));
-	}
-
-	return status;
-}
-
-static rstatus_t
-core_send(struct context *ctx, struct conn *conn)
-{
-	rstatus_t status;
-
-	status = conn_send(ctx, conn);
-	if (status != DN_OK) {
-		log_info("send on %s %d failed: %s", conn_get_type_string(conn),
-				 conn->sd, strerror(errno));
-	}
-
-	return status;
-}
-
-static void
-core_close_log(struct conn *conn)
-{
-	char *addrstr;
-
-	if ((conn->type == CONN_CLIENT) || (conn->type == CONN_DNODE_PEER_CLIENT)) {
-		addrstr = dn_unresolve_peer_desc(conn->sd);
-	} else {
-		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
-	}
-	log_debug(LOG_NOTICE, "close %s %d '%s' on event %04"PRIX32" eof %d done "
-			  "%d rb %zu sb %zu%c %s", conn_get_type_string(conn), conn->sd,
-              addrstr, conn->events, conn->eof, conn->done, conn->recv_bytes,
-              conn->send_bytes,
-              conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
-
-}
-
-static void
-core_close(struct context *ctx, struct conn *conn)
-{
-	rstatus_t status;
-
-	ASSERT(conn->sd > 0);
-
-    core_close_log(conn);
-
-	status = conn_del_from_epoll(conn);
-	if (status < 0) {
-		log_warn("event del conn %d failed, ignored: %s",
-		          conn->sd, strerror(errno));
-	}
-
-	conn_close(ctx, conn);
-}
-
-static void
-core_error(struct context *ctx, struct conn *conn)
-{
-	rstatus_t status;
-
-	status = dn_get_soerror(conn->sd);
-	if (status < 0) {
-	log_warn("get soerr on %s client %d failed, ignored: %s",
-             conn_get_type_string(conn), conn->sd, strerror(errno));
-	}
-	conn->err = errno;
-
-	core_close(ctx, conn);
 }
 
 static void
@@ -380,82 +311,8 @@ core_timeout(struct context *ctx)
 
 		conn->err = ETIMEDOUT;
 
-		core_close(ctx, conn);
+		conn_close(ctx, conn);
 	}
-}
-
-
-
-rstatus_t
-core_core(void *arg, uint32_t events)
-{
-	rstatus_t status;
-	struct conn *conn = arg;
-	struct context *ctx = conn_to_ctx(conn);
-
-    log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
-              conn_get_type_string(conn), conn->sd);
-
-	conn->events = events;
-
-	/* error takes precedence over read | write */
-	if (events & EVENT_ERR) {
-		if (conn->err && conn->dyn_mode) {
-			loga("conn err on dnode EVENT_ERR: %d", conn->err);
-		}
-		core_error(ctx, conn);
-
-		return DN_ERROR;
-	}
-
-	/* read takes precedence over write */
-	if (events & EVENT_READ) {
-		status = core_recv(ctx, conn);
-
-		if (status != DN_OK || conn->done || conn->err) {
-			if (conn->dyn_mode) {
-				if (conn->err) {
-					loga("conn err on dnode EVENT_READ: %d", conn->err);
-					core_close(ctx, conn);
-					return DN_ERROR;
-				}
-				return DN_OK;
-			}
-
-			core_close(ctx, conn);
-			return DN_ERROR;
-		}
-	}
-
-	if (events & EVENT_WRITE) {
-		status = core_send(ctx, conn);
-		if (status != DN_OK || conn->done || conn->err) {
-			if (conn->dyn_mode) {
-				if (conn->err) {
-					loga("conn err on dnode EVENT_WRITE: %d", conn->err);
-					core_close(ctx, conn);
-					return DN_ERROR;
-				}
-				return DN_OK;
-			}
-
-			core_close(ctx, conn);
-			return DN_ERROR;
-		}
-	}
-
-	return DN_OK;
-}
-
-
-void
-core_debug(struct context *ctx)
-{
-    struct server_pool *sp = ctx_get_pool(ctx);
-    struct topology *topo = ctx_get_topology(ctx);
-	log_debug(LOG_VERB, "=====================Peers info=====================");
-    log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
-    topo_print(topo);
 }
 
 
@@ -479,17 +336,18 @@ core_process_messages(void)
 rstatus_t
 core_loop(struct context *ctx)
 {
-	int nsd;
-
 	core_process_messages();
-
-	nsd = event_wait(ctx->evb, ctx->timeout);
-	if (nsd < 0) {
-		return nsd;
-	}
-
+    // Run the thread function once.
+    thread_ctx_run_once(array_get(&ctx->thread_ctxs, 0));
 	core_timeout(ctx);
 	stats_swap(ctx->stats);
 
 	return DN_OK;
+}
+
+struct event_base *
+core_get_evb_for_connection(struct context *ctx, connection_type_t type)
+{
+    pthread_ctx ptctx = array_get(&ctx->thread_ctxs, 0);
+    return ptctx->evb;
 }

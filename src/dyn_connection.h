@@ -156,22 +156,16 @@ conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
     return conn->ops->rsp_handler(conn, msgid, rsp);
 }
 
-#define conn_recv(ctx, conn)                        \
-        (conn)->ops->recv(ctx, conn)
 #define conn_recv_next(ctx, conn, alloc)            \
         (conn)->ops->recv_next(ctx, conn, alloc)
 #define conn_recv_done(ctx, conn, msg, nmsg)        \
         (conn)->ops->recv_done(ctx, conn, msg, nmsg)
 
-#define conn_send(ctx, conn)                        \
-        (conn)->ops->send(ctx, conn)
 #define conn_send_next(ctx, conn)                   \
         (conn)->ops->send_next(ctx, conn)
 #define conn_send_done(ctx, conn, msg)              \
         (conn)->ops->send_done(ctx, conn, msg)
 
-#define conn_close(ctx, conn)                       \
-        (conn)->ops->close(ctx, conn)
 #define conn_active(conn)                           \
         (conn)->ops->active(conn)
 #define conn_ref(conn, owner)                       \
@@ -202,9 +196,14 @@ struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 rstatus_t conn_listen(struct context *ctx, struct conn *p);
 rstatus_t conn_connect(struct context *ctx, struct conn *conn);
+void conn_close(struct context *ctx, struct conn *conn);
+rstatus_t conn_send(struct context *ctx, struct conn *conn);
+rstatus_t conn_recv(struct context *ctx, struct conn *conn);
+void conn_error(struct context *ctx, struct conn *conn);
 rstatus_t conn_add_out(struct conn *conn);
 rstatus_t conn_del_out(struct conn *conn);
 rstatus_t conn_add_to_epoll(struct conn *conn);
+rstatus_t conn_del_from_epoll(struct conn *conn);
 
 ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv_data(struct conn *conn, struct array *sendv, size_t nsend);

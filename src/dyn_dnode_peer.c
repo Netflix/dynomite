@@ -39,7 +39,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
 
     conn->owner = owner;
-    conn->evb = peer->owner->ctx->evb;
+    conn->evb = core_get_evb_for_connection(peer->owner->ctx, conn->type);
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
@@ -128,7 +128,7 @@ dnode_peer_each_set_evb(void *elem, void *data)
     struct context *ctx = data;
 
     // One could assign the peers to difference evb
-    s->evb = ctx->evb;
+    //s->evb = ctx->evb;
 
     return DN_OK;
 }

@@ -436,6 +436,72 @@ conn_reuse(struct conn *p)
     return status;
 }
 
+void
+conn_close(struct context *ctx, struct conn *conn)
+{
+	char *addrstr;
+
+	if ((conn->type == CONN_CLIENT) || (conn->type == CONN_DNODE_PEER_CLIENT)) {
+		addrstr = dn_unresolve_peer_desc(conn->sd);
+	} else {
+		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
+	}
+	log_debug(LOG_NOTICE, "close %s %d '%s' on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", conn_get_type_string(conn), conn->sd,
+              addrstr, conn->events, conn->eof, conn->done, conn->recv_bytes,
+              conn->send_bytes,
+              conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
+
+	rstatus_t status = conn_del_from_epoll(conn);
+	if (status < 0) {
+		log_warn("event del conn %d failed, ignored: %s",
+		          conn->sd, strerror(errno));
+	}
+    conn->ops->close(ctx, conn);
+}
+
+void
+conn_error(struct context *ctx, struct conn *conn)
+{
+	rstatus_t status = DN_OK;
+
+	status = dn_get_soerror(conn->sd);
+    if (status < 0) {
+        log_warn("get soerr on %s client %d failed, ignored: %s",
+                conn_get_type_string(conn), conn->sd, strerror(errno));
+    }
+	conn->err = errno;
+    conn_close(ctx, conn);
+}
+
+rstatus_t
+conn_recv(struct context *ctx, struct conn *conn)
+{
+	rstatus_t status;
+
+	status = conn->ops->recv(ctx, conn);
+	if (status != DN_OK) {
+		log_info("recv on %s %d failed: %s", conn_get_type_string(conn),
+				 conn->sd, strerror(errno));
+	}
+
+	return status;
+}
+
+rstatus_t
+conn_send(struct context *ctx, struct conn *conn)
+{
+	rstatus_t status;
+
+	status = conn->ops->send(ctx, conn);
+	if (status != DN_OK) {
+		log_info("send on %s %d failed: %s", conn_get_type_string(conn),
+				 conn->sd, strerror(errno));
+	}
+
+	return status;
+}
+
 rstatus_t
 conn_listen(struct context *ctx, struct conn *p)
 {
