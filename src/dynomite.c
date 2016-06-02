@@ -407,7 +407,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
                 return DN_ERROR;
             }
 
-            nci->stats_interval = value;
+            nci->stats_interval = (msec_t)value;
             break;
 
         case 'a':

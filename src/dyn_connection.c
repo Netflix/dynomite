@@ -166,7 +166,7 @@ _conn_get(void)
     }
 
     conn->owner = NULL;
-    conn->evb = NULL;
+    conn->ptctx = NULL;
 
     conn->sd = -1;
     string_init(&conn->pname);
@@ -452,7 +452,7 @@ conn_close(struct context *ctx, struct conn *conn)
               conn->send_bytes,
               conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
-	rstatus_t status = conn_del_from_epoll(conn);
+	rstatus_t status = thread_ctx_del_conn(conn->ptctx, conn);
 	if (status < 0) {
 		log_warn("event del conn %d failed, ignored: %s",
 		          conn->sd, strerror(errno));
@@ -546,7 +546,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = conn_add_to_epoll(p);
+    status = thread_ctx_add_conn(p->ptctx, p);
     if (status < 0) {
         log_error("event add conn p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -554,7 +554,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = conn_del_out(p);
+    status = thread_ctx_del_out(p->ptctx, p);
     if (status < 0) {
         log_error("event del out p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -610,7 +610,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         }
     }
 
-    status = conn_add_to_epoll(conn);
+    status = thread_ctx_add_conn(conn->ptctx, conn);
     if (status != DN_OK) {
         log_error("event add conn s %d for '%.*s' failed: %s",
                 conn->sd, conn->pname.len, conn->pname.data,
@@ -648,30 +648,6 @@ conn_connect(struct context *ctx, struct conn *conn)
     error:
     conn->err = errno;
     return status;
-}
-
-rstatus_t
-conn_add_to_epoll(struct conn *conn)
-{
-    return event_add_conn(conn->evb, conn);
-}
-
-rstatus_t
-conn_del_from_epoll(struct conn *conn)
-{
-    return event_del_conn(conn->evb, conn);
-}
-
-rstatus_t
-conn_add_out(struct conn *conn)
-{
-    return event_add_out(conn->evb, conn);
-}
-
-rstatus_t
-conn_del_out(struct conn *conn)
-{
-    return event_del_out(conn->evb, conn);
 }
 
 ssize_t

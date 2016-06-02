@@ -235,8 +235,6 @@ topo_init_seeds_peers(struct context *ctx)
 
     THROW_STATUS(array_each(peers, dnode_peer_each_set_owner, sp));
 
-    THROW_STATUS(array_each(peers, dnode_peer_each_set_evb, ctx));
-
     THROW_STATUS(topo_update(topo));
 
     log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool '%.*s'",

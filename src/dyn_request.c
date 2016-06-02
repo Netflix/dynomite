@@ -64,7 +64,7 @@ req_put(struct msg *msg)
         }
     }
 
-    msg_tmo_delete(msg);
+    ASSERT(msg->tmo_rbe.data == NULL);
 
     msg_put(msg);
 }

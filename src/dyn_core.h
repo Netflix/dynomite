@@ -132,6 +132,7 @@ struct topology;
 
 #define ENCRYPTION 1
 
+struct thread_ctx;
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
 struct datacenter;
 
@@ -170,7 +171,7 @@ struct instance {
     char            *log_filename;               /* log filename */
     char            *conf_filename;              /* configuration filename */
     uint16_t        stats_port;                  /* stats monitoring port */
-    int             stats_interval;              /* stats aggregation interval */
+    msec_t          stats_interval;              /* stats aggregation interval */
     char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
@@ -256,8 +257,8 @@ struct context {
     struct server_pool pool;        /* server_pool[] */
     struct conn        *datastore_conn;
     //struct event_base  *evb;        /* event base */
-    int                max_timeout; /* max timeout in msec */
-    int                timeout;     /* timeout in msec */
+    msec_t              max_timeout; /* max timeout in msec */
+    //int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     unsigned           enable_gossip:1;   /* enable/disable gossip */
@@ -280,6 +281,6 @@ ctx_get_topology(struct context *ctx)
 rstatus_t core_create(struct instance *nci);
 void core_destroy(struct context *ctx);
 rstatus_t core_loop(struct context *ctx);
-struct event_base *core_get_evb_for_connection(struct context *ctx, connection_type_t type);
+struct thread_ctx *core_get_ptctx_for_conn(struct context *ctx, connection_type_t type);
 
 #endif

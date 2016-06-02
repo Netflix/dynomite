@@ -241,7 +241,6 @@ get_consistency_string(consistency_t cons)
 #define DEFAULT_WRITE_CONSISTENCY DC_ONE
 extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
-extern uint8_t g_timeout_factor;
 
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
@@ -342,10 +341,6 @@ msg_handle_response(struct msg *req, struct msg *rsp)
 }
 
 size_t msg_free_queue_size(void);
-
-struct msg *msg_tmo_min(void);
-void msg_tmo_insert(struct msg *msg, struct conn *conn);
-void msg_tmo_delete(struct msg *msg);
 
 void msg_init(struct instance *nci);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);

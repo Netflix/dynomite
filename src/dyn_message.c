@@ -145,10 +145,7 @@ static uint64_t msg_id;          /* message id counter */
 static uint64_t frag_id;         /* fragment id counter */
 static size_t nfree_msgq;        /* # free msg q */
 static struct msg_tqh free_msgq; /* free msg q */
-static struct rbtree tmo_rbt;    /* timeout rbtree */
-static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
-uint8_t g_timeout_factor = 1;
 func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
 func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
@@ -207,80 +204,6 @@ msg_cant_handle_response(struct msg *req, struct msg *rsp)
 {
     return DN_ENO_IMPL;
 }
-
-static struct msg *
-msg_from_rbe(struct rbnode *node)
-{
-    struct msg *msg;
-    int offset;
-
-    offset = offsetof(struct msg, tmo_rbe);
-    msg = (struct msg *)((char *)node - offset);
-
-    return msg;
-}
-
-struct msg *
-msg_tmo_min(void)
-{
-    struct rbnode *node;
-
-    node = rbtree_min(&tmo_rbt);
-    if (node == NULL) {
-        return NULL;
-    }
-
-    return msg_from_rbe(node);
-}
-
-void
-msg_tmo_insert(struct msg *msg, struct conn *conn)
-{
-    struct rbnode *node;
-    msec_t timeout;
-
-    //ASSERT(msg->request);
-    ASSERT(!msg->quit && msg->expect_datastore_reply);
-
-    timeout = conn->dyn_mode? dnode_peer_timeout(msg, conn) : server_timeout(conn);
-    if (timeout <= 0) {
-        return;
-    }
-    timeout = timeout * g_timeout_factor;
-
-    node = &msg->tmo_rbe;
-    node->timeout = timeout;
-    node->key = dn_msec_now() + timeout;
-    node->data = conn;
-
-    rbtree_insert(&tmo_rbt, node);
-
-    if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "insert msg %"PRIu64" into tmo rbt with expiry of "
-              "%d msec", msg->id, timeout);
-    }
-}
-
-void
-msg_tmo_delete(struct msg *msg)
-{
-    struct rbnode *node;
-
-    node = &msg->tmo_rbe;
-
-    /* already deleted */
-
-    if (node->data == NULL) {
-        return;
-    }
-
-    rbtree_delete(&tmo_rbt, node);
-
-    if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
-    }
-}
-
 
 static size_t alloc_msg_count = 0;
 
@@ -670,7 +593,6 @@ msg_init(struct instance *nci)
     nfree_msgq = 0;
     alloc_msgs_max = nci->alloc_msgs_max;
     TAILQ_INIT(&free_msgq);
-    rbtree_init(&tmo_rbt, &tmo_rbs);
 }
 
 void

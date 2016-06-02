@@ -22,6 +22,7 @@
 
 #include "dyn_core.h"
 #include "dyn_server.h"
+#include "dyn_thread_ctx.h"
 
 struct msg *
 rsp_get(struct conn *conn)
@@ -109,7 +110,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
             log_debug(LOG_INFO, "c %d is done", conn->sd);
         }
 
-        status = conn_del_out(conn);
+        status = thread_ctx_del_out(conn->ptctx, conn);
         if (status != DN_OK) {
             conn->err = errno;
         }

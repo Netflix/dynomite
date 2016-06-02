@@ -822,7 +822,9 @@ gossip_loop(void *arg)
             log_debug(LOG_NOTICE, "I am still joining the ring!");
             //aggressively contact all known nodes before changing to state NORMAL
             gossip_announce_joining(sp);
-            usleep(MAX(gn_pool.ctx->timeout, gossip_interval) * 2);
+            // SHAILESH: TODO: figure out if ctx->timeout is required
+            //usleep(MAX(gn_pool.ctx->timeout, gossip_interval) * 2);
+            usleep(gossip_interval * 2);
         } else if (gn_pool.ctx->dyn_state == NORMAL) {
             gossip_forward_state(sp);
         }

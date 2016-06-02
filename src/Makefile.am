@@ -51,6 +51,7 @@ dynomite_SOURCES =			                          \
         dyn_ring_queue.h dyn_ring_queue.c                         \
         dyn_mbuf.c dyn_mbuf.h		                          \
         dyn_conf.c dyn_conf.h		                          \
+        dyn_msg_tmo.c dyn_msg_tmo.h                               \
         dyn_node_snitch.c dyn_node_snitch.h                       \
         dyn_setting.c dyn_setting.h                               \
         dyn_stats.c dyn_stats.h		                          \
@@ -98,6 +99,7 @@ dynomite_test_SOURCES =                                           \
         dyn_ring_queue.h dyn_ring_queue.c                         \
         dyn_mbuf.c dyn_mbuf.h                                     \
         dyn_conf.c dyn_conf.h                                     \
+        dyn_msg_tmo.c dyn_msg_tmo.h                               \
         dyn_node_snitch.c dyn_node_snitch.h                       \
         dyn_setting.c dyn_setting.h                               \
         dyn_stats.c dyn_stats.h                                   \

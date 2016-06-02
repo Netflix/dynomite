@@ -135,7 +135,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     /* enqueue the message (request) into peer inq */
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = conn_add_out(conn);
+        status = thread_ctx_add_out(conn->ptctx, conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg, errno);
             conn->err = errno;

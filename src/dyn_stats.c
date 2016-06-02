@@ -30,6 +30,7 @@
 #include <netinet/in.h>
 
 #include "dyn_core.h"
+#include "dyn_msg_tmo.h"
 #include "dyn_topology.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_histogram.h"
@@ -1324,7 +1325,7 @@ stats_stop_aggregator(struct stats *st)
 }
 
 struct stats *
-stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
+stats_create(uint16_t stats_port, char *stats_ip, msec_t stats_interval,
              char *source, struct server_pool *sp, struct context *ctx)
 {
     rstatus_t status;

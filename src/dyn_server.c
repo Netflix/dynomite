@@ -29,6 +29,7 @@
 #include "dyn_conf.h"
 #include "dyn_token.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_thread_ctx.h"
 
 static void server_close(struct context *ctx, struct conn *conn);
 static void
@@ -45,7 +46,7 @@ server_ref(struct conn *conn, void *owner)
     string_duplicate(&conn->pname, &server->endpoint.pname);
 
 	conn->owner = owner;
-    conn->evb = core_get_evb_for_connection(server->owner->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(server->owner->ctx, conn->type);
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -368,7 +369,8 @@ server_close(struct context *ctx, struct conn *conn)
 		/* dequeue the message (request) from server inq */
 		conn_dequeue_inq(ctx, conn, msg);
         // We should also remove the msg from the timeout rbtree.
-        msg_tmo_delete(msg);
+        pthread_ctx ptctx = conn->ptctx;
+        msg_tmo_delete(&ptctx->tmo, msg);
         server_ack_err(ctx, conn, msg);
         in_counter++;
 
@@ -763,7 +765,7 @@ req_send_next(struct context *ctx, struct conn *conn)
     nmsg = TAILQ_FIRST(&conn->imsg_q);
     if (nmsg == NULL) {
         /* nothing to send as the server inq is empty */
-        status = conn_del_out(conn);
+        status = thread_ctx_del_out(conn->ptctx, conn);
         if (status != DN_OK) {
             conn->err = errno;
         }
@@ -817,8 +819,10 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
      */
     if (msg->expect_datastore_reply || (conn->type == CONN_SERVER))
         conn_enqueue_outq(ctx, conn, msg);
-    else
+    else {
+        msg_tmo_delete(&conn->ptctx->tmo, msg);
         req_put(msg);
+    }
 }
 
 static void
@@ -836,7 +840,8 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
      * a response
      */
     if (msg->expect_datastore_reply) {
-        msg_tmo_insert(msg, conn);
+        pthread_ctx ptctx = conn->ptctx;
+        msg_tmo_insert(&ptctx->tmo, conn, msg);
     }
 
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
@@ -884,7 +889,8 @@ req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_SERVER);
 
-    msg_tmo_delete(msg);
+    pthread_ctx ptctx = conn->ptctx;
+    msg_tmo_delete(&ptctx->tmo, msg);
 
     TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, msg->id, msg->parent_id);

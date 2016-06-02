@@ -7,6 +7,7 @@
 #include "dyn_topology.h"
 #include "dyn_server.h"
 #include "dyn_dnode_client.h"
+#include "dyn_thread_ctx.h"
 
 static void
 dnode_client_ref(struct conn *conn, void *owner)
@@ -30,7 +31,7 @@ dnode_client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
-    conn->evb = core_get_evb_for_connection(pool->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->type);
     log_debug(LOG_VVERB, "dyn: ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
@@ -190,14 +191,13 @@ dnode_client_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
 {
     // Forward the response to the caller which is client connection.
     rstatus_t status = DN_OK;
-    struct context *ctx = conn_to_ctx(conn);
     /* There is no hash table on the dnode client side. So we rely on rsp->peer
        to get the corresponding request */
     ASSERT_LOG(rsp->peer, "rsp %d:%d does not have a peer", rsp->id, rsp->parent_id);
     struct msg *req = rsp->peer;
     req->peer = NULL;
     req->selected_rsp = rsp;
-    status = conn_add_out(conn);
+    status = thread_ctx_add_out(conn->ptctx, conn);
     if (status != DN_OK) {
         conn->err = errno;
     }

@@ -14,6 +14,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_node_snitch.h"
 #include "dyn_token.h"
+#include "dyn_thread_ctx.h"
 
 
 static bool
@@ -39,7 +40,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
 
     conn->owner = owner;
-    conn->evb = core_get_evb_for_connection(peer->owner->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn->type);
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
@@ -119,18 +120,6 @@ dnode_peer_active(struct conn *conn)
     log_debug(LOG_VVERB, "dyn: s %d is inactive", conn->sd);
 
     return false;
-}
-
-rstatus_t
-dnode_peer_each_set_evb(void *elem, void *data)
-{
-    struct peer *s = elem;
-    struct context *ctx = data;
-
-    // One could assign the peers to difference evb
-    //s->evb = ctx->evb;
-
-    return DN_OK;
 }
 
 rstatus_t
@@ -326,7 +315,6 @@ dnode_peer_failure(struct context *ctx, struct peer *server)
                   server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count);
     }
 
-
     now = dn_msec_now();
     if (now < 0) {
         return;
@@ -427,7 +415,8 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         conn_dequeue_inq(ctx, conn, msg);
         // We should also remove the msg from the timeout rbtree.
         // for outq, its already taken care of
-        msg_tmo_delete(msg);
+        pthread_ctx ptctx = conn->ptctx;
+        msg_tmo_delete(&ptctx->tmo, msg);
         dnode_peer_ack_err(ctx, conn, msg);
         in_counter++;
 
@@ -1596,8 +1585,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
         }
 
         //requeue
-        struct peer *peer = conn->owner;
-        status = conn_add_out(conn);
+        status = thread_ctx_add_out(conn->ptctx, conn);
         IGNORE_RET_VAL(status);
 
         return NULL;
@@ -1632,7 +1620,8 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
               conn, msg->id, msg->parent_id);
     if (msg->expect_datastore_reply) {
-        msg_tmo_insert(msg, conn);
+        pthread_ctx ptctx = conn->ptctx;
+        msg_tmo_insert(&ptctx->tmo, conn, msg);
     }
     TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
@@ -1698,7 +1687,8 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
-    msg_tmo_delete(msg);
+    pthread_ctx ptctx = conn->ptctx;
+    msg_tmo_delete(&ptctx->tmo, msg);
 
     TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VVERB, "conn %p dequeue outq %p", conn, msg);
@@ -1739,10 +1729,11 @@ dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *ms
 
     if (!p_conn)
         return;
+    pthread_ctx ptctx = p_conn->ptctx;
+    msg_tmo_delete(&ptctx->tmo, msg);
     ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
     if (req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-        struct peer *peer = p_conn->owner;
-        status = conn_add_out(p_conn);
+        status = thread_ctx_add_out(p_conn->ptctx, p_conn);
         if (status != DN_OK) {
             p_conn->err = errno;
         }
@@ -1783,7 +1774,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
-    status = conn_add_out(p_conn);
+    status = thread_ctx_add_out(p_conn->ptctx, p_conn);
     if (status != DN_OK) {
         log_warn("Error on connection to '%.*s'. Marking it to RESET", peer->name);
         dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);

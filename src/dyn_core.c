@@ -176,7 +176,7 @@ static rstatus_t
 ctx_init(struct context *ctx, struct instance *nci)
 {
 	ctx->max_timeout = nci->stats_interval;
-	ctx->timeout = ctx->max_timeout;
+	//ctx->timeout = ctx->max_timeout;
 	ctx->dyn_state = INIT;
     ctx->admin_opt = 0;
     return DN_OK;
@@ -255,67 +255,6 @@ core_destroy(struct context *ctx)
 	core_ctx_destroy(ctx);
 }
 
-static void
-core_timeout(struct context *ctx)
-{
-	for (;;) {
-		struct msg *msg;
-		struct conn *conn;
-		msec_t now, then;
-
-		msg = msg_tmo_min();
-		if (msg == NULL) {
-			ctx->timeout = ctx->max_timeout;
-			return;
-		}
-
-		/* skip over req that are in-error or done */
-
-		if (msg->error || msg->done) {
-			msg_tmo_delete(msg);
-			continue;
-		}
-
-		/*
-		 * timeout expired req and all the outstanding req on the timing
-		 * out server
-		 */
-
-		conn = msg->tmo_rbe.data;
-		then = msg->tmo_rbe.key;
-
-		now = dn_msec_now();
-		if (now < then) {
-			int delta = (int)(then - now);
-			ctx->timeout = MIN(delta, ctx->max_timeout);
-			return;
-		}
-
-        log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", msg->id,
-                 conn_get_type_string(conn), conn->sd, msg->tmo_rbe.timeout);
-
-		msg_tmo_delete(msg);
-
-		if (conn->dyn_mode) {
-			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
-                if (conn->same_dc)
-			        stats_pool_incr(ctx, peer_timedout_requests);
-                else
-			        stats_pool_incr(ctx, remote_peer_timedout_requests);
-			}
-		} else {
-			if (conn->type == CONN_SERVER) { //storage server requests
-			   stats_server_incr(ctx, server_dropped_requests);
-			}
-		}
-
-		conn->err = ETIMEDOUT;
-
-		conn_close(ctx, conn);
-	}
-}
-
-
 static rstatus_t
 core_process_messages(void)
 {
@@ -339,15 +278,14 @@ core_loop(struct context *ctx)
 	core_process_messages();
     // Run the thread function once.
     thread_ctx_run_once(array_get(&ctx->thread_ctxs, 0));
-	core_timeout(ctx);
 	stats_swap(ctx->stats);
 
 	return DN_OK;
 }
 
-struct event_base *
-core_get_evb_for_connection(struct context *ctx, connection_type_t type)
+pthread_ctx
+core_get_ptctx_for_conn(struct context *ctx, connection_type_t type)
 {
     pthread_ctx ptctx = array_get(&ctx->thread_ctxs, 0);
-    return ptctx->evb;
+    return ptctx;
 }
