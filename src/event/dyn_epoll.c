@@ -149,8 +149,8 @@ event_add_out(struct event_base *evb, struct conn *c)
     log_debug(LOG_DEBUG, "adding conn %p(%s) to active", c, conn_get_type_string(c));
     status = epoll_ctl(ep, EPOLL_CTL_MOD, c->sd, &event);
     if (status < 0) {
-        log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
-                  strerror(errno));
+        log_error("epoll ctl on e %d conn:%s sd %d failed: %s", ep,
+                  conn_get_type_string(c), c->sd, strerror(errno));
     } else {
         c->send_active = 1;
     }

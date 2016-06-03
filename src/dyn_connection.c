@@ -250,6 +250,13 @@ conn_get_write_consistency(struct conn *conn)
     return g_write_consistency;
 }
 
+consistency_t
+conn_get_consisteny(struct conn *conn, bool is_read)
+{
+    return is_read ? conn_get_read_consistency(conn) :
+                     conn_get_write_consistency(conn);
+}
+
 struct conn *
 test_conn_get(void)
 {

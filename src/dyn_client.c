@@ -681,37 +681,6 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     }
 }
 
-/*void
-remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        struct rack *rack, uint8_t *key, uint32_t keylen)
-{
-    struct conn *p_conn;
-
-    ASSERT((c_conn->type == CONN_CLIENT) ||
-           (c_conn->type == CONN_DNODE_PEER_CLIENT));
-
-    p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
-    if (p_conn == NULL) {
-        c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, msg, c_conn->err);
-        return;
-    }
-
-    //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct peer *peer = p_conn->owner;
-
-    if (peer->is_local) {
-        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
-                  msg->id, msg->parent_id);
-        local_req_forward(ctx, c_conn, msg, key, keylen);
-        return;
-    } else {
-        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
-                  msg->id, msg->parent_id, p_conn);
-        dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
-    }
-}*/
-
 void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
@@ -890,11 +859,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         }
     }
 
-    if (msg->is_read) {
-        msg->consistency = conn_get_read_consistency(c_conn);
-    } else {
-        msg->consistency = conn_get_write_consistency(c_conn);
-    }
+    msg->consistency = conn_get_consisteny(c_conn, msg->is_read);
 
     /* forward the request */
     struct topology *topo = pool->topo;
