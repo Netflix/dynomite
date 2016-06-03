@@ -1,5 +1,6 @@
 #include <dyn_core.h>
 #include <dyn_thread_ctx.h>
+#include <dyn_server.h>
 
 static tid_t tid_counter = 0;
 pthread_ctx
@@ -70,14 +71,30 @@ thread_ctx_core(void *arg, uint32_t events)
 	return DN_OK;
 }
 
-static rstatus_t
-thread_ctx_init_each(void *elem, void *arg)
+rstatus_t
+thread_ctx_datastore_preconnect(void *elem, void *arg)
 {
     pthread_ctx ptctx = elem;
-    struct context *ctx = arg;
+    struct context *ctx = ptctx->ctx;
+    struct server_pool *pool = &ctx->pool;
+
+    ptctx->datastore_conn = get_datastore_conn(ctx, pool);
+    if (ptctx->datastore_conn == NULL) {
+        log_error("Could not preconnect to datastore");
+        return DN_ERROR;
+    }
+    // back reference
+    ptctx->datastore_conn->ptctx = ptctx;
+	return DN_OK;
+}
+
+rstatus_t
+thread_ctx_init(pthread_ctx ptctx, struct context *ctx)
+{
     ptctx->ctx = ctx;
     ptctx->tid = tid_counter++;
 	ptctx->evb = event_base_create(EVENT_SIZE, &thread_ctx_core);
+    ptctx->datastore_conn = NULL;
     msg_tmo_init(&ptctx->tmo, ptctx);
 	if (ptctx->evb == NULL) {
 		loga("Failed to create socket event handling!!!");
@@ -87,31 +104,15 @@ thread_ctx_init_each(void *elem, void *arg)
 }
 
 rstatus_t
-thread_ctx_init(struct context *ctx)
-{
-    array_null(&ctx->thread_ctxs);
-    THROW_STATUS(array_init(&ctx->thread_ctxs, 1, sizeof(thread_ctx)));
-    pthread_ctx ptctx = array_push(&ctx->thread_ctxs);
-    thread_ctx_init_each(ptctx, ctx);
-    return DN_OK;
-}
-
-static rstatus_t
-thread_ctx_deinit_each(void *elem, void *arg)
+thread_ctx_deinit(void *elem, void *arg)
 {
     pthread_ctx ptctx = elem;
 	event_base_destroy(ptctx->evb);
     msg_tmo_deinit(&ptctx->tmo, ptctx);
+    conn_close(ptctx->ctx, ptctx->datastore_conn);
+    ptctx->datastore_conn = NULL;
     return DN_OK;
 }
-
-void
-thread_ctx_deinit(struct context *ctx)
-{
-    rstatus_t status = array_each(&ctx->thread_ctxs, thread_ctx_deinit_each, NULL);
-    IGNORE_RET_VAL(status);
-}
-
 
 rstatus_t
 thread_ctx_add_conn(pthread_ctx ptctx, struct conn *conn)

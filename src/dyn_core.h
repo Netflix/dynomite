@@ -255,10 +255,7 @@ struct context {
     struct stats       *stats;      /* stats */
 
     struct server_pool pool;        /* server_pool[] */
-    struct conn        *datastore_conn;
-    //struct event_base  *evb;        /* event base */
     msec_t              max_timeout; /* max timeout in msec */
-    //int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     unsigned           enable_gossip:1;   /* enable/disable gossip */

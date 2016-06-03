@@ -33,6 +33,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 
+#define MAX_THREADS 1
 static void
 core_debug(struct context *ctx)
 {
@@ -77,15 +78,31 @@ core_dnode_peer_pool_preconnect(struct context *ctx)
       //  gossip_pool_deinit(ctx);
     return status;
 }
+
+static rstatus_t
+core_datastore_preconnect(struct context *ctx)
+{
+    if (ctx->pool.preconnect) {
+        int i = 0;
+        for (i = 0; i< MAX_THREADS; i++) {
+            pthread_ctx ptctx = array_get(&ctx->thread_ctxs, i);
+            THROW_STATUS(thread_ctx_datastore_preconnect(ptctx, ctx));
+        }
+    }
+
+	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
+	if (status != DN_OK)
+	    dnode_peer_pool_disconnect(ctx);
+    return status;
+}
+
 static rstatus_t
 core_topo_init_seeds_peers(struct context *ctx)
 {
 	/* initialize peers */
 	THROW_STATUS(topo_init_seeds_peers(ctx));
-	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
-	if (status != DN_OK)
-	    dnode_peer_pool_disconnect(ctx);
-    return status;
+    THROW_STATUS(core_datastore_preconnect(ctx));
+    return DN_OK;
 }
 
 static rstatus_t
@@ -113,26 +130,20 @@ core_proxy_init(struct context *ctx)
 }
 
 static rstatus_t
-core_datastore_preconnect(struct context *ctx)
-{
-	if (ctx->pool.preconnect) {
-	    THROW_STATUS(datastore_preconnect(ctx->pool.datastore));
-    }
-
-     rstatus_t status = core_proxy_init(ctx);
-     if (status != DN_OK)
-        proxy_deinit(ctx);
-    return status;
-}
-
-static rstatus_t
 core_thread_ctx_init(struct context *ctx)
 {
-    THROW_STATUS(thread_ctx_init(ctx));
-    rstatus_t status = core_datastore_preconnect(ctx);
+    array_null(&ctx->thread_ctxs);
+    THROW_STATUS(array_init(&ctx->thread_ctxs, 1, sizeof(thread_ctx)));
+    int i = 0;
+    for (i = 0; i< MAX_THREADS; i++) {
+        pthread_ctx ptctx = array_push(&ctx->thread_ctxs);
+        THROW_STATUS(thread_ctx_init(ptctx, ctx));
+    }
+
+    rstatus_t status = core_proxy_init(ctx);
     if (status != DN_OK)
-        datastore_disconnect(ctx->pool.datastore);
-    return status;
+        proxy_deinit(ctx);
+    return DN_OK;
 }
 
 static rstatus_t
@@ -146,8 +157,9 @@ core_stats_create(struct context *ctx)
 		return DN_ERROR;
 	}
     rstatus_t status = core_thread_ctx_init(ctx);
-    if (status != DN_OK)
-        thread_ctx_deinit(ctx);
+    if (status != DN_OK) {
+        array_each(&ctx->thread_ctxs, thread_ctx_deinit, NULL);
+    }
     return status;
 }
 
@@ -220,7 +232,6 @@ static void
 core_ctx_destroy(struct context *ctx)
 {
 	proxy_deinit(ctx);
-    datastore_disconnect(ctx->pool.datastore);
 	stats_destroy(ctx->stats);
 	server_pool_deinit(&ctx->pool);
 	conf_destroy(ctx->cf);

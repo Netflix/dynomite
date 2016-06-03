@@ -10,6 +10,7 @@ typedef struct thread_ctx {
     struct context      *ctx;
     tid_t               tid;
     struct event_base   *evb;
+    struct conn         *datastore_conn;
     struct msg_tmo      tmo;
     msec_t              timeout;     /* timeout in msec */
 }thread_ctx;
@@ -21,8 +22,10 @@ pthread_ctx thread_ctx_create(void);
 rstatus_t thread_ctx_run_once(pthread_ctx ptctx);
 
 // Init and Deinit
-rstatus_t thread_ctx_init(struct context *ctx);
-void thread_ctx_deinit(struct context *ctx);
+rstatus_t thread_ctx_init(pthread_ctx ptctx, struct context *ctx);
+rstatus_t thread_ctx_deinit(void *elem, void *arg);
+
+rstatus_t thread_ctx_datastore_preconnect(void *elem, void *arg);
 
 rstatus_t thread_ctx_add_conn(pthread_ctx ptctx, struct conn *conn);
 rstatus_t thread_ctx_del_conn(pthread_ctx ptctx, struct conn *conn);

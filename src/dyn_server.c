@@ -167,42 +167,6 @@ server_pool_run(struct server_pool *pool)
 	return DN_OK;
 }
 
-rstatus_t
-datastore_preconnect(struct datastore *datastore)
-{
-	rstatus_t status;
-	struct server_pool *pool;
-	struct conn *conn;
-
-	pool = datastore->owner;
-
-	conn = server_conn(datastore);
-	if (conn == NULL) {
-		return DN_ENOMEM;
-	}
-
-	status = conn_connect(pool->ctx, conn);
-	if (status != DN_OK) {
-		log_warn("connect to datastore '%.*s' failed, ignored: %s",
-				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
-		server_close(pool->ctx, conn);
-	}
-
-	return DN_OK;
-}
-
-void
-datastore_disconnect(struct datastore *datastore)
-{
-	struct server_pool *pool = datastore->owner;
-    struct context *ctx = pool->ctx;
-
-    if (ctx->datastore_conn) {
-        conn_close(pool->ctx, ctx->datastore_conn);
-        ctx->datastore_conn = NULL;
-    }
-}
-
 static void
 server_failure(struct context *ctx, struct datastore *server)
 {
