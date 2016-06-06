@@ -29,6 +29,7 @@
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
+#include "dyn_thread_ctx.h"
 
 #include "proto/dyn_proto.h"
 
@@ -94,6 +95,7 @@
 
 static uint32_t nfree_connq;       /* # free conn q */
 static struct conn_tqh free_connq; /* free conn q */
+static pthread_spinlock_t lock;
 
 consistency_t g_read_consistency = DEFAULT_READ_CONSISTENCY;
 consistency_t g_write_consistency = DEFAULT_WRITE_CONSISTENCY;
@@ -151,6 +153,8 @@ _conn_get(void)
 {
     struct conn *conn;
 
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     if (!TAILQ_EMPTY(&free_connq)) {
         ASSERT(nfree_connq > 0);
 
@@ -164,6 +168,8 @@ _conn_get(void)
         }
         memset(conn, 0, sizeof(*conn));
     }
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 
     conn->owner = NULL;
     conn->ptctx = NULL;
@@ -385,9 +391,12 @@ conn_put(struct conn *conn)
     ASSERT(conn->owner == NULL);
 
     log_debug(LOG_VVERB, "put conn %p", conn);
-
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     nfree_connq++;
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 void
@@ -395,6 +404,8 @@ conn_init(void)
 {
     log_debug(LOG_DEBUG, "conn size %d", sizeof(struct conn));
     nfree_connq = 0;
+    int ret = pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+    ASSERT_LOG(!ret, "Failed to init spin lock. err:%d error: %s", ret, strerror(ret));
     TAILQ_INIT(&free_connq);
 }
 
@@ -410,6 +421,8 @@ conn_deinit(void)
         conn_free(conn);
     }
     ASSERT(nfree_connq == 0);
+    int ret = pthread_spin_destroy(&lock);
+    ASSERT_LOG(!ret, "Failed to destroy spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 static rstatus_t
