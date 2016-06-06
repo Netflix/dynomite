@@ -16,6 +16,7 @@ static uint8_t version = VERSION_10;
 static uint64_t dmsg_id;          /* message id counter */
 static uint32_t nfree_dmsgq;      /* # free msg q */
 static struct dmsg_tqh free_dmsgq; /* free msg q */
+static pthread_spinlock_t lock;
 
 static const struct string MAGIC_STR = string("   $2014$ ");
 static const struct string CRLF_STR = string(CRLF);
@@ -649,8 +650,12 @@ dmsg_put(struct dmsg *dmsg)
     if (log_loggable(LOG_VVVERB)) {
         log_debug(LOG_VVVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
     }
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 void
@@ -668,6 +673,8 @@ dmsg_init(void)
 
     dmsg_id = 0;
     nfree_dmsgq = 0;
+    int ret = pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+    ASSERT_LOG(!ret, "Failed to init spin lock. err:%d error: %s", ret, strerror(ret));
     TAILQ_INIT(&free_dmsgq);
 }
 
@@ -684,6 +691,8 @@ dmsg_deinit(void)
         dmsg_free(msg);
     }
     ASSERT(nfree_dmsgq == 0);
+    int ret = pthread_spin_destroy(&lock);
+    ASSERT_LOG(!ret, "Failed to destroy spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 
@@ -699,16 +708,22 @@ dmsg_get(void)
 {
     struct dmsg *dmsg;
 
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     if (!TAILQ_EMPTY(&free_dmsgq)) {
         ASSERT(nfree_dmsgq > 0);
 
         dmsg = TAILQ_FIRST(&free_dmsgq);
         nfree_dmsgq--;
         TAILQ_REMOVE(&free_dmsgq, dmsg, m_tqe);
+        ret = pthread_spin_unlock(&lock);
+        ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
         goto done;
     }
 
     dmsg = dn_alloc(sizeof(*dmsg));
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
     if (dmsg == NULL) {
         return NULL;
     }

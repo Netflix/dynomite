@@ -83,7 +83,7 @@ static rstatus_t
 core_datastore_preconnect(struct context *ctx)
 {
     if (ctx->pool.preconnect) {
-        int i = 0;
+        uint32_t i = 0;
         for (i = 0; i< MAX_THREADS; i++) {
             pthread_ctx ptctx = array_get(&ctx->thread_ctxs, i);
             THROW_STATUS(thread_ctx_datastore_preconnect(ptctx, ctx));
@@ -243,6 +243,7 @@ core_create(struct instance *nci)
 {
 	mbuf_init(nci);
 	msg_init(nci);
+	dmsg_init();
 	conn_init();
 
     rstatus_t status = core_ctx_create(nci);
