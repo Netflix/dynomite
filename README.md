@@ -34,7 +34,7 @@ To build Dynomite in _debug mode_:
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
-    
+
 ## Help
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
