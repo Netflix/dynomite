@@ -75,14 +75,12 @@ string_duplicate(struct string *dst, const struct string *src)
     ASSERT(dst->len == 0 && dst->data == NULL);
     ASSERT(src->len != 0 && src->data != NULL);
 
-    dst->data = dn_strndup(src->data, src->len + 1);
+    dst->data = dn_strndup(src->data, src->len);
     if (dst->data == NULL) {
         return DN_ENOMEM;
     }
 
-    dst->len = src->len;
-    dst->data[dst->len] = '\0';
-
+    dst->len = dn_strlen(dst->data);
     return DN_OK;
 }
 
@@ -92,13 +90,12 @@ string_copy(struct string *dst, const uint8_t *src, uint32_t srclen)
     //ASSERT(dst->len == 0 && dst->data == NULL);
     ASSERT(src != NULL && srclen != 0);
 
-    dst->data = dn_strndup(src, srclen + 1);
+    dst->data = dn_strndup(src, srclen);
     if (dst->data == NULL) {
         return DN_ENOMEM;
     }
 
-    dst->len = srclen;
-    dst->data[dst->len] = '\0';
+    dst->len = dn_strlen(dst->data);
 
     return DN_OK;
 }
