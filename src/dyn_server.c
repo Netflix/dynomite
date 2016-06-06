@@ -62,6 +62,7 @@ server_unref(struct conn *conn)
 
 	server = conn->owner;
 	conn->owner = NULL;
+    conn->ptctx->datastore_conn = NULL;
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);

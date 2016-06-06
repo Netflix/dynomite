@@ -453,8 +453,8 @@ conn_close(struct context *ctx, struct conn *conn)
 	} else {
 		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
 	}
-	log_debug(LOG_NOTICE, "close %s %d '%s' on event %04"PRIX32" eof %d done "
-			  "%d rb %zu sb %zu%c %s", conn_get_type_string(conn), conn->sd,
+	log_debug(LOG_NOTICE, "close %p %s %d '%s' on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", conn, conn_get_type_string(conn), conn->sd,
               addrstr, conn->events, conn->eof, conn->done, conn->recv_bytes,
               conn->send_bytes,
               conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
