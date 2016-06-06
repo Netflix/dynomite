@@ -536,8 +536,12 @@ msg_put(struct msg *msg)
         mbuf_put(mbuf);
     }
 
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     nfree_msgq++;
     TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 
