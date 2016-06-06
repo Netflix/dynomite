@@ -31,6 +31,7 @@ static struct mhdr free_mbufq; /* free mbuf q */
 static size_t mbuf_chunk_size; /* mbuf chunk size - header + data (const) */
 static size_t mbuf_offset;     /* mbuf offset in chunk (const) - include the extra space*/
 static uint64_t mbuf_alloc_count = 0;
+static pthread_spinlock_t lock;
 
 uint64_t
 mbuf_alloc_get_count(void)
@@ -46,6 +47,8 @@ _mbuf_get(void)
 
     //loga("_mbuf_get, nfree_mbufq = %d", nfree_mbufq);
 
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     if (!STAILQ_EMPTY(&free_mbufq)) {
         ASSERT(nfree_mbufq > 0);
 
@@ -54,14 +57,20 @@ _mbuf_get(void)
         STAILQ_REMOVE_HEAD(&free_mbufq, next);
 
         ASSERT(mbuf->magic == MBUF_MAGIC);
+        ret = pthread_spin_unlock(&lock);
+        ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
         goto done;
     }
 
     buf = dn_alloc(mbuf_chunk_size);
     if (buf == NULL) {
+        ret = pthread_spin_unlock(&lock);
+        ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
         return NULL;
     }
     mbuf_alloc_count++;
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 
     /*
      * mbuf header is at the tail end of the mbuf. This enables us to catch
@@ -164,8 +173,12 @@ mbuf_put(struct mbuf *mbuf)
     ASSERT(STAILQ_NEXT(mbuf, next) == NULL);
     ASSERT(mbuf->magic == MBUF_MAGIC);
 
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     nfree_mbufq++;
     STAILQ_INSERT_HEAD(&free_mbufq, mbuf, next);
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 /*
@@ -326,6 +339,8 @@ mbuf_init(struct instance *nci)
     mbuf_chunk_size = nci->mbuf_chunk_size + MBUF_ESIZE;
     mbuf_offset = mbuf_chunk_size - MBUF_HSIZE;
 
+    int ret = pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+    ASSERT_LOG(!ret, "Failed to init spin lock. err:%d error: %s", ret, strerror(ret));
     log_debug(LOG_DEBUG, "mbuf hsize %d chunk size %zu offset %zu length %zu",
               MBUF_HSIZE, mbuf_chunk_size, mbuf_offset, mbuf_offset);
 }
@@ -340,6 +355,8 @@ mbuf_deinit(void)
         nfree_mbufq--;
     }
     ASSERT(nfree_mbufq == 0);
+    int ret = pthread_spin_destroy(&lock);
+    ASSERT_LOG(!ret, "Failed to destroy spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 
