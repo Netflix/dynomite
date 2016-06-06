@@ -22,7 +22,7 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
     $ git clone git@github.com:Netflix/dynomite.git
     $ cd dynomite
     $ autoreconf -fvi
-    $ ./configure --enable-debug=log
+    $ ./configure --enable-debug=yes
     $ make
     $ src/dynomite -h
 
