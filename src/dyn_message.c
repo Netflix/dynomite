@@ -29,6 +29,7 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 #include "proto/dyn_proto.h"
+#include "hashkit/dyn_hashkit.h"
 
 #if (IOV_MAX > 128)
 #define DN_IOV_MAX 128
@@ -146,6 +147,7 @@ static uint64_t frag_id;         /* fragment id counter */
 static size_t nfree_msgq;        /* # free msg q */
 static struct msg_tqh free_msgq; /* free msg q */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
+static pthread_spinlock_t lock;
 func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
 func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
@@ -155,7 +157,7 @@ func_msg_get_key     g_msg_get_key;     /* message get key for the msg */
 static uint8_t *
 msg_get_key(struct msg *msg, struct string *hash_tag, uint32_t *keylen)
 {
-    uint8_t *key;
+    uint8_t *key = NULL;
     if (!string_empty(hash_tag)) {
         struct string *tag = hash_tag;
         uint8_t *tag_start, *tag_end;
@@ -212,27 +214,35 @@ _msg_get(struct conn *conn, const char *const caller)
 {
     struct msg *msg;
 
+    int ret = pthread_spin_lock(&lock);
+    ASSERT_LOG(!ret, "Failed to lock spin lock. err:%d error: %s", ret, strerror(ret));
     if (!TAILQ_EMPTY(&free_msgq)) {
         ASSERT(nfree_msgq);
 
         msg = TAILQ_FIRST(&free_msgq);
         nfree_msgq--;
         TAILQ_REMOVE(&free_msgq, msg, m_tqe);
+        ret = pthread_spin_unlock(&lock);
+        ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
         goto done;
     }
 
     //protect our server in the slow network and high traffics.
     //we drop client requests but still honor our peer requests
     if (alloc_msg_count >= alloc_msgs_max) {
-         log_debug(LOG_WARN, "allocated #msgs %lu hit max allowable limit", alloc_msg_count);
-         return NULL;
+        log_debug(LOG_WARN, "allocated #msgs %lu hit max allowable limit", alloc_msg_count);
+        ret = pthread_spin_unlock(&lock);
+        ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
+        return NULL;
     }
 
     alloc_msg_count++;
+    ret = pthread_spin_unlock(&lock);
+    ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 
 
     log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
-             alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
+            alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -418,7 +428,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     int n;
     char *errstr = err ? strerror(err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
-    char *source;
+    char *source = "Peer:";
 
     if (dyn_err == PEER_CONNECTION_REFUSE) {
         source = "Peer:";
@@ -592,6 +602,8 @@ msg_init(struct instance *nci)
     frag_id = 0;
     nfree_msgq = 0;
     alloc_msgs_max = nci->alloc_msgs_max;
+    int ret = pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+    ASSERT_LOG(!ret, "Failed to init spin lock. err:%d error: %s", ret, strerror(ret));
     TAILQ_INIT(&free_msgq);
 }
 
@@ -607,6 +619,8 @@ msg_deinit(void)
         msg_free(msg);
     }
     ASSERT(nfree_msgq == 0);
+    int ret = pthread_spin_destroy(&lock);
+    ASSERT_LOG(!ret, "Failed to destroy spin lock. err:%d error: %s", ret, strerror(ret));
 }
 
 bool
@@ -643,7 +657,7 @@ msg_payload_crc32(struct msg *msg)
             }
         }
 
-        crc = crc32_sz((char *)start, end - start, crc);
+        crc = crc32_sz((const char *)start, end - start, crc);
     }
     return crc;
 
