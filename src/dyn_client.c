@@ -659,19 +659,15 @@ static void
 admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    struct conn *p_conn;
-
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
-    if (p_conn == NULL) {
+    struct peer *peer = get_dnode_peer_in_rack_for_key(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    if (peer == NULL) {
         c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, msg, c_conn->err);
+        req_forward_error(ctx, c_conn, msg, DN_ENOHOST);
         return;
     }
-
-    struct peer *peer = p_conn->owner;
 
     if (peer->is_local) {
         send_rsp_integer(ctx, c_conn, msg);
