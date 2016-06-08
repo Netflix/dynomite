@@ -517,7 +517,9 @@ rstatus_t
 server_pool_init_my_dc_rack(struct server_pool *sp)
 {
     sp->my_dc = topo_get_dc(sp->topo, &sp->dc_name);
+    log_warn("my dc '%.*s' (%p)", sp->my_dc->name->len, sp->my_dc->name->data, sp->my_dc);
 	sp->my_rack = topo_get_rack(sp->my_dc, &sp->rack_name);
+    log_warn("my rack '%.*s' (%p)", sp->my_rack->name->len, sp->my_rack->name->data, sp->my_rack);
     return DN_OK;
 }
 

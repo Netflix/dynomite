@@ -47,8 +47,9 @@ core_debug(struct context *ctx)
 static rstatus_t
 core_init_last(struct context *ctx)
 {
-	core_debug(ctx);
     preselect_remote_rack_for_replication(ctx);
+    THROW_STATUS(server_pool_init_my_dc_rack(&ctx->pool));
+	core_debug(ctx);
     return DN_OK;
 }
 
@@ -64,7 +65,6 @@ core_gossip_pool_init(struct context *ctx)
 	CBUF_Init(C2S_OutQ);
 
     THROW_STATUS(gossip_pool_init(ctx));
-    THROW_STATUS(server_pool_init_my_dc_rack(&ctx->pool));
     THROW_STATUS(core_init_last(ctx));
     return DN_OK;
 }

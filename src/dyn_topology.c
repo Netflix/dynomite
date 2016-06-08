@@ -86,11 +86,8 @@ topo_get_dc(struct topology *topo, struct string *dcname)
 	struct datacenter *dc;
 	uint32_t i, len;
 
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_dc dc '%.*s'",
-				dcname->len, dcname->data);
-	}
 
+	log_debug(LOG_DEBUG, "%.*s'", dcname->len, dcname->data);
 	for (i = 0, len = array_n(&topo->datacenters); i < len; i++) {
 		dc = (struct datacenter *) array_get(&topo->datacenters, i);
 		ASSERT(dc != NULL);
@@ -102,6 +99,7 @@ topo_get_dc(struct topology *topo, struct string *dcname)
 	}
 
 	dc = array_push(&topo->datacenters);
+	log_debug(LOG_DEBUG, "%.*s' dc:%p idx:%d", dcname->len, dcname->data, dc, len);
 	dc_init(dc);
 	string_copy(dc->name, dcname->data, dcname->len);
 
@@ -120,9 +118,6 @@ topo_get_rack(struct datacenter *dc, struct string *rackname)
 	ASSERT(dc->dict_rack != NULL);
 	ASSERT(dc->name != NULL);
 
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "server_get_rack   '%.*s'", rackname->len, rackname->data);
-	}
 	/*
    struct rack *rack = dictFetchValue(dc->dict_rack, rackname);
    if (rack == NULL) {
@@ -147,6 +142,7 @@ topo_get_rack(struct datacenter *dc, struct string *rackname)
 	}
 
 	rack = array_push(&dc->racks);
+	log_debug(LOG_DEBUG, "'%.*s' rack:%p idx:%d", rackname->len, rackname->data, rack, len);
 	rack_init(rack);
 	string_copy(rack->name, rackname->data, rackname->len);
 	string_copy(rack->dc, dc->name->data, dc->name->len);
@@ -273,11 +269,11 @@ topo_print(struct topology *topo)
     uint32_t dc_index, dc_len;
     for(dc_index = 0, dc_len = array_n(&topo->datacenters); dc_index < dc_len; dc_index++) {
         struct datacenter *dc = array_get(&topo->datacenters, dc_index);
-        log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
+        log_debug(LOG_VERB, "Peer datacenter........'%.*s' (%p)", dc->name->len, dc->name->data, dc);
         uint32_t rack_index, rack_len;
         for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
             struct rack *rack = array_get(&dc->racks, rack_index);
-            log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
+            log_debug(LOG_VERB, "\tPeer rack........'%.*s' (%p)", rack->name->len, rack->name->data, rack);
             log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
             log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
         }

@@ -993,7 +993,6 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
         token = dnode_peer_pool_hash(pool, key, keylen);
         //print_dyn_token(token, 1);
         idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
-        //loga("found idx %d for rack '%.*s' ", idx, rack->name->len, rack->name->data);
 
         //TODOs: should reuse the token
         if (token != NULL) {
@@ -1880,25 +1879,27 @@ preselect_remote_rack_for_replication(struct context *ctx)
     struct server_pool *sp = &ctx->pool;
     struct topology *topo = sp->topo;
     uint32_t dc_cnt = array_n(&topo->datacenters);
-    uint32_t dc_index;
+    uint32_t dc_index = 0, rack_cnt = 0;
     uint32_t my_rack_index = 0;
+    struct datacenter *dc = NULL;
+    struct rack *rack = NULL;
 
     // Get the index of my rack in the current dc.
     // While at it, also sort other DC racks.
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
-        struct datacenter *dc = array_get(&topo->datacenters, dc_index);
+        dc = array_get(&topo->datacenters, dc_index);
         // sort the racks.
         array_sort(&dc->racks, rack_name_cmp);
 
         // skip if its not a local dc.
-        if (sp->my_dc != dc)
+        if (string_compare(dc->name, &sp->dc_name) == 0)
             continue;
 
         // if the dc is a local dc, get the rack_idx
         uint32_t rack_index;
-        uint32_t rack_cnt = array_n(&dc->racks);
+        rack_cnt = array_n(&dc->racks);
         for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
-            struct rack *rack = array_get(&dc->racks, rack_index);
+            rack = array_get(&dc->racks, rack_index);
             if (string_compare(rack->name, &sp->rack_name) == 0) {
                 my_rack_index = rack_index;
                 log_notice("my rack index %u", my_rack_index);
@@ -1908,15 +1909,15 @@ preselect_remote_rack_for_replication(struct context *ctx)
     }
 
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
-        struct datacenter *dc = array_get(&topo->datacenters, dc_index);
+        dc = array_get(&topo->datacenters, dc_index);
         dc->preselected_rack_for_replication = NULL;
 
         // Nothing to do for local DC, continue;
-        if (sp->my_dc == dc)
+        if (string_compare(dc->name, &sp->dc_name) == 0)
             continue;
 
         // if no racks, keep preselected_rack_for_replication as NULL
-        uint32_t rack_cnt = array_n(&dc->racks);
+        rack_cnt = array_n(&dc->racks);
         if (rack_cnt == 0)
             continue;
 

@@ -831,21 +831,19 @@ static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
     struct server_pool *pool = c_conn->owner;
-    uint8_t *key;
-    uint32_t keylen;
 
     ASSERT(c_conn->type == CONN_CLIENT);
     incr_client_stats(ctx, msg);
-
-    key = NULL;
-    keylen = 0;
 
     // add the message to the dict
     log_debug(LOG_DEBUG, "conn %p adding message %d:%d", c_conn, msg->id, msg->parent_id);
     dictAdd(c_conn->outstanding_msgs_dict, &msg->id, msg);
 
     // extract key for msg, either using the hash_tag what the parser got
+    uint8_t *key = NULL;
+    uint32_t keylen = 0;
     key = g_msg_get_key(msg, &pool->hash_tag, &keylen);
+
     //ASSERT(key != NULL);
     // need to capture the initial mbuf location as once we add in the dynomite
     // headers (as mbufs to the src msg), that will bork the request sent to
@@ -854,8 +852,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
     if (ctx->admin_opt == 1) {
         if (msg->type == MSG_REQ_REDIS_DEL || msg->type == MSG_REQ_MC_DELETE) {
-          admin_local_req_forward(ctx, c_conn, msg, pool->my_rack, key, keylen);
-          return;
+            admin_local_req_forward(ctx, c_conn, msg, pool->my_rack, key, keylen);
+            return;
         }
     }
 
