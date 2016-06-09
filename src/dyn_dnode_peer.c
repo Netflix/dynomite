@@ -18,9 +18,42 @@
 
 
 static bool
-is_same_dc(struct server_pool *sp, struct peer *peer_node)
+is_same_dc(struct peer *peer_node)
 {
+    struct server_pool *sp = peer_node->owner;
     return string_compare(&sp->dc_name, &peer_node->dc) == 0;
+}
+
+static bool
+is_conn_secured(struct peer *peer_node)
+{
+    //ASSERT(peer_server != NULL);
+    //ASSERT(sp != NULL);
+
+    // if dc-secured mode then communication only between nodes in different dc is secured
+    struct server_pool *sp = peer_node->owner;
+    switch (sp->secure_server_option)
+    {
+        case SECURE_OPTION_NONE:
+            return false;
+        case SECURE_OPTION_RACK:
+            // if rack-secured mode then communication only between nodes in different rack is secured.
+            // communication secured between nodes if they are in rack with same name across dcs.
+            if (string_compare(&sp->rack_name, &peer_node->rack) != 0
+                    || string_compare(&sp->dc_name, &peer_node->dc) != 0) {
+                return true;
+            }
+            return false;
+        case SECURE_OPTION_DC:
+            // if dc-secured mode then communication only between nodes in different dc is secured     
+            if (string_compare(&sp->dc_name, &peer_node->dc) != 0) {
+                return true;
+            }
+            return false;
+        case SECURE_OPTION_ALL:
+            return true;
+    }
+    return false;
 }
 
 static void
@@ -36,8 +69,15 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->addr = peer->endpoint.addr;
     string_duplicate(&conn->pname, &peer->endpoint.pname);
 
-    peer->ns_conn_q++;
-    TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
+    ASSERT(peer->conn == NULL);
+    peer->conn = conn;
+
+    if (is_conn_secured(peer)) {
+        conn->dnode_secured = 1;
+        conn->dnode_crypto_state = 0; //need to do a encryption handshake
+    }
+
+    conn->same_dc = is_same_dc(peer)? 1 : 0;
 
     conn->owner = owner;
     conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn->type);
@@ -59,9 +99,7 @@ dnode_peer_unref(struct conn *conn)
     peer = conn->owner;
     conn->owner = NULL;
 
-    ASSERT(peer->ns_conn_q != 0);
-    peer->ns_conn_q--;
-    TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
+    peer->conn = NULL;
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
@@ -158,9 +196,7 @@ dnode_peer_add_local(struct server_pool *pool, struct peer *self)
     self->endpoint.family = pool->dnode_proxy_endpoint.family;
     self->endpoint.addrlen = pool->dnode_proxy_endpoint.addrlen;
     self->endpoint.addr = pool->dnode_proxy_endpoint.addr;
-
-    self->ns_conn_q = 0;
-    TAILQ_INIT(&self->s_conn_q);
+    self->conn = NULL;
 
     self->next_retry = 0ULL;
     self->failure_count = 0;
@@ -185,73 +221,19 @@ dnode_peer_deinit(struct array *nodes)
 
         peer = array_pop(nodes);
         IGNORE_RET_VAL(peer);
-        ASSERT(TAILQ_EMPTY(&peer->s_conn_q) && peer->ns_conn_q == 0);
+        ASSERT(peer->conn == NULL);
     }
     array_deinit(nodes);
-}
-
-static bool
-is_conn_secured(struct server_pool *sp, struct peer *peer_node)
-{
-    //ASSERT(peer_server != NULL);
-    //ASSERT(sp != NULL);
-
-    // if dc-secured mode then communication only between nodes in different dc is secured
-    switch (sp->secure_server_option)
-    {
-        case SECURE_OPTION_NONE:
-            return false;
-        case SECURE_OPTION_RACK:
-            // if rack-secured mode then communication only between nodes in different rack is secured.
-            // communication secured between nodes if they are in rack with same name across dcs.
-            if (string_compare(&sp->rack_name, &peer_node->rack) != 0
-                    || string_compare(&sp->dc_name, &peer_node->dc) != 0) {
-                return true;
-            }
-            return false;
-        case SECURE_OPTION_DC:
-            // if dc-secured mode then communication only between nodes in different dc is secured     
-            if (string_compare(&sp->dc_name, &peer_node->dc) != 0) {
-                return true;
-            }
-            return false;
-        case SECURE_OPTION_ALL:
-            return true;
-    }
-    return false;
 }
 
 static struct conn *
 dnode_peer_conn(struct peer *peer)
 {
-    struct server_pool *pool;
-    struct conn *conn;
+    if (peer->conn != NULL)
+        return peer->conn;
 
-    pool = peer->owner;
-
-    if (peer->ns_conn_q < 1) {
-        conn = conn_get_peer(peer, false);
-        if (is_conn_secured(pool, peer)) {
-            conn->dnode_secured = 1;
-            conn->dnode_crypto_state = 0; //need to do a encryption handshake
-        }
-
-        conn->same_dc = is_same_dc(pool, peer)? 1 : 0;
-
-        return conn;
-    }
-
-    /*
-     * Pick a peer connection from the head of the queue and insert
-     * it back into the tail of queue to maintain the lru order
-     */
-    conn = TAILQ_FIRST(&peer->s_conn_q);
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
-    TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
-    TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
-
-    return conn;
+    peer->conn = conn_get_peer(peer, false);
+    return peer->conn;
 }
 
 static void
@@ -489,21 +471,13 @@ dnode_peer_each_preconnect(void *elem, void *data)
 static rstatus_t
 dnode_peer_each_disconnect(void *elem, void *data)
 {
-    struct peer *server;
+    struct peer *peer = elem;
     struct server_pool *pool;
 
-    server = elem;
-    pool = server->owner;
+    pool = peer->owner;
 
-    //TODOs: fixe me not to use s_conn_q to distinguish server pool and peer pool
-    while (!TAILQ_EMPTY(&server->s_conn_q)) {
-        struct conn *conn;
-
-        ASSERT(server->ns_conn_q > 0);
-
-        conn = TAILQ_FIRST(&server->s_conn_q);
-        conn_close(pool->ctx, conn);
-    }
+    if (peer->conn != NULL)
+        conn_close(pool->ctx, peer->conn);
 
     return DN_OK;
 }
@@ -670,14 +644,8 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
     nelem = array_n(peers);
     for (i = 0; i < nelem; i++) {
         struct peer *peer = (struct peer *) array_get(peers, i);
-        struct conn *conn, *nconn;
-        for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
-                conn = nconn) {
-            nconn = TAILQ_NEXT(conn, conn_tqe);
-            conn->owner = peer; //re-link to the owner in case of an resize/allocation
-        }
+        peer->conn->owner = peer; //re-link to the owner in case of an resize/allocation
     }
-
 }
 
 
@@ -718,8 +686,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->endpoint.family = info->family;
     s->endpoint.addrlen = info->addrlen;
     s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
+    s->conn = NULL;
 
     s->next_retry = 0ULL;
     s->failure_count = 0;
@@ -1007,7 +974,7 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
     server = array_get(&topo->peers, idx);
 
     if (server->state == DOWN) {
-        if (!is_same_dc(pool, server)) {
+        if (!is_same_dc(server)) {
             //pick another reroute server in the server DC
             server = dnode_peer_pool_reroute_server(pool, rack, key, keylen);
         }
@@ -1677,12 +1644,6 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                        struct peer *peer, struct msg *msg,
                        uint8_t *key, uint32_t keylen)
 {
-    /* enqueue message (request) into client outq, if response is expected */
-    // TODO: SHAILESH: Not the right place to do this.
-    if (msg->expect_datastore_reply && !msg->swallow) {
-        conn_enqueue_outq(ctx, c_conn, msg);
-    }
-
     struct conn *p_conn = dnode_peer_active_conn(ctx, peer);
     if (p_conn == NULL)
     {

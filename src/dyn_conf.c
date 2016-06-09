@@ -209,9 +209,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->endpoint.family = cseed->info.family;
     s->endpoint.addrlen = cseed->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
-
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
+    s->conn = NULL;
 
     s->next_retry = 0ULL;
     s->failure_count = 0;

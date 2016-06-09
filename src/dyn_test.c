@@ -261,10 +261,7 @@ init_peer(struct peer *s)
     s->endpoint.family = info->family;
     s->endpoint.addrlen = info->addrlen;
     s->endpoint.addr = (struct sockaddr *)&info->addr;
-
-
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
+    s->conn = NULL;
 
     s->next_retry = 0ULL;
     s->failure_count = 0;
