@@ -26,5 +26,6 @@
 #define _DYN_CLIENT_H_
 
 void init_client_conn(struct conn *conn);
+void client_forward_error(struct conn *conn, struct msg *msg, err_t err);
 
 #endif

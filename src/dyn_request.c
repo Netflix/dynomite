@@ -175,7 +175,7 @@ req_error(struct conn *conn, struct msg *msg)
     uint64_t id;
     uint32_t nfragment;
 
-    ASSERT(msg->request && req_done(conn, msg));
+    ASSERT_LOG(msg->request && req_done(conn, msg), "%s", conn_get_type_string(conn));
 
     if (msg->error) {
         return true;

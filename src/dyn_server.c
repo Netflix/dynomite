@@ -26,6 +26,7 @@
 #include "dyn_core.h"
 #include "dyn_topology.h"
 #include "dyn_server.h"
+#include "dyn_client.h"
 #include "dyn_conf.h"
 #include "dyn_token.h"
 #include "dyn_dnode_peer.h"
@@ -891,4 +892,186 @@ init_server_conn(struct conn *conn)
 {
     conn->type = CONN_SERVER;
     conn->ops = &server_ops;
+}
+
+static void
+req_redis_stats(struct context *ctx, struct msg *msg)
+{
+
+    switch (msg->type) {
+
+    case MSG_REQ_REDIS_GET:
+         stats_server_incr(ctx, redis_req_get);
+         break;
+    case MSG_REQ_REDIS_SET:
+         stats_server_incr(ctx, redis_req_set);
+         break;
+    case MSG_REQ_REDIS_DEL:
+         stats_server_incr(ctx, redis_req_del);
+         break;
+    case MSG_REQ_REDIS_INCR:
+    case MSG_REQ_REDIS_DECR:
+         stats_server_incr(ctx, redis_req_incr_decr);
+         break;
+    case MSG_REQ_REDIS_KEYS:
+         stats_server_incr(ctx, redis_req_keys);
+         break;
+    case MSG_REQ_REDIS_MGET:
+         stats_server_incr(ctx, redis_req_mget);
+         break;
+    case MSG_REQ_REDIS_SCAN:
+         stats_server_incr(ctx, redis_req_scan);
+         break;
+    case MSG_REQ_REDIS_SORT:
+          stats_server_incr(ctx, redis_req_sort);
+          break;
+    case MSG_REQ_REDIS_PING:
+         stats_server_incr(ctx, redis_req_ping);
+         break;
+    case MSG_REQ_REDIS_LREM:
+          stats_server_incr(ctx, redis_req_lreqm);
+          /* do not break as this is a list operation as the following.
+           * We count twice the LREM because it is an intensive operation/
+           *  */
+    case MSG_REQ_REDIS_LRANGE:
+    case MSG_REQ_REDIS_LSET:
+    case MSG_REQ_REDIS_LTRIM:
+    case MSG_REQ_REDIS_LINDEX:
+    case MSG_REQ_REDIS_LPUSHX:
+         stats_server_incr(ctx, redis_req_lists);
+         break;
+    case MSG_REQ_REDIS_SUNION:
+         stats_server_incr(ctx, redis_req_sunion);
+         /* do not break as this is a set operation as the following.
+          * We count twice the SUNION because it is an intensive operation/
+          *  */
+    case MSG_REQ_REDIS_SETBIT:
+    case MSG_REQ_REDIS_SETEX:
+    case MSG_REQ_REDIS_SETRANGE:
+    case MSG_REQ_REDIS_SADD:
+    case MSG_REQ_REDIS_SDIFF:
+    case MSG_REQ_REDIS_SDIFFSTORE:
+    case MSG_REQ_REDIS_SINTER:
+    case MSG_REQ_REDIS_SINTERSTORE:
+    case MSG_REQ_REDIS_SREM:
+    case MSG_REQ_REDIS_SUNIONSTORE:
+    case MSG_REQ_REDIS_SSCAN:
+        stats_server_incr(ctx, redis_req_set);
+        break;
+    case MSG_REQ_REDIS_ZADD:
+    case MSG_REQ_REDIS_ZINTERSTORE:
+    case MSG_REQ_REDIS_ZRANGE:
+    case MSG_REQ_REDIS_ZRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZREM:
+    case MSG_REQ_REDIS_ZREVRANGE:
+    case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZUNIONSTORE:
+    case MSG_REQ_REDIS_ZSCAN:
+    case MSG_REQ_REDIS_ZCOUNT:
+    case MSG_REQ_REDIS_ZINCRBY:
+    case MSG_REQ_REDIS_ZREMRANGEBYRANK:
+    case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
+        stats_server_incr(ctx, redis_req_sortedsets);
+        break;
+    case MSG_REQ_REDIS_HINCRBY:
+    case MSG_REQ_REDIS_HINCRBYFLOAT:
+    case MSG_REQ_REDIS_HSET:
+    case MSG_REQ_REDIS_HSETNX:
+        stats_server_incr(ctx, redis_req_hashes);
+        break;
+    default:
+        stats_server_incr(ctx, redis_req_other);
+        break;
+    }
+}
+
+void
+datastore_forward_stats(struct context *ctx, struct msg *msg)
+{
+    ASSERT(msg->request);
+
+    if (msg->is_read) {
+       stats_server_incr(ctx, read_requests);
+       stats_server_incr_by(ctx, read_request_bytes, msg->mlen);
+    } else {
+       stats_server_incr(ctx, write_requests);
+       stats_server_incr_by(ctx, write_request_bytes, msg->mlen);
+    }
+    if(g_data_store == DATA_REDIS){
+        req_redis_stats(ctx, msg);
+    }
+}
+
+void
+datastore_req_forward(struct conn *c_conn, struct msg *msg, uint8_t *key,
+                      uint32_t keylen)
+{
+    rstatus_t status;
+    struct conn *s_conn;
+
+    ASSERT((c_conn->type == CONN_CLIENT) ||
+           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+    // TODO: SHAILESH This should be thread specific ptctx
+    pthread_ctx ptctx = c_conn->ptctx;
+    thread_ctx_datastore_preconnect(c_conn->ptctx, NULL);
+    s_conn = c_conn->ptctx->datastore_conn;
+    struct context *ctx = ptctx->ctx;
+    log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
+    if (s_conn == NULL) {
+        client_forward_error(c_conn, msg, errno);
+        return;
+    }
+    ASSERT(s_conn->type == CONN_SERVER);
+
+    if (log_loggable(LOG_DEBUG)) {
+       log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
+                    dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(s_conn->sd));
+    }
+
+    if (ctx->dyn_state == NORMAL) {
+        /* enqueue the message (request) into server inq */
+        if (TAILQ_EMPTY(&s_conn->imsg_q)) {
+            status = thread_ctx_add_out(s_conn->ptctx, s_conn);
+
+            if (status != DN_OK) {
+                client_forward_error(c_conn, msg, errno);
+                s_conn->err = errno;
+                return;
+            }
+        }
+    } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
+        log_debug(LOG_INFO, "Node is in STANDBY state. Drop write/read requests");
+        client_forward_error(c_conn, msg, DN_EHOST_STATE_INVALID);
+        return;
+    } else if (ctx->dyn_state == WRITES_ONLY && msg->is_read) {
+        //no reads from peers/clients but allow writes from peers/clients
+        log_debug(LOG_INFO, "Node is in WRITES_ONLY state. Drop read requests");
+        client_forward_error(c_conn, msg, DN_EHOST_STATE_INVALID);
+        return;
+    } else if (ctx->dyn_state == RESUMING) {
+        log_debug(LOG_INFO, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
+        if (msg->is_read) {
+            client_forward_error(c_conn, msg, DN_EHOST_STATE_INVALID);
+            return;
+        }
+
+        status = thread_ctx_add_out(s_conn->ptctx, s_conn);
+
+        if (status != DN_OK) {
+            client_forward_error(c_conn, msg, errno);
+            s_conn->err = errno;
+            return;
+        }
+    }
+
+    conn_enqueue_inq(ctx, s_conn, msg);
+    datastore_forward_stats(ctx, msg);
+
+
+    if (log_loggable(LOG_VERB)) {
+       log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
+                " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
+                msg->mlen, msg->type, keylen, key);
+    }
+
 }

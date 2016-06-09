@@ -76,5 +76,8 @@ rstatus_t server_pool_init(struct server_pool *server_pool, struct conf_pool *co
 void server_pool_deinit(struct server_pool *server_pool);
 rstatus_t server_pool_init_my_dc_rack(struct server_pool *sp);
 void init_server_conn(struct conn *conn);
+void datastore_req_forward(struct conn *c_conn, struct msg *msg, uint8_t *key,
+                           uint32_t keylen);
+void datastore_forward_stats(struct context *ctx, struct msg *msg);
 
 #endif

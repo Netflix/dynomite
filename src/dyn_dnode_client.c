@@ -271,7 +271,10 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 
     ASSERT(msg->dmsg != NULL);
     if (msg->dmsg->type == DMSG_REQ) {
-       local_req_forward(ctx, conn, msg, key, keylen);
+        if (msg->expect_datastore_reply) {
+            conn_enqueue_outq(ctx, conn, msg);
+        }
+       datastore_req_forward(conn, msg, key, keylen);
     } else if (msg->dmsg->type == DMSG_REQ_FORWARD) {
         struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
         uint32_t rack_cnt = array_n(&pool->my_dc->racks);

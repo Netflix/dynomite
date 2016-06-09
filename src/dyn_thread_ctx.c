@@ -24,6 +24,8 @@ thread_ctx_core(void *arg, uint32_t events)
 
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {
+        log_debug(LOG_VVVERB, "handing error on %s %d",
+                  conn_get_type_string(conn), conn->sd);
 		if (conn->err && conn->dyn_mode) {
 			loga("conn err on dnode EVENT_ERR: %d", conn->err);
 		}
@@ -34,6 +36,8 @@ thread_ctx_core(void *arg, uint32_t events)
 
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
+        log_debug(LOG_VVVERB, "handing read on %s %d",
+                  conn_get_type_string(conn), conn->sd);
 		status = conn_recv(ctx, conn);
 
 		if (status != DN_OK || conn->done || conn->err) {
@@ -52,6 +56,8 @@ thread_ctx_core(void *arg, uint32_t events)
 	}
 
 	if (events & EVENT_WRITE) {
+        log_debug(LOG_VVVERB, "handing write on %s %d",
+                  conn_get_type_string(conn), conn->sd);
 		status = conn_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
 			if (conn->dyn_mode) {
@@ -78,13 +84,12 @@ thread_ctx_datastore_preconnect(void *elem, void *arg)
     struct context *ctx = ptctx->ctx;
     struct server_pool *pool = &ctx->pool;
 
-    ptctx->datastore_conn = get_datastore_conn(ctx, pool);
+    if (ptctx->datastore_conn == NULL)
+        ptctx->datastore_conn = get_datastore_conn(ctx, pool);
     if (ptctx->datastore_conn == NULL) {
         log_error("Could not preconnect to datastore");
         return DN_ERROR;
     }
-    // back reference
-    ptctx->datastore_conn->ptctx = ptctx;
 	return DN_OK;
 }
 
@@ -117,24 +122,28 @@ thread_ctx_deinit(void *elem, void *arg)
 rstatus_t
 thread_ctx_add_conn(pthread_ctx ptctx, struct conn *conn)
 {
+    log_debug(LOG_VVVERB, "ptctx %p: adding conn %p, %s", ptctx, conn, conn_get_type_string(conn));
     return event_add_conn(ptctx->evb, conn);
 }
 
 rstatus_t
 thread_ctx_del_conn(pthread_ctx ptctx, struct conn *conn)
 {
+    log_debug(LOG_VVVERB, "ptctx %p: deleting conn %p, %s", ptctx, conn, conn_get_type_string(conn));
     return event_del_conn(ptctx->evb, conn);
 }
 
 rstatus_t
 thread_ctx_add_out(pthread_ctx ptctx, struct conn *conn)
 {
+    log_debug(LOG_VVVERB, "ptctx %p: adding out conn %p, %s", ptctx, conn, conn_get_type_string(conn));
     return event_add_out(ptctx->evb, conn);
 }
 
 rstatus_t
 thread_ctx_del_out(pthread_ctx ptctx, struct conn *conn)
 {
+    log_debug(LOG_VVVERB, "ptctx %p: deleting out conn %p, %s", ptctx, conn, conn_get_type_string(conn));
     return event_del_out(ptctx->evb, conn);
 }
 

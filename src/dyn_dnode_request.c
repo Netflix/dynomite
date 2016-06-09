@@ -8,6 +8,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_mbuf.h"
 #include "dyn_server.h"
+#include "dyn_thread_ctx.h"
 
 
 //static struct string client_request_dyn_msg = string("Client_request");
