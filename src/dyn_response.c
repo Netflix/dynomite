@@ -102,7 +102,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
                (conn->type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
 
     req = TAILQ_FIRST(&conn->omsg_q);
-    if (req == NULL || (!req->selected_rsp && !req_error(conn, req))) {
+    if (req == NULL || (!req->selected_rsp && !req_done(conn, req))) {
         /* nothing is outstanding, initiate close? */
         if (req == NULL && conn->eof) {
             conn->done = 1;
