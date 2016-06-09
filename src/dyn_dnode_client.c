@@ -312,13 +312,6 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
     }
 }
 
-static struct msg *
-dnode_req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
-{
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
-    return req_recv_next(ctx, conn, alloc);
-}
-
 static void
 dnode_req_recv_done(struct context *ctx, struct conn *conn,
                     struct msg *msg, struct msg *nmsg)
@@ -471,7 +464,7 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 
 struct conn_ops dnode_client_ops = {
     msg_recv,
-    dnode_req_recv_next,
+    req_recv_next,
     dnode_req_recv_done,
     msg_send,
     dnode_rsp_send_next,

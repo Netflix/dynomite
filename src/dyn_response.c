@@ -158,39 +158,3 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 
     return rsp;
 }
-
-void
-rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
-{
-
-    ASSERT(conn->type == CONN_CLIENT);
-    ASSERT(conn->smsg == NULL);
-
-    if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "send done rsp %"PRIu64" on c %d", rsp->id, conn->sd);
-    }
-
-    log_debug(LOG_VERB, "conn %p rsp %p done", conn, rsp);
-    struct msg *req = rsp->peer;
-    ASSERT_LOG(req, "response %d does not have a corresponding request", rsp->id);
-    ASSERT_LOG(!req->rsp_sent, "request %d:%d already had a response sent",
-               req->id, req->parent_id);
-
-    ASSERT(!rsp->request && req->request);
-    ASSERT(req->selected_rsp == rsp);
-    req->rsp_sent = 1;
-
-    /* dequeue request from client outq */
-    conn_dequeue_outq(ctx, conn, req);
-
-    // Remove it from the dict
-    if (!req->awaiting_rsps) {
-        log_debug(LOG_VERB, "conn %p removing message %d:%d", conn, req->id, req->parent_id);
-        dictDelete(conn->outstanding_msgs_dict, &req->id);
-        req_put(req);
-    } else {
-        log_info("req %d:%d still awaiting rsps %d", req->id, req->parent_id,
-                  req->awaiting_rsps);
-    }
-}
-

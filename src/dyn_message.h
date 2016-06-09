@@ -377,8 +377,6 @@ void rsp_put(struct msg *msg);
 struct msg *rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc);
 void server_rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
 struct msg *rsp_send_next(struct context *ctx, struct conn *conn);
-void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
-
 
 /* for dynomite  */
 void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg);

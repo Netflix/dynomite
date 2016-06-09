@@ -472,7 +472,8 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    struct peer *peer = get_dnode_peer_in_rack_for_key(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    struct peer *peer = get_dnode_peer_in_rack_for_key(ctx, c_conn->owner, rack,
+                                                       key, keylen, msg->msg_type);
     if (peer == NULL) {
         c_conn->err = EHOSTDOWN;
         client_forward_error(c_conn, msg, DN_ENOHOST);
@@ -804,13 +805,43 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
 }
 
+static void
+client_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
+{
+    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->smsg == NULL);
+
+    log_debug(LOG_VERB, "conn %p rsp %p done", conn, rsp);
+    struct msg *req = rsp->peer;
+    ASSERT_LOG(req, "response %d does not have a corresponding request", rsp->id);
+    ASSERT_LOG(!req->rsp_sent, "request %d:%d already had a response sent",
+               req->id, req->parent_id);
+
+    ASSERT(!rsp->request && req->request);
+    ASSERT(req->selected_rsp == rsp);
+    req->rsp_sent = 1;
+
+    /* dequeue request from client outq */
+    conn_dequeue_outq(ctx, conn, req);
+
+    // Remove it from the dict
+    if (!req->awaiting_rsps) {
+        log_debug(LOG_VERB, "conn %p removing message %d:%d", conn, req->id, req->parent_id);
+        dictDelete(conn->outstanding_msgs_dict, &req->id);
+        req_put(req);
+    } else {
+        log_info("req %d:%d still awaiting rsps %d", req->id, req->parent_id,
+                  req->awaiting_rsps);
+    }
+}
+
 struct conn_ops client_ops = {
     msg_recv,
     req_recv_next,
     req_recv_done,
     msg_send,
     rsp_send_next,
-    rsp_send_done,
+    client_rsp_send_done,
     client_close,
     client_active,
     client_ref,
