@@ -215,10 +215,6 @@ struct server_pool {
 
     struct string      name;                 /* pool name (ref in conf_pool) */
     struct endpoint    proxy_endpoint;
-    int                dist_type;            /* distribution type (dist_type_t) */
-    int                key_hash_type;        /* key hash type (hash_type_t) */
-    hash_t             key_hash;             /* key hasher */
-    struct string      hash_tag;             /* key hash tag (ref in conf_pool) */
     msec_t             timeout;              /* timeout in msec */
     int                backlog;              /* listen backlog */
     uint32_t           client_connections;   /* maximum # client connection */

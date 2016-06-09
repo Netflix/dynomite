@@ -472,15 +472,15 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    struct peer *peer = get_dnode_peer_in_rack_for_key(ctx, c_conn->owner, rack,
-                                                       key, keylen, msg->msg_type);
+    struct peer *peer = topo_get_peer_in_rack_for_key(ctx_get_topology(ctx), rack,
+                                                      key, keylen, msg->msg_type);
     if (peer == NULL) {
         c_conn->err = EHOSTDOWN;
         client_forward_error(c_conn, msg, DN_ENOHOST);
         return;
     }
 
-    if (peer->is_local) {
+    if (!peer->is_local) {
         send_rsp_integer(ctx, c_conn, msg);
     } else {
         log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
@@ -495,12 +495,11 @@ void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    struct peer *peer;
-
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    peer = get_dnode_peer_in_rack_for_key(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    struct peer *peer = topo_get_peer_in_rack_for_key(ctx_get_topology(ctx), rack, key,
+                                         keylen, msg->msg_type);
     if (peer == NULL) {
         client_forward_error(c_conn, msg, DN_ENOHOST);
         return;
@@ -658,7 +657,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     // extract key for msg, either using the hash_tag what the parser got
     uint8_t *key = NULL;
     uint32_t keylen = 0;
-    key = g_msg_get_key(msg, &pool->hash_tag, &keylen);
+    key = g_msg_get_key(msg, &pool->topo->hash_tag, &keylen);
 
     //ASSERT(key != NULL);
     // need to capture the initial mbuf location as once we add in the dynomite

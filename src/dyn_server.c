@@ -144,7 +144,7 @@ server_pool_run(struct server_pool *pool)
      * So commenting the whole thing here. */
 
     /*
-    switch (pool->dist_type) {
+    switch (pool->topo->dist_type) {
 	case DIST_KETAMA:
 		return ketama_update(pool);
 
@@ -446,7 +446,7 @@ server_pool_update(struct server_pool *pool)
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
 		log_error("updating pool with dist %d failed: %s",
-				pool->dist_type, strerror(errno));
+				pool->topo->dist_type, strerror(errno));
 		return status;
 	}
 

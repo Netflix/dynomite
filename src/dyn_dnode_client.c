@@ -250,8 +250,8 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
     key = NULL;
     keylen = 0;
 
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
+    if (!string_empty(&pool->topo->hash_tag)) {
+        struct string *tag = &pool->topo->hash_tag;
         uint8_t *tag_start, *tag_end;
 
         tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);

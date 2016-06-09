@@ -17,8 +17,8 @@
 #include "dyn_thread_ctx.h"
 
 
-static bool
-is_same_dc(struct peer *peer_node)
+bool
+peer_is_same_dc(struct peer *peer_node)
 {
     struct server_pool *sp = peer_node->owner;
     return string_compare(&sp->dc_name, &peer_node->dc) == 0;
@@ -77,7 +77,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
         conn->dnode_crypto_state = 0; //need to do a encryption handshake
     }
 
-    conn->same_dc = is_same_dc(peer)? 1 : 0;
+    conn->same_dc = peer_is_same_dc(peer)? 1 : 0;
 
     conn->owner = owner;
     conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn->type);
@@ -314,7 +314,7 @@ dnode_peer_failure(struct context *ctx, struct peer *server)
     //if (server->failure_count == 3)
     //   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
 
-    status = topo_update(ctx_get_topology(ctx));
+    status = topo_update_now(ctx_get_topology(ctx));
     if (status != DN_OK) {
         log_error("dyn: updating peer pool '%.*s' failed: %s",
                 pool->name.len, pool->name.data, strerror(errno));
@@ -697,7 +697,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
 
     dnode_peer_relink_conn_owner(sp);
 
-    status = topo_update(sp->topo);
+    status = topo_update_now(sp->topo);
     if (status != DN_OK)
         return status;
 
@@ -884,140 +884,6 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
         server->failure_count = 0;
         server->next_retry = 0ULL;
     }
-}
-
-static rstatus_t
-dnode_peer_pool_update(struct server_pool *pool)
-{
-    msec_t now = dn_msec_now();
-    if (now < 0) {
-        return DN_ERROR;
-    }
-
-    if (now <= pool->next_rebuild) {
-        return DN_OK;
-    }
-
-    pool->next_rebuild = now + WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS;
-    return topo_update(pool->topo);
-
-}
-
-static struct dyn_token *
-dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
-{
-    ASSERT(array_n(&pool->topo->peers) != 0);
-    ASSERT(key != NULL && keylen != 0);
-
-    struct dyn_token *token = dn_alloc(sizeof(struct dyn_token));
-    if (token == NULL) {
-        return NULL;
-    }
-    init_dyn_token(token);
-
-    rstatus_t status = pool->key_hash((char *)key, keylen, token);
-    if (status != DN_OK) {
-        dn_free(token);
-        return NULL;
-    }
-
-    return token;
-}
-
-static struct peer *
-dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
-{
-    uint32_t pos = 0;
-    struct peer *server = NULL;
-    struct continuum *entry;
-
-    if (rack->ncontinuum > 1) {
-        do {
-            pos = pos % rack->ncontinuum;
-            entry = rack->continuum + pos;
-            server = array_get(&pool->topo->peers, entry->index);
-            pos++;
-        } while (server->state == DOWN && pos < rack->ncontinuum);
-    }
-
-    //TODOs: pick another server in another rack of the same DC if we don't have any good server
-    return server;
-}
-
-static struct peer *
-dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
-                       uint8_t *key, uint32_t keylen)
-{
-    struct peer *server;
-    uint32_t idx;
-    struct dyn_token *token = NULL;
-
-    ASSERT(array_n(&pool->topo->peers) != 0);
-
-    if (keylen == 0) {
-        idx = 0; //for no argument command
-    } else {
-        token = dnode_peer_pool_hash(pool, key, keylen);
-        //print_dyn_token(token, 1);
-        idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
-
-        //TODOs: should reuse the token
-        if (token != NULL) {
-            deinit_dyn_token(token);
-            dn_free(token);
-        }
-    }
-
-    ASSERT(idx < array_n(&pool->topo->peers));
-
-    struct topology *topo = pool->topo;
-    server = array_get(&topo->peers, idx);
-
-    if (server->state == DOWN) {
-        if (!is_same_dc(server)) {
-            //pick another reroute server in the server DC
-            server = dnode_peer_pool_reroute_server(pool, rack, key, keylen);
-        }
-    }
-
-    if (log_loggable(LOG_VERB)) {
-        log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
-                key, pool->dist_type, server->endpoint.pname.len, server->endpoint.pname.data);
-    }
-
-    return server;
-}
-
-struct peer*
-get_dnode_peer_in_rack_for_key(struct context *ctx, struct server_pool *pool,
-                               struct rack *rack, uint8_t *key, uint32_t keylen,
-                               uint8_t msg_type)
-{
-    rstatus_t status;
-    struct peer *peer;
-
-    log_debug(LOG_VERB, "Entering %s.....................", __FUNCTION__);
-
-    status = dnode_peer_pool_update(pool);
-    if (status != DN_OK) {
-        loga("status is not OK");
-        return NULL;
-    }
-
-    if (msg_type == 1) {  //always local
-        struct topology *topo = pool->topo;
-        peer = array_get(&topo->peers, 0);
-    } else {
-        /* from a given {key, keylen} pick a peer from pool */
-        peer = dnode_peer_pool_server(pool, rack, key, keylen);
-        if (peer == NULL) {
-            log_debug(LOG_VERB, "What? There is no such peer in rack '%.*s' for key '%.*s'",
-                    rack->name, keylen, key);
-            return NULL;
-        }
-    }
-
-    return peer;
 }
 
 static struct conn *

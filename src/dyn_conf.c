@@ -365,6 +365,11 @@ static rstatus_t
 conf_topo_transform(struct topology *topo, struct conf_pool *cp)
 {
     string_duplicate(&topo->seed_provider, &cp->dyn_seed_provider);
+    topo->key_hash_type = cp->hash;
+    topo->key_hash = hash_algos[cp->hash];
+    topo->dist_type = cp->distribution;
+    topo->hash_tag = cp->hash_tag;
+
     return DN_OK;
 }
 
@@ -394,11 +399,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->proxy_endpoint.family = cp->listen.info.family;
     sp->proxy_endpoint.addrlen = cp->listen.info.addrlen;
     sp->proxy_endpoint.addr = (struct sockaddr *)&cp->listen.info.addr;
-
-    sp->key_hash_type = cp->hash;
-    sp->key_hash = hash_algos[cp->hash];
-    sp->dist_type = cp->distribution;
-    sp->hash_tag = cp->hash_tag;
 
     g_data_store = cp->data_store;
     if ((g_data_store != DATA_REDIS) &&

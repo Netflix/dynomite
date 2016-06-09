@@ -156,9 +156,118 @@ topo_get_rack(struct datacenter *dc, struct string *rackname)
 }
 
 rstatus_t
-topo_update(struct topology *topo)
+topo_update_now(struct topology *topo)
 {
     return vnode_update(topo);
+}
+
+static struct peer *
+get_token_owner_reroute(struct topology *topo, struct rack *rack,
+                        uint8_t *key, uint32_t keylen)
+{
+    uint32_t pos = 0;
+    struct peer *peer = NULL;
+    struct continuum *entry;
+
+    if (rack->ncontinuum > 1) {
+        do {
+            // TODO: SHAILESH: Not sure how this works, using uint32 to get offset etc
+            pos = pos % rack->ncontinuum;
+            entry = rack->continuum + pos;
+            peer = array_get(&topo->peers, entry->index);
+            pos++;
+        } while (peer->state == DOWN && pos < rack->ncontinuum);
+    }
+
+    //TODO: SHAILESH pick another server in another rack of the same DC if we don't have any good server
+    return peer;
+}
+
+static struct dyn_token *
+get_key_hash(struct topology *topo, uint8_t *key, uint32_t keylen)
+{
+    ASSERT(array_n(&topo->peers) != 0);
+    ASSERT(key != NULL && keylen != 0);
+
+    struct dyn_token *token = dn_alloc(sizeof(struct dyn_token));
+    if (token == NULL) {
+        return NULL;
+    }
+    init_dyn_token(token);
+
+    rstatus_t status = topo->key_hash((char *)key, keylen, token);
+    if (status != DN_OK) {
+        log_error("Failed to get key_hash for key %.*s", keylen, key);
+        dn_free(token);
+        return NULL;
+    }
+
+    return token;
+}
+
+static struct peer *
+get_token_owner_on_rack(struct topology *topo, struct rack *rack,
+                        uint8_t *key, uint32_t keylen)
+{
+    uint32_t idx;
+    struct dyn_token *token = NULL;
+
+    ASSERT(array_n(&topo->peers) != 0);
+
+    if (keylen == 0) {
+        idx = 0; //for no argument command, local_only
+    } else {
+        token = get_key_hash(topo, key, keylen);
+        if (!token)
+            return NULL;
+
+        //print_dyn_token(token, 1);
+        idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
+
+        //TODOs: should reuse the token
+        deinit_dyn_token(token);
+        dn_free(token);
+    }
+
+    ASSERT(idx < array_n(&topo->peers));
+
+    struct peer *peer = array_get(&topo->peers, idx);
+
+    if (peer->state == DOWN) {
+        if (!peer_is_same_dc(peer)) {
+            //pick another reroute peer in the remote DC
+            peer = get_token_owner_reroute(topo, rack, key, keylen);
+        }
+    }
+
+    if (peer)
+        log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to peer '%.*s'", keylen,
+                  key, topo->dist_type, peer->endpoint.pname.len, peer->endpoint.pname.data);
+
+    return peer;
+}
+
+struct peer*
+topo_get_peer_in_rack_for_key(struct topology *topo, struct rack *rack,
+                              uint8_t *key, uint32_t keylen, uint8_t msg_type)
+{
+    if (msg_type == 1) {  //always local
+        return array_get(&topo->peers, 0);
+    }
+
+    rstatus_t status = topo_peer_update(topo);
+    if (status != DN_OK) {
+        log_error("Failed to update topology");
+        return NULL;
+    }
+
+    /* from a given {key, keylen} pick a peer from pool */
+    struct peer *peer = get_token_owner_on_rack(topo, rack, key, keylen);
+    if (peer == NULL) {
+        log_error("What? There is no such peer in rack '%.*s' for key '%.*s'",
+                  rack->name->len, rack->name->data, keylen, key);
+    }
+    return peer;
 }
 
 void
@@ -196,7 +305,7 @@ topo_init_seeds_peers(struct context *ctx)
         struct peer *self = array_push(peers);
         ASSERT(self != NULL);
         THROW_STATUS(dnode_peer_add_local(sp, self));
-        topo_update(topo);
+        topo_update_now(topo);
         return status;
     }
 
@@ -231,7 +340,7 @@ topo_init_seeds_peers(struct context *ctx)
 
     THROW_STATUS(array_each(peers, dnode_peer_each_set_owner, sp));
 
-    THROW_STATUS(topo_update(topo));
+    THROW_STATUS(topo_update_now(topo));
 
     log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool '%.*s'",
               nseed, sp->name.len, sp->name.data);
@@ -282,6 +391,19 @@ topo_print(struct topology *topo)
 
 }
 
+rstatus_t
+topo_peer_update(struct topology *topo)
+{
+    msec_t now = dn_msec_now();
+    if (now < topo->next_rebuild) {
+        return DN_OK;
+    }
+
+    topo->next_rebuild = now + WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS;
+    //TODO: SHAILESH: Make this async
+    return topo_update_now(topo);
+}
+
 struct topology *
 topo_create(void)
 {
@@ -293,5 +415,6 @@ topo_create(void)
     array_null(&t->peers);
     array_init(&t->peers, 1, sizeof(struct peer));
     string_init(&t->seed_provider);
+    t->next_rebuild = 0;
     return t;
 }
