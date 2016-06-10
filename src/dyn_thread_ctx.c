@@ -3,7 +3,7 @@
 #include <dyn_server.h>
 
 static tid_t tid_counter = 0;
-__thread tid_t g_ptctx = NULL;
+__thread pthread_ctx g_ptctx = NULL;
 pthread_ctx
 thread_ctx_create(void)
 {

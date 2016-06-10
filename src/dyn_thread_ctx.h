@@ -5,7 +5,8 @@
 struct context;
 struct event_base;
 typedef uint16_t tid_t;
-extern __thread tid_t g_ptctx;
+typedef struct thread_ctx *pthread_ctx;
+extern __thread pthread_ctx g_ptctx;
 
 typedef struct thread_ctx {
     struct context      *ctx;
@@ -15,7 +16,6 @@ typedef struct thread_ctx {
     struct msg_tmo      tmo;
     msec_t              timeout;     /* timeout in msec */
 }thread_ctx;
-typedef struct thread_ctx *pthread_ctx;
 
 pthread_ctx thread_ctx_create(void);
 
@@ -32,3 +32,4 @@ rstatus_t thread_ctx_add_conn(pthread_ctx ptctx, struct pollable *conn);
 rstatus_t thread_ctx_del_conn(pthread_ctx ptctx, struct pollable *conn);
 rstatus_t thread_ctx_add_out(pthread_ctx ptctx, struct pollable *conn);
 rstatus_t thread_ctx_del_out(pthread_ctx ptctx, struct pollable *conn);
+rstatus_t thread_ctx_add_in(pthread_ctx ptctx, struct pollable *conn);

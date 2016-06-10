@@ -19,7 +19,7 @@ AM_CFLAGS += -Wconversion -Wsign-compare
 AM_CFLAGS += -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wmissing-declarations -Wimplicit-function-declaration
 
 AM_LDFLAGS =
-AM_LDFLAGS += -lm -lpthread -rdynamic
+AM_LDFLAGS += -lm -lpthread -rdynamic -lrt
 AM_LDFLAGS += -lssl -lcrypto
 
 if OS_SOLARIS
@@ -62,6 +62,7 @@ dynomite_SOURCES =			                          \
         dyn_string.c dyn_string.h		                  \
 		dyn_topology.c dyn_topology.h							  \
         dyn_thread_ctx.c dyn_thread_ctx.h						  \
+        dyn_thread_ipc.h dyn_thread_ipc_mq.h dyn_thread_ipc_mq.c  \
         dyn_array.c dyn_array.h		                          \
         dyn_util.c dyn_util.h		                          \
         dyn_queue.h			                          \
@@ -107,6 +108,7 @@ dynomite_test_SOURCES =                                           \
         dyn_token.c dyn_token.h                                   \
 		dyn_topology.c dyn_topology.h							  \
         dyn_thread_ctx.c dyn_thread_ctx.h						  \
+        dyn_thread_ipc.h dyn_thread_ipc_mq.h dyn_thread_ipc_mq.c  \
         dyn_rbtree.c dyn_rbtree.h                                 \
         dyn_log.c dyn_log.h                                       \
         dyn_string.c dyn_string.h                                 \
