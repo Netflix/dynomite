@@ -131,21 +131,28 @@ rstatus_t
 thread_ctx_del_conn(pthread_ctx ptctx, struct conn *conn)
 {
     log_debug(LOG_VVVERB, "ptctx %p: deleting conn %p, %s", ptctx, conn, conn_get_type_string(conn));
-    return event_del_conn(ptctx->evb, conn);
+    return event_del_conn(ptctx->evb, &conn->p);
 }
 
 rstatus_t
 thread_ctx_add_out(pthread_ctx ptctx, struct conn *conn)
 {
     log_debug(LOG_VVVERB, "ptctx %p: adding out conn %p, %s", ptctx, conn, conn_get_type_string(conn));
-    return event_add_out(ptctx->evb, conn);
+    return event_add_out(ptctx->evb, &conn->p);
 }
 
 rstatus_t
 thread_ctx_del_out(pthread_ctx ptctx, struct conn *conn)
 {
     log_debug(LOG_VVVERB, "ptctx %p: deleting out conn %p, %s", ptctx, conn, conn_get_type_string(conn));
-    return event_del_out(ptctx->evb, conn);
+    return event_del_out(ptctx->evb, &conn->p);
+}
+
+rstatus_t
+thread_ctx_add_in(pthread_ctx ptctx, struct conn *conn)
+{
+    log_debug(LOG_VVVERB, "ptctx %p: adding in conn %p, %s", ptctx, conn, conn_get_type_string(conn));
+    return event_add_in(ptctx->evb, &conn->p);
 }
 
 static void
