@@ -1517,11 +1517,14 @@ dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *ms
 /* Forward request msg to peer on rack rack.*/
 /* Requirements: peer is not a local node. So it will put the msg on the outQ
  */
-void
+rstatus_t
 dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
-                       struct peer *peer, struct msg *msg,
-                       uint8_t *key, uint32_t keylen)
+                       struct peer *peer, struct msg *msg)
 {
+    if (g_ptctx != peer->ptctx) {
+        // This peer belongs to a different thread, forward the msg to that thread
+        ASSERT(0);
+    }
     struct conn *p_conn = dnode_peer_active_conn(ctx, peer);
     if (p_conn == NULL)
     {
@@ -1529,51 +1532,42 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
         // TODO: SHAILESH How does the client connection know that it is supposed to
         // read from its outqueue i.e a message is done??
         dnode_req_forward_error(ctx, NULL, msg, DN_EHOST_DOWN);
-        return;
+        return DN_EHOST_DOWN;
     }
 
-    log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%.*s' on rack '%.*s' dc '%.*s' ",
-              dn_unresolve_peer_desc(c_conn->p.sd), peer->name.len, peer->name.data,
-              peer->rack.len, peer->rack.data,
-              peer->dc.len, peer->dc.data);
-
-    rstatus_t status;
     ASSERT((c_conn->p.type == CONN_CLIENT) ||
            (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
-    status = thread_ctx_add_out(p_conn->ptctx, conn_get_pollable(p_conn));
+    rstatus_t status = thread_ctx_add_out(p_conn->ptctx, conn_get_pollable(p_conn));
     if (status != DN_OK) {
         log_warn("Error on connection to '%.*s'. Marking it to RESET", peer->name);
         dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);
         peer->state = RESET;
         p_conn->err = errno;
-        return;
+        return status;
     }
 
     struct mbuf *header_buf = mbuf_get();
     if (header_buf == NULL) {
         loga("Unable to obtain an mbuf for dnode msg's header!");
         dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);
-        return;
+        return DN_ENOMEM;
     }
 
-    //struct server_pool *pool = &ctx->pool;
-    //dmsg_type_t msg_type = (string_compare(&pool->dc_name, dc) != 0)? DMSG_REQ_FORWARD : DMSG_REQ;
     dmsg_type_t msg_type = !p_conn->same_dc ? DMSG_REQ_FORWARD : DMSG_REQ;
 
     if (p_conn->dnode_secured) {
-        //Encrypting and adding header for a request
         log_debug(LOG_VVERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
 
-        //write dnode header
+        // TODO: SHAILESH why #define, use a config variable
         if (ENCRYPTION) {
             status = dyn_aes_encrypt_msg(msg, p_conn->aes_key);
             if (status == DN_ERROR) {
                 loga("OOM to obtain an mbuf for encryption!");
                 mbuf_put(header_buf);
                 dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);
-                return;
+                return status;
             }
 
             log_debug(LOG_VVERB, "#encrypted bytes : %d", status);
@@ -1600,9 +1594,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 
     dnode_peer_req_forward_stats(ctx, msg);
 
-    log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->p.sd, p_conn->p.sd, msg->id,
-              msg->mlen, msg->type, keylen, key);
+    return DN_OK;
 }
 
 

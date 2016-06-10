@@ -513,12 +513,15 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         }
         datastore_req_forward(c_conn, msg, key, keylen);
     } else {
-        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to peer %p", c_conn,
-                msg->id, msg->parent_id, peer);
+        log_debug(LOG_VERB, "forwarding %lu:%lu from client conn '%s' to peer conn '%.*s' on rack '%.*s' dc '%.*s' ",
+                msg->id, msg->parent_id,
+                dn_unresolve_peer_desc(c_conn->p.sd), peer->name.len, peer->name.data,
+                peer->rack.len, peer->rack.data,
+                peer->dc.len, peer->dc.data);
         if (msg->expect_datastore_reply && !msg->swallow) {
             conn_enqueue_outq(ctx, c_conn, msg);
         }
-        dnode_peer_req_forward(ctx, c_conn, peer, msg, key, keylen);
+        dnode_peer_req_forward(ctx, c_conn, peer, msg);
     }
 }
 
