@@ -733,7 +733,7 @@ req_send_next(struct context *ctx, struct conn *conn)
     nmsg = TAILQ_FIRST(&conn->imsg_q);
     if (nmsg == NULL) {
         /* nothing to send as the server inq is empty */
-        status = thread_ctx_del_out(conn->ptctx, conn);
+        status = thread_ctx_del_out(conn->ptctx, conn_get_pollable(conn));
         if (status != DN_OK) {
             conn->err = errno;
         }
@@ -1031,7 +1031,7 @@ datastore_req_forward(struct conn *c_conn, struct msg *msg, uint8_t *key,
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */
         if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-            status = thread_ctx_add_out(s_conn->ptctx, s_conn);
+            status = thread_ctx_add_out(s_conn->ptctx, conn_get_pollable(s_conn));
 
             if (status != DN_OK) {
                 client_forward_error(c_conn, msg, errno);
@@ -1055,7 +1055,7 @@ datastore_req_forward(struct conn *c_conn, struct msg *msg, uint8_t *key,
             return;
         }
 
-        status = thread_ctx_add_out(s_conn->ptctx, s_conn);
+        status = thread_ctx_add_out(s_conn->ptctx, conn_get_pollable(s_conn));
 
         if (status != DN_OK) {
             client_forward_error(c_conn, msg, errno);

@@ -1359,7 +1359,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
         }
 
         //requeue
-        status = thread_ctx_add_out(conn->ptctx, conn);
+        status = thread_ctx_add_out(conn->ptctx, conn_get_pollable(conn));
         IGNORE_RET_VAL(status);
 
         return NULL;
@@ -1507,7 +1507,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *ms
     msg_tmo_delete(&ptctx->tmo, msg);
     ASSERT(p_conn->p.type == CONN_DNODE_PEER_CLIENT);
     if (req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-        status = thread_ctx_add_out(p_conn->ptctx, p_conn);
+        status = thread_ctx_add_out(p_conn->ptctx, conn_get_pollable(p_conn));
         if (status != DN_OK) {
             p_conn->err = errno;
         }
@@ -1542,7 +1542,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
            (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
-    status = thread_ctx_add_out(p_conn->ptctx, p_conn);
+    status = thread_ctx_add_out(p_conn->ptctx, conn_get_pollable(p_conn));
     if (status != DN_OK) {
         log_warn("Error on connection to '%.*s'. Marking it to RESET", peer->name);
         dnode_req_forward_error(ctx, p_conn, msg, DN_ENOMEM);

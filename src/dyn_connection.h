@@ -88,6 +88,7 @@ typedef enum connection_type {
     CONN_DNODE_PEER_PROXY, // this is a dnode (listening) connection...default 8101
     CONN_DNODE_PEER_CLIENT, // this is connected to a dnode peer client
     CONN_DNODE_PEER_SERVER, // this is connected to a dnode peer server
+    CONN_THREAD_IPC_MQ, // this is connected to a dnode peer server
 } connection_type_t;
 
 struct pollable {
@@ -146,8 +147,12 @@ struct conn {
     dict               *outstanding_msgs_dict;
 };
 
-char * conn_get_type_string(struct conn *conn);
-char * pollable_get_type_string(struct pollable *conn);
+static inline struct pollable *conn_get_pollable(struct conn *c)
+{
+    return &c->p;
+}
+const char * conn_get_type_string(struct conn *conn);
+const char * pollable_get_type_string(struct pollable *conn);
 
 static inline rstatus_t
 conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)

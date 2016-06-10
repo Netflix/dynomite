@@ -210,7 +210,7 @@ proxy_accept(struct context *ctx, struct conn *p)
         }
     }
 
-    status = thread_ctx_add_conn(c->ptctx, c);
+    status = thread_ctx_add_conn(c->ptctx, conn_get_pollable(c));
     if (status < 0) {
         log_error("event add conn from %s %d failed: %s",conn_get_type_string(p),
                   p->p.sd, strerror(errno));

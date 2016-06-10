@@ -100,7 +100,7 @@ static pthread_spinlock_t lock;
 consistency_t g_read_consistency = DEFAULT_READ_CONSISTENCY;
 consistency_t g_write_consistency = DEFAULT_WRITE_CONSISTENCY;
 
-inline char *
+inline const char *
 conn_get_type_string(struct conn *conn)
 {
     switch(conn->p.type) {
@@ -113,11 +113,12 @@ conn_get_type_string(struct conn *conn)
                                             "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
         case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
                                             "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
+        case CONN_THREAD_IPC_MQ: return "THREAD_IPC_MQ";
     }
     return "INVALID";
 }
 
-inline char *
+inline const char *
 pollable_get_type_string(struct pollable *p)
 {
     return conn_get_type_string((struct conn*)p);
@@ -478,7 +479,7 @@ conn_close(struct context *ctx, struct conn *conn)
               conn->send_bytes,
               conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
-	rstatus_t status = thread_ctx_del_conn(conn->ptctx, conn);
+	rstatus_t status = thread_ctx_del_conn(conn->ptctx, conn_get_pollable(conn));
 	if (status < 0) {
 		log_warn("event del conn %d failed, ignored: %s",
 		          conn->p.sd, strerror(errno));
@@ -572,7 +573,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = thread_ctx_add_conn(p->ptctx, p);
+    status = thread_ctx_add_conn(p->ptctx, conn_get_pollable(p));
     if (status < 0) {
         log_error("event add conn p %d on addr '%.*s' failed: %s",
                   p->p.sd, p->pname.len, p->pname.data,
@@ -580,7 +581,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = thread_ctx_del_out(p->ptctx, p);
+    status = thread_ctx_del_out(p->ptctx, conn_get_pollable(p));
     if (status < 0) {
         log_error("event del out p %d on addr '%.*s' failed: %s",
                   p->p.sd, p->pname.len, p->pname.data,

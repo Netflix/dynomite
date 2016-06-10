@@ -314,7 +314,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             }
         }
     } else if (status == DN_OK) {
-        status = thread_ctx_add_out(conn->ptctx, conn);
+        status = thread_ctx_add_out(conn->ptctx, conn_get_pollable(conn));
         if (status != DN_OK) {
             conn->err = errno;
         }
@@ -431,7 +431,7 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 
     req->done = 1;
     //req->pre_coalesce(req);
-    rstatus_t status = thread_ctx_add_out(c_conn->ptctx, c_conn);
+    rstatus_t status = thread_ctx_add_out(c_conn->ptctx, conn_get_pollable(c_conn));
     IGNORE_RET_VAL(status);
 }
 
@@ -457,7 +457,7 @@ client_forward_error(struct conn *conn, struct msg *msg,
     }
 
     if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
-        status = thread_ctx_add_out(conn->ptctx, conn);
+        status = thread_ctx_add_out(conn->ptctx, conn_get_pollable(conn));
         if (status != DN_OK) {
             conn->err = status;
         }

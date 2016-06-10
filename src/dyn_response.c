@@ -110,7 +110,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
             log_debug(LOG_INFO, "c %d is done", conn->p.sd);
         }
 
-        status = thread_ctx_del_out(conn->ptctx, conn);
+        status = thread_ctx_del_out(conn->ptctx, conn_get_pollable(conn));
         if (status != DN_OK) {
             conn->err = errno;
         }

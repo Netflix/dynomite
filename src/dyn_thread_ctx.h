@@ -28,7 +28,7 @@ rstatus_t thread_ctx_deinit(void *elem, void *arg);
 
 rstatus_t thread_ctx_datastore_preconnect(void *elem, void *arg);
 
-rstatus_t thread_ctx_add_conn(pthread_ctx ptctx, struct conn *conn);
-rstatus_t thread_ctx_del_conn(pthread_ctx ptctx, struct conn *conn);
-rstatus_t thread_ctx_add_out(pthread_ctx ptctx, struct conn *conn);
-rstatus_t thread_ctx_del_out(pthread_ctx ptctx, struct conn *conn);
+rstatus_t thread_ctx_add_conn(pthread_ctx ptctx, struct pollable *conn);
+rstatus_t thread_ctx_del_conn(pthread_ctx ptctx, struct pollable *conn);
+rstatus_t thread_ctx_add_out(pthread_ctx ptctx, struct pollable *conn);
+rstatus_t thread_ctx_del_out(pthread_ctx ptctx, struct pollable *conn);

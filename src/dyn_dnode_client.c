@@ -197,7 +197,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
     struct msg *req = rsp->peer;
     req->peer = NULL;
     req->selected_rsp = rsp;
-    status = thread_ctx_add_out(conn->ptctx, conn);
+    status = thread_ctx_add_out(conn->ptctx, conn_get_pollable(conn));
     if (status != DN_OK) {
         conn->err = errno;
     }
