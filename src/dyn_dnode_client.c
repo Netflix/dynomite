@@ -14,7 +14,7 @@ dnode_client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -31,7 +31,7 @@ dnode_client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->p.type);
     log_debug(LOG_VVERB, "dyn: ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
@@ -41,7 +41,7 @@ dnode_client_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -58,26 +58,26 @@ dnode_client_unref(struct conn *conn)
 static bool
 dnode_client_active(struct conn *conn)
 {
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: c %d is active", conn->p.sd);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: c %d is active", conn->p.sd);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "dyn: c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: c %d is active", conn->p.sd);
         return true;
     }
 
-    log_debug(LOG_VVERB, "dyn: c %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "dyn: c %d is inactive", conn->p.sd);
 
     return false;
 }
@@ -117,11 +117,11 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     dnode_client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
-    if (conn->sd < 0) {
+    if (conn->p.sd < 0) {
         conn_unref(conn);
         conn_put(conn);
         return;
@@ -136,7 +136,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
 
         if (log_loggable(LOG_INFO)) {
            log_debug(LOG_INFO, "dyn: close c %d discarding pending req %"PRIu64" len "
-                  "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
+                  "%"PRIu32" type %d", conn->p.sd, msg->id, msg->mlen,
                   msg->type);
         }
 
@@ -155,7 +155,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
         if (msg->done) {
             if (log_loggable(LOG_INFO)) {
                log_debug(LOG_INFO, "dyn: close c %d discarding %s req %"PRIu64" len "
-                      "%"PRIu32" type %d", conn->sd,
+                      "%"PRIu32" type %d", conn->p.sd,
                       msg->error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
             }
@@ -168,7 +168,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
 
             if (log_loggable(LOG_INFO)) {
                log_debug(LOG_INFO, "dyn: close c %d schedule swallow of req %"PRIu64" "
-                      "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
+                      "len %"PRIu32" type %d", conn->p.sd, msg->id, msg->mlen,
                       msg->type);
             }
         }
@@ -177,11 +177,11 @@ dnode_client_close(struct context *ctx, struct conn *conn)
 
     conn_unref(conn);
 
-    status = close(conn->sd);
+    status = close(conn->p.sd);
     if (status < 0) {
-        log_error("dyn: close c %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("dyn: close c %d failed, ignored: %s", conn->p.sd, strerror(errno));
     }
-    conn->sd = -1;
+    conn->p.sd = -1;
 
     conn_put(conn);
 }
@@ -207,13 +207,13 @@ dnode_client_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
 static bool
 dnode_req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
         if (log_loggable(LOG_VERB)) {
            log_debug(LOG_VERB, "dyn: filter empty req %"PRIu64" from c %d", msg->id,
-                       conn->sd);
+                       conn->p.sd);
         }
         req_put(msg);
         return true;
@@ -242,9 +242,9 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
        log_debug(LOG_DEBUG, "dnode_req_forward entering ");
     }
     log_debug(LOG_DEBUG, "DNODE REQ RECEIVED %s %d dmsg->id %u",
-              conn_get_type_string(conn), conn->sd, msg->dmsg->id);
+              conn_get_type_string(conn), conn->p.sd, msg->dmsg->id);
 
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     pool = conn->owner;
     key = NULL;
@@ -304,7 +304,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s' dc '%.*s' ",
-                           dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data, rack->dc->len, rack->dc->data);
+                           dn_unresolve_peer_desc(conn->p.sd), rack->name->len, rack->name->data, rack->dc->len, rack->dc->data);
             }
 
             remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
@@ -316,7 +316,7 @@ static void
 dnode_req_recv_done(struct context *ctx, struct conn *conn,
                     struct msg *msg, struct msg *nmsg)
 {
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
     ASSERT(msg->request);
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
@@ -337,7 +337,7 @@ static void
 dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     log_debug(LOG_VERB, "conn %p enqueue outq %p", conn, msg);
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
@@ -353,7 +353,7 @@ static void
 dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
@@ -371,7 +371,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     struct msg *rsp = rsp_send_next(ctx, conn);
 
@@ -442,10 +442,10 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 
     struct msg *req; /* peer message (request) */
 
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->smsg == NULL);
 
-    log_debug(LOG_VERB, "dyn: send done rsp %"PRIu64" on c %d", rsp->id, conn->sd);
+    log_debug(LOG_VERB, "dyn: send done rsp %"PRIu64" on c %d", rsp->id, conn->p.sd);
 
     req = rsp->peer;
 
@@ -454,7 +454,7 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
     ASSERT(req->done && !req->swallow);
     log_debug(LOG_DEBUG, "DNODE RSP SENT %s %d dmsg->id %u",
               conn_get_type_string(conn),
-             conn->sd, req->dmsg->id);
+             conn->p.sd, req->dmsg->id);
 
     /* dequeue request from client outq */
     conn_dequeue_outq(ctx, conn, req);
@@ -483,6 +483,6 @@ struct conn_ops dnode_client_ops = {
 void
 init_dnode_client_conn(struct conn *conn)
 {
-    conn->type = CONN_DNODE_PEER_CLIENT;
+    conn->p.type = CONN_DNODE_PEER_CLIENT;
     conn->ops = &dnode_client_ops;
 }

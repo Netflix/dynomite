@@ -90,12 +90,19 @@ typedef enum connection_type {
     CONN_DNODE_PEER_SERVER, // this is connected to a dnode peer server
 } connection_type_t;
 
+struct pollable {
+    int sd;
+    connection_type_t   type;
+    unsigned           recv_active:1; /* recv active? */
+    unsigned           send_active:1; /* send active? */
+};
+
 struct conn {
+    struct pollable    p;
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
     void               *owner;        /* connection owner - server_pool / server */
     struct thread_ctx  *ptctx;         /* thread_ctx this connection belongs to */
 
-    int                sd;            /* socket descriptor */
     struct string      pname;
     int                family;        /* socket address family */
     socklen_t          addrlen;       /* socket length */
@@ -116,9 +123,7 @@ struct conn {
 
     uint32_t           events;        /* connection io events */
     err_t              err;           /* connection errno */
-    unsigned           recv_active:1; /* recv active? */
     unsigned           recv_ready:1;  /* recv ready? */
-    unsigned           send_active:1; /* send active? */
     unsigned           send_ready:1;  /* send ready? */
 
     unsigned           connecting:1;  /* connecting? */
@@ -139,10 +144,10 @@ struct conn {
     consistency_t      read_consistency;
     consistency_t      write_consistency;
     dict               *outstanding_msgs_dict;
-    connection_type_t  type;
 };
 
 char * conn_get_type_string(struct conn *conn);
+char * pollable_get_type_string(struct pollable *conn);
 
 static inline rstatus_t
 conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)

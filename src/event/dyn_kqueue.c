@@ -109,7 +109,7 @@ event_base_destroy(struct event_base *evb)
 }
 
 int
-event_add_in(struct event_base *evb, struct conn *c)
+event_add_in(struct event_base *evb, struct pollable *c)
 {
     struct kevent *event;
 
@@ -131,7 +131,7 @@ event_add_in(struct event_base *evb, struct conn *c)
 }
 
 int
-event_del_in(struct event_base *evb, struct conn *c)
+event_del_in(struct event_base *evb, struct pollable *c)
 {
     struct kevent *event;
 
@@ -153,7 +153,7 @@ event_del_in(struct event_base *evb, struct conn *c)
 }
 
 int
-event_add_out(struct event_base *evb, struct conn *c)
+event_add_out(struct event_base *evb, struct pollable *c)
 {
     struct kevent *event;
 
@@ -176,7 +176,7 @@ event_add_out(struct event_base *evb, struct conn *c)
 }
 
 int
-event_del_out(struct event_base *evb, struct conn *c)
+event_del_out(struct event_base *evb, struct pollable *c)
 {
     struct kevent *event;
 
@@ -199,7 +199,7 @@ event_del_out(struct event_base *evb, struct conn *c)
 }
 
 int
-event_add_conn(struct event_base *evb, struct conn *c)
+event_add_conn(struct event_base *evb, struct pollable *c)
 {
     ASSERT(evb->kq > 0);
     ASSERT(c != NULL);
@@ -215,7 +215,7 @@ event_add_conn(struct event_base *evb, struct conn *c)
 }
 
 int
-event_del_conn(struct event_base *evb, struct conn *c)
+event_del_conn(struct event_base *evb, struct pollable *c)
 {
     int i;
 

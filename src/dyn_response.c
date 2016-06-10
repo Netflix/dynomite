@@ -29,8 +29,8 @@ rsp_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
-           (conn->type == CONN_SERVER));
+    ASSERT((conn->p.type == CONN_DNODE_PEER_SERVER) ||
+           (conn->p.type == CONN_SERVER));
 
     msg = msg_get(conn, false, __FUNCTION__);
     if (msg == NULL) {
@@ -58,8 +58,8 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     uint64_t id;
     err_t err;
 
-    ASSERT((conn->type == CONN_CLIENT) ||
-           (conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((conn->p.type == CONN_CLIENT) ||
+           (conn->p.type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request && req_error(conn, msg));
     ASSERT(msg->owner == conn);
 
@@ -99,15 +99,15 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *rsp, *req; /* response and it's peer request */
 
-    ASSERT_LOG((conn->type == CONN_DNODE_PEER_CLIENT) ||
-               (conn->type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
+    ASSERT_LOG((conn->p.type == CONN_DNODE_PEER_CLIENT) ||
+               (conn->p.type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
 
     req = TAILQ_FIRST(&conn->omsg_q);
     if (req == NULL || (!req->selected_rsp && !req_done(conn, req))) {
         /* nothing is outstanding, initiate close? */
         if (req == NULL && conn->eof) {
             conn->done = 1;
-            log_debug(LOG_INFO, "c %d is done", conn->sd);
+            log_debug(LOG_INFO, "c %d is done", conn->p.sd);
         }
 
         status = thread_ctx_del_out(conn->ptctx, conn);
@@ -153,7 +153,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     conn->smsg = rsp;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", rsp->id, conn->sd);
+       log_debug(LOG_VVERB, "send next rsp %"PRIu64" on c %d", rsp->id, conn->p.sd);
     }
 
     return rsp;

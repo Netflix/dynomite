@@ -100,12 +100,12 @@ event_fd(struct event_base *evb)
 struct event_base *event_base_create(int size, event_cb_t cb);
 void event_base_destroy(struct event_base *evb);
 
-int event_add_in(struct event_base *evb, struct conn *c);
-int event_del_in(struct event_base *evb, struct conn *c);
-int event_add_out(struct event_base *evb, struct conn *c);
-int event_del_out(struct event_base *evb, struct conn *c);
-int event_add_conn(struct event_base *evb, struct conn *c);
-int event_del_conn(struct event_base *evb, struct conn *c);
+int event_add_in(struct event_base *evb, struct pollable *c);
+int event_del_in(struct event_base *evb, struct pollable *c);
+int event_add_out(struct event_base *evb, struct pollable *c);
+int event_del_out(struct event_base *evb, struct pollable *c);
+int event_add_conn(struct event_base *evb, struct pollable *c);
+int event_del_conn(struct event_base *evb, struct pollable *c);
 int event_wait(struct event_base *evb, int timeout);
 void event_loop_stats(event_stats_cb_t cb, void *arg);
 

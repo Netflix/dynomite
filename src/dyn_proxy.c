@@ -25,13 +25,14 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_proxy.h"
+#include "dyn_thread_ctx.h"
 
 static void
 proxy_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->type == CONN_PROXY);
+    ASSERT(conn->p.type == CONN_PROXY);
     ASSERT(conn->owner == NULL);
 
     conn->family = pool->proxy_endpoint.family;
@@ -43,7 +44,7 @@ proxy_ref(struct conn *conn, void *owner)
 
     /* owner of the proxy connection is the server pool */
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->p.type);
 
     log_debug(LOG_VVERB, "ref conn %p owner %p", conn, pool);
 }
@@ -53,7 +54,7 @@ proxy_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->type == CONN_PROXY);
+    ASSERT(conn->p.type == CONN_PROXY);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -69,9 +70,9 @@ proxy_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->type == CONN_PROXY);
+    ASSERT(conn->p.type == CONN_PROXY);
 
-    if (conn->sd < 0) {
+    if (conn->p.sd < 0) {
         conn_unref(conn);
         conn_put(conn);
         return;
@@ -84,11 +85,11 @@ proxy_close(struct context *ctx, struct conn *conn)
 
     conn_unref(conn);
 
-    status = close(conn->sd);
+    status = close(conn->p.sd);
     if (status < 0) {
-        log_error("close p %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("close p %d failed, ignored: %s", conn->p.sd, strerror(errno));
     }
-    conn->sd = -1;
+    conn->p.sd = -1;
 
     conn_put(conn);
 }
@@ -119,7 +120,7 @@ proxy_init(struct context *ctx)
     }
 
     log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'",
-              p->sd, pool->proxy_endpoint.pname.len,
+              p->p.sd, pool->proxy_endpoint.pname.len,
               pool->proxy_endpoint.pname.data,
 			  log_datastore,
               pool->name.len, pool->name.data);
@@ -147,16 +148,16 @@ proxy_accept(struct context *ctx, struct conn *p)
     struct conn *c;
     int sd;
 
-    ASSERT(p->type == CONN_PROXY);
-    ASSERT(p->sd > 0);
-    ASSERT(p->recv_active && p->recv_ready);
+    ASSERT(p->p.type == CONN_PROXY);
+    ASSERT(p->p.sd > 0);
+    ASSERT(p->p.recv_active && p->recv_ready);
 
     for (;;) {
-        sd = accept(p->sd, NULL, NULL);
+        sd = accept(p->p.sd, NULL, NULL);
         if (sd < 0) {
             if (errno == EINTR) {
                 log_warn("accept on %s %d not ready - eintr",
-                         conn_get_type_string(p), p->sd);
+                         conn_get_type_string(p), p->p.sd);
                 continue;
             }
 
@@ -171,7 +172,7 @@ proxy_accept(struct context *ctx, struct conn *p)
              */
 
             log_error("accept on %s %d failed: %s",
-                      conn_get_type_string(p), p->sd, strerror(errno));
+                      conn_get_type_string(p), p->p.sd, strerror(errno));
             return DN_ERROR;
         }
 
@@ -181,44 +182,44 @@ proxy_accept(struct context *ctx, struct conn *p)
     c = conn_get(p->owner, true);
     if (c == NULL) {
         log_error("get conn for CLIENT %d from %s %d failed: %s", sd,
-                  conn_get_type_string(p), p->sd, strerror(errno));
+                  conn_get_type_string(p), p->p.sd, strerror(errno));
         status = close(sd);
         if (status < 0) {
             log_error("close c %d failed, ignored: %s", sd, strerror(errno));
         }
         return DN_ENOMEM;
     }
-    c->sd = sd;
+    c->p.sd = sd;
 
     stats_pool_incr(ctx, client_connections);
 
-    status = dn_set_nonblocking(c->sd);
+    status = dn_set_nonblocking(c->p.sd);
     if (status < 0) {
         log_error("set nonblock on %s %d from p %d failed: %s",
-                  conn_get_type_string(c), c->sd, p->sd, strerror(errno));
+                  conn_get_type_string(c), c->p.sd, p->p.sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
     if (p->family == AF_INET || p->family == AF_INET6) {
-        status = dn_set_tcpnodelay(c->sd);
+        status = dn_set_tcpnodelay(c->p.sd);
         if (status < 0) {
             log_warn("set tcpnodelay on %s %d from %s %d failed, ignored: %s",
-                     conn_get_type_string(c), c->sd, conn_get_type_string(p),
-                     p->sd, strerror(errno));
+                     conn_get_type_string(c), c->p.sd, conn_get_type_string(p),
+                     p->p.sd, strerror(errno));
         }
     }
 
     status = thread_ctx_add_conn(c->ptctx, c);
     if (status < 0) {
         log_error("event add conn from %s %d failed: %s",conn_get_type_string(p),
-                  p->sd, strerror(errno));
+                  p->p.sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
     log_notice("accepted %s %d on %s %d from '%s'", conn_get_type_string(c),
-               c->sd, conn_get_type_string(p), p->sd, dn_unresolve_peer_desc(c->sd));
+               c->p.sd, conn_get_type_string(p), p->p.sd, dn_unresolve_peer_desc(c->p.sd));
 
     return DN_OK;
 }
@@ -228,8 +229,8 @@ proxy_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->type == CONN_PROXY);
-    ASSERT(conn->recv_active);
+    ASSERT(conn->p.type == CONN_PROXY);
+    ASSERT(conn->p.recv_active);
 
     conn->recv_ready = 1;
     do {
@@ -264,7 +265,7 @@ struct conn_ops proxy_ops = {
 void
 init_proxy_conn(struct conn *conn)
 {
-    conn->type = CONN_PROXY;
+    conn->p.type = CONN_PROXY;
     conn->ops = &proxy_ops;
 }
 

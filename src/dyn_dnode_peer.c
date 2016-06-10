@@ -61,7 +61,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
 {
     struct peer *peer = owner;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner == NULL);
 
     conn->family = peer->endpoint.family;
@@ -80,7 +80,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->same_dc = peer_is_same_dc(peer)? 1 : 0;
 
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn->p.type);
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
@@ -93,7 +93,7 @@ dnode_peer_unref(struct conn *conn)
 {
     struct peer *peer;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner != NULL);
 
     peer = conn->owner;
@@ -113,7 +113,7 @@ dnode_peer_timeout(struct msg *msg, struct conn *conn)
     struct peer *server;
     struct server_pool *pool;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     server = conn->owner;
     pool = server->owner;
@@ -133,29 +133,29 @@ dnode_peer_timeout(struct msg *msg, struct conn *conn)
 static bool
 dnode_peer_active(struct conn *conn)
 {
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     if (!TAILQ_EMPTY(&conn->imsg_q)) {
-        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->p.sd);
         return true;
     }
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->p.sd);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->p.sd);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "dyn: s %d is active", conn->sd);
+        log_debug(LOG_VVERB, "dyn: s %d is active", conn->p.sd);
         return true;
     }
 
-    log_debug(LOG_VVERB, "dyn: s %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "dyn: s %d is inactive", conn->p.sd);
 
     return false;
 }
@@ -258,15 +258,15 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
         (req->owner == conn)) // a gossip message that originated on this conn
     {
         log_info("close %s %d swallow req %u:%u len %"PRIu32
-                 " type %d", conn_get_type_string(conn), conn->sd, req->id,
+                 " type %d", conn_get_type_string(conn), conn->p.sd, req->id,
                  req->parent_id, req->mlen, req->type);
         req_put(req);
         return;
     }
     struct conn *c_conn = req->owner;
     // At other connections, these responses would be swallowed.
-    ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
-               (c_conn->type == CONN_DNODE_PEER_CLIENT),
+    ASSERT_LOG((c_conn->p.type == CONN_CLIENT) ||
+               (c_conn->p.type == CONN_DNODE_PEER_CLIENT),
                "conn:%s c_conn:%s, req %d:%d", conn_get_type_string(conn),
                conn_get_type_string(c_conn), req->id, req->parent_id);
 
@@ -283,8 +283,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 
     log_info("close %s %d req %u:%u "
              "len %"PRIu32" type %d from c %d%c %s", conn_get_type_string(conn),
-             conn->sd, req->id, req->parent_id, req->mlen, req->type,
-             c_conn->sd, conn->err ? ':' : ' ',
+             conn->p.sd, req->id, req->parent_id, req->mlen, req->type,
+             c_conn->p.sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rstatus_t status =
             conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
@@ -379,11 +379,11 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", peer->endpoint.pname.len,
             peer->endpoint.pname.data);
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     dnode_peer_close_stats(ctx, conn);
 
-    if (conn->sd < 0) {
+    if (conn->p.sd < 0) {
         dnode_peer_failure(ctx, conn->owner);
         conn_unref(conn);
         conn_put(conn);
@@ -420,7 +420,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     log_warn("close %s %d Dropped %u outqueue & %u inqueue requests",
-             conn_get_type_string(conn), conn->sd, out_counter, in_counter);
+             conn_get_type_string(conn), conn->p.sd, out_counter, in_counter);
     msg = conn->rmsg;
     if (msg != NULL) {
         conn->rmsg = NULL;
@@ -431,7 +431,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         rsp_put(msg);
 
         log_debug(LOG_INFO, "dyn: close s %d discarding rsp %"PRIu64" len %"PRIu32" "
-                "in error", conn->sd, msg->id, msg->mlen);
+                "in error", conn->p.sd, msg->id, msg->mlen);
     }
 
     ASSERT(conn->smsg == NULL);
@@ -440,11 +440,11 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     conn_unref(conn);
 
-    status = close(conn->sd);
+    status = close(conn->p.sd);
     if (status < 0) {
-        log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("dyn: close s %d failed, ignored: %s", conn->p.sd, strerror(errno));
     }
-    conn->sd = -1;
+    conn->p.sd = -1;
 
     conn_put(conn);
 }
@@ -500,15 +500,15 @@ dnode_peer_close_socket(struct conn *conn)
     rstatus_t status;
     log_debug(LOG_VERB, "In %s", __FUNCTION__);
 
-    if ((conn != NULL) && (conn->sd >= 0)) {
-        status = close(conn->sd);
+    if ((conn != NULL) && (conn->p.sd >= 0)) {
+        status = close(conn->p.sd);
         if (status < 0) {
-            log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
+            log_error("dyn: close s %d failed, ignored: %s", conn->p.sd, strerror(errno));
         }
     }
 
     conn->dnode_crypto_state = 0;
-    conn->sd = -1;
+    conn->p.sd = -1;
 }
 
 
@@ -554,7 +554,7 @@ dnode_peer_forward_state(void *rmsg)
     status = conn_connect(sp->ctx, conn);
     if (status != DN_OK ) {
         dnode_peer_close(sp->ctx, conn);
-        log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
+        log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->p.sd);
         return DN_ERROR;
     }
 
@@ -629,7 +629,7 @@ dnode_peer_handshake_announcing(void *rmsg)
         status = conn_connect(sp->ctx, conn);
         if (status != DN_OK ) {
             dnode_peer_close(sp->ctx, conn);
-            log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
+            log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->p.sd);
             return DN_ERROR;
         }
 
@@ -867,7 +867,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 {
     struct peer *server = conn->owner;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connecting && !conn->connected);
 
     stats_pool_incr(ctx, peer_connections);
@@ -876,7 +876,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
     conn->connected = 1;
 
     if (log_loggable(LOG_INFO)) {
-        log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->sd,
+        log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->p.sd,
                 server->endpoint.pname.len, server->endpoint.pname.data);
     }
 }
@@ -886,7 +886,7 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
 {
     struct peer *server = conn->owner;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connected);
 
     if (server->failure_count != 0) {
@@ -986,7 +986,7 @@ dnode_peer_pool_deinit(struct array *server_pool)
 static struct msg *
 dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     return rsp_recv_next(ctx, conn, alloc);
 }
@@ -996,12 +996,12 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
         log_debug(LOG_VERB, "dyn: filter empty rsp %"PRIu64" on s %d", msg->id,
-                conn->sd);
+                conn->p.sd);
         rsp_put(msg);
         return true;
     }
@@ -1009,7 +1009,7 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     pmsg = TAILQ_FIRST(&conn->omsg_q);
     if (pmsg == NULL) {
         log_debug(LOG_INFO, "dyn: filter stray rsp %"PRIu64" len %"PRIu32" on s %d expect_datastore_reply %d",
-                msg->id, msg->mlen, conn->sd, msg->expect_datastore_reply);
+                msg->id, msg->mlen, conn->p.sd, msg->expect_datastore_reply);
         rsp_put(msg);
         return true;
     }
@@ -1037,7 +1037,7 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
     if (rsp) {
         log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
                   "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
-                  peer_conn->sd);
+                  peer_conn->p.sd);
         rsp_put(rsp);
     }
     req_put(req);
@@ -1079,7 +1079,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
               conn_get_type_string(peer_conn),
-              peer_conn->sd, rsp->dmsg->id,
+              peer_conn->p.sd, rsp->dmsg->id,
               req->id, req->parent_id, rsp->id, rsp->parent_id);
     ASSERT(req != NULL && req->peer == NULL);
     ASSERT(req->request && !req->done);
@@ -1107,8 +1107,8 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     g_pre_coalesce(rsp);
 
-    ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
-               (c_conn->type == CONN_DNODE_PEER_CLIENT),
+    ASSERT_LOG((c_conn->p.type == CONN_CLIENT) ||
+               (c_conn->p.type == CONN_DNODE_PEER_CLIENT),
                "c_conn type %s", conn_get_type_string(c_conn));
 
     dnode_rsp_forward_stats(ctx, rsp);
@@ -1134,7 +1134,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
     struct msg *req;
     struct conn *c_conn;
 
-    ASSERT(peer_conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(peer_conn->p.type == CONN_DNODE_PEER_SERVER);
 
     /* response from a peer implies that peer is ok and heartbeating */
     dnode_peer_ok(ctx, peer_conn);
@@ -1158,7 +1158,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         // Report a mismatch and try to rectify
         log_error("MISMATCH: dnode %s %d rsp_dmsg_id %u req %u:%u dnode rsp %u:%u",
                   conn_get_type_string(peer_conn),
-                  peer_conn->sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
+                  peer_conn->p.sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
                   rsp->parent_id);
         if (c_conn && conn_to_ctx(c_conn))
             stats_pool_incr(conn_to_ctx(c_conn),
@@ -1193,7 +1193,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 
         log_error("MISMATCHED DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",
                   conn_get_type_string(peer_conn),
-                 peer_conn->sd, rsp->dmsg->id,
+                 peer_conn->p.sd, rsp->dmsg->id,
                  req->id, req->parent_id, rsp->id, rsp->parent_id);
         ASSERT(req != NULL && req->peer == NULL);
         ASSERT(req->request && !req->done);
@@ -1220,7 +1220,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         err_rsp->peer = req;
 
         log_error("Peer connection s %d skipping request %u:%u, dummy err_rsp %u:%u",
-                 peer_conn->sd, req->id, req->parent_id, err_rsp->id, err_rsp->parent_id);
+                 peer_conn->p.sd, req->id, req->parent_id, err_rsp->id, err_rsp->parent_id);
         rstatus_t status =
             conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
                                 err_rsp);
@@ -1238,7 +1238,7 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 {
     log_debug(LOG_VERB, "dnode_rsp_recv_done entering ...");
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     ASSERT(msg != NULL && conn->rmsg == msg);
     ASSERT(!msg->request);
     ASSERT(msg->owner == conn);
@@ -1274,7 +1274,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
     rstatus_t status;
     struct msg *pmsg;
 
-    //ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
+    //ASSERT(p_conn->p.type == CONN_DNODE_PEER_CLIENT);
 
     //add messsage
     struct mbuf *nbuf = mbuf_get();
@@ -1338,7 +1338,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     // TODO: Not the right way to use time_t directly. FIXME
     uint32_t now = (uint32_t)time(NULL);
@@ -1375,10 +1375,10 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     if (log_loggable(LOG_DEBUG)) {
        log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
     }
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     // TODO: crashes because dmsg is NULL :(
     /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
-              conn_get_type_string(conn), conn->sd, msg->dmsg->id);*/
+              conn_get_type_string(conn), conn->p.sd, msg->dmsg->id);*/
 
     if (!conn->same_dc)
         msg->remote_region_send_time = dn_usec_now();
@@ -1389,7 +1389,7 @@ static void
 dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
               conn, msg->id, msg->parent_id);
@@ -1417,7 +1417,7 @@ static void
 dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
@@ -1438,7 +1438,7 @@ static void
 dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
@@ -1459,7 +1459,7 @@ static void
 dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
     pthread_ctx ptctx = conn->ptctx;
     msg_tmo_delete(&ptctx->tmo, msg);
@@ -1505,7 +1505,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *ms
         return;
     pthread_ctx ptctx = p_conn->ptctx;
     msg_tmo_delete(&ptctx->tmo, msg);
-    ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
+    ASSERT(p_conn->p.type == CONN_DNODE_PEER_CLIENT);
     if (req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
         status = thread_ctx_add_out(p_conn->ptctx, p_conn);
         if (status != DN_OK) {
@@ -1533,13 +1533,13 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     }
 
     log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%.*s' on rack '%.*s' dc '%.*s' ",
-              dn_unresolve_peer_desc(c_conn->sd), peer->name.len, peer->name.data,
+              dn_unresolve_peer_desc(c_conn->p.sd), peer->name.len, peer->name.data,
               peer->rack.len, peer->rack.data,
               peer->dc.len, peer->dc.data);
 
     rstatus_t status;
-    ASSERT((c_conn->type == CONN_CLIENT) ||
-           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((c_conn->p.type == CONN_CLIENT) ||
+           (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
     status = thread_ctx_add_out(p_conn->ptctx, p_conn);
@@ -1601,7 +1601,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     dnode_peer_req_forward_stats(ctx, msg);
 
     log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
+              " type %d with key '%.*s'", c_conn->p.sd, p_conn->p.sd, msg->id,
               msg->mlen, msg->type, keylen, key);
 }
 
@@ -1628,7 +1628,7 @@ struct conn_ops dnode_peer_ops = {
 void
 init_dnode_peer_conn(struct conn *conn)
 {
-    conn->type = CONN_DNODE_PEER_SERVER;
+    conn->p.type = CONN_DNODE_PEER_SERVER;
     conn->ops = &dnode_peer_ops;
 }
 

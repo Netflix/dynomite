@@ -16,7 +16,7 @@ dnode_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner == NULL);
 
     conn->family = pool->dnode_proxy_endpoint.family;
@@ -28,7 +28,7 @@ dnode_ref(struct conn *conn, void *owner)
 
     /* owner of the proxy connection is the server pool */
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->p.type);
 
     log_debug(LOG_VVERB, "ref conn %p owner %p", conn, pool);
 }
@@ -38,7 +38,7 @@ dnode_unref(struct conn *conn)
 {
     struct server_pool *pool;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner != NULL);
 
     pool = conn->owner;
@@ -54,9 +54,9 @@ dnode_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
     
-    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_PROXY);
 
-    if (conn->sd < 0) {
+    if (conn->p.sd < 0) {
         conn_unref(conn);
         conn_put(conn);
         return;
@@ -69,11 +69,11 @@ dnode_close(struct context *ctx, struct conn *conn)
 
     conn_unref(conn);
 
-    status = close(conn->sd);
+    status = close(conn->p.sd);
     if (status < 0) {
-        log_error("close p %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("close p %d failed, ignored: %s", conn->p.sd, strerror(errno));
     }
-    conn->sd = -1;
+    conn->p.sd = -1;
 
     conn_put(conn);
 }
@@ -103,7 +103,7 @@ dnode_init(struct context *ctx)
     }
 
     log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'"
-              " with %"PRIu32" servers", p->sd, pool->dnode_proxy_endpoint.pname.len,
+              " with %"PRIu32" servers", p->p.sd, pool->dnode_proxy_endpoint.pname.len,
               pool->dnode_proxy_endpoint.pname.data,
 			  log_datastore,
               pool->name.len, pool->name.data );
@@ -131,17 +131,17 @@ dnode_accept(struct context *ctx, struct conn *p)
     socklen_t client_len = sizeof(client_address);
     int sd = 0;
 
-    ASSERT(p->type == CONN_DNODE_PEER_PROXY);
-    ASSERT(p->sd > 0);
-    ASSERT(p->recv_active && p->recv_ready);
+    ASSERT(p->p.type == CONN_DNODE_PEER_PROXY);
+    ASSERT(p->p.sd > 0);
+    ASSERT(p->p.recv_active && p->recv_ready);
 
     
     for (;;) {
-        sd = accept(p->sd, (struct sockaddr *)&client_address, &client_len);
+        sd = accept(p->p.sd, (struct sockaddr *)&client_address, &client_len);
         if (sd < 0) {
             if (errno == EINTR) {
                 log_warn("dyn: accept on %s %d not ready - eintr",
-                         conn_get_type_string(p), p->sd);
+                         conn_get_type_string(p), p->p.sd);
                 continue;
             }
 
@@ -156,7 +156,7 @@ dnode_accept(struct context *ctx, struct conn *p)
              */
 
             log_error("dyn: accept on %s %d failed: %s", conn_get_type_string(p),
-                      p->sd, strerror(errno));
+                      p->p.sd, strerror(errno));
             return DN_ERROR;
         }
 
@@ -174,44 +174,44 @@ dnode_accept(struct context *ctx, struct conn *p)
     c = conn_get_peer(p->owner, true);
     if (c == NULL) {
         log_error("dyn: get conn client peer for PEER_CLIENT %d from %s %d failed: %s",
-                  sd, conn_get_type_string(p), p->sd, strerror(errno));
+                  sd, conn_get_type_string(p), p->p.sd, strerror(errno));
         status = close(sd);
         if (status < 0) {
             log_error("dyn: close c %d failed, ignored: %s", sd, strerror(errno));
         }
         return DN_ENOMEM;
     }
-    c->sd = sd;
+    c->p.sd = sd;
 
     stats_pool_incr(ctx, dnode_client_connections);
 
-    status = dn_set_nonblocking(c->sd);
+    status = dn_set_nonblocking(c->p.sd);
     if (status < 0) {
         log_error("dyn: set nonblock on s %d from peer socket %d failed: %s",
-                  c->sd, p->sd, strerror(errno));
+                  c->p.sd, p->p.sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
     if (p->family == AF_INET || p->family == AF_INET6) {
-        status = dn_set_tcpnodelay(c->sd);
+        status = dn_set_tcpnodelay(c->p.sd);
         if (status < 0) {
             log_warn("dyn: set tcpnodelay on %d from peer socket %d failed, ignored: %s",
-                     c->sd, p->sd, strerror(errno));
+                     c->p.sd, p->p.sd, strerror(errno));
         }
     }
 
     status = thread_ctx_add_conn(c->ptctx, c);
     if (status < 0) {
         log_error("dyn: event add conn from %s %d failed: %s",
-                  conn_get_type_string(p), p->sd, strerror(errno));
+                  conn_get_type_string(p), p->p.sd, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
     log_notice("dyn: accepted %s %d on %s %d from '%s'",
-               conn_get_type_string(c), c->sd, conn_get_type_string(p), p->sd,
-               dn_unresolve_peer_desc(c->sd));
+               conn_get_type_string(c), c->p.sd, conn_get_type_string(p), p->p.sd,
+               dn_unresolve_peer_desc(c->p.sd));
 
     return DN_OK;
 }
@@ -221,8 +221,8 @@ dnode_recv(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
 
-    ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
-    ASSERT(conn->recv_active);
+    ASSERT(conn->p.type == CONN_DNODE_PEER_PROXY);
+    ASSERT(conn->p.recv_active);
  
     conn->recv_ready = 1;
     do {
@@ -256,6 +256,6 @@ struct conn_ops dnode_server_ops = {
 void
 init_dnode_proxy_conn(struct conn *conn)
 {
-    conn->type = CONN_DNODE_PEER_PROXY;
+    conn->p.type = CONN_DNODE_PEER_PROXY;
     conn->ops = &dnode_server_ops;
 }

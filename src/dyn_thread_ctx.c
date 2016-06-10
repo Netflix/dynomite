@@ -19,14 +19,14 @@ thread_ctx_core(void *arg, uint32_t events)
 	struct context *ctx = conn_to_ctx(conn);
 
     log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
-              conn_get_type_string(conn), conn->sd);
+              conn_get_type_string(conn), conn->p.sd);
 
 	conn->events = events;
 
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {
         log_debug(LOG_VVVERB, "handing error on %s %d",
-                  conn_get_type_string(conn), conn->sd);
+                  conn_get_type_string(conn), conn->p.sd);
 		if (conn->err && conn->dyn_mode) {
 			loga("conn err on dnode EVENT_ERR: %d", conn->err);
 		}
@@ -38,7 +38,7 @@ thread_ctx_core(void *arg, uint32_t events)
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
         log_debug(LOG_VVVERB, "handing read on %s %d",
-                  conn_get_type_string(conn), conn->sd);
+                  conn_get_type_string(conn), conn->p.sd);
 		status = conn_recv(ctx, conn);
 
 		if (status != DN_OK || conn->done || conn->err) {
@@ -58,7 +58,7 @@ thread_ctx_core(void *arg, uint32_t events)
 
 	if (events & EVENT_WRITE) {
         log_debug(LOG_VVVERB, "handing write on %s %d",
-                  conn_get_type_string(conn), conn->sd);
+                  conn_get_type_string(conn), conn->p.sd);
 		status = conn_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
 			if (conn->dyn_mode) {
@@ -186,19 +186,19 @@ thread_ctx_timeout(pthread_ctx ptctx)
 		}
 
         log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", msg->id,
-                 conn_get_type_string(conn), conn->sd, msg->tmo_rbe.timeout);
+                 conn_get_type_string(conn), conn->p.sd, msg->tmo_rbe.timeout);
 
 		msg_tmo_delete(&ptctx->tmo, msg);
 
 		if (conn->dyn_mode) {
-			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
+			if (conn->p.type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
                 if (conn->same_dc)
 			        stats_pool_incr(ctx, peer_timedout_requests);
                 else
 			        stats_pool_incr(ctx, remote_peer_timedout_requests);
 			}
 		} else {
-			if (conn->type == CONN_SERVER) { //storage server requests
+			if (conn->p.type == CONN_SERVER) { //storage server requests
 			   stats_server_incr(ctx, server_dropped_requests);
 			}
 		}

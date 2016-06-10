@@ -242,7 +242,7 @@ _msg_get(struct conn *conn, const char *const caller)
 
 
     log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
-            alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
+            alloc_msg_count, caller, conn_get_type_string(conn), conn->p.sd);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -373,7 +373,7 @@ msg_get(struct conn *conn, bool request, const char * const caller)
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
-              msg, msg->id, msg->request, conn->sd);
+              msg, msg->id, msg->request, conn->p.sd);
     }
 
     return msg;
@@ -717,8 +717,8 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *nmsg;  /* new message */
     struct mbuf *nbuf; /* new mbuf */
 
-    ASSERT((conn->type == CONN_CLIENT) ||
-           (conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((conn->p.type == CONN_CLIENT) ||
+           (conn->p.type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request);
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, g_pre_splitcopy, msg);
@@ -1006,7 +1006,7 @@ msg_recv(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg;
 
-    ASSERT(conn->recv_active);
+    ASSERT(conn->p.recv_active);
     conn->recv_ready = 1;
 
     do {
@@ -1155,7 +1155,7 @@ msg_send(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg;
 
-    ASSERT(conn->send_active);
+    ASSERT(conn->p.send_active);
 
     conn->send_ready = 1;
     do {

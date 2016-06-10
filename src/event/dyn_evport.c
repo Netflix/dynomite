@@ -94,19 +94,19 @@ event_base_destroy(struct event_base *evb)
 }
 
 int
-event_add_in(struct event_base *evb, struct conn *c)
+event_add_in(struct event_base *evb, struct pollable *c)
 {
     return 0;
 }
 
 int
-event_del_in(struct event_base *evb, struct conn *c)
+event_del_in(struct event_base *evb, struct pollable *c)
 {
     return 0;
 }
 
 int
-event_add_out(struct event_base *evb, struct conn *c)
+event_add_out(struct event_base *evb, struct pollable *c)
 {
     int status;
     int evp = evb->evp;
@@ -132,7 +132,7 @@ event_add_out(struct event_base *evb, struct conn *c)
 }
 
 int
-event_del_out(struct event_base *evb, struct conn *c)
+event_del_out(struct event_base *evb, struct pollable *c)
 {
     int status;
     int evp = evb->evp;
@@ -158,7 +158,7 @@ event_del_out(struct event_base *evb, struct conn *c)
 }
 
 int
-event_add_conn(struct event_base *evb, struct conn *c)
+event_add_conn(struct event_base *evb, struct pollable *c)
 {
     int status;
     int evp = evb->evp;
@@ -182,7 +182,7 @@ event_add_conn(struct event_base *evb, struct conn *c)
 }
 
 int
-event_del_conn(struct event_base *evb, struct conn *c)
+event_del_conn(struct event_base *evb, struct pollable *c)
 {
     int status;
     int evp = evb->evp;
@@ -218,7 +218,7 @@ event_del_conn(struct event_base *evb, struct conn *c)
 }
 
 static int
-event_reassociate(struct event_base *evb, struct conn *c)
+event_reassociate(struct event_base *evb, struct pollable *c)
 {
     int status, events;
     int evp = evb->evp;

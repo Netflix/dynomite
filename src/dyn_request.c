@@ -29,8 +29,8 @@ req_get(struct conn *conn)
 {
     struct msg *msg;
 
-    ASSERT((conn->type == CONN_CLIENT) ||
-           (conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((conn->p.type == CONN_CLIENT) ||
+           (conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     msg = msg_get(conn, true, __FUNCTION__);
     if (msg == NULL) {
@@ -83,8 +83,8 @@ req_done(struct conn *conn, struct msg *msg)
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
-    ASSERT((conn->type == CONN_CLIENT) ||
-           (conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((conn->p.type == CONN_CLIENT) ||
+           (conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     if (msg == NULL || (!msg->done && !msg->selected_rsp)) {
         return false;
@@ -156,7 +156,7 @@ req_done(struct conn *conn, struct msg *msg)
     g_post_coalesce(msg->frag_owner);
 
     log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
-              "fragments is done", conn->sd, id, nfragment);
+              "fragments is done", conn->p.sd, id, nfragment);
 
     return true;
 }
@@ -238,7 +238,7 @@ ferror:
     }
 
     log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
-              "fragments is in error", conn->sd, id, nfragment);
+              "fragments is in error", conn->p.sd, id, nfragment);
 
     return true;
 }

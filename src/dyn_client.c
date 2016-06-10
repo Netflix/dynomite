@@ -83,7 +83,7 @@ client_ref(struct conn *conn, void *owner)
 {
     struct server_pool *pool = owner;
 
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
     ASSERT(conn->owner == NULL);
 
     /*
@@ -100,7 +100,7 @@ client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->p.type);
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->waiting_to_unref = 0;
 
@@ -131,7 +131,7 @@ client_unref_internal_try_put(struct conn *conn)
 static void
 client_unref_and_try_put(struct conn *conn)
 {
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
 
     struct server_pool *pool;
     pool = conn->owner;
@@ -152,26 +152,26 @@ client_unref(struct conn *conn)
 static bool
 client_active(struct conn *conn)
 {
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "c %d is active", conn->p.sd);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "c %d is active", conn->p.sd);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "c %d is active", conn->p.sd);
         return true;
     }
 
-    log_debug(LOG_VVERB, "c %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "c %d is inactive", conn->p.sd);
 
     return false;
 }
@@ -209,11 +209,11 @@ client_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg, *nmsg; /* current and next message */
 
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
 
     client_close_stats(ctx, conn->owner, conn->err, conn->eof);
 
-    if (conn->sd < 0) {
+    if (conn->p.sd < 0) {
         client_unref(conn);
         return;
     }
@@ -226,7 +226,7 @@ client_close(struct context *ctx, struct conn *conn)
         ASSERT(msg->request && !msg->done);
 
         log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
-                  "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
+                  "%"PRIu32" type %d", conn->p.sd, msg->id, msg->mlen,
                   msg->type);
 
         req_put(msg);
@@ -243,7 +243,7 @@ client_close(struct context *ctx, struct conn *conn)
 
         if (msg->done) {
             log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
-                      "%"PRIu32" type %d", conn->sd,
+                      "%"PRIu32" type %d", conn->p.sd,
                       msg->error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
             req_put(msg);
@@ -254,7 +254,7 @@ client_close(struct context *ctx, struct conn *conn)
             ASSERT(msg->peer == NULL);
 
             log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
-                      "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
+                      "len %"PRIu32" type %d", conn->p.sd, msg->id, msg->mlen,
                       msg->type);
         }
 
@@ -262,11 +262,11 @@ client_close(struct context *ctx, struct conn *conn)
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    status = close(conn->sd);
+    status = close(conn->p.sd);
     if (status < 0) {
-        log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("close c %d failed, ignored: %s", conn->p.sd, strerror(errno));
     }
-    conn->sd = -1;
+    conn->p.sd = -1;
     client_unref(conn);
 }
 
@@ -281,7 +281,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     }
     rsp->peer = NULL;
     // now the handler owns the response. the caller owns the request
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
     // Fetch the original request
     struct msg *req = dictFetchValue(conn->outstanding_msgs_dict, &reqid);
     if (!req) {
@@ -327,8 +327,8 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
     struct msg *msg;
 
-    ASSERT((conn->type == CONN_DNODE_PEER_CLIENT) ||
-           (conn->type = CONN_CLIENT));
+    ASSERT((conn->p.type == CONN_DNODE_PEER_CLIENT) ||
+           (conn->p.type = CONN_CLIENT));
 
     if (conn->eof) {
         msg = conn->rmsg;
@@ -350,7 +350,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             ASSERT(msg->request && !msg->done);
 
             log_error("eof c %d discarding incomplete req %"PRIu64" len "
-                      "%"PRIu32"", conn->sd, msg->id, msg->mlen);
+                      "%"PRIu32"", conn->p.sd, msg->id, msg->mlen);
 
             req_put(msg);
         }
@@ -364,7 +364,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          */
         if (!conn_active(conn)) {
             conn->done = 1;
-            log_debug(LOG_INFO, "c %d is done", conn->sd);
+            log_debug(LOG_INFO, "c %d is done", conn->p.sd);
         }
 
         return NULL;
@@ -391,12 +391,12 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 static bool
 req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
 
     if (msg_empty(msg)) {
         ASSERT(conn->rmsg == NULL);
         log_debug(LOG_VERB, "filter empty req %"PRIu64" from c %d", msg->id,
-                  conn->sd);
+                  conn->p.sd);
         req_put(msg);
         return true;
     }
@@ -408,7 +408,7 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
     if (msg->quit) {
         ASSERT(conn->rmsg == NULL);
         log_debug(LOG_INFO, "filter quit req %"PRIu64" from c %d", msg->id,
-                  conn->sd);
+                  conn->p.sd);
         conn->eof = 1;
         conn->recv_ready = 0;
         req_put(msg);
@@ -443,7 +443,7 @@ client_forward_error(struct conn *conn, struct msg *msg,
 
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
-                 "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
+                 "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->p.sd,
                  dn_strerror(err));
     }
 
@@ -469,8 +469,8 @@ static void
 admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    ASSERT((c_conn->type == CONN_CLIENT) ||
-           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((c_conn->p.type == CONN_CLIENT) ||
+           (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     struct peer *peer = topo_get_peer_in_rack_for_key(ctx_get_topology(ctx), rack,
                                                       key, keylen, msg->msg_type);
@@ -495,8 +495,8 @@ void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    ASSERT((c_conn->type == CONN_CLIENT) ||
-           (c_conn->type == CONN_DNODE_PEER_CLIENT));
+    ASSERT((c_conn->p.type == CONN_CLIENT) ||
+           (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     struct peer *peer = topo_get_peer_in_rack_for_key(ctx_get_topology(ctx), rack, key,
                                          keylen, msg->msg_type);
@@ -556,7 +556,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
 
         if (log_loggable(LOG_DEBUG)) {
             log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-                    dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+                    dn_unresolve_peer_desc(c_conn->p.sd), rack->name->len, rack->name->data);
         }
         log_debug(LOG_VERB, "c_conn: %p forwarding (%d:%d)",
                 c_conn, rack_msg->id, rack_msg->parent_id);
@@ -610,7 +610,7 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
 
     if (log_loggable(LOG_DEBUG)) {
         log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-                dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+                dn_unresolve_peer_desc(c_conn->p.sd), rack->name->len, rack->name->data);
     }
     remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
 }
@@ -647,7 +647,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 {
     struct server_pool *pool = c_conn->owner;
 
-    ASSERT(c_conn->type == CONN_CLIENT);
+    ASSERT(c_conn->p.type == CONN_CLIENT);
     incr_client_stats(ctx, msg);
 
     // add the message to the dict
@@ -698,7 +698,7 @@ void
 req_recv_done(struct context *ctx, struct conn *conn,
               struct msg *msg, struct msg *nmsg)
 {
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
     ASSERT(msg->request);
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
@@ -781,7 +781,7 @@ static void
 req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
 
     conn->omsg_count++;
     histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
@@ -793,7 +793,7 @@ static void
 req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     ASSERT(msg->request);
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
 
     if (msg->stime_in_microsec) {
         usec_t latency = dn_usec_now() - msg->stime_in_microsec;
@@ -808,7 +808,7 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 static void
 client_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 {
-    ASSERT(conn->type == CONN_CLIENT);
+    ASSERT(conn->p.type == CONN_CLIENT);
     ASSERT(conn->smsg == NULL);
 
     log_debug(LOG_VERB, "conn %p rsp %p done", conn, rsp);
@@ -856,6 +856,6 @@ struct conn_ops client_ops = {
 void
 init_client_conn(struct conn *conn)
 {
-    conn->type = CONN_CLIENT;
+    conn->p.type = CONN_CLIENT;
     conn->ops = &client_ops;
 }
