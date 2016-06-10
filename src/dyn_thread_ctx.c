@@ -3,6 +3,7 @@
 #include <dyn_server.h>
 
 static tid_t tid_counter = 0;
+__thread tid_t g_ptctx = NULL;
 pthread_ctx
 thread_ctx_create(void)
 {
@@ -212,6 +213,7 @@ rstatus_t
 thread_ctx_run_once(pthread_ctx ptctx)
 {
 	int nsd;
+    g_ptctx = ptctx;
 	nsd = event_wait(ptctx->evb, (int)ptctx->timeout);
 	if (nsd < 0) {
 		return nsd;

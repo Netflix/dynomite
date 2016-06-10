@@ -11,13 +11,14 @@
 
 #define WAIT_BEFORE_RECONNECT_IN_MILLIS      30000
 #define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
-
+#include <dyn_thread_ctx.h>
 struct peer {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
     struct conn        *conn;         /* active connection to peer */
+    pthread_ctx        ptctx;
 
     msec_t             next_retry;    /* next retry time in msec */
     uint32_t           failure_count; /* # consecutive failures */
@@ -36,8 +37,8 @@ msec_t dnode_peer_timeout(struct msg *msg, struct conn *conn);
 void dnode_peer_connected(struct context *ctx, struct conn *conn);
 void dnode_peer_deinit(struct array *nodes);
 rstatus_t dnode_peer_add_local(struct server_pool *pool, struct peer *self);
-rstatus_t dnode_peer_each_set_evb(void *elem, void *data);
 rstatus_t dnode_peer_each_set_owner(void *elem, void *data);
+rstatus_t dnode_peer_each_set_ptctx(void *elem, void *data);
 
 void dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *msg, err_t error);
 void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct peer *peer,

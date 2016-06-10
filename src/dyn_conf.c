@@ -210,6 +210,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->endpoint.addrlen = cseed->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
     s->conn = NULL;
+    s->ptctx = NULL;
 
     s->next_retry = 0ULL;
     s->failure_count = 0;

@@ -299,5 +299,17 @@ pthread_ctx
 core_get_ptctx_for_conn(struct context *ctx, connection_type_t type)
 {
     pthread_ctx ptctx = array_get(&ctx->thread_ctxs, 0);
+    // Seperate thread_ctx for dyn_proxy, dyn_dnode_proxy, so that all clients
+    // belong to same thread_ctx, all dnode clients belong to another thread_ctx.
+    // datastore connections belong to current thread_ctx
+    // peer connections belong to the thread_ctx of the peer object
+    return ptctx;
+}
+
+pthread_ctx
+core_get_ptctx_for_peer(struct context *ctx, struct peer *peer)
+{
+    // For now use the same as dnode_proxy, i.e g_ptctx
+    pthread_ctx ptctx = array_get(&ctx->thread_ctxs, 0);
     return ptctx;
 }

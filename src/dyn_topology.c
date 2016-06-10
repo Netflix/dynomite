@@ -305,6 +305,8 @@ topo_init_seeds_peers(struct context *ctx)
         struct peer *self = array_push(peers);
         ASSERT(self != NULL);
         THROW_STATUS(dnode_peer_add_local(sp, self));
+        THROW_STATUS(array_each(peers, dnode_peer_each_set_owner, sp));
+        THROW_STATUS(array_each(peers, dnode_peer_each_set_ptctx, ctx));
         topo_update_now(topo);
         return status;
     }
@@ -322,6 +324,7 @@ topo_init_seeds_peers(struct context *ctx)
 
     /* set seed owner */
     THROW_STATUS(array_each(seeds, dnode_peer_each_set_owner, sp));
+    THROW_STATUS(array_each(seeds, dnode_peer_each_set_ptctx, ctx));
 
     /* initialize peers list = seeds list */
     ASSERT(array_n(peers) == 0);
@@ -339,6 +342,7 @@ topo_init_seeds_peers(struct context *ctx)
     ASSERT(array_n(peers) == peer_cnt);
 
     THROW_STATUS(array_each(peers, dnode_peer_each_set_owner, sp));
+    THROW_STATUS(array_each(peers, dnode_peer_each_set_ptctx, ctx));
 
     THROW_STATUS(topo_update_now(topo));
 

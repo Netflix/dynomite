@@ -659,7 +659,6 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     uint32_t keylen = 0;
     key = g_msg_get_key(msg, &pool->topo->hash_tag, &keylen);
 
-    //ASSERT(key != NULL);
     // need to capture the initial mbuf location as once we add in the dynomite
     // headers (as mbufs to the src msg), that will bork the request sent to
     // secondary racks
@@ -680,7 +679,6 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
     uint32_t dc_index;
 
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
-
         struct datacenter *dc = array_get(&topo->datacenters, dc_index);
         if (dc == NULL) {
             log_error("Wow, this is very bad, dc is NULL");

@@ -172,6 +172,17 @@ dnode_peer_each_set_owner(void *elem, void *data)
 }
 
 rstatus_t
+dnode_peer_each_set_ptctx(void *elem, void *data)
+{
+    struct peer *s = elem;
+    struct context *ctx = data;
+
+    s->ptctx = core_get_ptctx_for_peer(ctx, s);
+
+    return DN_OK;
+}
+
+rstatus_t
 dnode_peer_add_local(struct server_pool *pool, struct peer *self)
 {
     ASSERT(self != NULL);
@@ -197,6 +208,7 @@ dnode_peer_add_local(struct server_pool *pool, struct peer *self)
     self->endpoint.addrlen = pool->dnode_proxy_endpoint.addrlen;
     self->endpoint.addr = pool->dnode_proxy_endpoint.addr;
     self->conn = NULL;
+    self->ptctx = NULL;
 
     self->next_retry = 0ULL;
     self->failure_count = 0;

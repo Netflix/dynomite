@@ -92,6 +92,7 @@ struct event_base;
 struct rack;
 struct dyn_ring;
 struct topology;
+struct peer;
 
 #include <stddef.h>
 #include <stdint.h>
@@ -275,5 +276,6 @@ rstatus_t core_create(struct instance *nci);
 void core_destroy(struct context *ctx);
 rstatus_t core_loop(struct context *ctx);
 struct thread_ctx *core_get_ptctx_for_conn(struct context *ctx, connection_type_t type);
+struct thread_ctx *core_get_ptctx_for_peer(struct context *ctx, struct peer *peer);
 
 #endif

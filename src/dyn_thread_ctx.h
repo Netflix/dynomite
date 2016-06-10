@@ -5,6 +5,7 @@
 struct context;
 struct event_base;
 typedef uint16_t tid_t;
+extern __thread tid_t g_ptctx;
 
 typedef struct thread_ctx {
     struct context      *ctx;
