@@ -1,0 +1,34 @@
+
+    x Move all rbtree timeout code to thread_ctx
+    x Move all looping functions to thread_ctx
+    x Each thread_ctx has its own datastore connection
+    x Protect individual queues
+        x conn queue
+        x message queue
+        x mbuf queue
+        x dnode message queue
+    x Remove the connection parameter from req_put
+    x Move topology specific code to topology (06/09)
+    x Implement a pollable interface to be added to event notification system. The thread ipc will implement a pollable interface
+    x Implement a ipc interface
+    x thread local storage
+06/10
+    x Improve peer interface 
+    x Create message queue in threads, add to epoll 
+    x Plan how the response will be returned
+06/11
+    o Unlink message queue after creation
+    o Protect global datastructures
+        o Stats : read/write lock
+        o topology : read/write lock
+06/12
+    o dyn_epoll is not thread safe. Make recv_active, send_active as atomic
+    o Check all event_adds, and make sure we call event add out/in before we write to the connection
+    o Make dnode client and client uniform (dnode client also has HashTable, and referencing etc) 
+    o Send to peer should take into account thread_ctx: peer should have thread_ctx?
+    o Do not destroy connection on closing.
+    o Create threads
+    o different type for pollable and connection type
+    o Per thread stats and reporting
+
+    o Check for socket connect success: http://stackoverflow.com/questions/10187347/async-connect-and-disconnect-with-epoll-linux/10194883#10194883
