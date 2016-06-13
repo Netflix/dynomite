@@ -98,6 +98,7 @@ struct mbuf;
 struct mhdr;
 struct conf;
 struct stats;
+struct entropy_conn;
 struct instance;
 struct event_base;
 struct rack;
@@ -137,6 +138,8 @@ struct dyn_ring;
 #include "dyn_crypto.h"
 #include "dyn_setting.h"
 
+
+#include "entropy/dyn_entropy.h"
 #include "event/dyn_event.h"
 
 #define ENCRYPTION 1
@@ -175,6 +178,8 @@ struct instance {
     int             stats_interval;              /* stats aggregation interval */
     char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
+    uint16_t        entropy_port;                  /* send reconciliation port */
+    char            *entropy_addr;                 /* send reconciliation addr */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
     size_t			alloc_msgs_max;			 /* allocated messages buffer size */
     pid_t           pid;                         /* process id */
@@ -297,13 +302,15 @@ struct server_pool {
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     secure_server_option_t secure_server_option;
     struct string      pem_key_file;
+    struct string      recon_key_file;       /* file with Key encryption in reconciliation */
+	struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
 };
 
 struct context {
     struct instance    *instance;   /* back pointer to instance */
     struct conf        *cf;         /* configuration */
     struct stats       *stats;      /* stats */
-
+    struct entropy     *entropy;    /* reconciliation connection */
     struct server_pool pool;        /* server_pool[] */
     struct event_base  *evb;        /* event base */
     int                max_timeout; /* max timeout in msec */

@@ -350,4 +350,52 @@ error:
     ep = -1;
 }
 
+void
+event_loop_entropy(event_entropy_cb_t cb, void *arg)
+{
+    struct entropy *st = arg;
+    int status, ep;
+    struct epoll_event ev;
+    st->interval = 30;
+
+    ep = epoll_create(1);
+    if (ep < 0) {
+        log_error("entropy epoll create failed: %s", strerror(errno));
+        return;
+    }
+
+    ev.data.fd = st->sd;
+    ev.events = EPOLLIN;
+
+    status = epoll_ctl(ep, EPOLL_CTL_ADD, st->sd, &ev);
+    if (status < 0) {
+        log_error("entropy epoll ctl on e %d sd %d failed: %s", ep, st->sd,
+                  strerror(errno));
+        goto error;
+    }
+
+    for (;;) {
+        int n;
+
+        n = epoll_wait(ep, &ev, 1, st->interval);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            log_error("entropy epoll wait on e %d with m %d failed: %s", ep,
+                      st->sd, strerror(errno));
+            break;
+        }
+
+        cb(st, &n);
+    }
+
+error:
+    status = close(ep);
+    if (status < 0) {
+        log_error("close e %d failed, ignored: %s", ep, strerror(errno));
+    }
+    ep = -1;
+}
+
 #endif /* DN_HAVE_EPOLL */
