@@ -14,30 +14,6 @@ LOG_DIR=/logs/system/dynomite
 CONF_DIR=$DYN_DIR/conf
 
 
-#** Requires setting the EC2 Instance type as ENV variable
-# If Dynomite is used outside of AWS environment the 
-# following can be used as ideas on how much memory Dynomite
-# should take.
-
-# Message allocation based on the instance type
-# 2GB for Florida + 85% for Redis (rest available for OS)
-if [ "$EC2_INSTANCE_TYPE" == "r3.xlarge" ]; then
-# r3.xlarge: 30.5GB RAM (2.5GB available)
-    ALLOC_MSGS=100000
-elif [ "$EC2_INSTANCE_TYPE" == "r3.2xlarge" ]; then
-# r3.2xlarge: 61GB RAM (7.15GB available)
-    ALLOC_MSGS=300000
-elif [ "$EC2_INSTANCE_TYPE" == "r3.4xlarge" ]; then
-# r3.4xlarge: 122GB RAM (16.3GB available)
-    ALLOC_MSGS=800000
-elif [ "$EC2_INSTANCE_TYPE" == "r3.8xlarge" ]; then
-# r3.8xlarge: 244GB RAM (34.19GB available)
-# Dynomite uper threshold is 1M
-    ALLOC_MSGS=1000000
-fi
-echo "Instance Type: $EC2_INSTANCE_TYPE --> Allocated messages: $ALLOC_MSGS"
-
-
 declare -x `stat --printf "userowner=%U\ngroupowner=%G\n" "$0"`
 
 if [ ! -d "$LOG_DIR" ]; then
@@ -50,15 +26,36 @@ if [ -e $LOG_DIR/dynomite.log ]; then
     mv $LOG_DIR/dynomite.log $LOG_DIR/dynomite-$(date +%Y%m%d_%H%M%S).log
 fi
 
-
+echo "MBUF_SIZE=$MBUF_SIZE"
 if [ -z "$MBUF_SIZE" ]; then
     echo "MBUF_SIZE is empty. Use default value 16K"
     MBUF_SIZE=16384
 fi
 
+echo "ALLOC_MSGS=$ALLOC_MSGS"
 if [ -z "$ALLOC_MSGS" ]; then
-    echo "ALLOC_MSGS is empty. Use default value 200K"
-    ALLOC_MSGS=200000
+    #** Requires setting the EC2 Instance type as ENV variable
+    # If Dynomite is used outside of AWS environment the 
+    # following can be used as ideas on how much memory Dynomite
+    # should take.
+
+    # Message allocation based on the instance type
+    # 2GB for Florida + 85% for Redis (rest available for OS)
+    if [ "$EC2_INSTANCE_TYPE" == "r3.xlarge" ]; then
+        # r3.xlarge: 30.5GB RAM (2.5GB available)
+        ALLOC_MSGS=100000
+    elif [ "$EC2_INSTANCE_TYPE" == "r3.2xlarge" ]; then
+       # r3.2xlarge: 61GB RAM (7.15GB available)
+       ALLOC_MSGS=300000
+    elif [ "$EC2_INSTANCE_TYPE" == "r3.4xlarge" ]; then
+       # r3.4xlarge: 122GB RAM (16.3GB available)
+       ALLOC_MSGS=800000
+    elif [ "$EC2_INSTANCE_TYPE" == "r3.8xlarge" ]; then
+       # r3.8xlarge: 244GB RAM (34.19GB available)
+       # Dynomite uper threshold is 1M
+       ALLOC_MSGS=1000000
+    fi
+    echo "Instance Type: $EC2_INSTANCE_TYPE --> Allocated messages: $ALLOC_MSGS"
 fi
 
 
