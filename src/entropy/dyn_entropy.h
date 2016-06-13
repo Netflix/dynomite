@@ -38,8 +38,6 @@ struct entropy {
     int               interval;       		  /* entropy aggregation interval */
     int               sd;             		  /* socket descriptor */
     int               redis_sd;				  /* Redis socket descriptor for AOF */
-    struct string     recon_key_file;		  /* file with Key encryption in reconciliation */
-    struct string     recon_iv_file;		  /* file with Initialization Vector encryption in reconciliation */
 };
 
 struct entropy *entropy_init(struct context *ctx, uint16_t entropy_port, char *entropy_ip);

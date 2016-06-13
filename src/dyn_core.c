@@ -132,19 +132,35 @@ core_thread_ctx_init(struct context *ctx)
 }
 
 static rstatus_t
+core_entropy_init(struct context *ctx)
+{
+    struct instance *nci = ctx->instance;
+    /* initializing anti-entropy */
+    ctx->entropy = entropy_init(ctx, nci->entropy_port, nci->entropy_addr);
+    if (ctx->entropy == NULL) {
+    	log_error("Failed to create entropy!!!");
+        return DN_ERROR;
+    }
+    rstatus_t status = core_thread_ctx_init(ctx);
+    if (status != DN_OK) {
+        array_each(&ctx->thread_ctxs, thread_ctx_deinit, NULL);
+    }
+	return status;
+}
+
+static rstatus_t
 core_stats_create(struct context *ctx)
 {
     struct instance *nci = ctx->instance;
 	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
-		loga("Failed to create stats!!!");
+    	log_error("Failed to create stats!!!");
 		return DN_ERROR;
 	}
-    rstatus_t status = core_thread_ctx_init(ctx);
-    if (status != DN_OK) {
-        array_each(&ctx->thread_ctxs, thread_ctx_deinit, NULL);
-    }
+    rstatus_t status = core_entropy_init(ctx);
+    if (status != DN_OK)
+    	entropy_conn_destroy(ctx->entropy);
     return status;
 }
 

@@ -97,7 +97,9 @@ static struct string dist_strings[] = {
 
 #define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
-#define PEM_KEY_FILE  "conf/dynomite.pem"
+#define PEM_KEY_FILE      "conf/dynomite.pem"
+#define RECON_KEY_FILE    "conf/recon_key.pem"
+#define RECON_IV_FILE     "conf/recon_iv.pem"
 
 data_store_t g_data_store = CONF_DEFAULT_DATASTORE;
 struct command {
@@ -267,6 +269,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->read_consistency);
     string_init(&cp->write_consistency);
     string_init(&cp->pem_key_file);
+    string_init(&cp->recon_key_file);
+    string_init(&cp->recon_iv_file);
     string_init(&cp->dc);
     string_init(&cp->env);
     cp->dyn_listen.port = 0;
@@ -333,6 +337,8 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->read_consistency);
     string_deinit(&cp->write_consistency);
     string_deinit(&cp->pem_key_file);
+    string_deinit(&cp->recon_key_file);
+    string_deinit(&cp->recon_iv_file);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
 
@@ -442,6 +448,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
+    sp->recon_key_file = cp->recon_key_file;
+    sp->recon_iv_file = cp->recon_iv_file;
 
     sp->conf_pool = cp;
 
@@ -1340,6 +1348,14 @@ static struct command conf_commands[] = {
         conf_set_string,
         offsetof(struct conf_pool, pem_key_file) },
 
+	{ string("recon_key_file"),
+	    conf_set_string,
+	    offsetof(struct conf_pool, recon_key_file) },
+
+	{ string("recon_iv_file"),
+		conf_set_string,
+		offsetof(struct conf_pool, recon_iv_file) },
+
     { string("datacenter"),
       conf_set_string,
       offsetof(struct conf_pool, dc) },
@@ -2159,6 +2175,16 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     if (string_empty(&cp->pem_key_file)) {
         string_copy_c(&cp->pem_key_file, (const uint8_t *)PEM_KEY_FILE);
         log_debug(LOG_INFO, "setting pem key file to default value:%s", PEM_KEY_FILE);
+    }
+
+    if (string_empty(&cp->recon_key_file)) {
+        string_copy_c(&cp->recon_key_file, &RECON_KEY_FILE);
+        log_debug(LOG_INFO, "setting reconciliation key file to default value:%s", RECON_KEY_FILE);
+    }
+
+    if (string_empty(&cp->recon_iv_file)) {
+        string_copy_c(&cp->recon_iv_file, &RECON_IV_FILE);
+        log_debug(LOG_INFO, "setting reconciliation IV file to default value:%s", RECON_IV_FILE);
     }
 
     status = conf_validate_server(cf, cp);

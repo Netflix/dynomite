@@ -89,6 +89,8 @@ struct conf_pool {
     struct string      read_consistency;
     struct string      write_consistency;
     struct string      pem_key_file;
+    struct string      recon_key_file;       /* file with Key encryption in reconciliation */
+	struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
     struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
