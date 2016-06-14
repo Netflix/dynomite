@@ -1,6 +1,7 @@
 #include <dyn_core.h>
 #include <dyn_thread_ctx.h>
 #include <dyn_server.h>
+#include <dyn_dnode_peer.h>
 
 static tid_t tid_counter = 0;
 __thread pthread_ctx g_ptctx = NULL;
@@ -12,21 +13,76 @@ thread_ctx_create(void)
 }
 
 static rstatus_t
-thread_ctx_core(void *arg, uint32_t events)
+handle_ipc_events(void *arg, uint32_t events)
+{
+	rstatus_t status;
+	pthread_ipc ptipc = arg;
+    ASSERT_LOG(ptipc == g_ptctx->ptipc,
+               "wrong ipc notification, my ptipc:%p, received for %p",
+               g_ptctx->ptipc, ptipc);
+
+	//struct context *ctx = conn_to_ctx(conn);
+    log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
+              pollable_get_type_string(&ptipc->p), ptipc->p.sd);
+
+	/* error takes precedence over read | write */
+	if (events & EVENT_ERR) {
+        log_error("handing error on ipc %d", ptipc->p.sd);
+		ASSERT(NULL);
+
+		return DN_ERROR;
+	}
+
+	/* read takes precedence over write */
+	if (events & EVENT_READ) {
+        log_debug(LOG_WARN, "handing read on ipc %d", ptipc->p.sd);
+
+        struct msg * msg = NULL;
+        while ((msg = thread_ipc_receive(ptipc)) != NULL) {
+            if (msg->request) {
+                // received a message, if its a request forward it to peer
+                struct peer *dst_peer = msg->dst_peer;
+                ASSERT(dst_peer != NULL);
+                ASSERT(g_ptctx == dst_peer->ptctx);
+                dnode_peer_req_forward(g_ptctx->ctx, dst_peer, msg);
+            } else {
+                // if its a response, call the client associated with it.
+                // THere is swallowing business here because if we are receiving a
+                // response here it means that the client(CLIENT or DNODE_CLIENT) is
+                // expecting it. Either the response is for a remote dc forwarded
+                // request or its part of a quorum response
+                struct conn *c_conn = msg->client_conn;
+                ASSERT(c_conn->ptctx == g_ptctx);
+                status = conn_handle_response(msg->client_conn, msg);
+                IGNORE_RET_VAL(status);
+            }
+        }
+	}
+
+	if (events & EVENT_WRITE) {
+        ASSERT_LOG(NULL, "received write notifiction on ipc %d, But I never registered for one", ptipc->p.sd);
+	}
+
+	return DN_OK;
+}
+    
+static rstatus_t
+handle_connection_events(void *arg, uint32_t events)
 {
 	rstatus_t status;
 	struct conn *conn = arg;
+
 	struct context *ctx = conn_to_ctx(conn);
 
     log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
-              pollable_get_type_string(conn), conn->p.sd);
+              conn_get_type_string(conn), conn->p.sd);
 
 	conn->events = events;
 
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {
         log_debug(LOG_VVVERB, "handing error on %s %d",
-                  pollable_get_type_string(conn), conn->p.sd);
+                  conn_get_type_string(conn), conn->p.sd);
 		if (conn->err && conn->dyn_mode) {
 			loga("conn err on dnode EVENT_ERR: %d", conn->err);
 		}
@@ -38,7 +94,7 @@ thread_ctx_core(void *arg, uint32_t events)
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
         log_debug(LOG_VVVERB, "handing read on %s %d",
-                  pollable_get_type_string(conn), conn->p.sd);
+                  conn_get_type_string(conn), conn->p.sd);
 		status = conn_recv(ctx, conn);
 
 		if (status != DN_OK || conn->done || conn->err) {
@@ -58,7 +114,7 @@ thread_ctx_core(void *arg, uint32_t events)
 
 	if (events & EVENT_WRITE) {
         log_debug(LOG_VVVERB, "handing write on %s %d",
-                  pollable_get_type_string(conn), conn->p.sd);
+                  conn_get_type_string(conn), conn->p.sd);
 		status = conn_send(ctx, conn);
 		if (status != DN_OK || conn->done || conn->err) {
 			if (conn->dyn_mode) {
@@ -76,6 +132,28 @@ thread_ctx_core(void *arg, uint32_t events)
 	}
 
 	return DN_OK;
+}
+
+static rstatus_t
+thread_ctx_core(void *arg, uint32_t events)
+{
+	struct pollable *pollable = arg;
+
+    // Depending on the type of pollable, call the appropriate functions
+    switch(pollable->type) {
+        case CONN_PROXY :
+        case CONN_CLIENT:
+        case CONN_SERVER:
+        case CONN_DNODE_PEER_PROXY:
+        case CONN_DNODE_PEER_CLIENT:
+        case CONN_DNODE_PEER_SERVER:
+                               return handle_connection_events(arg, events);
+        case CONN_THREAD_IPC_MQ:
+                               return handle_ipc_events(arg, events);
+        default:
+            ASSERT_LOG(NULL, "invalid type of pollable object %d", pollable->type);
+    }
+    return DN_OK;
 }
 
 rstatus_t
@@ -101,6 +179,8 @@ thread_ctx_init(pthread_ctx ptctx, struct context *ctx)
     ptctx->tid = tid_counter++;
 	ptctx->evb = event_base_create(EVENT_SIZE, &thread_ctx_core);
     ptctx->datastore_conn = NULL;
+    ptctx->ptipc = thread_ipc_mq_create();
+    thread_ipc_init(ptctx->ptipc, ptctx);
     msg_tmo_init(&ptctx->tmo, ptctx);
 	if (ptctx->evb == NULL) {
 		loga("Failed to create socket event handling!!!");
@@ -115,6 +195,8 @@ thread_ctx_deinit(void *elem, void *arg)
     pthread_ctx ptctx = elem;
 	event_base_destroy(ptctx->evb);
     msg_tmo_deinit(&ptctx->tmo, ptctx);
+    thread_ipc_destroy(ptctx->ptipc);
+    ptctx->ptipc = NULL;
     conn_close(ptctx->ctx, ptctx->datastore_conn);
     ptctx->datastore_conn = NULL;
     return DN_OK;
@@ -155,6 +237,21 @@ thread_ctx_add_in(pthread_ctx ptctx, struct pollable *conn)
     return event_add_in(ptctx->evb, conn);
 }
 
+rstatus_t
+thread_ctx_forward_req(pthread_ctx ptctx, struct msg *req)
+{
+    ASSERT(req->dst_peer->ptctx == ptctx);
+    return thread_ipc_send(ptctx->ptipc, req);
+}
+
+rstatus_t
+thread_ctx_forward_rsp(pthread_ctx ptctx, struct msg *rsp)
+{
+    ASSERT(!rsp->request);
+    ASSERT(rsp->owner != NULL);
+    return thread_ipc_send(ptctx->ptipc, rsp);
+}
+
 static void
 thread_ctx_timeout(pthread_ctx ptctx)
 {
@@ -193,7 +290,7 @@ thread_ctx_timeout(pthread_ctx ptctx)
 		}
 
         log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", msg->id,
-                 pollable_get_type_string(conn), conn->p.sd, msg->tmo_rbe.timeout);
+                 conn_get_type_string(conn), conn->p.sd, msg->tmo_rbe.timeout);
 
 		msg_tmo_delete(&ptctx->tmo, msg);
 

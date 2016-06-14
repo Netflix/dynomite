@@ -252,9 +252,12 @@ _msg_get(struct conn *conn, const char *const caller)
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
     msg->id = ++msg_id;
+    msg->req_id = 0;
     msg->parent_id = 0;
     msg->peer = NULL;
     msg->owner = NULL;
+    msg->dst_peer = NULL;
+    msg->client_conn = NULL;
     msg->stime_in_microsec = 0ULL;
     msg->remote_region_send_time = 0L;
     msg->awaiting_rsps = 0;
@@ -384,6 +387,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 {
     target->parent_id = src->id;
     target->owner = src->owner;
+    target->dst_peer = src->dst_peer;
     target->request = src->request;
 
     target->parser = src->parser;

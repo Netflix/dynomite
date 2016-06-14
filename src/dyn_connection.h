@@ -147,7 +147,8 @@ struct conn {
     dict               *outstanding_msgs_dict;
 };
 
-static inline struct pollable *conn_get_pollable(struct conn *c)
+static inline struct pollable *
+conn_get_pollable(struct conn *c)
 {
     return &c->p;
 }
@@ -161,9 +162,9 @@ conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
 }
 
 static inline rstatus_t
-conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
+conn_handle_response(struct conn *conn, struct msg *rsp)
 {
-    return conn->ops->rsp_handler(conn, msgid, rsp);
+    return conn->ops->rsp_handler(conn, rsp->req_id, rsp);
 }
 
 #define conn_recv_next(ctx, conn, alloc)            \

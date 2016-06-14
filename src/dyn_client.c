@@ -521,7 +521,9 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         if (msg->expect_datastore_reply && !msg->swallow) {
             conn_enqueue_outq(ctx, c_conn, msg);
         }
-        dnode_peer_req_forward(ctx, c_conn, peer, msg);
+        ASSERT((c_conn->p.type == CONN_CLIENT) ||
+                (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
+        dnode_peer_req_forward(ctx, peer, msg);
     }
 }
 

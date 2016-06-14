@@ -41,7 +41,7 @@ rstatus_t dnode_peer_each_set_owner(void *elem, void *data);
 rstatus_t dnode_peer_each_set_ptctx(void *elem, void *data);
 
 void dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *msg, err_t error);
-rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
+rstatus_t dnode_peer_req_forward(struct context *ctx,
                                  struct peer *peer, struct msg *msg);
 rstatus_t dnode_peer_pool_preconnect(struct context *ctx);
 void dnode_peer_pool_disconnect(struct context *ctx);

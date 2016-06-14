@@ -107,10 +107,10 @@ event_add_in(struct event_base *evb, struct pollable *c)
         return 0;
     }
 
-    event.events = (uint32_t)(EPOLLIN); // | EPOLLET);
+    event.events = (uint32_t)(EPOLLIN | EPOLLET);
     event.data.ptr = c;
 
-    status = epoll_ctl(ep, EPOLL_CTL_MOD, c->sd, &event);
+    status = epoll_ctl(ep, EPOLL_CTL_ADD, c->sd, &event);
     if (status < 0) {
         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
                   strerror(errno));

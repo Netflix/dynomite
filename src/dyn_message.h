@@ -250,6 +250,10 @@ struct msg {
     msgid_t              id;              /* message id */
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
+    struct peer          *dst_peer;       /* Use for a request in the thread_ctx, to indicate the peer this request should be forwarded to */
+    msgid_t              req_id;          /* used for a response to indicate the request id the response belongs to */
+    struct conn          *client_conn;    /* used for a response to indicate the client connection this response belongs to */
+
     usec_t               stime_in_microsec;  /* start time in microsec */
     usec_t               remote_region_send_time; /* time in microsec when message sent to remote region */
     uint8_t              awaiting_rsps;

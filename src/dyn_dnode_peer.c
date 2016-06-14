@@ -17,6 +17,8 @@
 #include "dyn_thread_ctx.h"
 
 
+static void forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp);
+
 bool
 peer_is_same_dc(struct peer *peer_node)
 {
@@ -286,12 +288,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
              conn->p.sd, req->id, req->parent_id, req->mlen, req->type,
              c_conn->p.sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
-    rstatus_t status =
-            conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
-                                 rsp);
-    IGNORE_RET_VAL(status);
-    if (req->swallow)
-        req_put(req);
+    forward_response_upstream(c_conn, req, rsp);
 }
 
 
@@ -656,7 +653,8 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
     nelem = array_n(peers);
     for (i = 0; i < nelem; i++) {
         struct peer *peer = (struct peer *) array_get(peers, i);
-        peer->conn->owner = peer; //re-link to the owner in case of an resize/allocation
+        if (peer->conn)
+            peer->conn->owner = peer; //re-link to the owner in case of an resize/allocation
     }
 }
 
@@ -1043,6 +1041,49 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
     req_put(req);
 }
 
+static void
+peer_mismatch_stats_incr(struct conn *peer_conn, struct conn *c_conn, struct msg *req,
+                   struct msg *rsp)
+{
+    // Report a mismatch and try to rectify
+    log_error("MISMATCH: dnode %s %d rsp_dmsg_id %u req %u:%u dnode rsp %u:%u",
+            conn_get_type_string(peer_conn),
+            peer_conn->p.sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
+            rsp->parent_id);
+    if (c_conn && conn_to_ctx(c_conn))
+        stats_pool_incr(conn_to_ctx(c_conn), peer_mismatch_requests);
+    return;
+}
+
+static void
+update_remote_region_stats(struct context *ctx, struct conn *peer_conn, struct msg *req)
+{
+    if (!peer_conn->same_dc && req->remote_region_send_time) {
+        struct stats *st = ctx->stats;
+        usec_t delay = dn_usec_now() - req->remote_region_send_time;
+        histo_add(&st->cross_region_histo, delay);
+    }
+}
+
+static void
+forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp)
+{
+    // Here, if the client belongs to different thread, forward the response
+    // to that thread
+    rsp->req_id = req->parent_id ? req->parent_id : req->id;
+    rsp->client_conn = c_conn;
+    if (c_conn->ptctx != g_ptctx) {
+        thread_ctx_forward_rsp(c_conn->ptctx, rsp);
+        return;
+    }
+    rstatus_t status = conn_handle_response(c_conn, rsp);
+    IGNORE_RET_VAL(status);
+    if (req->swallow) {
+        log_info("swallow request %d:%d", req->id, req->parent_id);
+        req_put(req);
+    }
+}
+
 /* Description: link data from a peer connection to a client-facing connection
  * peer_conn: a peer connection
  * msg      : msg with data from the peer connection after parsing
@@ -1050,12 +1091,9 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
 static void
 dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 {
-    rstatus_t status;
     struct msg *req;
-    struct conn *c_conn;
 
     req = TAILQ_FIRST(&peer_conn->omsg_q);
-    c_conn = req->owner;
 
     /* if client consistency is dc_one forward the response from only the
        local node. Since dyn_dnode_peer is always a remote node, drop the rsp */
@@ -1097,8 +1135,13 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
     }
 
     conn_dequeue_outq(ctx, peer_conn, req);
-    req->done = 1;
 
+    dnode_rsp_forward_stats(ctx, rsp);
+    struct conn *c_conn = req->owner;
+    ASSERT_LOG((c_conn->p.type == CONN_CLIENT) ||
+               (c_conn->p.type == CONN_DNODE_PEER_CLIENT),
+               "c_conn type %s", conn_get_type_string(c_conn));
+    req->done = 1;
     log_info("c_conn:%p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
              rsp->id, rsp->parent_id);
     /* establish rsp <-> req (response <-> request) link */
@@ -1107,19 +1150,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     g_pre_coalesce(rsp);
 
-    ASSERT_LOG((c_conn->p.type == CONN_CLIENT) ||
-               (c_conn->p.type == CONN_DNODE_PEER_CLIENT),
-               "c_conn type %s", conn_get_type_string(c_conn));
-
-    dnode_rsp_forward_stats(ctx, rsp);
-    // c_conn owns respnse now
-    status = conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
-                                  rsp);
-    IGNORE_RET_VAL(status);
-    if (req->swallow) {
-        log_info("swallow request %d:%d", req->id, req->parent_id);
-        req_put(req);
-    }
+    forward_response_upstream(c_conn, req, rsp);
 }
 
 /* There are chances that the request to the remote peer or its response got dropped.
@@ -1145,24 +1176,12 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
         c_conn = req->owner;
 
-        if (!peer_conn->same_dc && req->remote_region_send_time) {
-            struct stats *st = ctx->stats;
-            usec_t delay = dn_usec_now() - req->remote_region_send_time;
-            histo_add(&st->cross_region_histo, delay);
-        }
-
         if (req->id == rsp->dmsg->id) {
+            update_remote_region_stats(ctx, peer_conn, req);
             dnode_rsp_forward_match(ctx, peer_conn, rsp);
             return;
         }
-        // Report a mismatch and try to rectify
-        log_error("MISMATCH: dnode %s %d rsp_dmsg_id %u req %u:%u dnode rsp %u:%u",
-                  conn_get_type_string(peer_conn),
-                  peer_conn->p.sd, rsp->dmsg->id, req->id, req->parent_id, rsp->id,
-                  rsp->parent_id);
-        if (c_conn && conn_to_ctx(c_conn))
-            stats_pool_incr(conn_to_ctx(c_conn),
-                    peer_mismatch_requests);
+        peer_mismatch_stats_incr(peer_conn, c_conn, req, rsp);
 
         // TODO : should you be worried about message id getting wrapped around to 0?
         if (rsp->dmsg->id < req->id) {
@@ -1179,7 +1198,6 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
                 dnode_rsp_swallow(ctx, peer_conn, req, NULL);
                 continue;
             }
-            log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
         }
 
         if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
@@ -1203,7 +1221,6 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             msg_dump(req);
         }
 
-
         conn_dequeue_outq(ctx, peer_conn, req);
         req->done = 1;
 
@@ -1221,14 +1238,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 
         log_error("Peer connection s %d skipping request %u:%u, dummy err_rsp %u:%u",
                  peer_conn->p.sd, req->id, req->parent_id, err_rsp->id, err_rsp->parent_id);
-        rstatus_t status =
-            conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
-                                err_rsp);
-        IGNORE_RET_VAL(status);
-        if (req->swallow) {
-                log_debug(LOG_INFO, "swallow request %d:%d", req->id, req->parent_id);
-            req_put(req);
-        }
+        forward_response_upstream(c_conn, req, err_rsp);
     }
 }
 
@@ -1518,12 +1528,13 @@ dnode_req_forward_error(struct context *ctx, struct conn *p_conn, struct msg *ms
 /* Requirements: peer is not a local node. So it will put the msg on the outQ
  */
 rstatus_t
-dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
+dnode_peer_req_forward(struct context *ctx,
                        struct peer *peer, struct msg *msg)
 {
     if (g_ptctx != peer->ptctx) {
         // This peer belongs to a different thread, forward the msg to that thread
-        ASSERT(0);
+        msg->dst_peer = peer;
+        THROW_STATUS(thread_ctx_forward_req(peer->ptctx, msg));
     }
     struct conn *p_conn = dnode_peer_active_conn(ctx, peer);
     if (p_conn == NULL)
@@ -1534,9 +1545,6 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
         dnode_req_forward_error(ctx, NULL, msg, DN_EHOST_DOWN);
         return DN_EHOST_DOWN;
     }
-
-    ASSERT((c_conn->p.type == CONN_CLIENT) ||
-           (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
     rstatus_t status = thread_ctx_add_out(p_conn->ptctx, conn_get_pollable(p_conn));

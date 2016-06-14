@@ -291,9 +291,8 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
              conn->p.sd, req->id, req->parent_id,
              req->mlen, req->type, c_conn->p.sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
-    rstatus_t status =
-            conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
-                                 rsp);
+    rsp->req_id = req->parent_id ? req->parent_id : req->id;
+    rstatus_t status = conn_handle_response(c_conn, rsp);
     IGNORE_RET_VAL(status);
     if (req->swallow)
         req_put(req);
@@ -688,8 +687,8 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     // this should really be the message's response handler be doing it
     if (req_done(c_conn, req)) {
         // handler owns the response now
-        status = conn_handle_response(c_conn, c_conn->p.type == CONN_CLIENT ?
-                                      req->id : req->parent_id, rsp);
+        rsp->req_id = c_conn->p.type == CONN_CLIENT ? req->id : req->parent_id;
+        status = conn_handle_response(c_conn, rsp);
         IGNORE_RET_VAL(status);
      }
 }
