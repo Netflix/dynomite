@@ -48,7 +48,7 @@ rstatus_t entropy_listen(struct entropy *cn);
 
 int entropy_encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *ciphertext);
 int entropy_decrypt(unsigned char *plaintext, int plaintext_len, unsigned char *ciphertext);
-rstatus_t entropy_key_iv_load();
+rstatus_t entropy_key_iv_load(struct context *ctx);
 
 rstatus_t entropy_snd_start(int peer_socket, int header_size, int buffer_size, int cipher_size);
 rstatus_t entropy_rcv_start(int peer_socket, int header_size, int buffer_size, int cipher_size);
