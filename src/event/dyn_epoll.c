@@ -353,10 +353,10 @@ error:
 void
 event_loop_entropy(event_entropy_cb_t cb, void *arg)
 {
-    struct entropy *st = arg;
+    struct entropy *ent = arg;
     int status, ep;
     struct epoll_event ev;
-    st->interval = 30;
+    ent->interval = 30;
 
     ep = epoll_create(1);
     if (ep < 0) {
@@ -364,12 +364,12 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
         return;
     }
 
-    ev.data.fd = st->sd;
+    ev.data.fd = ent->sd;
     ev.events = EPOLLIN;
 
-    status = epoll_ctl(ep, EPOLL_CTL_ADD, st->sd, &ev);
+    status = epoll_ctl(ep, EPOLL_CTL_ADD, ent->sd, &ev);
     if (status < 0) {
-        log_error("entropy epoll ctl on e %d sd %d failed: %s", ep, st->sd,
+        log_error("entropy epoll ctl on e %d sd %d failed: %s", ep, ent->sd,
                   strerror(errno));
         goto error;
     }
@@ -377,17 +377,17 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
     for (;;) {
         int n;
 
-        n = epoll_wait(ep, &ev, 1, st->interval);
+        n = epoll_wait(ep, &ev, 1, ent->interval);
         if (n < 0) {
             if (errno == EINTR) {
                 continue;
             }
             log_error("entropy epoll wait on e %d with m %d failed: %s", ep,
-                      st->sd, strerror(errno));
+            		ent->sd, strerror(errno));
             break;
         }
 
-        cb(st, &n);
+        cb(ent, &n);
     }
 
 error:

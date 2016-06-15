@@ -34,7 +34,7 @@
 static rstatus_t
 core_init_last(struct context *ctx)
 {
-	core_debug(ctx);
+    core_debug(ctx);
     preselect_remote_rack_for_replication(ctx);
     return DN_OK;
 }
@@ -42,13 +42,13 @@ core_init_last(struct context *ctx)
 static rstatus_t
 core_gossip_pool_init(struct context *ctx)
 {
-	//init ring msg queue
-	CBUF_Init(C2G_InQ);
-	CBUF_Init(C2G_OutQ);
+    //init ring msg queue
+    CBUF_Init(C2G_InQ);
+    CBUF_Init(C2G_OutQ);
 
-	//init stats msg queue
-	CBUF_Init(C2S_InQ);
-	CBUF_Init(C2S_OutQ);
+    //init stats msg queue
+    CBUF_Init(C2S_InQ);
+    CBUF_Init(C2S_OutQ);
 
     THROW_STATUS(gossip_pool_init(ctx));
     THROW_STATUS(core_init_last(ctx));
@@ -58,7 +58,7 @@ core_gossip_pool_init(struct context *ctx)
 static rstatus_t
 core_dnode_peer_pool_preconnect(struct context *ctx)
 {
-	THROW_STATUS(dnode_peer_pool_preconnect(ctx));
+    THROW_STATUS(dnode_peer_pool_preconnect(ctx));
     rstatus_t status = core_gossip_pool_init(ctx);
     //if (status != DN_OK)
       //  gossip_pool_deinit(ctx);
@@ -113,12 +113,12 @@ core_server_pool_preconnect(struct context *ctx)
 static rstatus_t
 core_event_base_create(struct context *ctx)
 {
-	/* initialize event handling for client, proxy and server */
-	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
-	if (ctx->evb == NULL) {
-		log_error("Failed to create socket event handling!!!");
-		return DN_ERROR;
-	}
+    /* initialize event handling for client, proxy and server */
+    ctx->evb = event_base_create(EVENT_SIZE, &core_core);
+    if (ctx->evb == NULL) {
+	log_error("Failed to create socket event handling!!!");
+	return DN_ERROR;
+    }
     rstatus_t status = core_server_pool_preconnect(ctx);
     if (status != DN_OK)
 		server_pool_disconnect(ctx);
@@ -134,36 +134,41 @@ core_entropy_init(struct context *ctx)
     if (ctx->entropy == NULL) {
     	log_error("Failed to create entropy!!!");
     }
-	rstatus_t status = core_event_base_create(ctx);
-	if (status != DN_OK)
-	    event_base_destroy(ctx->evb);
-	return status;
+
+    rstatus_t status = core_event_base_create(ctx);
+    if (status != DN_OK)
+       event_base_destroy(ctx->evb);
+    
+    return status;
 }
 
 static rstatus_t
 core_stats_create(struct context *ctx)
 {
     struct instance *nci = ctx->instance;
-	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
+    ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
-    	log_error("Failed to create stats!!!");
-		return DN_ERROR;
-	}
+        log_error("Failed to create stats!!!");
+        return DN_ERROR;
+    }
+
     rstatus_t status = core_entropy_init(ctx);
     if (status != DN_OK)
     	entropy_conn_destroy(ctx->entropy);
+    
     return status;
 }
 
 static rstatus_t
 core_crypto_init(struct context *ctx)
 {
-	/* crypto init */
+    /* crypto init */
     THROW_STATUS(crypto_init(&ctx->pool));
     rstatus_t status = core_stats_create(ctx);
     if (status != DN_OK)
-		stats_destroy(ctx->stats);
+	stats_destroy(ctx->stats);
+    
     return status;
 }
 
@@ -180,38 +185,39 @@ core_server_pool_init(struct context *ctx)
 static rstatus_t
 core_ctx_create(struct instance *nci)
 {
-	struct context *ctx;
+    struct context *ctx;
 
-	srand((unsigned) time(NULL));
+    srand((unsigned) time(NULL));
 
-	ctx = dn_alloc(sizeof(*ctx));
-	if (ctx == NULL) {
-		loga("Failed to create context!!!");
-		return DN_ERROR;
-	}
+    ctx = dn_alloc(sizeof(*ctx));
+    if (ctx == NULL) {
+	loga("Failed to create context!!!");
+	return DN_ERROR;
+    }
     nci->ctx = ctx;
     ctx->instance = nci;
-	ctx->cf = NULL;
-	ctx->stats = NULL;
-	ctx->evb = NULL;
-	ctx->max_timeout = nci->stats_interval;
-	ctx->timeout = ctx->max_timeout;
-	ctx->dyn_state = INIT;
+    ctx->cf = NULL;
+    ctx->stats = NULL;
+    ctx->evb = NULL;
+    ctx->max_timeout = nci->stats_interval;
+    ctx->timeout = ctx->max_timeout;
+    ctx->dyn_state = INIT;
 
-	/* parse and create configuration */
+    /* parse and create configuration */
     ctx->cf = conf_create(nci->conf_filename);
-	if (ctx->cf == NULL) {
-		loga("Failed to create conf!!!");
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return DN_ERROR;
-	}
-	rstatus_t status = core_server_pool_init(ctx);
+    if (ctx->cf == NULL) {
+        loga("Failed to create conf!!!");
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+	return DN_ERROR;
+    }
+
+    rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return DN_ERROR;
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+        return DN_ERROR;
     }
     return status;
 }
@@ -219,21 +225,21 @@ core_ctx_create(struct instance *nci)
 static void
 core_ctx_destroy(struct context *ctx)
 {
-	proxy_deinit(ctx);
-	server_pool_disconnect(ctx);
-	event_base_destroy(ctx->evb);
-	stats_destroy(ctx->stats);
-	server_pool_deinit(&ctx->pool);
-	conf_destroy(ctx->cf);
-	dn_free(ctx);
+    proxy_deinit(ctx);
+    server_pool_disconnect(ctx);
+    event_base_destroy(ctx->evb);
+    stats_destroy(ctx->stats);
+    server_pool_deinit(&ctx->pool);
+    conf_destroy(ctx->cf);
+    dn_free(ctx);
 }
 
 rstatus_t
 core_start(struct instance *nci)
 {
-	mbuf_init(nci);
-	msg_init(nci);
-	conn_init();
+    mbuf_init(nci);
+    msg_init(nci);
+    conn_init();
 
     rstatus_t status = core_ctx_create(nci);
     if (status != DN_OK) {
@@ -243,7 +249,7 @@ core_start(struct instance *nci)
         mbuf_deinit();
     }
 
-	return status;
+    return status;
 }
 
 void

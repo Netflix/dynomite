@@ -418,7 +418,7 @@ error:
 void
 event_loop_entropy(event_entropy_cb_t cb, void *arg)
 {
-    struct entropy *st = arg;
+    struct entropy *ent = arg;
     int status, kq;
     struct kevent change, event;
     struct timespec ts, *tsp;
@@ -429,15 +429,15 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
         return;
     }
 
-    EV_SET(&change, st->sd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    EV_SET(&change, ent->sd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
 
-    /* kevent should block indefinitely if st->interval < 0 */
-    if (st->interval < 0) {
+    /* kevent should block indefinitely if ent->interval < 0 */
+    if (ent->interval < 0) {
         tsp = NULL;
     } else {
         tsp = &ts;
-        tsp->tv_sec = st->interval / 1000LL;
-        tsp->tv_nsec = (st->interval % 1000LL) * 1000000LL;
+        tsp->tv_sec = ent->interval / 1000LL;
+        tsp->tv_nsec = (ent->interval % 1000LL) * 1000000LL;
     }
 
 
@@ -449,7 +449,7 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
             if (errno == EINTR) {
                 continue;
             }
-            log_error("kevent on kq %d with m %d failed: %s", kq, st->sd,
+            log_error("kevent on kq %d with m %d failed: %s", kq, ent->sd,
                       strerror(errno));
             goto error;
         }
@@ -463,7 +463,7 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
                 if (ev->data == EINTR) {
                     continue;
                 }
-                log_error("kevent on kq %d with m %d failed: %s", kq, st->sd,
+                log_error("kevent on kq %d with m %d failed: %s", kq, ent->sd,
                           strerror(ev->data));
                 goto error;
             }

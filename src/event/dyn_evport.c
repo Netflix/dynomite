@@ -425,7 +425,7 @@ error:
 void
 event_loop_entropy(event_entropy_cb_t cb, void *arg)
 {
-    struct entropy *st = arg;
+    struct entropy *ent = arg;
     int status, evp;
     port_event_t event;
     struct timespec ts, *tsp;
@@ -436,20 +436,20 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
         return;
     }
 
-    status = port_associate(evp, PORT_SOURCE_FD, st->sd, POLLIN, NULL);
+    status = port_associate(evp, PORT_SOURCE_FD, ent->sd, POLLIN, NULL);
     if (status < 0) {
-        log_error("port associate on evp %d sd %d failed: %s", evp, st->sd,
+        log_error("port associate on evp %d sd %d failed: %s", evp, ent->sd,
                   strerror(errno));
         goto error;
     }
 
-    /* port_getn should block indefinitely if st->interval < 0 */
-    if (st->interval < 0) {
+    /* port_getn should block indefinitely if ent->interval < 0 */
+    if (ent->interval < 0) {
         tsp = NULL;
     } else {
         tsp = &ts;
-        tsp->tv_sec = st->interval / 1000LL;
-        tsp->tv_nsec = (st->interval % 1000LL) * 1000000LL;
+        tsp->tv_sec = ent->interval / 1000LL;
+        tsp->tv_nsec = (ent->interval % 1000LL) * 1000000LL;
     }
 
 
@@ -464,7 +464,7 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
 
             if (errno != ETIME) {
                 log_error("port getn on evp %d with m %d failed: %s", evp,
-                          st->sd, strerror(errno));
+                          ent->sd, strerror(errno));
                 goto error;
             }
         }
@@ -473,9 +473,9 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
 
         if (nreturned == 1) {
             /* re-associate monitoring descriptor with the port */
-            status = port_associate(evp, PORT_SOURCE_FD, st->sd, POLLIN, NULL);
+            status = port_associate(evp, PORT_SOURCE_FD, ent->sd, POLLIN, NULL);
             if (status < 0) {
-                log_error("port associate on evp %d sd %d failed: %s", evp, st->sd,
+                log_error("port associate on evp %d sd %d failed: %s", evp, ent->sd,
                           strerror(errno));
             }
         }

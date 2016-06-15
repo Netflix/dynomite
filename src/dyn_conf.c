@@ -2177,12 +2177,12 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (string_empty(&cp->recon_key_file)) {
-        string_copy_c(&cp->recon_key_file, &RECON_KEY_FILE);
+        string_copy_c(&cp->recon_key_file, (const uint8_t *)RECON_KEY_FILE);
         log_debug(LOG_INFO, "setting reconciliation key file to default value:%s", RECON_KEY_FILE);
     }
 
     if (string_empty(&cp->recon_iv_file)) {
-        string_copy_c(&cp->recon_iv_file, &RECON_IV_FILE);
+        string_copy_c(&cp->recon_iv_file, (const uint8_t *)RECON_IV_FILE);
         log_debug(LOG_INFO, "setting reconciliation IV file to default value:%s", RECON_IV_FILE);
     }
 
