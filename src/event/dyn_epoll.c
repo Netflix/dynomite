@@ -137,7 +137,7 @@ event_add_out(struct event_base *evb, struct pollable *c)
     ASSERT(ep > 0);
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
-    ASSERT(c->recv_active);
+    //ASSERT(c->recv_active);
 
     if (c->send_active) {
         return 0;

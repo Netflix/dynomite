@@ -71,7 +71,7 @@ msec_t server_timeout(struct conn *conn);
 rstatus_t server_init(struct server_pool *sp, struct array *conf_server);
 rstatus_t server_connect(struct context *ctx, struct datastore *server, struct conn *conn);
 
-struct conn *get_datastore_conn(struct context *ctx, struct server_pool *pool);
+struct conn *get_datastore_conn(struct thread_ctx *ptctx);
 rstatus_t server_pool_init(struct server_pool *server_pool, struct conf_pool *conf_pool, struct context *ctx);
 void server_pool_deinit(struct server_pool *server_pool);
 rstatus_t server_pool_init_my_dc_rack(struct server_pool *sp);

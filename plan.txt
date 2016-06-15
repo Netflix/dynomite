@@ -19,16 +19,21 @@
 06/13
     x Unlink message queue after creation
     x Send to peer should take into account thread_ctx: peer should have thread_ctx?
-    o Create 1 extra thread, for remote region nodes.
+    x Create 1 extra thread, for remote region nodes.
 06/14
+    o better allocation code on threads, also the g_ptctx is NULL most of the time.
     o dyn_epoll is not thread safe. Make recv_active, send_active as atomic
+    o Replace node in main thread tries to disconnect and reconnect, avoid that in the main thread.
+    o Get rid peer field
+    o Optimize calls to thread_ctx_add/del_* by doing proactive checks
+    o Make dnode client and client uniform (dnode client also has HashTable, and referencing etc) 
     o Protect global datastructures
         o Stats : read/write lock
         o topology : read/write lock
-    o Make dnode client and client uniform (dnode client also has HashTable, and referencing etc) 
     o Check all event_adds, and make sure we call event add out/in before we write to the connection
     o Do not destroy connection on closing.
     o different type for pollable and connection type
     o Per thread stats and reporting
 
     o Check for socket connect success: http://stackoverflow.com/questions/10187347/async-connect-and-disconnect-with-epoll-linux/10194883#10194883
+    o Fix building tools directory

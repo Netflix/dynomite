@@ -28,7 +28,7 @@ dnode_ref(struct conn *conn, void *owner)
 
     /* owner of the proxy connection is the server pool */
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->p.type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn);
 
     log_debug(LOG_VVERB, "ref conn %p owner %p", conn, pool);
 }

@@ -27,7 +27,7 @@ handle_ipc_events(void *arg, uint32_t events)
 
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {
-        log_error("handing error on ipc %d", ptipc->p.sd);
+        log_error("handling error on ipc %d", ptipc->p.sd);
 		ASSERT(NULL);
 
 		return DN_ERROR;
@@ -35,15 +35,18 @@ handle_ipc_events(void *arg, uint32_t events)
 
 	/* read takes precedence over write */
 	if (events & EVENT_READ) {
-        log_debug(LOG_WARN, "handing read on ipc %d", ptipc->p.sd);
+        log_debug(LOG_VVERB, "handling read on ipc %d", ptipc->p.sd);
 
         struct msg * msg = NULL;
+        uint32_t count = 0;
         while ((msg = thread_ipc_receive(ptipc)) != NULL) {
+            count++;
             if (msg->request) {
                 // received a message, if its a request forward it to peer
                 struct peer *dst_peer = msg->dst_peer;
                 ASSERT(dst_peer != NULL);
                 ASSERT(g_ptctx == dst_peer->ptctx);
+                log_debug(LOG_VERB, "forward req %d:%d to peer %p", msg->id, msg->parent_id, dst_peer);
                 dnode_peer_req_forward(g_ptctx->ctx, dst_peer, msg);
             } else {
                 // if its a response, call the client associated with it.
@@ -57,7 +60,8 @@ handle_ipc_events(void *arg, uint32_t events)
                 IGNORE_RET_VAL(status);
             }
         }
-	}
+        log_debug(LOG_DEBUG, "ptctx %p handled %u messages", g_ptctx, count);
+    }
 
 	if (events & EVENT_WRITE) {
         ASSERT_LOG(NULL, "received write notifiction on ipc %d, But I never registered for one", ptipc->p.sd);
@@ -160,11 +164,9 @@ rstatus_t
 thread_ctx_datastore_preconnect(void *elem, void *arg)
 {
     pthread_ctx ptctx = elem;
-    struct context *ctx = ptctx->ctx;
-    struct server_pool *pool = &ctx->pool;
 
     if (ptctx->datastore_conn == NULL)
-        ptctx->datastore_conn = get_datastore_conn(ctx, pool);
+        ptctx->datastore_conn = get_datastore_conn(ptctx);
     if (ptctx->datastore_conn == NULL) {
         log_error("Could not preconnect to datastore");
         return DN_ERROR;
@@ -177,6 +179,7 @@ thread_ctx_init(pthread_ctx ptctx, struct context *ctx)
 {
     ptctx->ctx = ctx;
     ptctx->tid = tid_counter++;
+    ptctx->pthread_id = 0; // real thrread id thats running
 	ptctx->evb = event_base_create(EVENT_SIZE, &thread_ctx_core);
     ptctx->datastore_conn = NULL;
     ptctx->ptipc = thread_ipc_mq_create();
@@ -241,6 +244,7 @@ rstatus_t
 thread_ctx_forward_req(pthread_ctx ptctx, struct msg *req)
 {
     ASSERT(req->dst_peer->ptctx == ptctx);
+    log_debug(LOG_VERB, "%p(%d) forwarding req %d:%d", ptctx, ptctx->tid, req->id, req->parent_id);
     return thread_ipc_send(ptctx->ptipc, req);
 }
 
@@ -313,15 +317,36 @@ thread_ctx_timeout(pthread_ctx ptctx)
 	}
 }
 
-rstatus_t
-thread_ctx_run_once(pthread_ctx ptctx)
+void *
+notify_main_thread()
 {
-	int nsd;
+    int rc = pthread_barrier_wait(&datastore_preconnect_barr);
+    if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
+    {
+        log_error("Could not wait on barrier");
+    }
+}
+
+void *
+thread_ctx_run(void *arg)
+{
+    pthread_ctx ptctx = arg;
     g_ptctx = ptctx;
-	nsd = event_wait(ptctx->evb, (int)ptctx->timeout);
-	if (nsd < 0) {
-		return nsd;
-	}
-	thread_ctx_timeout(ptctx);
-    return DN_OK;
+
+    if (ptctx->ctx->pool.preconnect) {
+        if (thread_ctx_datastore_preconnect(ptctx, NULL) != DN_OK) {
+            log_error("Failed to preconnect to datastore");
+        }
+    }
+
+    // notify main thread
+    notify_main_thread();
+
+	int nsd;
+    for (;;) {
+        nsd = event_wait(ptctx->evb, (int)ptctx->timeout);
+        ASSERT(nsd >= 0);
+	    thread_ctx_timeout(ptctx);
+    }
+    return 0;
 }

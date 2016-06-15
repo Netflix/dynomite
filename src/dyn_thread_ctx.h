@@ -12,6 +12,7 @@ extern __thread pthread_ctx g_ptctx;
 typedef struct thread_ctx {
     struct context      *ctx;
     tid_t               tid;
+    pthread_t           pthread_id;
     struct event_base   *evb;
     struct conn         *datastore_conn;
     pthread_ipc         ptipc;
@@ -22,7 +23,7 @@ typedef struct thread_ctx {
 pthread_ctx thread_ctx_create(void);
 
 // Run functions
-rstatus_t thread_ctx_run_once(pthread_ctx ptctx);
+void *thread_ctx_run(void *arg);
 
 // Init and Deinit
 rstatus_t thread_ctx_init(pthread_ctx ptctx, struct context *ctx);

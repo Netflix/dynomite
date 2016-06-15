@@ -37,15 +37,18 @@ mq_ipc_init(pthread_ipc ptipc, pthread_ctx ptctx)
 
     mode_t omask;
     omask = umask(0);
-    if (mq_unlink(mq_name) == -1) {
-        log_error("failed to unlink mq %s. Please manually delete it", mq_name);
-    }
+    // do a unlink first, just in case
+    mq_unlink(mq_name);
     ptipc->p.sd = mq_open(mq_name, O_RDWR|O_NONBLOCK|O_CREAT|O_EXCL,
                           (S_IRWXU | S_IRWXG | S_IRWXO), &attr);
     umask(omask);
     if (ptipc->p.sd == -1) {
         ASSERT_LOG(0,"failed to open mq for reading: %s, %s\n ", mq_name, strerror(errno));
     }
+    /*if (mq_unlink(mq_name) == -1) {
+        log_error("failed to unlink mq %s. Please manually delete it", mq_name);
+    }*/
+
     log_notice("Opened mq %s sd %d for reading", mq_name, ptipc->p.sd);
     thread_ctx_add_in(ptipc->owner_ptctx, get_pollable(ipc));
     return DN_OK;
@@ -75,11 +78,14 @@ mq_ipc_receive(pthread_ipc ptipc)
     // read from the mq in non blocking way
     struct msg *msg = NULL;
     // we have to receive the pointer itself, hence &msg, and sizeof(msg)
-    if (mq_receive(ptipc->p.sd, (char *)&msg, sizeof(msg), NULL) != 0) {
-        if (errno != EAGAIN)
-            log_error("failed to receive from mq: %.*s, err:%d %s\n", ipc->name.len,
+    while (mq_receive(ptipc->p.sd, (char *)&msg, sizeof(msg), NULL) == -1) {
+        if (errno == EAGAIN)
+            return NULL;
+        if (errno != EINTR) {
+            log_error("failed to receive from mq: %.*s, err:%d %s", ipc->name.len,
                     ipc->name.data, errno, strerror(errno));
-        return NULL;
+            return NULL;
+        }
     }
 
     return msg;

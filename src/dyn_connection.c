@@ -637,7 +637,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         }
     }
 
-    status = thread_ctx_add_conn(conn->ptctx, conn);
+    status = thread_ctx_add_conn(conn->ptctx, conn_get_pollable(conn));
     if (status != DN_OK) {
         log_error("event add conn s %d for '%.*s' failed: %s",
                 conn->p.sd, conn->pname.len, conn->pname.data,

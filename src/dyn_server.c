@@ -47,7 +47,7 @@ server_ref(struct conn *conn, void *owner)
     string_duplicate(&conn->pname, &server->endpoint.pname);
 
 	conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(server->owner->ctx, conn->p.type);
+    conn->ptctx = core_get_ptctx_for_conn(server->owner->ctx, conn);
 
 	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -458,11 +458,13 @@ server_pool_update(struct server_pool *pool)
 }
 
 struct conn *
-get_datastore_conn(struct context *ctx, struct server_pool *pool)
+get_datastore_conn(pthread_ctx ptctx)
 {
 	rstatus_t status;
 	struct datastore *datastore;
 	struct conn *conn;
+    struct context *ctx = ptctx->ctx;
+    struct server_pool *pool = &ctx->pool;
 
 	status = server_pool_update(pool);
 	if (status != DN_OK) {

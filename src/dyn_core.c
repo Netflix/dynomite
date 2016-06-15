@@ -33,7 +33,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 
-#define MAX_THREADS 1
+pthread_barrier_t datastore_preconnect_barr;
 static void
 core_debug(struct context *ctx)
 {
@@ -80,29 +80,14 @@ core_dnode_peer_pool_preconnect(struct context *ctx)
 }
 
 static rstatus_t
-core_datastore_preconnect(struct context *ctx)
-{
-    if (ctx->pool.preconnect) {
-        uint32_t i = 0;
-        for (i = 0; i< MAX_THREADS; i++) {
-            pthread_ctx ptctx = array_get(&ctx->thread_ctxs, i);
-            THROW_STATUS(thread_ctx_datastore_preconnect(ptctx, ctx));
-        }
-    }
-
-	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
-	if (status != DN_OK)
-	    dnode_peer_pool_disconnect(ctx);
-    return status;
-}
-
-static rstatus_t
 core_topo_init_seeds_peers(struct context *ctx)
 {
 	/* initialize peers */
 	THROW_STATUS(topo_init_seeds_peers(ctx));
-    THROW_STATUS(core_datastore_preconnect(ctx));
-    return DN_OK;
+	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
+	if (status != DN_OK)
+	    dnode_peer_pool_disconnect(ctx);
+    return status;
 }
 
 static rstatus_t
@@ -133,7 +118,7 @@ static rstatus_t
 core_thread_ctx_init(struct context *ctx)
 {
     array_null(&ctx->thread_ctxs);
-    THROW_STATUS(array_init(&ctx->thread_ctxs, 1, sizeof(thread_ctx)));
+    THROW_STATUS(array_init(&ctx->thread_ctxs, MAX_THREADS, sizeof(thread_ctx)));
     int i = 0;
     for (i = 0; i< MAX_THREADS; i++) {
         pthread_ctx ptctx = array_push(&ctx->thread_ctxs);
@@ -289,27 +274,38 @@ core_loop(struct context *ctx)
 {
 	core_process_messages();
     // Run the thread function once.
-    thread_ctx_run_once(array_get(&ctx->thread_ctxs, 0));
 	stats_swap(ctx->stats);
 
 	return DN_OK;
 }
 
 pthread_ctx
-core_get_ptctx_for_conn(struct context *ctx, connection_type_t type)
+core_get_ptctx_for_conn(struct context *ctx, struct conn *conn)
 {
-    pthread_ctx ptctx = array_get(&ctx->thread_ctxs, 0);
-    // Seperate thread_ctx for dyn_proxy, dyn_dnode_proxy, so that all clients
-    // belong to same thread_ctx, all dnode clients belong to another thread_ctx.
-    // datastore connections belong to current thread_ctx
-    // peer connections belong to the thread_ctx of the peer object
-    return ptctx;
+    pthread_ctx ptctx0 = array_get(&ctx->thread_ctxs, 0);
+    pthread_ctx ptctx1 = array_get(&ctx->thread_ctxs, 1);
+    pthread_ctx ptctx2 = array_get(&ctx->thread_ctxs, 2);
+    pthread_ctx ret = NULL;
+    switch(conn->p.type)
+    {
+        case CONN_PROXY : ret = ptctx0; break;
+        case CONN_CLIENT: ret = ptctx0; break;
+        case CONN_SERVER: ret = g_ptctx; break;
+        case CONN_DNODE_PEER_CLIENT: ret = conn->same_dc ? ptctx1 : ptctx2; break;
+        case CONN_DNODE_PEER_SERVER: ret = conn->same_dc ? ptctx1 : ptctx2; break;
+        case CONN_DNODE_PEER_PROXY: ret = ptctx1; break;
+        default: ret = g_ptctx; break;
+    }
+    log_notice("Returning ptctx %p(%d) for conn %p(%s)", ret, ret ? ret->tid : -1,
+               conn, conn_get_type_string(conn));
+    return ret;
 }
 
 pthread_ctx
 core_get_ptctx_for_peer(struct context *ctx, struct peer *peer)
 {
+    pthread_ctx ptctx1 = array_get(&ctx->thread_ctxs, 1);
+    pthread_ctx ptctx2 = array_get(&ctx->thread_ctxs, 2);
     // For now use the same as dnode_proxy, i.e g_ptctx
-    pthread_ctx ptctx = array_get(&ctx->thread_ctxs, 0);
-    return ptctx;
+    return peer_is_same_dc(peer) ? ptctx1 : ptctx2;
 }

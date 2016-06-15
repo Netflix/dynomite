@@ -29,6 +29,7 @@
 #include <fcntl.h>
 
 #include "dyn_core.h"
+#include "dyn_thread_ctx.h"
 
 static struct logger logger;
 
@@ -146,9 +147,9 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     char buffer [80];
     strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", localtime(&curTime.tv_sec));
 
-    len += dn_scnprintf(buf + len, size - len, "[%.*s.%03d] %s:%d ",
+    len += dn_scnprintf(buf + len, size - len, "[%.*s.%03d] (%d) %s:%d ",
                         strlen(buffer), buffer, (int64_t)curTime.tv_usec / 1000,
-                        file, line);
+                        g_ptctx ? g_ptctx->tid : -1, file, line);
 
     va_start(args, fmt);
     len += dn_vscnprintf(buf + len, size - len, fmt, args);

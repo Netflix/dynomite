@@ -31,7 +31,7 @@ dnode_client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn->p.type);
+    conn->ptctx = core_get_ptctx_for_conn(pool->ctx, conn);
     log_debug(LOG_VVERB, "dyn: ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }

@@ -34,6 +34,7 @@
 #include "dyn_conf.h"
 #include "dyn_signal.h"
 #include "dyn_asciilogo.h"
+#include "dyn_thread_ctx.h"
 
 #define DN_CONF_PATH        "conf/dynomite.yml"
 
@@ -576,6 +577,18 @@ dn_post_run(struct instance *nci)
 }
 
 static rstatus_t
+dn_create_thread(pthread_ctx ptctx)
+{
+    int ret = pthread_create(&ptctx->pthread_id, NULL,
+                   &thread_ctx_run, ptctx) ;
+    if (ret != 0) {
+        log_error("Not able to create thread. err %d %s", errno, strerror(errno));
+        return DN_ERROR;
+    }
+    return DN_OK;
+}
+
+static rstatus_t
 dn_run(struct instance *nci)
 {
     rstatus_t status;
@@ -589,7 +602,31 @@ dn_run(struct instance *nci)
     if (!ctx->enable_gossip)
     	ctx->dyn_state = NORMAL;
 
+    // +1 for main thread
+    if(pthread_barrier_init(&datastore_preconnect_barr, NULL, MAX_THREADS + 1))
+    {
+        log_error("Could not create a barrier err:%d %s", errno, strerror(errno));
+        return DN_ERROR;
+    }
+
+
     // Start thread per thread_ctx
+    log_notice("Spawning %d threads", MAX_THREADS);
+    uint16_t i;
+    for (i = 0; i < MAX_THREADS; i++) {
+        pthread_ctx ptctx = array_get(&ctx->thread_ctxs, i);
+        THROW_STATUS(dn_create_thread(ptctx));
+    }
+    log_notice("Waiting for %d threads to preconnect to datastore", MAX_THREADS);
+    // wait on barrier for all threads to preconnect
+    int rc = pthread_barrier_wait(&datastore_preconnect_barr);
+    if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
+    {
+        log_error("Could not wait on barrier %d", rc);
+        exit(-1);
+    }
+    log_notice("all threads preconnected to datastore");
+
     /* run rabbit run */
     for (;;) {
         status = core_loop(ctx);

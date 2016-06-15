@@ -635,13 +635,13 @@ gossip_add_node_if_absent(struct server_pool *sp,
     struct gossip_node *g_node = dictFetchValue(g_rack->dict_token_nodes, token_str);
 
     if (g_node == NULL) { //never existed
-        log_debug(LOG_VERB, "Node not found!  We need to add it");
-        log_debug(LOG_VERB, "adding node : dc[%.*s]", dc->len, dc->data);
-        log_debug(LOG_VERB, "adding node : g_rack[%.*s]", g_rack->name.len, g_rack->name.data);
-        log_debug(LOG_VERB, "adding node : address[%.*s]", address->len, address->data);
-        log_debug(LOG_VERB, "adding node : ip[%.*s]", ip->len, ip->data);
-        log_debug(LOG_VERB, "adding node : port[%.*s]", port->len, port->data);
-        log_debug(LOG_VERB, "suggested state : %d", state);
+        log_debug(LOG_NOTICE, "Node not found!  We need to add it");
+        log_debug(LOG_NOTICE, "adding node : dc[%.*s]", dc->len, dc->data);
+        log_debug(LOG_NOTICE, "adding node : g_rack[%.*s]", g_rack->name.len, g_rack->name.data);
+        log_debug(LOG_NOTICE, "adding node : address[%.*s]", address->len, address->data);
+        log_debug(LOG_NOTICE, "adding node : ip[%.*s]", ip->len, ip->data);
+        log_debug(LOG_NOTICE, "adding node : port[%.*s]", port->len, port->data);
+        log_debug(LOG_NOTICE, "suggested state : %d", state);
         //print_dyn_token(token, 6);
         gossip_add_node(sp, dc, g_rack, address, ip, port, token, state);
     } else if (dictFind(g_rack->dict_name_nodes, ip) != NULL) {

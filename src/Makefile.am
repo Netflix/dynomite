@@ -26,7 +26,8 @@ if OS_SOLARIS
 AM_LDFLAGS += -lnsl -lsocket
 endif
 
-SUBDIRS = hashkit proto event seedsprovider tools
+#SUBDIRS = hashkit proto event seedsprovider tools
+SUBDIRS = hashkit proto event seedsprovider
 
 sbin_PROGRAMS = dynomite dynomite-test
 

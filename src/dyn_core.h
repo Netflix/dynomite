@@ -63,6 +63,7 @@
 # define DN_HAVE_BACKTRACE 1
 #endif
 
+#define MAX_THREADS 3
 #define THROW_STATUS(s)                                             \
                 {                                                   \
                     rstatus_t __ret = (s);                          \
@@ -130,6 +131,7 @@ struct peer;
 #include "dyn_setting.h"
 
 #include "event/dyn_event.h"
+extern pthread_barrier_t datastore_preconnect_barr;
 
 #define ENCRYPTION 1
 
@@ -275,7 +277,7 @@ ctx_get_topology(struct context *ctx)
 rstatus_t core_create(struct instance *nci);
 void core_destroy(struct context *ctx);
 rstatus_t core_loop(struct context *ctx);
-struct thread_ctx *core_get_ptctx_for_conn(struct context *ctx, connection_type_t type);
+struct thread_ctx *core_get_ptctx_for_conn(struct context *ctx, struct conn *conn);
 struct thread_ctx *core_get_ptctx_for_peer(struct context *ctx, struct peer *peer);
 
 #endif

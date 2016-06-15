@@ -82,7 +82,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->same_dc = peer_is_same_dc(peer)? 1 : 0;
 
     conn->owner = owner;
-    conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn->p.type);
+    conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn);
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
@@ -1073,11 +1073,15 @@ forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp)
     rsp->req_id = req->parent_id ? req->parent_id : req->id;
     rsp->client_conn = c_conn;
     if (c_conn->ptctx != g_ptctx) {
+        // disassociate req/response
+        req->peer = NULL;
+        req->selected_rsp =  NULL;
         thread_ctx_forward_rsp(c_conn->ptctx, rsp);
-        return;
+    } else {
+        rstatus_t status = conn_handle_response(c_conn, rsp);
+        IGNORE_RET_VAL(status);
     }
-    rstatus_t status = conn_handle_response(c_conn, rsp);
-    IGNORE_RET_VAL(status);
+
     if (req->swallow) {
         log_info("swallow request %d:%d", req->id, req->parent_id);
         req_put(req);
@@ -1535,6 +1539,7 @@ dnode_peer_req_forward(struct context *ctx,
         // This peer belongs to a different thread, forward the msg to that thread
         msg->dst_peer = peer;
         THROW_STATUS(thread_ctx_forward_req(peer->ptctx, msg));
+        return DN_OK;
     }
     struct conn *p_conn = dnode_peer_active_conn(ctx, peer);
     if (p_conn == NULL)
