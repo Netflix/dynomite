@@ -39,7 +39,7 @@ core_debug(struct context *ctx)
 {
     struct server_pool *sp = ctx_get_pool(ctx);
     struct topology *topo = ctx_get_topology(ctx);
-	log_debug(LOG_VERB, "=====================Peers info=====================");
+    log_debug(LOG_VERB, "=====================Peers info=====================");
     log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
     topo_print(topo);
 }
@@ -49,20 +49,20 @@ core_init_last(struct context *ctx)
 {
     preselect_remote_rack_for_replication(ctx);
     THROW_STATUS(server_pool_init_my_dc_rack(&ctx->pool));
-	core_debug(ctx);
+    core_debug(ctx);
     return DN_OK;
 }
 
 static rstatus_t
 core_gossip_pool_init(struct context *ctx)
 {
-	//init ring msg queue
-	CBUF_Init(C2G_InQ);
-	CBUF_Init(C2G_OutQ);
+    //init ring msg queue
+    CBUF_Init(C2G_InQ);
+    CBUF_Init(C2G_OutQ);
 
-	//init stats msg queue
-	CBUF_Init(C2S_InQ);
-	CBUF_Init(C2S_OutQ);
+    //init stats msg queue
+    CBUF_Init(C2S_InQ);
+    CBUF_Init(C2S_OutQ);
 
     THROW_STATUS(gossip_pool_init(ctx));
     THROW_STATUS(core_init_last(ctx));
@@ -72,7 +72,7 @@ core_gossip_pool_init(struct context *ctx)
 static rstatus_t
 core_dnode_peer_pool_preconnect(struct context *ctx)
 {
-	THROW_STATUS(dnode_peer_pool_preconnect(ctx));
+    THROW_STATUS(dnode_peer_pool_preconnect(ctx));
     rstatus_t status = core_gossip_pool_init(ctx);
     //if (status != DN_OK)
       //  gossip_pool_deinit(ctx);
@@ -82,21 +82,21 @@ core_dnode_peer_pool_preconnect(struct context *ctx)
 static rstatus_t
 core_topo_init_seeds_peers(struct context *ctx)
 {
-	/* initialize peers */
-	THROW_STATUS(topo_init_seeds_peers(ctx));
-	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
-	if (status != DN_OK)
-	    dnode_peer_pool_disconnect(ctx);
+    /* initialize peers */
+    THROW_STATUS(topo_init_seeds_peers(ctx));
+    rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
+    if (status != DN_OK)
+        dnode_peer_pool_disconnect(ctx);
     return status;
 }
 
 static rstatus_t
 core_dnode_init(struct context *ctx)
 {
-	/* initialize dnode listener per server pool */
+    /* initialize dnode listener per server pool */
     THROW_STATUS(dnode_init(ctx));
 
-	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
+    ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
     rstatus_t status = core_topo_init_seeds_peers(ctx);
     if (status != DN_OK)
         topo_deinit_seeds_peers(ctx);
@@ -106,7 +106,7 @@ core_dnode_init(struct context *ctx)
 static rstatus_t
 core_proxy_init(struct context *ctx)
 {
-	/* initialize proxy per server pool */
+    /* initialize proxy per server pool */
     THROW_STATUS(proxy_init(ctx));
     rstatus_t status = core_dnode_init(ctx);
     if (status != DN_OK)
@@ -138,40 +138,43 @@ core_entropy_init(struct context *ctx)
     /* initializing anti-entropy */
     ctx->entropy = entropy_init(ctx, nci->entropy_port, nci->entropy_addr);
     if (ctx->entropy == NULL) {
-    	log_error("Failed to create entropy!!!");
+        log_error("Failed to create entropy!!!");
         return DN_ERROR;
     }
     rstatus_t status = core_thread_ctx_init(ctx);
     if (status != DN_OK) {
         array_each(&ctx->thread_ctxs, thread_ctx_deinit, NULL);
     }
-	return status;
+    return status;
 }
 
 static rstatus_t
 core_stats_create(struct context *ctx)
 {
     struct instance *nci = ctx->instance;
-	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
-			                  nci->hostname, &ctx->pool, ctx);
+    ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
+                              nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
-    	log_error("Failed to create stats!!!");
-		return DN_ERROR;
-	}
+        log_error("Failed to create stats!!!");
+        return DN_ERROR;
+    }
+
     rstatus_t status = core_entropy_init(ctx);
     if (status != DN_OK)
-    	entropy_conn_destroy(ctx->entropy);
+        entropy_conn_destroy(ctx->entropy);
+    
     return status;
 }
 
 static rstatus_t
 core_crypto_init(struct context *ctx)
 {
-	/* crypto init */
+    /* crypto init */
     THROW_STATUS(crypto_init(&ctx->pool));
     rstatus_t status = core_stats_create(ctx);
     if (status != DN_OK)
-		stats_destroy(ctx->stats);
+        stats_destroy(ctx->stats);
+    
     return status;
 }
 
@@ -181,50 +184,50 @@ core_server_pool_init(struct context *ctx)
     THROW_STATUS(server_pool_init(&ctx->pool, &ctx->cf->pool, ctx));
     rstatus_t status = core_crypto_init(ctx);
     if (status != DN_OK)
-		crypto_deinit();
+        crypto_deinit();
     return status;
 }
 
 static rstatus_t
 ctx_init(struct context *ctx, struct instance *nci)
 {
-	ctx->max_timeout = nci->stats_interval;
-	//ctx->timeout = ctx->max_timeout;
-	ctx->dyn_state = INIT;
+    ctx->max_timeout = nci->stats_interval;
+    //ctx->timeout = ctx->max_timeout;
+    ctx->dyn_state = INIT;
     ctx->admin_opt = 0;
     return DN_OK;
-
 }
 
 static rstatus_t
 core_ctx_create(struct instance *nci)
 {
-	struct context *ctx;
+    struct context *ctx;
 
-	srand((unsigned) time(NULL));
+    srand((unsigned) time(NULL));
 
-	ctx = dn_zalloc(sizeof(*ctx));
-	if (ctx == NULL) {
-		loga("Failed to create context!!!");
-		return DN_ERROR;
-	}
+    ctx = dn_zalloc(sizeof(*ctx));
+    if (ctx == NULL) {
+        loga("Failed to create context!!!");
+        return DN_ERROR;
+    }
     THROW_STATUS(ctx_init(ctx, nci));
     nci->ctx = ctx;
     ctx->instance = nci;
-	/* parse and create configuration */
+    /* parse and create configuration */
     ctx->cf = conf_create(nci->conf_filename);
-	if (ctx->cf == NULL) {
-		loga("Failed to create conf!!!");
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return DN_ERROR;
-	}
-	rstatus_t status = core_server_pool_init(ctx);
+    if (ctx->cf == NULL) {
+        loga("Failed to create conf!!!");
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+    return DN_ERROR;
+    }
+
+    rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return DN_ERROR;
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+        return DN_ERROR;
     }
     return status;
 }
@@ -232,20 +235,20 @@ core_ctx_create(struct instance *nci)
 static void
 core_ctx_destroy(struct context *ctx)
 {
-	proxy_deinit(ctx);
-	stats_destroy(ctx->stats);
-	server_pool_deinit(&ctx->pool);
-	conf_destroy(ctx->cf);
-	dn_free(ctx);
+    proxy_deinit(ctx);
+    stats_destroy(ctx->stats);
+    server_pool_deinit(&ctx->pool);
+    conf_destroy(ctx->cf);
+    dn_free(ctx);
 }
 
 rstatus_t
 core_create(struct instance *nci)
 {
-	mbuf_init(nci);
-	msg_init(nci);
-	dmsg_init();
-	conn_init();
+    mbuf_init(nci);
+    msg_init(nci);
+    dmsg_init();
+    conn_init();
 
     rstatus_t status = core_ctx_create(nci);
     if (status != DN_OK) {
@@ -255,44 +258,44 @@ core_create(struct instance *nci)
         mbuf_deinit();
     }
 
-	return status;
+    return status;
 }
 
 void
 core_destroy(struct context *ctx)
 {
-	conn_deinit();
-	msg_deinit();
-	dmsg_deinit();
-	mbuf_deinit();
-	core_ctx_destroy(ctx);
+    conn_deinit();
+    msg_deinit();
+    dmsg_deinit();
+    mbuf_deinit();
+    core_ctx_destroy(ctx);
 }
 
 static rstatus_t
 core_process_messages(void)
 {
-	log_debug(LOG_VVVERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
+    log_debug(LOG_VVVERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
 
-	while (!CBUF_IsEmpty(C2G_OutQ)) {
-		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
-		if (msg != NULL && msg->cb != NULL) {
-			msg->cb(msg);
-			core_debug(msg->sp->ctx);
-			ring_msg_deinit(msg);
-		}
-	}
+    while (!CBUF_IsEmpty(C2G_OutQ)) {
+        struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
+        if (msg != NULL && msg->cb != NULL) {
+            msg->cb(msg);
+            core_debug(msg->sp->ctx);
+            ring_msg_deinit(msg);
+        }
+    }
 
-	return DN_OK;
+    return DN_OK;
 }
 
 rstatus_t
 core_loop(struct context *ctx)
 {
-	core_process_messages();
+    core_process_messages();
     // Run the thread function once.
-	stats_swap(ctx->stats);
+    stats_swap(ctx->stats);
 
-	return DN_OK;
+    return DN_OK;
 }
 
 pthread_ctx
