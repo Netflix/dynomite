@@ -344,11 +344,11 @@ entropy_key_iv_load(struct context *ctx){
     struct stat     file_stat;
     unsigned char   buff[BUFFER_SIZE];
 
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
+    struct server_pool *pool = &ctx->pool;
 
     /* 1. Check if the String array of the file names has been allocated */
     if (string_empty(&pool->recon_key_file) || string_empty(&pool->recon_iv_file)) {
-    	log_error("Could NOT read key or iv file");
+    	log_error("Could NOT read entropy key or iv file");
     	return DN_ERROR;
     }
 
@@ -377,8 +377,8 @@ entropy_key_iv_load(struct context *ctx){
     /* 4. loading the .pem files */
     FILE *key_file = fopen(key_file_name,"r");
     if(key_file == NULL){
-    	    log_error("opening key.pem file failed %s", pool->recon_key_file);
-    	    return DN_ERROR;
+    	log_error("opening key.pem file failed %s", pool->recon_key_file);
+    	return DN_ERROR;
     }
     FILE *iv_file = fopen(iv_file_name,"r");
 	if(iv_file == NULL){
@@ -435,8 +435,8 @@ entropy_key_iv_load(struct context *ctx){
  * Function:  entropy_snd_init
  * --------------------
  * Initiates the data for the connection towards another cluster for reconciliation.
- * Loading of key/iv happens only once by calling entropy_key_iv_load which is a util function.
- *  The same key/iv are reused in the entropy_rcv_init as well.
+ * Loading of key/iv happens only once by calling entropy_key_iv_load, which is a util function.
+ * The same key/iv are reused for both entropy rcv and snd.
  *
  *  returns: a entropy_conn structure with information about the connection
  *           or NULL if a new thread cannot be picked up.
@@ -451,7 +451,7 @@ entropy_init( struct context *ctx, uint16_t entropy_port, char *entropy_ip)
 
     cn = dn_alloc(sizeof(*cn));
     if (cn == NULL) {
-        log_error("Cannot allocate snd entropy structure");
+        log_error("Cannot allocate entropy structure");
         goto error;
     }
 
