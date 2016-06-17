@@ -195,6 +195,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
        to get the corresponding request */
     ASSERT_LOG(rsp->peer, "rsp %d:%d does not have a peer", rsp->id, rsp->parent_id);
     struct msg *req = rsp->peer;
+    log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
     req->peer = NULL;
     req->selected_rsp = rsp;
     status = thread_ctx_add_out(conn->ptctx, conn_get_pollable(conn));

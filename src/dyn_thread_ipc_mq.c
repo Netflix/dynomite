@@ -31,7 +31,7 @@ mq_ipc_init(pthread_ipc ptipc, pthread_ctx ptctx)
     // create a message queue.
     struct mq_attr attr;
     attr.mq_flags   = O_NONBLOCK;
-    attr.mq_maxmsg  = 10;
+    attr.mq_maxmsg  = 32768;
     attr.mq_msgsize = 8;
     attr.mq_curmsgs = 0;
 

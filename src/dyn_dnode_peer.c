@@ -506,6 +506,7 @@ dnode_peer_close_socket(struct conn *conn)
 
     conn->dnode_crypto_state = 0;
     conn->p.sd = -1;
+    conn->connecting = conn->connected = 0;
 }
 
 
@@ -792,8 +793,7 @@ dnode_peer_replace(void *rmsg)
         s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
 
 
-        dnode_peer_each_disconnect(s, NULL);
-        dnode_peer_each_preconnect(s, NULL);
+        s->state = RESET;
     } else {
         log_debug(LOG_INFO, "Unable to find any node matched the token");
     }
@@ -1074,10 +1074,13 @@ forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp)
     rsp->client_conn = c_conn;
     if (c_conn->ptctx != g_ptctx) {
         // disassociate req/response
+        log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
         req->peer = NULL;
         req->selected_rsp =  NULL;
+        log_info("sending rsp %p %lu:%lu to different thread", rsp, rsp->id, rsp->parent_id);
         thread_ctx_forward_rsp(c_conn->ptctx, rsp);
     } else {
+        log_info("sending rsp %p %lu:%lu upstream", rsp, rsp->id, rsp->parent_id);
         rstatus_t status = conn_handle_response(c_conn, rsp);
         IGNORE_RET_VAL(status);
     }

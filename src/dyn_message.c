@@ -254,6 +254,7 @@ done:
     msg->id = ++msg_id;
     msg->req_id = 0;
     msg->parent_id = 0;
+    log_info("setting peer on msg %p %lu:%lu to NULL", msg, msg->id, msg->parent_id);
     msg->peer = NULL;
     msg->owner = NULL;
     msg->dst_peer = NULL;

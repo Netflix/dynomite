@@ -276,9 +276,13 @@ static rstatus_t
 client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 {
     // First lets delink the response and message that earlier code did
+    ASSERT_LOG(!rsp->request, "msg %p %lu:%lu should have been a response",
+               rsp, rsp->id, rsp->parent_id);
     if (rsp->peer) {
+        log_info("setting peer on req %p %lu:%lu to NULL", rsp->peer, rsp->peer->id, rsp->peer->parent_id);
         rsp->peer->peer = NULL;
     }
+    log_info("setting peer on rsp %p %lu:%lu to NULL", rsp, rsp->id, rsp->parent_id);
     rsp->peer = NULL;
     // now the handler owns the response. the caller owns the request
     ASSERT(conn->p.type == CONN_CLIENT);
@@ -743,7 +747,9 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
+    log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
     req->peer = NULL;
+    log_info("setting peer on msg %p %lu:%lu to NULL", rsp, rsp->id, rsp->parent_id);
     rsp->peer = req;
     req->selected_rsp = rsp;
     return DN_OK;
@@ -773,7 +779,9 @@ msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rsp = rspmgr_get_response(&req->rspmgr);
     ASSERT(rsp);
     rspmgr_free_other_responses(&req->rspmgr, rsp);
+    log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
     req->peer = NULL;
+    log_info("*********************setting peer on response %p %lu:%lu to %p", rsp, rsp->id, rsp->parent_id, req);
     rsp->peer = req;
     req->selected_rsp = rsp;
     req->err = rsp->err;

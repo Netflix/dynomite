@@ -56,6 +56,9 @@ handle_ipc_events(void *arg, uint32_t events)
                 // request or its part of a quorum response
                 struct conn *c_conn = msg->client_conn;
                 ASSERT(c_conn->ptctx == g_ptctx);
+                log_info("sending rsp %p %lu:%lu upstream for req %lu", msg, msg->id, msg->parent_id, msg->req_id);
+                log_info("setting peer on msg %p %lu:%lu to NULL", msg, msg->id, msg->parent_id);
+                msg->peer = NULL;
                 status = conn_handle_response(msg->client_conn, msg);
                 IGNORE_RET_VAL(status);
             }

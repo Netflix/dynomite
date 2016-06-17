@@ -292,6 +292,7 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
              req->mlen, req->type, c_conn->p.sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rsp->req_id = req->parent_id ? req->parent_id : req->id;
+    log_notice("sending rsp %p %lu:%lu upstream", rsp, rsp->id, rsp->parent_id);
     rstatus_t status = conn_handle_response(c_conn, rsp);
     IGNORE_RET_VAL(status);
     if (req->swallow)
@@ -690,6 +691,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     if (req_done(c_conn, req)) {
         // handler owns the response now
         rsp->req_id = c_conn->p.type == CONN_CLIENT ? req->id : req->parent_id;
+        log_info("sending rsp %p %lu:%lu upstream from server ", rsp, rsp->id, rsp->parent_id);
         status = conn_handle_response(c_conn, rsp);
         IGNORE_RET_VAL(status);
      }

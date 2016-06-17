@@ -86,6 +86,7 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     if (pmsg != NULL) {
         ASSERT(!pmsg->request && pmsg->peer == msg);
         msg->selected_rsp = NULL;
+        log_info("setting peer on msg %p %lu:%lu to NULL", pmsg, pmsg->id, pmsg->parent_id);
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }
@@ -121,7 +122,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     rsp = conn->smsg;
     if (rsp != NULL) {
         ASSERT(!rsp->request);
-        ASSERT(rsp->peer != NULL);
+        ASSERT_LOG(rsp->peer != NULL, "rsp:%p %lu:%lu reqid: %lu", rsp, rsp->id, rsp->parent_id, rsp->req_id);
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
 
