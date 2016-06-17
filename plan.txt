@@ -25,7 +25,8 @@
     x Replace node in main thread tries to disconnect and reconnect, avoid that in the main thread.
     x Fix crashes
     x Make pappy run
-
+06/15
+    o Code walkthrough again
     o dyn_epoll is not thread safe. Make recv_active, send_active as atomic
     o Get rid of peer field
     o Make sure multiple dynomite nodes work on same machine since we have almost hardcoded dynomite message queue names
