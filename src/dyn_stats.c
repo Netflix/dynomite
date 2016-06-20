@@ -1045,18 +1045,22 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                         char* type = op + 5;
                         log_notice("op: %s", op);
                         log_notice("type: %s", type);
-                        if (strcmp(type, "/dc_one") == 0)
+                        if (!dn_strcasecmp(type, "/"CONF_STR_DC_ONE))
                             g_read_consistency = DC_ONE;
-                        else if (strcmp(type, "/dc_quorum") == 0)
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_QUORUM))
                             g_read_consistency = DC_QUORUM;
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_SAFE_QUORUM))
+                            g_read_consistency = DC_SAFE_QUORUM;
                         else
                             st_cmd->cmd = CMD_UNKNOWN;
                     } else if (strncmp(op, "/write", 6) == 0) {
                         char* type = op + 6;
-                        if (strcmp(type, "/dc_one") == 0)
+                        if (!dn_strcasecmp(type, "/"CONF_STR_DC_ONE))
                             g_write_consistency = DC_ONE;
-                        else if (strcmp(type, "/dc_quorum") == 0)
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_QUORUM))
                             g_write_consistency = DC_QUORUM;
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_SAFE_QUORUM))
+                            g_write_consistency = DC_SAFE_QUORUM;
                         else
                             st_cmd->cmd = CMD_UNKNOWN;
                     } else

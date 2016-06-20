@@ -462,7 +462,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
     if ((req->swallow && req->noreply) || // no reply
         (req->swallow && (req->consistency == DC_ONE)) || // dc one
-        (req->swallow && (req->consistency == DC_QUORUM) // remote dc request
+        (req->swallow && ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM)) // remote dc request
                       && (!conn->same_dc)) ||
         (req->owner == conn)) // a gossip message that originated on this conn
     {
@@ -1462,12 +1462,12 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     /* if client consistency is dc_quorum, forward the response from only the
        local region/DC. */
-    if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
+    if (((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
+        && !peer_conn->same_dc) {
         if (req->swallow) {
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        //log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
     }
 
     log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
@@ -1575,13 +1575,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
         }
 
-        if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
+        if (((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
+            && !peer_conn->same_dc) {
             if (req->swallow) {
                 // swallow the request and move on the next one
                 dnode_rsp_swallow(ctx, peer_conn, req, NULL);
                 continue;
             }
-            log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
         }
 
         log_error("MISMATCHED DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",

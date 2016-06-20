@@ -205,15 +205,28 @@ typedef enum dyn_error {
     UNKNOWN_ERROR,
     PEER_CONNECTION_REFUSE,
     STORAGE_CONNECTION_REFUSE,
-    BAD_FORMAT
+    BAD_FORMAT,
+    NO_QUORUM_ACHIEVED,
 } dyn_error_t;
 
+static inline char *
+dn_strerror(dyn_error_t err)
+{
+    switch(err)
+    {
+        case NO_QUORUM_ACHIEVED:
+            return "Failed to achieve Quorum";
+        default:
+            return strerror(err);
+    }
+}
 /* This is a wrong place for this typedef. But adding to core has some
  * dependency issues - FixIt someother day :(
  */
 typedef enum consistency {
     DC_ONE = 0,
-    DC_QUORUM = 1
+    DC_QUORUM,
+    DC_SAFE_QUORUM,
 } consistency_t;
 
 static inline char*
@@ -223,6 +236,7 @@ get_consistency_string(consistency_t cons)
     {
         case DC_ONE: return "DC_ONE";
         case DC_QUORUM: return "DC_QUORUM";
+        case DC_SAFE_QUORUM: return "DC_SAFE_QUORUM";
     }
     return "INVALID CONSISTENCY";
 }
