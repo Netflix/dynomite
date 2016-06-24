@@ -57,7 +57,6 @@ handle_ipc_events(void *arg, uint32_t events)
                 struct conn *c_conn = msg->client_conn;
                 ASSERT(c_conn->ptctx == g_ptctx);
                 log_info("sending rsp %p %lu:%lu upstream for req %lu", msg, msg->id, msg->parent_id, msg->req_id);
-                log_info("setting peer on msg %p %lu:%lu to NULL", msg, msg->id, msg->parent_id);
                 msg->peer = NULL;
                 status = conn_handle_response(msg->client_conn, msg);
                 IGNORE_RET_VAL(status);
@@ -320,8 +319,8 @@ thread_ctx_timeout(pthread_ctx ptctx)
 	}
 }
 
-void *
-notify_main_thread()
+static void
+notify_main_thread(void)
 {
     int rc = pthread_barrier_wait(&datastore_preconnect_barr);
     if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)

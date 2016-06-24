@@ -279,20 +279,20 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     ASSERT_LOG(!rsp->request, "msg %p %lu:%lu should have been a response",
                rsp, rsp->id, rsp->parent_id);
     if (rsp->peer) {
-        log_info("setting peer on req %p %lu:%lu to NULL", rsp->peer, rsp->peer->id, rsp->peer->parent_id);
         rsp->peer->peer = NULL;
     }
-    log_info("setting peer on rsp %p %lu:%lu to NULL", rsp, rsp->id, rsp->parent_id);
     rsp->peer = NULL;
     // now the handler owns the response. the caller owns the request
     ASSERT(conn->p.type == CONN_CLIENT);
     // Fetch the original request
     struct msg *req = dictFetchValue(conn->outstanding_msgs_dict, &reqid);
     if (!req) {
-        log_notice("looks like we already cleanedup the request for %d", reqid);
+        log_notice("looks like we already cleanedup the request for %lu", reqid);
         rsp_put(rsp);
         return DN_OK;
     }
+    ASSERT_LOG(req->id == reqid, "BUG IN HASH TABLE: retrieved req %lu:%ly for req %lu",
+               req->id, req->parent_id, reqid);
     // we have to submit the response irrespective of the unref status.
     rstatus_t status = msg_handle_response(req, rsp);
     if (conn->waiting_to_unref) {
@@ -558,7 +558,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
             }
 
             msg_clone(msg, orig_mbuf, rack_msg);
-            log_info("msg (%d:%d) clone to rack msg (%d:%d)",
+            log_info("msg (%lu:%lu) clone to rack msg (%lu:%lu) for local dc",
                      msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
             rack_msg->swallow = true;
         }
@@ -615,6 +615,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     msg_clone(msg, orig_mbuf, rack_msg);
+    log_info("msg (%lu:%lu) clone to rack msg (%lu:%lu) for remote dc",
+             msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
     rack_msg->swallow = true;
 
     if (log_loggable(LOG_DEBUG)) {
@@ -747,9 +749,7 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
         log_warn("Received more than one response for dc_one. req: %d:%d \
                  prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
                  req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
     req->peer = NULL;
-    log_info("setting peer on msg %p %lu:%lu to NULL", rsp, rsp->id, rsp->parent_id);
     rsp->peer = req;
     req->selected_rsp = rsp;
     return DN_OK;
@@ -759,7 +759,13 @@ static rstatus_t
 swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
     log_info("req %d swallowing response %d", req->id, rsp->id);
-    ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
+    if (!req->awaiting_rsps) {
+        log_error("Req %d:%d has no awaiting rsps, rsp %d",
+                  req->id, req->parent_id, rsp->id);
+        msg_dump(req);
+        msg_dump(rsp);
+    }
+    ASSERT_LOG(req->awaiting_rsps, "Req %d:%d has no awaiting rsps, rsp %d",
                req->id, req->parent_id, rsp->id);
     // drop this response.
     rsp_put(rsp);
@@ -779,7 +785,6 @@ msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rsp = rspmgr_get_response(&req->rspmgr);
     ASSERT(rsp);
     rspmgr_free_other_responses(&req->rspmgr, rsp);
-    log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
     req->peer = NULL;
     log_info("*********************setting peer on response %p %lu:%lu to %p", rsp, rsp->id, rsp->parent_id, req);
     rsp->peer = req;

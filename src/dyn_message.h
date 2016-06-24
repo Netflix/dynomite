@@ -306,7 +306,7 @@ struct msg {
 
     //dynomite
     struct dmsg          *dmsg;          /* dyn message */
-    int                  dyn_state;
+    dyn_parse_state_t    dyn_state;
     dyn_error_t          dyn_error;      /* error code for dynomite */
     uint8_t              msg_type;       /* for special message types
                                               0 : normal,

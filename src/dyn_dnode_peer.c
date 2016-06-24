@@ -283,9 +283,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     rsp->dmsg = dmsg_get();
     rsp->dmsg->id =  req->id;
 
-    log_info("close %s %d req %u:%u "
-             "len %"PRIu32" type %d from c %d%c %s", conn_get_type_string(conn),
-             conn->p.sd, req->id, req->parent_id, req->mlen, req->type,
+    log_info("close %s %d req %u:%u err_rsp %lu:%lu from client %d%c %s", conn_get_type_string(conn),
+             conn->p.sd, req->id, req->parent_id, rsp->id, rsp->parent_id,
              c_conn->p.sd, conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     forward_response_upstream(c_conn, req, rsp);
@@ -1074,7 +1073,6 @@ forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp)
     rsp->client_conn = c_conn;
     if (c_conn->ptctx != g_ptctx) {
         // disassociate req/response
-        log_info("setting peer on msg %p %lu:%lu to NULL", req, req->id, req->parent_id);
         req->peer = NULL;
         req->selected_rsp =  NULL;
         log_info("sending rsp %p %lu:%lu to different thread", rsp, rsp->id, rsp->parent_id);
@@ -1114,7 +1112,9 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     /* if client consistency is dc_quorum, forward the response from only the
        local region/DC. */
-    if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
+    //if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
+    struct peer *peer = peer_conn->owner;
+    if ((req->consistency == DC_QUORUM) && !peer_is_same_dc(peer)) {
         if (req->swallow) {
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;

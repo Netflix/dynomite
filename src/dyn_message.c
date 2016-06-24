@@ -254,7 +254,6 @@ done:
     msg->id = ++msg_id;
     msg->req_id = 0;
     msg->parent_id = 0;
-    log_info("setting peer on msg %p %lu:%lu to NULL", msg, msg->id, msg->parent_id);
     msg->peer = NULL;
     msg->owner = NULL;
     msg->dst_peer = NULL;
@@ -879,6 +878,7 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
         */
         status = DN_ERROR;
         conn->err = errno;
+        log_error("Parsing error on conn %p %d %s", conn, conn->p.sd, conn_get_type_string(conn));
         break;
     }
 

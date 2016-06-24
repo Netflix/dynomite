@@ -224,7 +224,7 @@ _log_hexdump(const char *file, int line, char *data, int datalen,
         unsigned char c;
         int savelen;
 
-        len += dn_scnprintf(buf + len, size - len, "%08x  ", off);
+        len += dn_scnprintf(buf + len, size - len, "%08x(%d)", off, g_ptctx ? g_ptctx->tid : -1);
 
         save = data;
         savelen = datalen;

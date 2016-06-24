@@ -14,24 +14,35 @@ typedef enum dmsg_version {
     VERSION_10 = 1
 } dmsg_version_t;
 
-enum {
+typedef enum {
         DYN_START = 0,
         DYN_MAGIC_STRING = 1000,
+        DYN_MAGIC_STRING_SPACE,
         DYN_MSG_ID,
+        DYN_MSG_ID_SPACE,
         DYN_TYPE_ID,
+        DYN_TYPE_ID_SPACE,
         DYN_BIT_FIELD,
+        DYN_BIT_FIELD_SPACE,
         DYN_VERSION,
+        DYN_VERSION_SPACE,
         DYN_SAME_DC,
-        DYN_STAR,
-        DYN_DATA_LEN,
-        DYN_DATA,
-        DYN_SPACES_BEFORE_PAYLOAD_LEN,
+        DYN_SAME_DC_SPACE,
+        DYN_AESKEY_LEN_STAR,
+        DYN_AESKEY_LEN,
+        DYN_AESKEY_LEN_SPACE,
+        DYN_AESKEY,
+        DYN_AESKEY_SPACE,
+        DYN_PAYLOAD_LEN_STAR,
         DYN_PAYLOAD_LEN,
-        DYN_CRLF_BEFORE_DONE,
+        DYN_CR_BEFORE_DONE,
+        DYN_LF_BEFORE_DONE,
         DYN_DONE,
         DYN_POST_DONE,
         DYN_UNKNOWN
-} dyn_state;
+} dyn_parse_state_t;
+
+const char *dyn_parse_state_get_string(dyn_parse_state_t dyn_state);
 
 typedef enum dmsg_type {
     DMSG_UNKNOWN = 0,
@@ -99,6 +110,5 @@ rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
 
 void data_store_parse_req(struct msg *r);
-void data_store_parse_rsp(struct msg *r);
 
 #endif

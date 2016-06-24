@@ -31,7 +31,7 @@ mq_ipc_init(pthread_ipc ptipc, pthread_ctx ptctx)
     // create a message queue.
     struct mq_attr attr;
     attr.mq_flags   = O_NONBLOCK;
-    attr.mq_maxmsg  = 32768;
+    attr.mq_maxmsg  = 65536;
     attr.mq_msgsize = 8;
     attr.mq_curmsgs = 0;
 
@@ -45,9 +45,9 @@ mq_ipc_init(pthread_ipc ptipc, pthread_ctx ptctx)
     if (ptipc->p.sd == -1) {
         ASSERT_LOG(0,"failed to open mq for reading: %s, %s\n ", mq_name, strerror(errno));
     }
-    /*if (mq_unlink(mq_name) == -1) {
+    if (mq_unlink(mq_name) == -1) {
         log_error("failed to unlink mq %s. Please manually delete it", mq_name);
-    }*/
+    }
 
     log_notice("Opened mq %s sd %d for reading", mq_name, ptipc->p.sd);
     thread_ctx_add_in(ptipc->owner_ptctx, get_pollable(ipc));

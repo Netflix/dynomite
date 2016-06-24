@@ -27,18 +27,70 @@ static unsigned char aes_decrypted_buf[34];
 static rstatus_t dmsg_to_gossip(struct ring_msg *rmsg);
 
 
+const char *
+dyn_state_get_string(dyn_parse_state_t dyn_state)
+{
+    switch (dyn_state) {
+        case DYN_START: return "DYN_START";
+        case DYN_MAGIC_STRING: return "DYN_MAGIC_STRING";
+        case DYN_MAGIC_STRING_SPACE: return "DYN_MAGIC_STRING_SPACE";
+        case DYN_MSG_ID: return "DYN_MSG_ID";
+        case DYN_MSG_ID_SPACE: return "DYN_MSG_ID_SPACE";
+        case DYN_TYPE_ID: return "DYN_TYPE_ID";
+        case DYN_TYPE_ID_SPACE: return "DYN_TYPE_ID_SPACE";
+        case DYN_BIT_FIELD: return "DYN_BIT_FIELD";
+        case DYN_BIT_FIELD_SPACE: return "DYN_BIT_FIELD_SPACE";
+        case DYN_VERSION: return "DYN_VERSION";
+        case DYN_VERSION_SPACE: return "DYN_VERSION_SPACE";
+        case DYN_SAME_DC: return "DYN_SAME_DC";
+        case DYN_SAME_DC_SPACE: return "DYN_SAME_DC_SPACE";
+        case DYN_AESKEY_LEN_STAR: return "DYN_AESKEY_LEN_STAR";
+        case DYN_AESKEY_LEN: return "DYN_AESKEY_LEN";
+        case DYN_AESKEY: return "DYN_AESKEY";
+        case DYN_PAYLOAD_LEN_STAR: return "DYN_PAYLOAD_LEN_STAR";
+        case DYN_PAYLOAD_LEN: return "DYN_PAYLOAD_LEN";
+        case DYN_CR_BEFORE_DONE: return "DYN_CR_BEFORE_DONE";
+        case DYN_LF_BEFORE_DONE: return "DYN_LF_BEFORE_DONE";
+        case DYN_DONE: return "DYN_DONE";
+        case DYN_POST_DONE: return "DYN_POST_DONE";
+        case DYN_UNKNOWN: return "DYN_UNKNOWN";
+        default: return "UNSPECIFIED";
+    }
+}
+
+#define PRINT_WEIRD_CHAR_AND_RESET(dyn_state, ch)           \
+        {                                                   \
+            loga("%s weird char (%d) '%c'",                 \
+                 dyn_state_get_string(dyn_state), ch, ch);  \
+            token = NULL;                                   \
+            dyn_state = DYN_START;                          \
+            if (ch == '$')                                  \
+               p--;                                         \
+        }
+
+/* The function parses a dnode header. The dnode header is same for the
+ * request as well as response.
+ * Here we start parsing and look for the magic string and then the state
+ * machine starts. However when we encounter a weird character, we should
+ * reset the state to DYN_START, and also reset the fields in the dmsg that
+ * we have been accumulating.
+ * There are chances that we have only some part of the header, at which
+ * point, we keep the partial header and reuse it in the next parsing.
+ * The partial header is kept in the message itself.
+ */
 static bool 
 dyn_parse_core(struct msg *r)
 {
    struct dmsg *dmsg;
    struct mbuf *b;
-   uint8_t *p = r->pos, *token;
    uint8_t ch = ' ';
    uint64_t num = 0;
+   bool log = log_loggable(LOG_VVERB);
 
-   dyn_state = r->dyn_state;
-   if (log_loggable(LOG_DEBUG)) {
-      log_debug(LOG_DEBUG, "dyn_state:  %d", r->dyn_state);
+   dyn_parse_state_t dyn_state = r->dyn_state;
+   if (log) {
+      log_warn("%s: starting to parse", dyn_state_get_string(dyn_state), r->dyn_state);
+      msg_dump(r);
    }
 
    if (r->dyn_state == DYN_DONE || r->dyn_state == DYN_POST_DONE)
@@ -48,279 +100,374 @@ dyn_parse_core(struct msg *r)
 
    dmsg = r->dmsg;
    if (dmsg == NULL) {
-      r->dmsg = dmsg_get();
-      dmsg = r->dmsg;
-      dmsg->owner = r;
-      if (dmsg == NULL) {//should track this as a dropped message
-         loga("unable to create a new dmsg");
-         goto error; //should count as OOM error
-      }
+       dmsg = r->dmsg = dmsg_get();
+       dmsg->owner = r;
+       if (dmsg == NULL) {//should track this as a dropped message
+           loga("unable to create a new dmsg");
+           log_error("Unable to create dmsg. at error for state %s",
+                   dyn_state_get_string(dyn_state));
+           r->result = MSG_PARSE_ERROR;
+           errno = DN_ENOMEM;
+           return false;
+       }
    }
 
-   token = NULL;
-
+   bool reset_dmsg = false;
+   uint8_t *token = NULL;
+   uint8_t *p;
    for (p = r->pos; p < b->last; p++) {
+       if (reset_dmsg) {
+           dmsg->mlen = 0;
+           dmsg->data = NULL;
+           dmsg->plen = 0;
+           dmsg->payload = NULL;
+           dmsg->type = DMSG_UNKNOWN;
+           dmsg->version = VERSION_10;
+           dmsg->id = 0;
+           dmsg->source_address = NULL;
+           dmsg->owner = r;
+           dmsg->bit_field = 0;
+           dmsg->same_dc = 1;
+           reset_dmsg = false;
+       }
       ch = *p;
+      if (log) {
+         log_warn("%s: ch: (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+      }
       switch (dyn_state) {
       case DYN_START:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_START");
-         }
          if (ch != ' ' && ch != '$') {
-            break;
+             // keep looking for the token
+             continue;
          }
 
          if (ch == ' ') {
-            if (token == NULL)
+            if (!token)
                token = p;
-
-            break;
+            continue;
          }
 
          if (ch == '$') {
+             if (!token)
+                 token = p;
               if (p + 5 < b->last) {
                   if ((*(p+1) == '2') &&
                       (*(p+2) == '0') &&
                       (*(p+3) == '1') &&
                       (*(p+4) == '4') &&
                       (*(p+5) == '$')) {
-                     dyn_state = DYN_MAGIC_STRING;
+                      if (log)
+                        log_warn("%s, new state DYN_MAGIC_STRING_SPACE",
+                                 dyn_state_get_string(dyn_state));
+                      dyn_state = DYN_MAGIC_STRING_SPACE;
                      p += 5;
+                     break;
                   } else {
                      //goto skip;
+                     reset_dmsg = true;
                      token = NULL; //reset
+                     continue;
                   }
               } else {
+                    // The token is split across two messages,
                     goto split;
               }
          } else {
-            loga("Facing a weird char %c", p);
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
             //goto skip;
+            reset_dmsg = true;
             token = NULL; //reset
+            continue;
          }
-
          break;
 
-      case DYN_MAGIC_STRING:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_MAGIC_STRING");
-         }
+      case DYN_MAGIC_STRING_SPACE:
          if (ch == ' ') {
             dyn_state = DYN_MSG_ID;
             num = 0;
-            break;
+            continue;
          } else {
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            loga("%s Facing a weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
             token = NULL;
-            loga("Facing a weird char %c", p);
-            //goto skip;
             dyn_state = DYN_START;
+            reset_dmsg = true;
+            if (ch == '$')
+                p--;
+            continue;
          }
-
          break;
 
       case DYN_MSG_ID:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_MSG_ID");
-            log_debug(LOG_DEBUG, "num = %d", num);
-         }
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
-         } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "MSG ID : %d", num);
-            }
-            dmsg->id = num;
+            continue;
+         }
+         if (log) {
+             log_warn("%s MSG ID : %d new state DYN_MSG_ID_SPACE",
+                      dyn_state_get_string(dyn_state), num);
+         }
+         dmsg->id = num;
+         dyn_state = DYN_MSG_ID_SPACE;
+         p--;
+         num = 0;
+         continue;
+
+      case DYN_MSG_ID_SPACE:
+         if (ch == ' ') {
             dyn_state = DYN_TYPE_ID;
-            num = 0;
+            continue;
          } else {
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-            //goto skip;
-            token = NULL; //reset
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+            token = NULL; //reset, and start from beginning
             dyn_state = DYN_START;
+            reset_dmsg = true;
             if (ch == '$')
-               p -= 1;
+               p--;
          }
          break;
 
       case DYN_TYPE_ID:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_TYPE_ID: num = %d", num);
-         }
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
-         } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "Type Id: %d", num);
-            }
-            dmsg->type = num;
+            continue;
+         }
+         if (log) {
+             log_warn("%s TYPE ID : %d new state DYN_TYPE_ID_SPACE",
+                     dyn_state_get_string(dyn_state), num);
+         }
+         dmsg->type = num;
+         dyn_state = DYN_TYPE_ID_SPACE;
+         num = 0;
+         p--;
+         continue;
+      case DYN_TYPE_ID_SPACE:
+        if (ch == ' ') {
             dyn_state = DYN_BIT_FIELD;
-            num = 0;
+            continue;
          } else {
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-            token = NULL;
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+            token = NULL; //reset, and start from beginning
             dyn_state = DYN_START;
-            if (ch == '$')
-               p -= 1;
+            reset_dmsg = true;
+            if (ch == '$') // backtrack one characted to get the '$' token
+               p--;
          }
-
          break;
-
       case DYN_BIT_FIELD:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_BIT_FIELD, num = %d", num);
-         }
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
-         } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
+            if (log) {
+                log_warn("%s Encryption: %d new state DYN_BIT_FIELD_SPACE",
+                         dyn_state_get_string(dyn_state), num);
             }
             dmsg->bit_field = num & 0xF;
-            dyn_state = DYN_VERSION;
-            num = 0;
+            dyn_state = DYN_BIT_FIELD_SPACE;
+            continue;
          } else {
-            token = NULL;
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+            token = NULL; //reset, and start from beginning
             dyn_state = DYN_START;
-            if (ch == '$')
-               p -= 1;
+            reset_dmsg = true;
+            if (ch == '$') // backtrack one characted to get the '$' token
+               p--;
          }
-
          break;
-
-      case DYN_VERSION:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_VERSION: num = %d", num);
+      case DYN_BIT_FIELD_SPACE:
+         if (ch == ' ') {
+             dyn_state = DYN_VERSION;
+             continue;
+         } else {
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+            token = NULL; //reset, and start from beginning
+            dyn_state = DYN_START;
+            reset_dmsg = true;
+            if (ch == '$') // backtrack one characted to get the '$' token
+               p--;
          }
+         break;
+      case DYN_VERSION:
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
-         } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "VERSION : %d", num);
-            }
-            dmsg->version = num;
+            continue;
+         }
+         if (log) {
+             log_warn("%s VERSION: %d new state DYN_VERSION_SPACE",
+                     dyn_state_get_string(dyn_state), num);
+         }
+         dmsg->version = num;
+         dyn_state = DYN_VERSION_SPACE;
+         p--;
+         num = 0;
+         continue;
+      case DYN_VERSION_SPACE:
+         if (ch == ' ') {
             dyn_state = DYN_SAME_DC;
             num = 0;
+            continue;
          } else {
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
             token = NULL;
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
             dyn_state = DYN_START;
+            reset_dmsg = true;
             if (ch == '$')
-               p -= 1;
+               p--;
          }
-
          break;
-
       case DYN_SAME_DC:
-      	if (isdigit(ch)) {
-      		dmsg->same_dc = (uint8_t)(ch - '0');
-      		if (log_loggable(LOG_DEBUG)) {
-           	   log_debug(LOG_DEBUG, "DYN_SAME_DC %d", dmsg->same_dc);
-      		}
-      	} else if (ch == ' ' && isdigit(*(p-1))) {
-      		dyn_state = DYN_DATA_LEN;
-      		num = 0;
-      	} else {
-      		token = NULL;
-      		//loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-      		dyn_state = DYN_START;
-      		if (ch == '$')
-      		   p -= 1;
+         if (isdigit(ch)) {
+             dmsg->same_dc = (uint8_t)(ch - '0');
+             if (log) {
+                 log_warn("%s same_dc %d new state DYN_SAME_DC_SPACE",
+                         dyn_state_get_string(dyn_state), dmsg->same_dc);
+             }
+             dyn_state = DYN_SAME_DC_SPACE;
+             continue;
+         } else {
+             loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+             token = NULL;
+             dyn_state = DYN_START;
+            reset_dmsg = true;
+             if (ch == '$')
+                 p--;
+         }
+         continue;
+      case DYN_SAME_DC_SPACE:
+         if (ch == ' ') {
+             dyn_state = DYN_AESKEY_LEN_STAR;
+             num = 0;
+         } else {
+             loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+             token = NULL;
+             dyn_state = DYN_START;
+            reset_dmsg = true;
+             if (ch == '$')
+      		   p--;
       	}
-
       	break;
 
-      case DYN_DATA_LEN:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_DATA_LEN: num = %d", num);
-         }
+    case DYN_AESKEY_LEN_STAR:
          if (ch == '*') {
-            break;
-         } else if (isdigit(ch))  {
-            num = num*10 + (uint64_t)(ch - '0');
-         } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "Data len: %d", num);
-            }
-            dmsg->mlen = (uint32_t)num;
-            dyn_state = DYN_DATA;
-            num = 0;
+             dyn_state = DYN_AESKEY_LEN;
+             num = 0;
          } else {
-            token = NULL;
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-            dyn_state = DYN_START;
-            if (ch == '$')
-               p -= 1;
-         }
-         break;
+             loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+             token = NULL;
+             dyn_state = DYN_START;
+            reset_dmsg = true;
+             if (ch == '$')
+      		   p--;
+      	}
+      	break;
 
-      case DYN_DATA:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_DATA");
-         }
-         if (p + dmsg->mlen < b->last) {
-            dmsg->data = p;
-            p += dmsg->mlen - 1;
-            dyn_state = DYN_SPACES_BEFORE_PAYLOAD_LEN;
-         } else {
-            //loga("char is '%c %c %c %c'", *(p-2), *(p-1), ch, *(p+1));
-            goto split;
-         }
-
-         break;
-
-      case DYN_SPACES_BEFORE_PAYLOAD_LEN:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
-         }
-         if (ch == ' ') {
-            break;
-         } else if (ch == '*') {
-            dyn_state = DYN_PAYLOAD_LEN;
-            num = 0;
-         }
-
-         break;
-
-      case DYN_PAYLOAD_LEN:
-
+      case DYN_AESKEY_LEN:
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
-         } else if (ch == CR)  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "Payload len: %d", num);
-            }
-            dmsg->plen = (uint32_t)num;
+            continue;
+         }
+         if (log) {
+             log_warn("%s AES key len: %u new state DYN_AESKEY_LEN_SPACE",
+                      dyn_state_get_string(dyn_state), num);
+         }
+         dmsg->mlen = (uint32_t)num;
+         dyn_state = DYN_AESKEY_LEN_SPACE;
+         num = 0;
+         p--;
+         continue;
+
+      case DYN_AESKEY_LEN_SPACE:
+         if (ch == ' ') {
+            dyn_state = DYN_AESKEY;
             num = 0;
-            dyn_state = DYN_CRLF_BEFORE_DONE;
          } else {
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
             token = NULL;
             dyn_state = DYN_START;
+            reset_dmsg = true;
             if (ch == '$')
-               p -= 1;
+               p--;
+         }
+         break;
+      case DYN_AESKEY:
+        if (p + dmsg->mlen < b->last) {
+            dmsg->data = p;
+            p += dmsg->mlen - 1;
+            dyn_state = DYN_AESKEY_SPACE;
+            continue;
+         } else {
+            goto split;
+         }
+         break;
+      case DYN_AESKEY_SPACE:
+         if (ch == ' ') {
+             dyn_state = DYN_PAYLOAD_LEN_STAR;
+             num = 0;
+         } else {
+            loga("%s weird char (%d) '%c'",
+                 dyn_state_get_string(dyn_state), ch, ch);
+            token = NULL;
+            dyn_state = DYN_START;
+            reset_dmsg = true;
+            if (ch == '$')
+               p--;
          }
          break;
 
-      case DYN_CRLF_BEFORE_DONE:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
-         }
-         if (*p == LF) {
-            dyn_state = DYN_DONE;
+      case DYN_PAYLOAD_LEN_STAR:
+         if (ch == '*') {
+             dyn_state = DYN_PAYLOAD_LEN;
+             num = 0;
          } else {
+             loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+             token = NULL;
+             dyn_state = DYN_START;
+            reset_dmsg = true;
+             if (ch == '$')
+      		   p--;
+      	}
+      	break;
+
+      case DYN_PAYLOAD_LEN:
+        if (isdigit(ch))  {
+            num = num*10 + (uint64_t)(ch - '0');
+            continue;
+         }
+         if (log) {
+             log_warn("%s payload len: %u new state DYN_CR_BEFORE_DONE",
+                      dyn_state_get_string(dyn_state), num);
+         }
+         dmsg->plen = (uint32_t)num;
+         dyn_state = DYN_CR_BEFORE_DONE;
+         num = 0;
+         p--;
+         continue;
+      case DYN_CR_BEFORE_DONE:
+         if (ch == CR)
+             dyn_state = DYN_LF_BEFORE_DONE;
+         else {
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
             token = NULL;
             dyn_state = DYN_START;
+            reset_dmsg = true;
             if (ch == '$')
-               p -= 1;
+               p--;
          }
+         break;
 
+      case DYN_LF_BEFORE_DONE:
+         if (ch == LF) {
+             dyn_state = DYN_DONE;
+         } else {
+            loga("%s weird char (%d) '%c'", dyn_state_get_string(dyn_state), ch, ch);
+            token = NULL;
+            dyn_state = DYN_START;
+            reset_dmsg = true;
+            if (ch == '$')
+               p--;
+         }
          break;
 
       case DYN_DONE:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_DONE");
-         }
+         // Store everything in msg r
          r->pos = p;
          dmsg->payload = p;
          r->dyn_state = DYN_DONE;
@@ -329,6 +476,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       default:
+         ASSERT_LOG(NULL, "dyn_state %d", dyn_state);
          NOT_REACHED();
          break;
 
@@ -346,48 +494,36 @@ dyn_parse_core(struct msg *r)
       r->result = MSG_PARSE_AGAIN;
        if (b->last == b->end) {
           struct mbuf *nbuf = mbuf_get();
-          if (nbuf == NULL) {
-             loga("Unable to obtain a new mbuf for replacement!");
-             mbuf_put(b);
-             nbuf = mbuf_get();
-             mbuf_insert_head(&r->mhdr, nbuf);
-             r->pos = nbuf->pos;
-             return false;
-         }
-
-         //replacing the bad mbuf with a new and empty mbuf
-         mbuf_insert(&r->mhdr, nbuf);
-         mbuf_remove(&r->mhdr, b);
-         mbuf_put(b);
-         r->pos = nbuf->pos;
-         return false;
+          ASSERT_LOG(nbuf != NULL, "Unable to obtain a new mbuf for replacement!");
+          mbuf_remove(&r->mhdr, b);
+          mbuf_put(b);
+          mbuf_insert_head(&r->mhdr, nbuf);
+          r->pos = nbuf->pos;
+          return false;
        } else { //split it and throw away the bad portion
            struct mbuf *nbuf;
 
            nbuf = mbuf_split(&r->mhdr, r->pos, NULL, NULL);
-          if (nbuf == NULL) {
-               return DN_ENOMEM;
-          }
-          mbuf_insert(&r->mhdr, nbuf);
-          mbuf_remove(&r->mhdr, b);
-          mbuf_put(b);
-          r->pos = nbuf->pos;
-          return false;
+           ASSERT_LOG(nbuf != NULL, "Unable to obtain a new mbuf");
+           mbuf_insert(&r->mhdr, nbuf);
+           mbuf_remove(&r->mhdr, b);
+           mbuf_put(b);
+           r->pos = nbuf->pos;
+           return false;
        }
-
    }
 
    if (mbuf_length(b) == 0 || b->last == b->end) {
-      if (log_loggable(LOG_DEBUG)) {
-          log_debug(LOG_DEBUG, "Would this case ever happen?");
+      if (log) {
+          log_warn("Would this case ever happen?");
       }
       r->result = MSG_PARSE_AGAIN;
       return false;
    }
 
    if (r->pos == b->last) {
-       if (log_loggable(LOG_DEBUG)) {
-           log_debug(LOG_DEBUG, "Forward to reading the new block of data");
+      if (log) {
+           log_warn("Forward to reading the new block of data");
        }
        r->dyn_state = DYN_START;
        r->result = MSG_PARSE_AGAIN;
@@ -395,8 +531,8 @@ dyn_parse_core(struct msg *r)
        return false;
    }
 
-   if (log_loggable(LOG_VVERB)) {
-      log_debug(LOG_VVERB, "in split");
+   if (log) {
+       log_warn("in split");
    }
    r->dyn_state = DYN_START;
    r->pos = token;
@@ -427,24 +563,6 @@ dyn_parse_core(struct msg *r)
    }
 
    return true;
-
-   error:
-   log_debug(LOG_ERR, "at error for state %d and c %c", dyn_state, *p);
-   r->result = MSG_PARSE_ERROR;
-   r->pos = p;
-   errno = EINVAL;
-
-   if (log_loggable(LOG_ERR)) {
-      log_hexdump(LOG_ERR, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
-            "res %d type %d state %d", r->id, r->result, r->type,
-            dyn_state);
-      log_hexdump(LOG_ERR, p, b->last - p, "inspecting req %"PRIu64" "
-            "res %d type %d state %d", r->id, r->result, r->type,
-            dyn_state);
-   }
-   r->dyn_state = dyn_state;
-
-   return false;
 }
 
 
@@ -462,7 +580,11 @@ dyn_parse_req(struct msg *r)
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 		struct conn *conn = r->owner;
-		conn->same_dc = !!dmsg->same_dc;
+        if (conn->p.type != CONN_DNODE_PEER_SERVER) {
+            if (conn->same_dc != !!dmsg->same_dc)
+                log_error("SHAILESH.......................changing same_dc field of conn %p to %d", conn, !!dmsg->same_dc);
+            conn->same_dc = !!dmsg->same_dc;
+        }
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
 				dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
@@ -546,6 +668,22 @@ dyn_parse_req(struct msg *r)
 	r->result = MSG_PARSE_AGAIN;
 }
 
+static void
+data_store_parse_rsp(struct msg *r)
+{
+	if (g_data_store == DATA_REDIS) {
+		return redis_parse_rsp(r);
+	}
+	else if (g_data_store == DATA_MEMCACHE){
+		return memcache_parse_rsp(r);
+	}
+	else{
+		//if (log_loggable(LOG_VVERB)) {
+			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
+		//}
+		exit(0);
+	}
+}
 
 void dyn_parse_rsp(struct msg *r)
 {
@@ -559,7 +697,11 @@ void dyn_parse_rsp(struct msg *r)
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 		struct conn *conn = r->owner;
-		conn->same_dc = !!dmsg->same_dc;
+        //if (conn->p.type != CONN_DNODE_PEER_SERVER) {
+            if (conn->same_dc != !!dmsg->same_dc)
+                log_error("SHAILESH.......................changing same_dc field of conn %p to %d", conn, !!dmsg->same_dc);
+            conn->same_dc = !!dmsg->same_dc;
+        //}
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
 			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
@@ -626,8 +768,8 @@ void dyn_parse_rsp(struct msg *r)
 	}
 
 	//bad case
-	if (log_loggable(LOG_DEBUG)) {
-		log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
+	if (log_loggable(LOG_VVERB)) {
+		log_debug(LOG_VVERB, "Resp: bad message - cannot parse");  //fix me to do something
 		msg_dump(r);
 	}
 
@@ -1113,23 +1255,6 @@ data_store_parse_req(struct msg *r)
 	}
 	else if (g_data_store == DATA_MEMCACHE){
 		return memcache_parse_req(r);
-	}
-	else{
-		//if (log_loggable(LOG_VVERB)) {
-			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-		//}
-		exit(0);
-	}
-}
-
-void
-data_store_parse_rsp(struct msg *r)
-{
-	if (g_data_store == DATA_REDIS) {
-		return redis_parse_rsp(r);
-	}
-	else if (g_data_store == DATA_MEMCACHE){
-		return memcache_parse_rsp(r);
 	}
 	else{
 		//if (log_loggable(LOG_VVERB)) {

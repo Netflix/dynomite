@@ -133,7 +133,7 @@ struct peer;
 #include "event/dyn_event.h"
 extern pthread_barrier_t datastore_preconnect_barr;
 
-#define ENCRYPTION 1
+#define ENCRYPTION 0
 
 struct thread_ctx;
 typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);

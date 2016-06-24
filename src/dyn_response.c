@@ -86,7 +86,6 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     if (pmsg != NULL) {
         ASSERT(!pmsg->request && pmsg->peer == msg);
         msg->selected_rsp = NULL;
-        log_info("setting peer on msg %p %lu:%lu to NULL", pmsg, pmsg->id, pmsg->parent_id);
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }

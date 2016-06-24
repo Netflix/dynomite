@@ -50,9 +50,7 @@ req_put(struct msg *msg)
     pmsg = msg->peer;
     if (pmsg != NULL) {
         ASSERT(!pmsg->request && pmsg->peer == msg);
-        log_info("setting peer on msg %p %lu:%lu to NULL", msg, msg->id, msg->parent_id);
         msg->peer = NULL;
-        log_info("setting peer on msg %p %lu:%lu to NULL", pmsg, pmsg->id, pmsg->parent_id);
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }
@@ -61,7 +59,6 @@ req_put(struct msg *msg)
         if (pmsg != NULL) {
             ASSERT(!pmsg->request && pmsg->peer == msg);
             msg->selected_rsp = NULL;
-            log_info("setting peer on msg %p %lu:%lu to NULL", pmsg, pmsg->id, pmsg->parent_id);
             pmsg->peer = NULL;
             rsp_put(pmsg);
         }
