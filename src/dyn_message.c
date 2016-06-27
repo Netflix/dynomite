@@ -241,8 +241,8 @@ _msg_get(struct conn *conn, const char *const caller)
     ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
 
 
-    log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
-            alloc_msg_count, caller, conn_get_type_string(conn), conn->p.sd);
+    //log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
+            //alloc_msg_count, caller, conn_get_type_string(conn), conn->p.sd);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -879,6 +879,7 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
         status = DN_ERROR;
         conn->err = errno;
         log_error("Parsing error on conn %p %d %s", conn, conn->p.sd, conn_get_type_string(conn));
+        msg_dump(msg);
         break;
     }
 

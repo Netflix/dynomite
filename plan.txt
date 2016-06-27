@@ -28,12 +28,12 @@
 06/23
     x Fix cross region replication crashes:
         x Rewrote the dnode header parser
-06/24
+06/28
+    o Code walkthrough again
+06/29
     o Round Robin in connection
         o At heavy load, cross region replication lag is pretty high.
         o Also the queue size if pretty high
-
-    o Code walkthrough again
 
     o dyn_epoll is not thread safe. Make recv_active, send_active as atomic
     o Get rid of peer field

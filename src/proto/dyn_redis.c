@@ -1929,6 +1929,7 @@ redis_parse_rsp(struct msg *r)
                 break;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -1942,6 +1943,7 @@ redis_parse_rsp(struct msg *r)
         case SW_ERROR:
              if (r->token == NULL) {
                if (ch != '-') {
+                log_error("SHAILESH....HERE");
                   goto error;
                }
                /* rsp_start <- p */
@@ -2081,6 +2083,7 @@ redis_parse_rsp(struct msg *r)
             } else if (isdigit(ch)) {
                 r->integer = r->integer * 10 + (uint32_t)(ch - '0');
             } else {
+                log_error("SHAILESH....HERE");
                 goto error;
             }
             break;
@@ -2104,6 +2107,7 @@ redis_parse_rsp(struct msg *r)
                 goto done;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2112,6 +2116,7 @@ redis_parse_rsp(struct msg *r)
         case SW_BULK:
             if (r->token == NULL) {
                 if (ch != '$') {
+                log_error("SHAILESH....HERE");
                     goto error;
                 }
                 /* rsp_start <- p */
@@ -2124,11 +2129,13 @@ redis_parse_rsp(struct msg *r)
                 r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
             } else if (ch == CR) {
                 if ((p - r->token) <= 1) {
+                log_error("SHAILESH....HERE");
                     goto error;
                 }
                 r->token = NULL;
                 state = SW_BULK_LF;
             } else {
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2141,6 +2148,7 @@ redis_parse_rsp(struct msg *r)
                 break;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2152,10 +2160,12 @@ redis_parse_rsp(struct msg *r)
                 r->rlen -= (uint32_t)(b->last - p);
                 m = b->last - 1;
                 p = m;
+                //log_warn("splitting msg %lu", r->id);
                 break;
             }
 
             if (*m != CR) {
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2172,6 +2182,7 @@ redis_parse_rsp(struct msg *r)
                 goto done;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2180,6 +2191,7 @@ redis_parse_rsp(struct msg *r)
         case SW_MULTIBULK:
             if (r->token == NULL) {
                 if (ch != '*') {
+                log_error("SHAILESH....HERE");
                     goto error;
                 }
                 r->token = p;
@@ -2192,6 +2204,7 @@ redis_parse_rsp(struct msg *r)
                 r->rnarg = r->rnarg * 10 + (uint32_t)(ch - '0');
             } else if (ch == CR) {
                 if ((p - r->token) <= 1) {
+                log_error("SHAILESH....HERE");
                     goto error;
                 }
 
@@ -2200,6 +2213,7 @@ redis_parse_rsp(struct msg *r)
                 r->token = NULL;
                 state = SW_MULTIBULK_NARG_LF;
             } else {
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2216,6 +2230,7 @@ redis_parse_rsp(struct msg *r)
                 break;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2261,6 +2276,7 @@ redis_parse_rsp(struct msg *r)
                             }
 
                             if (ch != '$') {
+                log_error("SHAILESH....HERE");
                                 goto error;
                             }
 
@@ -2272,6 +2288,7 @@ redis_parse_rsp(struct msg *r)
                             ;
                         } else if (ch == CR) {
                             if ((p - r->token) <= 1 || r->rnarg == 0) {
+                log_error("SHAILESH....HERE");
                                 goto error;
                             }
 
@@ -2284,6 +2301,7 @@ redis_parse_rsp(struct msg *r)
                             r->rnarg--;
                             r->token = NULL;
                         } else {
+                log_error("SHAILESH....HERE");
                             goto error;
                         }
 
@@ -2296,6 +2314,7 @@ redis_parse_rsp(struct msg *r)
                 break;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2311,6 +2330,7 @@ redis_parse_rsp(struct msg *r)
             }
 
             if (*m != CR) {
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 
@@ -2332,6 +2352,7 @@ redis_parse_rsp(struct msg *r)
                 break;
 
             default:
+                log_error("SHAILESH....HERE");
                 goto error;
             }
 

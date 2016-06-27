@@ -86,6 +86,7 @@ dyn_parse_core(struct msg *r)
    uint8_t ch = ' ';
    uint64_t num = 0;
    bool log = log_loggable(LOG_VVERB);
+   //bool log = !r->request;
 
    dyn_parse_state_t dyn_state = r->dyn_state;
    if (log) {
@@ -93,8 +94,12 @@ dyn_parse_core(struct msg *r)
       msg_dump(r);
    }
 
-   if (r->dyn_state == DYN_DONE || r->dyn_state == DYN_POST_DONE)
+   if (r->dyn_state == DYN_DONE || r->dyn_state == DYN_POST_DONE) {
+       if (log)
+           log_warn("Dyn header of message %lu dmsg id %lu is already parsed",
+                    r->id, r->dmsg ? r->dmsg->id : 0);
        return true;
+   }
 
    b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
@@ -495,9 +500,9 @@ dyn_parse_core(struct msg *r)
        if (b->last == b->end) {
           struct mbuf *nbuf = mbuf_get();
           ASSERT_LOG(nbuf != NULL, "Unable to obtain a new mbuf for replacement!");
+          mbuf_insert(&r->mhdr, nbuf);
           mbuf_remove(&r->mhdr, b);
           mbuf_put(b);
-          mbuf_insert_head(&r->mhdr, nbuf);
           r->pos = nbuf->pos;
           return false;
        } else { //split it and throw away the bad portion
@@ -537,18 +542,18 @@ dyn_parse_core(struct msg *r)
    r->dyn_state = DYN_START;
    r->pos = token;
    r->result = MSG_PARSE_REPAIR;
-   if (log_loggable(LOG_VVERB)) {
-      log_hexdump(LOG_VVERB, b->pos, mbuf_length(b), "split and inspecting req %"PRIu64" "
+   if (log_loggable(LOG_WARN)) {
+      log_hexdump(LOG_WARN, b->pos, mbuf_length(b), "split and inspecting req %"PRIu64" "
             "res %d type %d state %d", r->id, r->result, r->type,
             r->dyn_state);
 
-      log_hexdump(LOG_VVERB, b->start, b->last - b->start, "split and inspecting full req %"PRIu64" "
+      log_hexdump(LOG_WARN, b->start, b->last - b->start, "split and inspecting full req %"PRIu64" "
             "res %d type %d state %d", r->id, r->result, r->type,
             r->dyn_state);
    }
    return false;
 
-   done:
+done:
    r->pos = p;
    dmsg->source_address = r->owner->addr;
 
@@ -692,7 +697,6 @@ void dyn_parse_rsp(struct msg *r)
 		msg_dump(r);
 	}
 
-	bool done_parsing = false;
 	struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
@@ -760,9 +764,6 @@ void dyn_parse_rsp(struct msg *r)
 			}
 			return;
 		}
-
-		if (done_parsing)
-			return;
 
 		return data_store_parse_rsp(r);
 	}
