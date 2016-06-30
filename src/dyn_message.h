@@ -220,6 +220,22 @@ dn_strerror(dyn_error_t err)
             return strerror(err);
     }
 }
+
+static inline char *
+dyn_error_source(dyn_error_t err)
+{
+    switch(err)
+    {
+        case NO_QUORUM_ACHIEVED:
+            return "Dynomite:";
+        case PEER_CONNECTION_REFUSE:
+            return "Peer:";
+        case STORAGE_CONNECTION_REFUSE:
+            return "Storage:";
+        default:
+            return "unknown:";
+    }
+}
 /* This is a wrong place for this typedef. But adding to core has some
  * dependency issues - FixIt someother day :(
  */

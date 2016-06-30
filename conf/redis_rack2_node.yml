@@ -12,5 +12,5 @@ dyn_o_mite:
   secure_server_option: datacenter
   pem_key_file: conf/dynomite.pem
   data_store: 0
-  read_consistency : DC_SAFE_QUORUM
-  write_consistency : DC_SAFE_QUORUM
+  read_consistency : DC_ONE
+  write_consistency : DC_ONE

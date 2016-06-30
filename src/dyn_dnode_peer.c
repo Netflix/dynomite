@@ -1460,7 +1460,7 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
         //log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
     }
 
-    /* if client consistency is dc_quorum, forward the response from only the
+    /* if client consistency is dc_quorum or dc_safe_quorum, forward the response from only the
        local region/DC. */
     if (((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
         && !peer_conn->same_dc) {
