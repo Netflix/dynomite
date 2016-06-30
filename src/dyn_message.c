@@ -463,15 +463,9 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
-    char *errstr = err ? strerror(err) : "unknown";
+    char *errstr = err ? dn_strerror(err) : "unknown";
     char *protstr = conn->data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
-    char *source;
-
-    if (dyn_err == PEER_CONNECTION_REFUSE) {
-        source = "Peer:";
-    } else if (dyn_err == STORAGE_CONNECTION_REFUSE) {
-        source = "Storage:";
-    }
+    char *source = dyn_error_source(dyn_err);
 
     msg = _msg_get(conn, __FUNCTION__);
     if (msg == NULL) {

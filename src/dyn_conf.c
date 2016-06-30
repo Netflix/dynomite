@@ -1586,19 +1586,23 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_ONE))
         g_read_consistency = DC_ONE;
+    else if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_SAFE_QUORUM))
+        g_read_consistency = DC_SAFE_QUORUM;
     else if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
         g_read_consistency = DC_QUORUM;
     else {
-        log_error("conf: directive \"read_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
+        log_error("conf: directive \"read_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM' 'DC_SAFE_QUORUM'");
         return DN_ERROR;
     }
 
     if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_ONE))
         g_write_consistency = DC_ONE;
-    else if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_QUORUM))
+    else if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_SAFE_QUORUM))
+        g_write_consistency = DC_SAFE_QUORUM;
+    else if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
         g_write_consistency = DC_QUORUM;
     else {
-        log_error("conf: directive \"write_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM'");
+        log_error("conf: directive \"write_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM' 'DC_SAFE_QUORUM'");
         return DN_ERROR;
     }
 

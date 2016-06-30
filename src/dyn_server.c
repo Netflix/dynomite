@@ -340,7 +340,7 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     //ASSERT_LOG(!req->swallow, "req %d:%d has swallow set??", req->id, req->parent_id);
     if ((req->swallow && req->noreply) ||
         (req->swallow && (req->consistency == DC_ONE)) ||
-        (req->swallow && (req->consistency == DC_QUORUM)
+        (req->swallow && ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
                       && (!conn->same_dc))) {
         log_info("close %s %d swallow req %"PRIu64" len %"PRIu32
                  " type %d", conn_get_type_string(conn), conn->sd, req->id,

@@ -1,0 +1,29 @@
+dyn_o_mite:
+    auto_eject_hosts: true
+    datacenter: us-east-1
+    distribution: vnode
+    dyn_listen: 0.0.0.0:8101
+    dyn_read_timeout: 200000
+    dyn_seed_provider: florida_provider
+    dyn_seeds:
+        - ec2-54-155-253-128.eu-west-1.compute.amazonaws.com:8101:dyno_sh_dev--euwest1a:eu-west-1:1383429731
+        - ec2-54-224-161-182.compute-1.amazonaws.com:8101:dyno_sh_dev--useast1d:us-east-1:1383429731
+        - ec2-54-87-58-146.compute-1.amazonaws.com:8101:dyno_sh_dev--useast1c:us-east-1:1383429731
+        - ec2-54-216-119-225.eu-west-1.compute.amazonaws.com:8101:dyno_sh_dev--euwest1c:eu-west-1:1383429731
+        - ec2-54-170-250-137.eu-west-1.compute.amazonaws.com:8101:dyno_sh_dev--euwest1b:eu-west-1:1383429731
+    dyn_write_timeout: 200000
+    gos_interval: 10000
+    hash: murmur
+    listen: 0.0.0.0:8102
+    preconnect: true
+    server_retry_timeout: 30000
+    servers:
+        - 127.0.0.1:22122:1
+    timeout: 5000
+    tokens: '1383429731'
+    rack: dyno_sh_dev--useast1e
+    secure_server_option: datacenter
+    read_consistency: DC_QUORUM
+    write_consistency: DC_QUORUM
+    pem_key_file: /apps/dynomite/conf/dynomite.pem
+    data_store: 0
