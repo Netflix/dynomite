@@ -47,6 +47,7 @@ dyn_state_get_string(dyn_parse_state_t dyn_state)
         case DYN_AESKEY_LEN_STAR: return "DYN_AESKEY_LEN_STAR";
         case DYN_AESKEY_LEN: return "DYN_AESKEY_LEN";
         case DYN_AESKEY: return "DYN_AESKEY";
+        case DYN_AESKEY_SPACE: return "DYN_AESKEY_SPACE";
         case DYN_PAYLOAD_LEN_STAR: return "DYN_PAYLOAD_LEN_STAR";
         case DYN_PAYLOAD_LEN: return "DYN_PAYLOAD_LEN";
         case DYN_CR_BEFORE_DONE: return "DYN_CR_BEFORE_DONE";
