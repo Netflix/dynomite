@@ -31,6 +31,9 @@
 06/28
     o Code walkthrough again
 06/29
+    x Fix dnode parsing error
+06/30
+    o Core walkthrough
     o Round Robin in connection
         o At heavy load, cross region replication lag is pretty high.
         o Also the queue size if pretty high

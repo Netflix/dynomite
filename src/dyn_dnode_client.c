@@ -235,39 +235,17 @@ static void
 dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct server_pool *pool;
-    uint8_t *key;
-    uint32_t keylen;
-
-    if (log_loggable(LOG_DEBUG)) {
-       log_debug(LOG_DEBUG, "dnode_req_forward entering ");
-    }
-    log_debug(LOG_DEBUG, "DNODE REQ RECEIVED %s %d dmsg->id %u",
-              conn_get_type_string(conn), conn->p.sd, msg->dmsg->id);
 
     ASSERT(conn->p.type == CONN_DNODE_PEER_CLIENT);
 
+    log_debug(LOG_DEBUG, "DNODE REQ RECEIVED %s %d dmsg->id %u",
+              conn_get_type_string(conn), conn->p.sd, msg->dmsg->id);
+
+
     pool = conn->owner;
-    key = NULL;
-    keylen = 0;
-
-    if (!string_empty(&pool->topo->hash_tag)) {
-        struct string *tag = &pool->topo->hash_tag;
-        uint8_t *tag_start, *tag_end;
-
-        tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
-
-    if (keylen == 0) {
-        key = msg->key_start;
-        keylen = (uint32_t)(msg->key_end - msg->key_start);
-    }
+    uint8_t *key = NULL;
+    uint32_t keylen = 0;
+    key = g_msg_get_key(msg, &pool->topo->hash_tag, &keylen);
 
     ASSERT(msg->dmsg != NULL);
     if (msg->dmsg->type == DMSG_REQ) {
