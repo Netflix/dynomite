@@ -146,6 +146,10 @@ rsp_send_next(struct context *ctx, struct conn *conn)
       	  stats_pool_incr(ctx, forward_error);
         }
     } else {
+        if (!req->selected_rsp) {
+            conn->smsg = NULL;
+            return NULL;
+        }
         rsp = req->selected_rsp;
     }
     ASSERT(!rsp->request);
