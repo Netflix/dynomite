@@ -323,6 +323,12 @@ struct msg {
     unsigned             first_fragment:1;/* first fragment? */
     unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
+    /* A hack here: We need a way in dnode_rsp_send_next to remmeber if we already
+     * did a dmsg_write of a dnode header in this message. If we do not remember it,
+     * then if the same message gets attempted to be sent twice in msg_send_chain,
+     * (due to lack of space in the previous attempt), we will prepend another header
+     * and we will have corrupted message at the destination */
+    unsigned             dnode_header_prepended:1;       /* swallow response? */
     unsigned             rsp_sent:1;      /* is a response sent for this request?*/
 
     int					 data_store;

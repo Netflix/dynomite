@@ -323,6 +323,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
+    msg->dnode_header_prepended = 0;
     msg->rsp_sent = 0;
     msg->data_store = DATA_REDIS;
 
