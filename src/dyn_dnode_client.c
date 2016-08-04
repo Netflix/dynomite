@@ -383,6 +383,9 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
         //need to deal with multi-block later
         uint64_t msg_id = pmsg->dmsg->id;
+        if (rsp->dnode_header_prepended) {
+            return rsp;
+        }
 
         struct mbuf *header_buf = mbuf_get();
         if (header_buf == NULL) {
@@ -424,6 +427,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
             dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(rsp));
         }
 
+        rsp->dnode_header_prepended = 1;
         mbuf_insert_head(&rsp->mhdr, header_buf);
 
         if (log_loggable(LOG_VVERB)) {
