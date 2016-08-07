@@ -1147,6 +1147,11 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     ASSERT(req != NULL && req->peer == NULL);
     ASSERT(req->request && !req->done);
 
+    if (req->request_send_time) {
+        struct stats *st = ctx->stats;
+        uint64_t delay = dn_usec_now() - req->request_send_time;
+        histo_add(&st->server_latency_histo, delay);
+    }
     conn_dequeue_outq(ctx, s_conn, req);
     req->done = 1;
 
@@ -1258,6 +1263,7 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 
     /* dequeue the message (request) from server inq */
     conn_dequeue_inq(ctx, conn, msg);
+    msg->request_send_time = dn_usec_now();
 
     /*
      * noreply request instructs the server not to send any response. So,
@@ -1275,6 +1281,7 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 {
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_SERVER);
+    msg->request_inqueue_enqueue_time_us = dn_usec_now();
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -1305,6 +1312,8 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
 
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
+    int64_t delay = dn_usec_now() - msg->request_inqueue_enqueue_time_us;
+    histo_add(&ctx->stats->server_queue_wait_time_histo, delay);
 
     conn->imsg_count--;
     histo_add(&ctx->stats->server_in_queue, conn->imsg_count);

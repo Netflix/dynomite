@@ -716,11 +716,11 @@ static void
 dnode_peer_close_socket(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-        if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "In dnode_peer_close_socket");
-        }
+    if (log_loggable(LOG_VERB)) {
+        log_debug(LOG_VERB, "In dnode_peer_close_socket");
+    }
 
-    if (conn != NULL) {
+    if ((conn != NULL) && (conn->sd != -1)) {
         status = close(conn->sd);
         if (status < 0) {
             log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
@@ -1538,10 +1538,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
         c_conn = req->owner;
 
-        if (!peer_conn->same_dc && req->remote_region_send_time) {
+        if (req->request_send_time) {
             struct stats *st = ctx->stats;
-            uint64_t delay = dn_usec_now() - req->remote_region_send_time;
-            histo_add(&st->cross_region_histo, delay);
+            uint64_t delay = dn_usec_now() - req->request_send_time;
+            if (!peer_conn->same_dc)
+                histo_add(&st->cross_region_latency_histo, delay);
+            else
+                histo_add(&st->cross_zone_latency_histo, delay);
         }
 
         if (req->id == rsp->dmsg->id) {
@@ -1773,8 +1776,7 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->sd, msg->dmsg->id);*/
 
-    if (!conn->same_dc)
-        msg->remote_region_send_time = dn_usec_now();
+    msg->request_send_time = dn_usec_now();
     req_send_done(ctx, conn, msg);
 }
 
@@ -1783,9 +1785,8 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 {
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    msg->request_inqueue_enqueue_time_us = dn_usec_now();
 
-    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
-              conn, msg->id, msg->parent_id);
     if (!msg->noreply) {
         msg_tmo_insert(msg, conn);
     }
@@ -1811,7 +1812,14 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 {
     ASSERT(msg->request);
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
+    int64_t delay = 0;
+    if (msg->request_inqueue_enqueue_time_us) {
+        delay = dn_usec_now() - msg->request_inqueue_enqueue_time_us;
+        if (conn->same_dc)
+            histo_add(&ctx->stats->cross_zone_latency_histo, delay);
+        else
+            histo_add(&ctx->stats->cross_region_latency_histo, delay);
+    }
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
 
