@@ -272,7 +272,8 @@ done:
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0L;
-    msg->remote_region_send_time = 0L;
+    msg->request_send_time = 0L;
+    msg->request_inqueue_enqueue_time_us = 0L;
     msg->awaiting_rsps = 0;
     msg->selected_rsp = NULL;
 
