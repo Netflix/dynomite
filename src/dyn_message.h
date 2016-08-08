@@ -272,8 +272,8 @@ struct msg {
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     int64_t              stime_in_microsec;  /* start time in microsec */
-    int64_t              request_inqueue_enqueue_time_us; /* when message was enqueued in inqueue, either to a redis server or remote region or cross rack */
-    int64_t              request_send_time; /* when message was sent: either to a redis server or remote region or cross rack */
+    int64_t              request_inqueue_enqueue_time_us; /* when message was enqueued in inqueue, either to the data store or remote region or cross rack */
+    int64_t              request_send_time; /* when message was sent: either to the data store or remote region or cross rack */
     uint8_t              awaiting_rsps;
     struct msg           *selected_rsp;
 

@@ -720,7 +720,7 @@ dnode_peer_close_socket(struct context *ctx, struct conn *conn)
         log_debug(LOG_VERB, "In dnode_peer_close_socket");
     }
 
-    if ((conn != NULL) && (conn->sd != -1)) {
+    if (conn != NULL) {
         status = close(conn->sd);
         if (status < 0) {
             log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
