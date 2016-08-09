@@ -254,7 +254,15 @@ struct stats {
     volatile bool             reset_histogram;
     struct histogram latency_histo;
     struct histogram payload_size_histo;
-    struct histogram cross_region_histo;
+
+    volatile struct histogram server_latency_histo;
+    volatile struct histogram cross_zone_latency_histo;
+    volatile struct histogram cross_region_latency_histo;
+
+    volatile struct histogram server_queue_wait_time_histo;
+    volatile struct histogram cross_zone_queue_wait_time_histo;
+    volatile struct histogram cross_region_queue_wait_time_histo;
+
     struct histogram client_out_queue;
     struct histogram server_in_queue;
     struct histogram server_out_queue;

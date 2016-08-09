@@ -259,7 +259,8 @@ done:
     msg->dst_peer = NULL;
     msg->client_conn = NULL;
     msg->stime_in_microsec = 0ULL;
-    msg->remote_region_send_time = 0L;
+    msg->request_send_time = 0L;
+    msg->request_inqueue_enqueue_time_us = 0L;
     msg->awaiting_rsps = 0;
     msg->selected_rsp = NULL;
 
@@ -431,15 +432,9 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
-    char *errstr = err ? strerror(err) : "unknown";
+    char *errstr = err ? dn_strerror(err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
-    char *source = "Peer:";
-
-    if (dyn_err == PEER_CONNECTION_REFUSE) {
-        source = "Peer:";
-    } else if (dyn_err == STORAGE_CONNECTION_REFUSE) {
-        source = "Storage:";
-    }
+    char *source = dyn_error_source(dyn_err);
 
     msg = _msg_get(conn, __FUNCTION__);
     if (msg == NULL) {

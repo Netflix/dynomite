@@ -589,7 +589,8 @@ request_send_to_all_local_racks(struct msg *msg)
     if ((msg->type == MSG_REQ_REDIS_PING) ||
         (msg->type == MSG_REQ_REDIS_INFO))
         return false;
-    if (msg->consistency == DC_QUORUM)
+    if ((msg->consistency == DC_QUORUM) ||
+        (msg->consistency == DC_SAFE_QUORUM))
         return true;
     return false;
 }

@@ -255,7 +255,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 {
     if ((req->swallow && !req->expect_datastore_reply) || // no reply
         (req->swallow && (req->consistency == DC_ONE)) || // dc one
-        (req->swallow && (req->consistency == DC_QUORUM) // remote dc request
+        (req->swallow && ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM)) // remote dc request
                       && (!conn->same_dc)) ||
         (req->owner == conn)) // a gossip message that originated on this conn
     {
@@ -494,7 +494,6 @@ static void
 dnode_peer_close_socket(struct conn *conn)
 {
     rstatus_t status;
-    log_debug(LOG_VERB, "In %s", __FUNCTION__);
 
     if ((conn != NULL) && (conn->p.sd >= 0)) {
         status = close(conn->p.sd);
@@ -1110,16 +1109,15 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
         //log_warn("req %d:%d with DC_ONE consistency is not being swallowed");
     }
 
-    /* if client consistency is dc_quorum, forward the response from only the
+    /* if client consistency is dc_quorum or dc_safe_quorum, forward the response from only the
        local region/DC. */
-    //if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
     struct peer *peer = peer_conn->owner;
-    if ((req->consistency == DC_QUORUM) && !peer_is_same_dc(peer)) {
+    if (((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
+        && !peer_is_same_dc(peer)) {
         if (req->swallow) {
             dnode_rsp_swallow(ctx, peer_conn, req, rsp);
             return;
         }
-        //log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
     }
 
     log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
@@ -1183,6 +1181,15 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         log_debug(LOG_VERB, "dnode_rsp_forward entering req %p rsp %p...", req, rsp);
         c_conn = req->owner;
 
+        if (req->request_send_time) {
+            struct stats *st = ctx->stats;
+            uint64_t delay = dn_usec_now() - req->request_send_time;
+            if (!peer_conn->same_dc)
+                histo_add(&st->cross_region_latency_histo, delay);
+            else
+                histo_add(&st->cross_zone_latency_histo, delay);
+        }
+
         if (req->id == rsp->dmsg->id) {
             update_remote_region_stats(ctx, peer_conn, req);
             dnode_rsp_forward_match(ctx, peer_conn, rsp);
@@ -1207,13 +1214,13 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
             }
         }
 
-        if ((req->consistency == DC_QUORUM) && !peer_conn->same_dc) {
+        if (((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
+            && !peer_conn->same_dc) {
             if (req->swallow) {
                 // swallow the request and move on the next one
                 dnode_rsp_swallow(ctx, peer_conn, req, NULL);
                 continue;
             }
-            log_warn("req %d:%d with DC_QUORUM consistency is not being swallowed");
         }
 
         log_error("MISMATCHED DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, skipping....",
@@ -1397,8 +1404,7 @@ dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->p.sd, msg->dmsg->id);*/
 
-    if (!conn->same_dc)
-        msg->remote_region_send_time = dn_usec_now();
+    msg->request_send_time = dn_usec_now();
     req_send_done(ctx, conn, msg);
 }
 
@@ -1407,9 +1413,8 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
 {
     ASSERT(msg->request);
     ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
+    msg->request_inqueue_enqueue_time_us = dn_usec_now();
 
-    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d calling req_server_enqueue_imsgq",
-              conn, msg->id, msg->parent_id);
     if (msg->expect_datastore_reply) {
         pthread_ctx ptctx = conn->ptctx;
         msg_tmo_insert(&ptctx->tmo, conn, msg);
@@ -1436,6 +1441,14 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     ASSERT(msg->request);
     ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
 
+    int64_t delay = 0;
+    if (msg->request_inqueue_enqueue_time_us) {
+        delay = dn_usec_now() - msg->request_inqueue_enqueue_time_us;
+        if (conn->same_dc)
+            histo_add(&ctx->stats->cross_zone_latency_histo, delay);
+        else
+            histo_add(&ctx->stats->cross_region_latency_histo, delay);
+    }
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
 
