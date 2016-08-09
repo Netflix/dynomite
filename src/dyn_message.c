@@ -297,7 +297,8 @@ done:
     msg->peer = NULL;
     msg->owner = NULL;
     msg->stime_in_microsec = 0ULL;
-    msg->remote_region_send_time = 0L;
+    msg->request_send_time = 0L;
+    msg->request_inqueue_enqueue_time_us = 0L;
     msg->awaiting_rsps = 0;
     msg->selected_rsp = NULL;
 
@@ -343,6 +344,7 @@ done:
     msg->first_fragment = 0;
     msg->last_fragment = 0;
     msg->swallow = 0;
+    msg->dnode_header_prepended = 0;
     msg->rsp_sent = 0;
 
     //dynomite
@@ -467,15 +469,9 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct msg *msg;
     struct mbuf *mbuf;
     int n;
-    char *errstr = err ? strerror(err) : "unknown";
+    char *errstr = err ? dn_strerror(err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
-    char *source;
-
-    if (dyn_err == PEER_CONNECTION_REFUSE) {
-        source = "Peer:";
-    } else if (dyn_err == STORAGE_CONNECTION_REFUSE) {
-        source = "Storage:";
-    }
+    char *source = dyn_error_source(dyn_err);
 
     msg = _msg_get(conn, __FUNCTION__);
     if (msg == NULL) {

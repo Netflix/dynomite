@@ -390,9 +390,10 @@ stats_create_bufs(struct stats *st)
 
     /* footer */
     size += 2;
+    // Accomodate for new fields that are directly added using stats_add_num_str
+    size += 1024;
 
     size = DN_ALIGN(size, DN_ALIGNMENT);
-
     st->buf.data = dn_alloc(size);
     if (st->buf.data == NULL) {
         log_error("create stats buffer of size %zu failed: %s", size,
@@ -476,6 +477,24 @@ stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, bo
     return DN_OK;
 }
 
+static rstatus_t
+stats_add_num_str(struct stats_buffer *buf, const char *key, int64_t val)
+{
+    uint8_t *pos;
+    size_t room;
+    int n;
+
+    pos = buf->data + buf->len;
+    room = buf->size - buf->len - 1;
+
+    n = dn_snprintf(pos, room, "\"%s\":%"PRId64",\n", key, val);
+    if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
+        return DN_ERROR;
+    }
+    buf->len += (size_t)n;
+    return DN_OK;
+}
 
 static rstatus_t
 stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
@@ -530,8 +549,33 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.val_95th));
     THROW_STATUS(stats_add_num(&st->buf, &st->payload_size_mean_str,
                  (int64_t)st->payload_size_histo.mean));
-    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_avg_rtt,
-                 (int64_t)st->cross_region_histo.mean));
+
+    THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_region_rtt",
+                (int64_t)st->cross_region_latency_histo.mean));
+    THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_region_rtt",
+                (int64_t)st->cross_region_latency_histo.val_99th));
+    THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_zone_latency",
+                (int64_t)st->cross_zone_latency_histo.mean));
+    THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_zone_latency",
+                (int64_t)st->cross_zone_latency_histo.val_99th));
+    THROW_STATUS(stats_add_num_str(&st->buf, "average_server_latency",
+                (int64_t)st->server_latency_histo.mean));
+    THROW_STATUS(stats_add_num_str(&st->buf, "99_server_latency",
+                (int64_t)st->server_latency_histo.val_99th));
+
+    THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_region_queue_wait",
+                (int64_t)st->cross_region_queue_wait_time_histo.mean));
+    THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_region_queue_wait",
+                (int64_t)st->cross_region_queue_wait_time_histo.val_99th));
+    THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_zone_queue_wait",
+                (int64_t)st->cross_zone_queue_wait_time_histo.mean));
+    THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_zone_queue_wait",
+                (int64_t)st->cross_zone_queue_wait_time_histo.val_99th));
+    THROW_STATUS(stats_add_num_str(&st->buf, "average_server_queue_wait",
+                (int64_t)st->server_queue_wait_time_histo.mean));
+    THROW_STATUS(stats_add_num_str(&st->buf, "99_server_queue_wait",
+                (int64_t)st->server_queue_wait_time_histo.val_99th));
+
     THROW_STATUS(stats_add_num(&st->buf, &st->client_out_queue_99,
                  (int64_t)st->client_out_queue.val_99th));
     THROW_STATUS(stats_add_num(&st->buf, &st->server_in_queue_99,
@@ -548,8 +592,6 @@ stats_add_header(struct stats *st)
                  (int64_t)st->remote_peer_out_queue.val_99th));
     THROW_STATUS(stats_add_num(&st->buf, &st->remote_peer_in_queue_99,
                  (int64_t)st->remote_peer_in_queue.val_99th));
-    THROW_STATUS(stats_add_num(&st->buf, &st->cross_region_99_rtt,
-                 (int64_t)st->cross_region_histo.val_99th));
     THROW_STATUS(stats_add_num(&st->buf, &st->alloc_msgs_str,
                  (int64_t)st->alloc_msgs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_msgs_str,
@@ -714,7 +756,15 @@ stats_aggregate(struct stats *st)
         st->reset_histogram = 0;
         histo_reset(&st->latency_histo);
         histo_reset(&st->payload_size_histo);
-        histo_reset(&st->cross_region_histo);
+
+        histo_reset(&st->server_latency_histo);
+        histo_reset(&st->cross_zone_latency_histo);
+        histo_reset(&st->cross_region_latency_histo);
+
+        histo_reset(&st->server_queue_wait_time_histo);
+        histo_reset(&st->cross_zone_queue_wait_time_histo);
+        histo_reset(&st->cross_region_queue_wait_time_histo);
+
         histo_reset(&st->server_in_queue);
         histo_reset(&st->server_out_queue);
         histo_reset(&st->client_out_queue);
@@ -985,18 +1035,22 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                         char* type = op + 5;
                         log_notice("op: %s", op);
                         log_notice("type: %s", type);
-                        if (strcmp(type, "/dc_one") == 0)
+                        if (!dn_strcasecmp(type, "/"CONF_STR_DC_ONE))
                             g_read_consistency = DC_ONE;
-                        else if (strcmp(type, "/dc_quorum") == 0)
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_QUORUM))
                             g_read_consistency = DC_QUORUM;
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_SAFE_QUORUM))
+                            g_read_consistency = DC_SAFE_QUORUM;
                         else
                             st_cmd->cmd = CMD_UNKNOWN;
                     } else if (strncmp(op, "/write", 6) == 0) {
                         char* type = op + 6;
-                        if (strcmp(type, "/dc_one") == 0)
+                        if (!dn_strcasecmp(type, "/"CONF_STR_DC_ONE))
                             g_write_consistency = DC_ONE;
-                        else if (strcmp(type, "/dc_quorum") == 0)
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_QUORUM))
                             g_write_consistency = DC_QUORUM;
+                        else if (!dn_strcasecmp(type, "/"CONF_STR_DC_SAFE_QUORUM))
+                            g_write_consistency = DC_SAFE_QUORUM;
                         else
                             st_cmd->cmd = CMD_UNKNOWN;
                     } else
@@ -1408,7 +1462,15 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     histo_init(&st->latency_histo);
     histo_init(&st->payload_size_histo);
-    histo_init(&st->cross_region_histo);
+
+    histo_init(&st->server_latency_histo);
+    histo_init(&st->cross_zone_latency_histo);
+    histo_init(&st->cross_region_latency_histo);
+
+    histo_init(&st->server_queue_wait_time_histo);
+    histo_init(&st->cross_zone_queue_wait_time_histo);
+    histo_init(&st->cross_region_queue_wait_time_histo);
+
     histo_init(&st->client_out_queue);
     histo_init(&st->server_in_queue);
     histo_init(&st->server_out_queue);
@@ -1499,7 +1561,14 @@ stats_swap(struct stats *st)
     histo_compute(&st->latency_histo);
 
     histo_compute(&st->payload_size_histo);
-    histo_compute(&st->cross_region_histo);
+
+    histo_compute(&st->server_latency_histo);
+    histo_compute(&st->cross_zone_latency_histo);
+    histo_compute(&st->cross_region_latency_histo);
+
+    histo_compute(&st->server_queue_wait_time_histo);
+    histo_compute(&st->cross_zone_queue_wait_time_histo);
+    histo_compute(&st->cross_region_queue_wait_time_histo);
 
     histo_compute(&st->client_out_queue);
     histo_compute(&st->server_in_queue);

@@ -8,8 +8,9 @@ struct response_mgr {
     /* we could use the dynamic array
        here. But we have only 3 ASGs */
     struct msg  *responses[MAX_REPLICAS_PER_DC];
-    uint8_t     good_responses;     // non-error responses received
-    uint8_t     max_responses;      // max responses expected
+    uint32_t    checksums[MAX_REPLICAS_PER_DC];
+    uint8_t     good_responses;     // non-error responses received. (nil) is not an error
+    uint8_t     max_responses;      // max responses expected.
     uint8_t     quorum_responses;   // responses expected to form a quorum
     uint8_t     error_responses;    // error responses received
     struct msg  *err_rsp;           // first error response

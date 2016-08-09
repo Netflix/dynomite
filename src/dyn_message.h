@@ -213,15 +213,44 @@ typedef enum dyn_error {
     UNKNOWN_ERROR,
     PEER_CONNECTION_REFUSE,
     STORAGE_CONNECTION_REFUSE,
-    BAD_FORMAT
+    BAD_FORMAT,
+    NO_QUORUM_ACHIEVED,
 } dyn_error_t;
 
+static inline char *
+dn_strerror(dyn_error_t err)
+{
+    switch(err)
+    {
+        case NO_QUORUM_ACHIEVED:
+            return "Failed to achieve Quorum";
+        default:
+            return strerror(err);
+    }
+}
+
+static inline char *
+dyn_error_source(dyn_error_t err)
+{
+    switch(err)
+    {
+        case NO_QUORUM_ACHIEVED:
+            return "Dynomite:";
+        case PEER_CONNECTION_REFUSE:
+            return "Peer:";
+        case STORAGE_CONNECTION_REFUSE:
+            return "Storage:";
+        default:
+            return "unknown:";
+    }
+}
 /* This is a wrong place for this typedef. But adding to core has some
  * dependency issues - FixIt someother day :(
  */
 typedef enum consistency {
     DC_ONE = 0,
-    DC_QUORUM = 1
+    DC_QUORUM,
+    DC_SAFE_QUORUM,
 } consistency_t;
 
 static inline char*
@@ -231,6 +260,7 @@ get_consistency_string(consistency_t cons)
     {
         case DC_ONE: return "DC_ONE";
         case DC_QUORUM: return "DC_QUORUM";
+        case DC_SAFE_QUORUM: return "DC_SAFE_QUORUM";
     }
     return "INVALID CONSISTENCY";
 }
@@ -250,7 +280,8 @@ struct msg {
     struct msg           *peer;           /* message peer */
     struct conn          *owner;          /* message owner - client | server */
     usec_t               stime_in_microsec;  /* start time in microsec */
-    usec_t               remote_region_send_time; /* time in microsec when message sent to remote region */
+    int64_t              request_inqueue_enqueue_time_us; /* when message was enqueued in inqueue, either to the data store or remote region or cross rack */
+    int64_t              request_send_time; /* when message was sent: either to the data store or remote region or cross rack */
     uint8_t              awaiting_rsps;
     struct msg           *selected_rsp;
 
@@ -297,6 +328,12 @@ struct msg {
     unsigned             first_fragment:1;/* first fragment? */
     unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
+    /* We need a way in dnode_rsp_send_next to remember if we already
+     * did a dmsg_write of a dnode header in this message. If we do not remember it,
+     * then if the same message gets attempted to be sent twice in msg_send_chain,
+     * (due to lack of space in the previous attempt), we will prepend another header
+     * and we will have corrupted message at the destination */
+    unsigned             dnode_header_prepended:1;
     unsigned             rsp_sent:1;      /* is a response sent for this request?*/
 
     //dynomite
