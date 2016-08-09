@@ -1686,9 +1686,9 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     if (msg->request_inqueue_enqueue_time_us) {
         delay = dn_usec_now() - msg->request_inqueue_enqueue_time_us;
         if (conn->same_dc)
-            histo_add(&ctx->stats->cross_zone_latency_histo, delay);
+            histo_add(&ctx->stats->cross_zone_queue_wait_time_histo, delay);
         else
-            histo_add(&ctx->stats->cross_region_latency_histo, delay);
+            histo_add(&ctx->stats->cross_region_queue_wait_time_histo, delay);
     }
     TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);

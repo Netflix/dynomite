@@ -252,8 +252,8 @@ struct stats {
     volatile int              aggregate;      /* shadow (b) aggregate? */
     volatile int              updated;        /* current (a) updated? */
     volatile bool             reset_histogram;
-    struct histogram latency_histo;
-    struct histogram payload_size_histo;
+    volatile struct histogram latency_histo;
+    volatile struct histogram payload_size_histo;
 
     volatile struct histogram server_latency_histo;
     volatile struct histogram cross_zone_latency_histo;
@@ -263,14 +263,14 @@ struct stats {
     volatile struct histogram cross_zone_queue_wait_time_histo;
     volatile struct histogram cross_region_queue_wait_time_histo;
 
-    struct histogram client_out_queue;
-    struct histogram server_in_queue;
-    struct histogram server_out_queue;
-    struct histogram dnode_client_out_queue;
-    struct histogram peer_in_queue;
-    struct histogram peer_out_queue;
-    struct histogram remote_peer_in_queue;
-    struct histogram remote_peer_out_queue;
+    volatile struct histogram client_out_queue;
+    volatile struct histogram server_in_queue;
+    volatile struct histogram server_out_queue;
+    volatile struct histogram dnode_client_out_queue;
+    volatile struct histogram peer_in_queue;
+    volatile struct histogram peer_out_queue;
+    volatile struct histogram remote_peer_in_queue;
+    volatile struct histogram remote_peer_out_queue;
 
     size_t           alloc_msgs;
     size_t           free_msgs;
