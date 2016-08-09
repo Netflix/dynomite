@@ -104,9 +104,6 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         return rspmgr->err_rsp;
     }
 
-    ASSERT_LOG(rspmgr->good_responses == 3, "rspmgr req: %lu has %d good responses",
-               rspmgr->msg->id, rspmgr->good_responses);
-
     uint32_t chk0, chk1, chk2;
     chk0 = rspmgr->checksums[0];
     chk1 = rspmgr->checksums[1];
