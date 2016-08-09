@@ -25,13 +25,13 @@ rspmgr_is_quorum_achieved(struct response_mgr *rspmgr)
         return false;
 
     uint32_t chk0, chk1, chk2;
-    chk0 = msg_payload_crc32(rspmgr->responses[0]);
-    chk1 = msg_payload_crc32(rspmgr->responses[1]);
+    chk0 = rspmgr->checksums[0];
+    chk1 = rspmgr->checksums[1];
     if (chk0 == chk1)
         return true;
     if (rspmgr->good_responses < 3)
         return false;
-    chk2 = msg_payload_crc32(rspmgr->responses[2]);
+    chk2 = rspmgr->checksums[2];
     if ((chk1 == chk2) || (chk0 == chk2))
         return true;
     return false;
@@ -91,6 +91,7 @@ rspmgr_incr_non_quorum_responses_stats(struct response_mgr *rspmgr)
                         client_non_quorum_w_responses);
 
 }
+
 struct msg*
 rspmgr_get_response(struct response_mgr *rspmgr)
 {
@@ -106,31 +107,24 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         return rspmgr->err_rsp;
     }
 
-    if (rspmgr->good_responses < 3) {
-        log_debug(LOG_VERB, "req:%lu only %d responses, returning first",
-                  rspmgr->msg->id, rspmgr->good_responses);
-        return rspmgr->responses[0];
-    }
-
     ASSERT_LOG(rspmgr->good_responses == 3, "rspmgr req: %lu has %d good responses",
                rspmgr->msg->id, rspmgr->good_responses);
 
     uint32_t chk0, chk1, chk2;
-    chk0 = msg_payload_crc32(rspmgr->responses[0]);
-    chk1 = msg_payload_crc32(rspmgr->responses[1]);
+    chk0 = rspmgr->checksums[0];
+    chk1 = rspmgr->checksums[1];
     if (chk0 == chk1) {
         return rspmgr->responses[0];
-    } else {
-        chk2 = msg_payload_crc32(rspmgr->responses[2]);
+    } else if (rspmgr->good_responses == 3) {
+        chk2 = rspmgr->checksums[2];
         if (chk1 == chk2)
             return rspmgr->responses[1];
         else if (chk0 == chk2)
             return rspmgr->responses[0];
     }
     rspmgr_incr_non_quorum_responses_stats(rspmgr);
-    log_info("none of the responses match, returning first");
     if (log_loggable(LOG_DEBUG)) {
-        log_error("Message: ");
+        log_error("Request: ");
         msg_dump(rspmgr->msg);
     }
     if (log_loggable(LOG_VVERB)) {
@@ -138,10 +132,25 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         msg_dump(rspmgr->responses[0]);
         log_error("Respone 1: ");
         msg_dump(rspmgr->responses[1]);
-        log_error("Respone 2: ");
-        msg_dump(rspmgr->responses[2]);
+        if (rspmgr->good_responses == 3) {
+            log_error("Respone 2: ");
+            msg_dump(rspmgr->responses[2]);
+        }
     }
-    return rspmgr->responses[0];
+    if (rspmgr->msg->consistency == DC_QUORUM) {
+        log_info("none of the responses match, returning first");
+        return rspmgr->responses[0];
+    } else {
+        log_info("none of the responses match, returning error");
+        struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
+        rsp->error = 1;
+        rsp->err = NO_QUORUM_ACHIEVED;
+        rsp->dyn_error = NO_QUORUM_ACHIEVED;
+        ASSERT(rspmgr->err_rsp == NULL);
+        rspmgr->err_rsp = rsp;
+        rspmgr->error_responses++;
+        return rsp;
+    }
 }
 
 void
@@ -174,7 +183,9 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
         else
             rsp_put(rsp);
     } else {
-        log_debug(LOG_VERB, "Good response %d:%d", rsp->id, rsp->parent_id);
+        rspmgr->checksums[rspmgr->good_responses] = msg_payload_crc32(rsp);
+        log_debug(LOG_VERB, "Good response %d:%d checksum %u", rsp->id,
+                  rsp->parent_id, rspmgr->checksums[rspmgr->good_responses]);
         rspmgr->responses[rspmgr->good_responses++] =  rsp;
     }
     msg_decr_awaiting_rsps(rspmgr->msg);

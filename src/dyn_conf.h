@@ -34,6 +34,11 @@
 #define CONF_DEFAULT_PEERS                   200
 #define CONF_DEFAULT_ENV                     "aws"
 #define CONF_DEFAULT_CONN_MSG_RATE           50000   //conn msgs per sec
+
+#define CONF_STR_DC_ONE                      "dc_one"
+#define CONF_STR_DC_QUORUM                   "dc_quorum"
+#define CONF_STR_DC_SAFE_QUORUM              "dc_safe_quorum"
+
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
     struct string   name;    /* name */
