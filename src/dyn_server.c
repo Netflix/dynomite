@@ -284,10 +284,10 @@ server_failure(struct context *ctx, struct server *server)
 
 	next = now + pool->server_retry_timeout;
 
-	log_debug(LOG_INFO, "update pool %"PRIu32" '%.*s' to delete server '%.*s' "
-			"for next %"PRIu32" secs", pool->idx, pool->name.len,
-			pool->name.data, server->pname.len, server->pname.data,
-			pool->server_retry_timeout / 1000 / 1000);
+	log_info("update pool %"PRIu32" '%.*s' to delete server '%.*s' "
+			 "for next %"PRIu32" secs", pool->idx, pool->name.len,
+			 pool->name.data, server->pname.len, server->pname.data,
+			 pool->server_retry_timeout / 1000 / 1000);
 
 	stats_pool_incr(ctx, pool, server_ejects);
 

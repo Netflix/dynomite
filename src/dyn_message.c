@@ -256,9 +256,9 @@ _msg_get(struct conn *conn, const char *const caller)
 
     alloc_msg_count++;
 
-
-    log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
-             alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
+    if (alloc_msg_count % 1000 == 0)
+        log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
+                 alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
