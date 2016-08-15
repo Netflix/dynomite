@@ -565,15 +565,14 @@ server_ok(struct context *ctx, struct conn *conn)
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connected);
 
-	if (server->failure_count != 0) {
-           if (log_loggable(LOG_VERB)) {
-		   log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
-				 " to 0", server->pname.len, server->pname.data,
-				 server->failure_count);
-           }
-           server->failure_count = 0;
-           server->next_retry = 0LL;
-	}
+    if (log_loggable(LOG_VERB)) {
+        log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
+                " to 0", server->pname.len, server->pname.data,
+                server->failure_count);
+    }
+    server->failure_count = 0;
+    server->next_retry = 0LL;
+    server->reconnect_backoff_factor = 1LL;
 }
 
 static rstatus_t

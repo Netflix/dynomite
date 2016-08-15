@@ -249,6 +249,7 @@ conf_server_each_transform(void *elem, void *data)
     TAILQ_INIT(&s->s_conn_q);
 
     s->next_retry = 0LL;
+    s->reconnect_backoff_factor = 1LL;
     s->failure_count = 0;
 
     log_debug(LOG_VERB, "transform to server %"PRIu32" '%.*s'",
@@ -298,6 +299,7 @@ conf_seed_each_transform(void *elem, void *data)
     TAILQ_INIT(&s->s_conn_q);
 
     s->next_retry = 0LL;
+    s->reconnect_backoff_factor = 1LL;
     s->failure_count = 0;
 
     s->processed = 0;

@@ -236,6 +236,7 @@ struct server {
     struct conn_tqh    s_conn_q;      /* server connection q */
 
     int64_t            next_retry;    /* next retry time in usec */
+    int64_t            reconnect_backoff_factor; /* backoff mulitplier */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */
