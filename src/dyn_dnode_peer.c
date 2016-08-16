@@ -157,8 +157,8 @@ dnode_peer_add_local(struct server_pool *pool, struct server *peer)
     peer->ns_conn_q = 0;
     TAILQ_INIT(&peer->s_conn_q);
 
-    peer->next_retry = 0LL;
-    peer->reconnect_backoff_s = 1LL;
+    peer->next_retry_us = 0LL;
+    peer->reconnect_backoff_sec = 1LL;
     peer->failure_count = 0;
     peer->is_seed = 1;
     peer->processed = 0;
@@ -537,11 +537,11 @@ dnode_peer_failure(struct context *ctx, struct server *server)
     stats_pool_incr(ctx, pool, peer_ejects);
 
     //server->failure_count = 0;
-    server->next_retry = now + (server->reconnect_backoff_s * 1000 * 1000);
-    server->reconnect_backoff_s =
-        (2 * server->reconnect_backoff_s) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
+    server->next_retry_us = now + (server->reconnect_backoff_sec * 1000 * 1000);
+    server->reconnect_backoff_sec =
+        (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
                                                 MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
-                                                2 * server->reconnect_backoff_s;
+                                                2 * server->reconnect_backoff_sec;
     // Mark the peer as down
     server->state = DOWN;
     status = dnode_peer_pool_update(pool);
@@ -932,8 +932,8 @@ dnode_peer_add_node(struct server_pool *sp, struct node *node)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0LL;
-    s->reconnect_backoff_s = 1LL;
+    s->next_retry_us = 0LL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
     s->is_seed = node->is_seed;
 
@@ -1125,8 +1125,8 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
             " to 0", server->pname.len, server->pname.data,
             server->failure_count);
     server->failure_count = 0;
-    server->next_retry = 0LL;
-    server->reconnect_backoff_s = 1LL;
+    server->next_retry_us = 0LL;
+    server->reconnect_backoff_sec = 1LL;
 }
 
 static rstatus_t
@@ -1270,9 +1270,9 @@ dnode_peer_pool_server_conn(struct context *ctx, struct server *server)
     if (server->state == DOWN) {
         int64_t now = dn_usec_now();
         static int64_t next_log = 0; // Log every 1 sec
-        if (server->next_retry && (now > server->next_retry)) {
-            server->state = NORMAL; // Reset the connection status if any
-            server->next_retry = 0;
+        if (server->next_retry_us && (now > server->next_retry_us)) {
+            server->state = NORMAL;
+            server->next_retry_us = 0;
             server->failure_count = 0;
         } else {
             if (now > next_log) {

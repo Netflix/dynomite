@@ -717,7 +717,6 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
             return;
         }
         // All other cases return a response
-        //log_warn("Directly sending a response");
         struct msg *rsp = msg_get(c_conn, false, c_conn->data_store, __FUNCTION__);
         msg->done = 1;
         rsp->error = msg->error = 1;

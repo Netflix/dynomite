@@ -292,7 +292,7 @@ server_failure(struct context *ctx, struct server *server)
 	stats_pool_incr(ctx, pool, server_ejects);
 
 	server->failure_count = 0;
-	server->next_retry = next;
+	server->next_retry_us = next;
 
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
@@ -571,8 +571,8 @@ server_ok(struct context *ctx, struct conn *conn)
                 server->failure_count);
     }
     server->failure_count = 0;
-    server->next_retry = 0LL;
-    server->reconnect_backoff_s = 1LL;
+    server->next_retry_us = 0LL;
+    server->reconnect_backoff_sec = 1LL;
 }
 
 static rstatus_t

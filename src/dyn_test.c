@@ -265,7 +265,7 @@ init_server(struct server *s)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0LL;
+    s->next_retry_us = 0LL;
     s->failure_count = 0;
 
     s->processed = 0;
