@@ -397,7 +397,7 @@ dnode_peer_connect(struct context *ctx, struct server *server, struct conn *conn
         status = DN_ERROR;
         goto error;
     }
-    log_debug(LOG_WARN, "dnode: connected to peer '%.*s' on p %d", server->pname.len,
+    log_debug(LOG_WARN, "dnode: connecting to peer '%.*s' on p %d", server->pname.len,
             server->pname.data, conn->sd);
 
 
@@ -1277,7 +1277,7 @@ dnode_peer_pool_server_conn(struct context *ctx, struct server *server)
         } else {
             if (now > next_log) {
                 log_warn("Detecting peer '%.*s' is set with state Down",
-                         server->name.len, server->name.data);
+                         server->pname.len, server->pname.data);
                 next_log = now + 1000 * 1000;
             }
             return NULL;

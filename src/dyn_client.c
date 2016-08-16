@@ -699,7 +699,8 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
             int64_t now = dn_usec_now();
             static int64_t next_log = 0; // Log every 1 sec
             if (now > next_log) {
-                log_warn("still connecting");
+                log_warn("still connecting to peer '%.*s'......",
+                         peer->pname.len, peer->pname.data);
                 next_log = now + 1000 * 1000;
             }
         }
