@@ -572,7 +572,7 @@ server_ok(struct context *ctx, struct conn *conn)
     }
     server->failure_count = 0;
     server->next_retry = 0LL;
-    server->reconnect_backoff_factor = 1LL;
+    server->reconnect_backoff_s = 1LL;
 }
 
 static rstatus_t

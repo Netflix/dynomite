@@ -9,8 +9,7 @@
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
 
-#define WAIT_BEFORE_RECONNECT_IN_MILLIS      1000
-#define MAX_WAIT_BEFORE_RECONNECT_IN_MILLIS  10000
+#define MAX_WAIT_BEFORE_RECONNECT_IN_SECS    10
 #define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
 
 int dnode_peer_timeout(struct msg *msg, struct conn *conn);
