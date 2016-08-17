@@ -692,6 +692,10 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         return;
     }
 
+    /* enqueue message (request) into client outq, if response is expected */
+    if (!msg->noreply && !msg->swallow) {
+        conn_enqueue_outq(ctx, c_conn, msg);
+    }
     // now get a peer connection
     struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
     if ((p_conn == NULL) || (p_conn->connecting)) {
@@ -720,10 +724,12 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         struct msg *rsp = msg_get(c_conn, false, c_conn->data_store, __FUNCTION__);
         msg->done = 1;
         rsp->error = msg->error = 1;
-        rsp->err = msg->err = PEER_HOST_DOWN;
-        rsp->dyn_error = msg->dyn_error = PEER_HOST_DOWN;
+        rsp->err = msg->err = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
+        rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
+                                                    PEER_HOST_DOWN);
         rsp->dmsg = dmsg_get();
         rsp->dmsg->id =  msg->id;
+        log_info("%lu:%lu <-> %lu:%lu Short circuit....", msg->id, msg->parent_id, rsp->id, rsp->parent_id);
         client_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
                                rsp);
         if (msg->swallow)
@@ -827,6 +833,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     msg_clone(msg, orig_mbuf, rack_msg);
+    log_info("msg (%d:%d) clone to remote rack msg (%d:%d)",
+            msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
     rack_msg->swallow = true;
 
     if (log_loggable(LOG_DEBUG)) {
@@ -983,6 +991,8 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
     req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
+    log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
+             rsp->id, rsp->parent_id);
     return DN_OK;
 }
 
