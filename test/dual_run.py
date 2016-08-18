@@ -22,10 +22,21 @@ class dual_run():
         self.d = d
         self.debug = debug
     def run_verify(self, func, *args):
+        r_result = None
+        d_result = None
         r_func = getattr(self.r, func)
         d_func = getattr(self.d, func)
         r_result = r_func(*args)
-        d_result = d_func(*args)
+        i = 0
+        retry_limit = 3
+        while i < retry_limit:
+            try:
+                d_result = d_func(*args)
+                break
+            except redis.exceptions.ResponseError, e:
+                i = i + 1
+                print "\tGot error '{}' ... Retry effort {}/{}\n\tQuery '{} {}'".format(e, func, i, retry_limit, str(args))
+                continue
         if self.debug:
             print "Query: %s %s" % (func, str(args))
             print "Redis: %s" % str(r_result)
