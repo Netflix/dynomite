@@ -32,11 +32,16 @@ class dual_run():
         while i < retry_limit:
             try:
                 d_result = d_func(*args)
+                if i > 0:
+                    print "\tSucceeded in attempt {}".format(i+1)
                 break
             except redis.exceptions.ResponseError, e:
-                i = i + 1
-                print "\tGot error '{}' ... Retry effort {}/{}\n\tQuery '{} {}'".format(e, func, i, retry_limit, str(args))
-                continue
+                if "Peer Node is not connected" in str(e):
+                    i = i + 1
+                    print "\tGot error '{}' ... Retry effort {}/{}\n\tQuery '{} {}'".format(e, i, retry_limit, func, str(args))
+                    continue
+                print "\tGot error '{}'\n\tQuery '{} {}'".format(e, func, str(args))
+                break
         if self.debug:
             print "Query: %s %s" % (func, str(args))
             print "Redis: %s" % str(r_result)
