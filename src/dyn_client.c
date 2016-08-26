@@ -728,10 +728,11 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
                                                     PEER_HOST_DOWN);
         rsp->dmsg = dmsg_get();
+        rsp->peer = msg;
         rsp->dmsg->id =  msg->id;
         log_info("%lu:%lu <-> %lu:%lu Short circuit....", msg->id, msg->parent_id, rsp->id, rsp->parent_id);
-        client_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
-                               rsp);
+        conn_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
+                             rsp);
         if (msg->swallow)
             msg_put(msg);
         return;
