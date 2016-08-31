@@ -486,6 +486,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, conn->data_store, __FUNCTION__);
     req->done = 1;
+    rsp->peer = req;
     rsp->error = req->error = 1;
     rsp->err = req->err = conn->err;
     rsp->dyn_error = req->dyn_error = PEER_CONNECTION_REFUSE;
@@ -1221,7 +1222,12 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
     if (server->state == DOWN) {
         if (!is_same_dc(pool, server)) {
             //pick another reroute server in the server DC
-            server = dnode_peer_pool_reroute_server(pool, rack, key, keylen);
+            struct server * reroute_server = dnode_peer_pool_reroute_server(pool,
+                                                            rack, key, keylen);
+            // If there is no reroute server, just return the down server and
+            // let upper layer handle the connection failures.
+            if (reroute_server)
+                server = reroute_server;
         }
     }
 
