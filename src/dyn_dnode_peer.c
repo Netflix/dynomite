@@ -1219,7 +1219,7 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
 
     server = array_get(&pool->peers, idx);
 
-    if (server->state == DOWN) {
+    /*if (server->state == DOWN) {
         if (!is_same_dc(pool, server)) {
             //pick another reroute server in the server DC
             struct server * reroute_server = dnode_peer_pool_reroute_server(pool,
@@ -1229,7 +1229,7 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
             if (reroute_server)
                 server = reroute_server;
         }
-    }
+    }*/
 
     if (log_loggable(LOG_VERB)) {
         log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
