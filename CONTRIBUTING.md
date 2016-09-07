@@ -30,5 +30,6 @@ For minor fixes just open a pull request to the [dev]( https://github.com/Netfli
 
 ## Questions
 
-If you have questions or want to report a bug please create an [Issue]( https://github.com/Netflix/dynomite/issues ) or send us an email: dynomite [at] netflix [DOT] com
+If you have questions or want to report a bug please create an [Issue]( https://github.com/Netflix/dynomite/issues ) or chat with us on [![Dev chat at https://gitter.im/Netflix/dynomite](https://badges.gitter.im/Netflix/dynomite.svg)](https://gitter.im/Netflix/dynomite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 
