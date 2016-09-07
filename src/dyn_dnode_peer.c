@@ -14,8 +14,9 @@
 #include "dyn_node_snitch.h"
 #include "dyn_token.h"
 
+static rstatus_t dnode_peer_pool_update(struct server_pool *pool);
 
-static bool
+bool
 is_same_dc(struct server_pool *sp, struct node *peer_node)
 {
     return string_compare(&sp->dc, &peer_node->dc) == 0;
@@ -159,7 +160,8 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     self->ns_conn_q = 0;
     TAILQ_INIT(&self->s_conn_q);
 
-    self->next_retry = 0ULL;
+    self->next_retry_us = 0ULL;
+    self->reconnect_backoff_sec = 1LL;
     self->failure_count = 0;
     self->is_seed = 1;
     self->processed = 0;
@@ -384,6 +386,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     req->done = 1;
+    rsp->peer = req;
     rsp->error = req->error = 1;
     rsp->err = req->err = conn->err;
     rsp->dyn_error = req->dyn_error = PEER_CONNECTION_REFUSE;
@@ -413,33 +416,41 @@ dnode_peer_failure(struct context *ctx, struct node *server)
 
     server->failure_count++;
 
-    if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" ",
-                  server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count);
+    log_notice("dyn: peer '%.*s' failure count %"PRIu32" ",
+               server->endpoint.pname.len, server->endpoint.pname.data,
+               server->failure_count);
+
+    if (server->failure_count < pool->server_failure_limit) {
+        return;
     }
 
 
-    now = dn_msec_now();
+    now = dn_usec_now();
     if (now < 0) {
         return;
     }
 
-    if (log_loggable(LOG_INFO)) {
-       log_debug(LOG_INFO, "dyn: update peer pool '%.*s' for peer '%.*s' "
+    stats_pool_set_ts(ctx, peer_ejected_at, (int64_t)now);
+
+    log_notice("dyn: update peer pool '%.*s' for peer '%.*s' "
                "for next %"PRIu32" secs", pool->name.len,
                pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
-               pool->server_retry_timeout_ms/1000);
-    }
+               WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS/1000);
 
     stats_pool_incr(ctx, peer_ejects);
 
     //if (server->failure_count == 3)
-    //   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
-
-    status = dnode_peer_pool_run(pool);
+    server->next_retry_us = now + (server->reconnect_backoff_sec * 1000 * 1000);
+    server->reconnect_backoff_sec =
+        (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
+                                                MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
+                                                2 * server->reconnect_backoff_sec;
+    // Mark the peer as down
+    server->state = DOWN;
+    status = dnode_peer_pool_update(pool);
     if (status != DN_OK) {
         log_error("dyn: updating peer pool '%.*s' failed: %s",
-                pool->name.len, pool->name.data, strerror(errno));
+                  pool->name.len, pool->name.data, strerror(errno));
     }
 }
 
@@ -819,7 +830,8 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0ULL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
     s->is_seed = node->is_seed;
 
@@ -1007,13 +1019,12 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connected);
 
-    if (server->failure_count != 0) {
-        log_debug(LOG_VERB, "dyn: reset peer '%.*s' failure count from %"PRIu32
-                " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
-                server->failure_count);
-        server->failure_count = 0;
-        server->next_retry = 0ULL;
-    }
+    log_debug(LOG_VERB, "dyn: reset peer '%.*s' failure count from %"PRIu32
+            " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
+            server->failure_count);
+    server->failure_count = 0;
+    server->next_retry_us = 0ULL;
+    server->reconnect_backoff_sec =  1LL;
 }
 
 static rstatus_t
@@ -1075,8 +1086,8 @@ dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint
 }
 
 static struct node *
-dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
-                       uint8_t *key, uint32_t keylen)
+dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
+                           uint8_t *key, uint32_t keylen)
 {
     struct node *server;
     uint32_t idx;
@@ -1103,12 +1114,17 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
 
     server = array_get(&pool->peers, idx);
 
-    if (server->state == DOWN) {
+    /*if (server->state == DOWN) {
         if (!is_same_dc(pool, server)) {
             //pick another reroute server in the server DC
-            server = dnode_peer_pool_reroute_server(pool, rack, key, keylen);
+            struct server *reroute_server = dnode_peer_pool_reroute_server(pool,
+                                                            rack, key, keylen);
+            // If there is no reroute server, just return the down server and
+            // let upper layer handle the connection failures.
+            if (reroute_server)
+                server = reroute_server;
         }
-    }
+    }*/
 
     if (log_loggable(LOG_VERB)) {
         log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
@@ -1118,14 +1134,13 @@ dnode_peer_pool_server(struct server_pool *pool, struct rack *rack,
     return server;
 }
 
-struct conn *
-dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
-                     struct rack *rack, uint8_t *key, uint32_t keylen,
-                     uint8_t msg_type)
+struct node *
+dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
+                       struct rack *rack, uint8_t *key, uint32_t keylen,
+                       uint8_t msg_type)
 {
     rstatus_t status;
     struct node *peer;
-    struct conn *conn;
 
     log_debug(LOG_VERB, "Entering dnode_peer_pool_conn ................................");
 
@@ -1139,16 +1154,39 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
         peer = array_get(&pool->peers, 0);
     } else {
         /* from a given {key, keylen} pick a peer from pool */
-        peer = dnode_peer_pool_server(pool, rack, key, keylen);
+        peer = dnode_peer_for_key_on_rack(pool, rack, key, keylen);
         if (peer == NULL) {
             log_debug(LOG_VERB, "What? There is no such peer in rack '%.*s' for key '%.*s'",
                     rack->name, keylen, key);
             return NULL;
         }
     }
+    return peer;
+}
+
+struct conn *
+dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
+{
+    // This peer is marked as down. lets check if it is time to connect
+    if (peer->state == DOWN) {
+        usec_t now = dn_usec_now();
+        static usec_t next_log = 0; // Log every 1 sec
+        if (peer->next_retry_us && (now > peer->next_retry_us)) {
+            peer->state = NORMAL;
+            peer->next_retry_us = 0;
+            peer->failure_count = 0;
+        } else {
+            if (now > next_log) {
+                log_warn("Detecting peer '%.*s' is set with state Down",
+                         peer->endpoint.pname.len, peer->endpoint.pname.data);
+                next_log = now + 1000 * 1000;
+            }
+            return NULL;
+        }
+    }
 
     /* pick a connection to a given peer */
-    conn = dnode_peer_conn(peer);
+    struct conn *conn = dnode_peer_conn(peer);
     if (conn == NULL) {
         return NULL;
     }
@@ -1157,17 +1195,11 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
         return conn; //Don't bother to connect
     }
 
-    if (peer->state == DOWN) {
-        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Down", peer->name);
-        conn->err = EHOSTDOWN;
-        dnode_peer_close(ctx, conn);
-        return NULL;
-    } else if (peer->state == RESET) {
+    if (peer->state == RESET) {
         log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
 
         dnode_peer_close_socket(ctx, conn);
-        status = conn_connect(ctx, conn);
-        if (status != DN_OK) {
+        if (conn_connect(ctx, conn) != DN_OK) {
             conn->err = EHOSTDOWN;
             dnode_peer_close(ctx, conn);
             return NULL;
@@ -1178,8 +1210,7 @@ dnode_peer_pool_conn(struct context *ctx, struct server_pool *pool,
         return conn;
     }
 
-    status = conn_connect(ctx, conn);
-    if (status != DN_OK) {
+    if (conn_connect(ctx, conn) != DN_OK) {
         dnode_peer_close(ctx, conn);
         return NULL;
     }

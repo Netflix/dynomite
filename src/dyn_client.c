@@ -655,57 +655,91 @@ static void
 admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
                         struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    struct conn *p_conn;
-
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    if (!peer->is_local) {
+        send_rsp_integer(ctx, c_conn, msg);
+        return;
+    }
+
+    struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
     if (p_conn == NULL) {
         c_conn->err = EHOSTDOWN;
         req_forward_error(ctx, c_conn, msg, c_conn->err);
         return;
     }
 
-    struct node *peer = p_conn->owner;
-
-    if (peer->is_local) {
-        send_rsp_integer(ctx, c_conn, msg);
-    } else {
-        log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
-        local_req_forward(ctx, c_conn, msg, key, keylen);
-    }
+    log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
+    local_req_forward(ctx, c_conn, msg, key, keylen);
 }
 
 void
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                        struct rack *rack, uint8_t *key, uint32_t keylen)
+                   struct rack *rack, uint8_t *key, uint32_t keylen)
 {
-    struct conn *p_conn;
-
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    p_conn = dnode_peer_pool_conn(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
-    if (p_conn == NULL) {
-        c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, msg, c_conn->err);
-        return;
-    }
-
-    //jeb - check if s_conn is _this_ node, and if so, get conn from server_pool_conn instead
-    struct node *peer = p_conn->owner;
-
+    struct node * peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
+                                                keylen, msg->msg_type);
     if (peer->is_local) {
         log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
                   msg->id, msg->parent_id);
         local_req_forward(ctx, c_conn, msg, key, keylen);
         return;
-    } else {
-        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
-                  msg->id, msg->parent_id, p_conn);
-        dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
     }
+
+    /* enqueue message (request) into client outq, if response is expected */
+    if (msg->expect_datastore_reply  && !msg->swallow) {
+        conn_enqueue_outq(ctx, c_conn, msg);
+    }
+    // now get a peer connection
+    struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
+    if ((p_conn == NULL) || (p_conn->connecting)) {
+        if (p_conn) {
+            usec_t now = dn_usec_now();
+            static usec_t next_log = 0; // Log every 1 sec
+            if (now > next_log) {
+                log_warn("still connecting to peer '%.*s'......",
+                         peer->endpoint.pname.len, peer->endpoint.pname.data);
+                next_log = now + 1000 * 1000;
+            }
+        }
+        // No response for DC_ONE & swallow
+        if ((msg->consistency == DC_ONE) && (msg->swallow)) {
+            msg_put(msg);
+            return;
+        }
+        // No response for remote dc
+        struct server_pool *pool = c_conn->owner;
+        bool same_dc = is_same_dc(pool, peer)? 1 : 0;
+        if (!same_dc) {
+            msg_put(msg);
+            return;
+        }
+        // All other cases return a response
+        struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
+        msg->done = 1;
+        rsp->error = msg->error = 1;
+        rsp->err = msg->err = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
+        rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
+                                                    PEER_HOST_DOWN);
+        rsp->dmsg = dmsg_get();
+        rsp->peer = msg;
+        rsp->dmsg->id =  msg->id;
+        log_info("%lu:%lu <-> %lu:%lu Short circuit....", msg->id, msg->parent_id, rsp->id, rsp->parent_id);
+        conn_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
+                             rsp);
+        if (msg->swallow)
+            msg_put(msg);
+        return;
+    }
+
+    log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
+            msg->id, msg->parent_id, p_conn);
+    dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
 }
 
 static void
@@ -798,6 +832,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     msg_clone(msg, orig_mbuf, rack_msg);
+    log_info("msg (%d:%d) clone to remote rack msg (%d:%d)",
+            msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
     rack_msg->swallow = true;
 
     if (log_loggable(LOG_DEBUG)) {
@@ -954,6 +990,8 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
     req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
+    log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
+             rsp->id, rsp->parent_id);
     return DN_OK;
 }
 
