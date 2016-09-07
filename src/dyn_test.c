@@ -265,7 +265,8 @@ init_peer(struct node *s)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0ULL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
 
     s->processed = 0;

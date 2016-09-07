@@ -70,7 +70,7 @@ static struct string dist_strings[] = {
 #define CONF_DEFAULT_PRECONNECT              true
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
-#define CONF_DEFAULT_SERVER_FAILURE_LIMIT    2
+#define CONF_DEFAULT_SERVER_FAILURE_LIMIT    3
 #define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
 
@@ -165,7 +165,8 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0ULL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
 
     log_debug(LOG_VERB, "transform to server '%.*s'",
@@ -214,7 +215,8 @@ conf_seed_each_transform(void *elem, void *data)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry = 0ULL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
 
     s->processed = 0;
@@ -2160,7 +2162,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         g_write_consistency = DC_ONE;
     else if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_SAFE_QUORUM))
         g_write_consistency = DC_SAFE_QUORUM;
-    else if (!dn_strcasecmp(cp->read_consistency.data, CONF_STR_DC_QUORUM))
+    else if (!dn_strcasecmp(cp->write_consistency.data, CONF_STR_DC_QUORUM))
         g_write_consistency = DC_QUORUM;
     else {
         log_error("conf: directive \"write_consistency:\"must be one of 'DC_ONE' 'DC_QUORUM' 'DC_SAFE_QUORUM'");

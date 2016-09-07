@@ -393,7 +393,7 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *aes_key)
             return DN_ERROR;
         }
 
-        int n = dyn_aes_encrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, aes_key);
+        int n = dyn_aes_encrypt(mbuf->pos, mbuf->last - mbuf->pos, nbuf, aes_key);
         if (n > 0)
             count += n;
 

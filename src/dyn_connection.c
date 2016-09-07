@@ -521,7 +521,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         status = DN_ERROR;
         goto error;
     }
-    log_debug(LOG_WARN, "connected to '%.*s' on p %d", conn->pname.len,
+    log_debug(LOG_WARN, "connecting to '%.*s' on p %d", conn->pname.len,
             conn->pname.data, conn->sd);
 
 
