@@ -448,7 +448,7 @@ client_forward_error(struct conn *conn, struct msg *msg,
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
                  "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->p.sd,
-                 dn_strerror(err));
+                 dn_client_strerror(err));
     }
 
     msg->done = 1;

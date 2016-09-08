@@ -2,7 +2,7 @@
 #include "dyn_error.h"
 
 
-char *dn_strerror(err_t err) {
+char *dn_client_strerror(err_t err) {
     switch(err) {
         case DN_ENOHOST:
             return "No host found for given key";

@@ -1054,16 +1054,6 @@ peer_mismatch_stats_incr(struct conn *peer_conn, struct conn *c_conn, struct msg
 }
 
 static void
-update_remote_region_stats(struct context *ctx, struct conn *peer_conn, struct msg *req)
-{
-    if (!peer_conn->same_dc && req->remote_region_send_time) {
-        struct stats *st = ctx->stats;
-        usec_t delay = dn_usec_now() - req->remote_region_send_time;
-        histo_add(&st->cross_region_histo, delay);
-    }
-}
-
-static void
 forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp)
 {
     // Here, if the client belongs to different thread, forward the response
@@ -1191,7 +1181,6 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
         }
 
         if (req->id == rsp->dmsg->id) {
-            update_remote_region_stats(ctx, peer_conn, req);
             dnode_rsp_forward_match(ctx, peer_conn, rsp);
             return;
         }

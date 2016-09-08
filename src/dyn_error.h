@@ -13,4 +13,4 @@
 typedef int rstatus_t; /* return type */
 typedef int err_t;     /* error type */
 
-extern char *dn_strerror(err_t err);
+extern char *dn_client_strerror(err_t err);
