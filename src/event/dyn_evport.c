@@ -480,7 +480,7 @@ event_loop_entropy(event_entropy_cb_t cb, void *arg)
             }
         }
 
-        cb(st, &nreturned);
+        cb(ent, &nreturned);
     }
 
 error:
