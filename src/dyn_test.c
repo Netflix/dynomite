@@ -263,7 +263,8 @@ init_peer(struct peer *s)
     s->endpoint.addr = (struct sockaddr *)&info->addr;
     s->conn = NULL;
 
-    s->next_retry = 0ULL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
 
     s->processed = 0;

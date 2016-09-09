@@ -215,6 +215,8 @@ typedef enum dyn_error {
     UNKNOWN_ERROR,
     PEER_CONNECTION_REFUSE,
     STORAGE_CONNECTION_REFUSE,
+    PEER_HOST_DOWN,
+    PEER_HOST_NOT_CONNECTED,
     BAD_FORMAT,
     NO_QUORUM_ACHIEVED,
 } dyn_error_t;
@@ -226,6 +228,10 @@ dn_strerror(dyn_error_t err)
     {
         case NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
+        case PEER_HOST_DOWN:
+            return "Peer Node is down";
+        case PEER_HOST_NOT_CONNECTED:
+            return "Peer Node is not connected";
         default:
             return strerror(err);
     }
@@ -239,6 +245,8 @@ dyn_error_source(dyn_error_t err)
         case NO_QUORUM_ACHIEVED:
             return "Dynomite:";
         case PEER_CONNECTION_REFUSE:
+        case PEER_HOST_DOWN:
+        case PEER_HOST_NOT_CONNECTED:
             return "Peer:";
         case STORAGE_CONNECTION_REFUSE:
             return "Storage:";

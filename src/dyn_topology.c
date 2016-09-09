@@ -233,12 +233,17 @@ get_token_owner_on_rack(struct topology *topo, struct rack *rack,
 
     struct peer *peer = array_get(&topo->peers, idx);
 
-    if (peer->state == DOWN) {
+    /*if (peer->state == DOWN) {
         if (!peer_is_same_dc(peer)) {
             //pick another reroute peer in the remote DC
-            peer = get_token_owner_reroute(topo, rack, key, keylen);
+            struct peer *reroute_peer = get_token_owner_reroute(topo, rack, key,
+                                                                keylen);
+            // If there is no reroute server, just return the down server and
+            // let upper layer handle the connection failures.
+            if (reroute_peer)
+                peer = reroute_peer;
         }
-    }
+    }*/
 
     if (peer)
         log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to peer '%.*s'", keylen,

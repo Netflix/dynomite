@@ -16,7 +16,6 @@
 #include "dyn_token.h"
 #include "dyn_thread_ctx.h"
 
-
 static void forward_response_upstream(struct conn *c_conn, struct msg *req, struct msg *rsp);
 
 bool
@@ -212,7 +211,8 @@ dnode_peer_add_local(struct server_pool *pool, struct peer *self)
     self->conn = NULL;
     self->ptctx = NULL;
 
-    self->next_retry = 0ULL;
+    self->next_retry_us = 0ULL;
+    self->reconnect_backoff_sec = 1LL;
     self->failure_count = 0;
     self->is_seed = 1;
     self->processed = 0;
@@ -277,6 +277,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     req->done = 1;
+    rsp->peer = req;
     rsp->error = req->error = 1;
     rsp->err = req->err = conn->err;
     rsp->dyn_error = req->dyn_error = PEER_CONNECTION_REFUSE;
@@ -300,29 +301,35 @@ dnode_peer_failure(struct context *ctx, struct peer *server)
 
     server->failure_count++;
 
-    if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "dyn: peer '%.*s' failure count %"PRIu32" ",
-                  server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count);
+    log_notice("dyn: peer '%.*s' failure count %"PRIu32" ",
+               server->endpoint.pname.len, server->endpoint.pname.data,
+               server->failure_count);
+
+    if (server->failure_count < pool->server_failure_limit) {
+        return;
     }
 
-    now = dn_msec_now();
+    now = dn_usec_now();
     if (now < 0) {
         return;
     }
 
-    if (log_loggable(LOG_INFO)) {
-       log_debug(LOG_INFO, "dyn: update peer pool '%.*s' for peer '%.*s' "
+    stats_pool_set_ts(ctx, peer_ejected_at, (int64_t)now);
+    log_notice("dyn: update peer pool '%.*s' for peer '%.*s' "
                "for next %"PRIu32" secs", pool->name.len,
                pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
                pool->server_retry_timeout_ms/1000);
-    }
 
     stats_pool_incr(ctx, peer_ejects);
 
-    //if (server->failure_count == 3)
-    //   server->next_retry = now + WAIT_BEFORE_RECONNECT_IN_MILLIS;
-
-    status = topo_update_now(ctx_get_topology(ctx));
+    server->next_retry_us = now + (server->reconnect_backoff_sec * 1000 * 1000);
+    server->reconnect_backoff_sec =
+        (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
+                                                MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
+                                                2 * server->reconnect_backoff_sec;
+    // Mark the peer as down
+    server->state = DOWN;
+    status = topo_peer_update(ctx_get_topology(ctx));
     if (status != DN_OK) {
         log_error("dyn: updating peer pool '%.*s' failed: %s",
                 pool->name.len, pool->name.data, strerror(errno));
@@ -697,7 +704,8 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
     s->conn = NULL;
 
-    s->next_retry = 0ULL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
     s->is_seed = node->is_seed;
 
@@ -885,23 +893,39 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
     ASSERT(conn->p.type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connected);
 
-    if (server->failure_count != 0) {
-        log_debug(LOG_VERB, "dyn: reset peer '%.*s' failure count from %"PRIu32
-                " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
-                server->failure_count);
-        server->failure_count = 0;
-        server->next_retry = 0ULL;
-    }
+    log_debug(LOG_VERB, "dyn: reset peer '%.*s' failure count from %"PRIu32
+            " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
+            server->failure_count);
+    server->failure_count = 0;
+    server->next_retry_us = 0ULL;
+    server->reconnect_backoff_sec =  1LL;
 }
 
 static struct conn *
 dnode_peer_active_conn(struct context *ctx, struct peer *peer)
 {
+    // This peer is marked as down. lets check if it is time to connect
     if (peer->state == DOWN) {
-        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Down", peer->name);
-        return NULL;
+        usec_t now = dn_usec_now();
+        static usec_t next_log = 0; // Log every 1 sec
+        if (peer->next_retry_us && (now > peer->next_retry_us)) {
+            peer->state = NORMAL;
+            peer->next_retry_us = 0;
+            peer->failure_count = 0;
+        } else {
+            if (now > next_log) {
+                log_warn("Detecting peer '%.*s' is set with state Down",
+                         peer->endpoint.pname.len, peer->endpoint.pname.data);
+                next_log = now + 1000 * 1000;
+            }
+            return NULL;
+        }
     }
+ 
     struct conn *p_conn = dnode_peer_conn(peer);
+    if (!p_conn)
+        return NULL;
+
     if (peer->state == RESET) {
         log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset. Disconnecting and Reconnecting", peer->name);
         // close existing connection and recreate it.
@@ -1546,14 +1570,45 @@ dnode_peer_req_forward(struct context *ctx,
         THROW_STATUS(thread_ctx_forward_req(peer->ptctx, msg));
         return DN_OK;
     }
+
+    struct conn *c_conn = msg->owner;
     struct conn *p_conn = dnode_peer_active_conn(ctx, peer);
-    if (p_conn == NULL)
-    {
-        // No active connection to this peer. Mark the message as err
-        // TODO: SHAILESH How does the client connection know that it is supposed to
-        // read from its outqueue i.e a message is done??
-        dnode_req_forward_error(ctx, NULL, msg, DN_EHOST_DOWN);
-        return DN_EHOST_DOWN;
+    if ((p_conn == NULL) || (p_conn->connecting)) {
+        if (p_conn) {
+            usec_t now = dn_usec_now();
+            static usec_t next_log = 0; // Log every 1 sec
+            if (now > next_log) {
+                log_warn("still connecting to peer '%.*s'......",
+                         peer->endpoint.pname.len, peer->endpoint.pname.data);
+                next_log = now + 1000 * 1000;
+            }
+        }
+        // No response for DC_ONE & swallow
+        if ((msg->consistency == DC_ONE) && (msg->swallow)) {
+            msg_put(msg);
+            return DN_OK;
+        }
+        // No response for remote dc
+        if (!peer_is_same_dc(peer)) {
+            msg_put(msg);
+            return;
+        }
+
+        // All other cases return a response
+        struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
+        msg->done = 1;
+        rsp->error = msg->error = 1;
+        rsp->dyn_error = msg->dyn_error = rsp->err = msg->err = (p_conn ?
+                                    PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
+        rsp->dmsg = dmsg_get();
+        rsp->peer = msg;
+        rsp->dmsg->id =  msg->id;
+        log_info("%lu:%lu <-> %lu:%lu Short circuit....", msg->id, msg->parent_id,
+                 rsp->id, rsp->parent_id);
+        forward_response_upstream(c_conn, msg, rsp);
+        if (msg->swallow)
+            msg_put(msg);
+        return;
     }
 
     /* enqueue the message (request) into peer inq */
@@ -1574,6 +1629,10 @@ dnode_peer_req_forward(struct context *ctx,
     }
 
     dmsg_type_t msg_type = !p_conn->same_dc ? DMSG_REQ_FORWARD : DMSG_REQ;
+    // SMB: THere is some non trivial business happening here. Better refer to the
+    // comment in dnode_rsp_send_next to understand the stuff here.
+    // Note: THere MIGHT BE A NEED TO PORT THE dnode_header_prepended FIX FROM THERE
+    // TO HERE. especially when a message is being sent in parts
 
     if (p_conn->dnode_secured) {
         log_debug(LOG_VVERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));

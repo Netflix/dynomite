@@ -9,7 +9,7 @@
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
 
-#define WAIT_BEFORE_RECONNECT_IN_MILLIS      30000
+#define MAX_WAIT_BEFORE_RECONNECT_IN_SECS    10
 #define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
 #include <dyn_thread_ctx.h>
 struct peer {
@@ -20,7 +20,8 @@ struct peer {
     struct conn        *conn;         /* active connection to peer */
     pthread_ctx        ptctx;
 
-    msec_t             next_retry;    /* next retry time in msec */
+    usec_t             next_retry_us; /* next retry time in usec */
+    sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */

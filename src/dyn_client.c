@@ -486,13 +486,13 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
 
     if (!peer->is_local) {
         send_rsp_integer(ctx, c_conn, msg);
-    } else {
-        log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
-        if (msg->expect_datastore_reply) {
-            conn_enqueue_outq(ctx, c_conn, msg);
-        }
-        datastore_req_forward(c_conn, msg, key, keylen);
+        return;
     }
+    log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
+    if (msg->expect_datastore_reply) {
+        conn_enqueue_outq(ctx, c_conn, msg);
+    }
+    datastore_req_forward(c_conn, msg, key, keylen);
 }
 
 void
@@ -502,8 +502,8 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
     ASSERT((c_conn->p.type == CONN_CLIENT) ||
            (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
 
-    struct peer *peer = topo_get_peer_in_rack_for_key(ctx_get_topology(ctx), rack, key,
-                                         keylen, msg->msg_type);
+    struct peer *peer = topo_get_peer_in_rack_for_key(ctx_get_topology(ctx), rack,
+                                                      key, keylen, msg->msg_type);
     if (peer == NULL) {
         client_forward_error(c_conn, msg, DN_ENOHOST);
         return;
@@ -516,19 +516,71 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
             conn_enqueue_outq(ctx, c_conn, msg);
         }
         datastore_req_forward(c_conn, msg, key, keylen);
-    } else {
-        log_debug(LOG_VERB, "forwarding %lu:%lu from client conn '%s' to peer conn '%.*s' on rack '%.*s' dc '%.*s' ",
-                msg->id, msg->parent_id,
-                dn_unresolve_peer_desc(c_conn->p.sd), peer->name.len, peer->name.data,
-                peer->rack.len, peer->rack.data,
-                peer->dc.len, peer->dc.data);
-        if (msg->expect_datastore_reply && !msg->swallow) {
-            conn_enqueue_outq(ctx, c_conn, msg);
-        }
-        ASSERT((c_conn->p.type == CONN_CLIENT) ||
-                (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
-        dnode_peer_req_forward(ctx, peer, msg);
+        return;
     }
+/*
+    // enqueue message (request) into client outq, if response is expected
+    if (msg->expect_datastore_reply  && !msg->swallow) {
+        conn_enqueue_outq(ctx, c_conn, msg);
+    }
+    // now get a peer connection
+    struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
+    if ((p_conn == NULL) || (p_conn->connecting)) {
+        if (p_conn) {
+            usec_t now = dn_usec_now();
+            static usec_t next_log = 0; // Log every 1 sec
+            if (now > next_log) {
+                log_warn("still connecting to peer '%.*s'......",
+                         peer->endpoint.pname.len, peer->endpoint.pname.data);
+                next_log = now + 1000 * 1000;
+            }
+        }
+        // No response for DC_ONE & swallow
+        if ((msg->consistency == DC_ONE) && (msg->swallow)) {
+            msg_put(msg);
+            return;
+        }
+        // No response for remote dc
+        struct server_pool *pool = c_conn->owner;
+        bool same_dc = is_same_dc(pool, peer)? 1 : 0;
+        if (!same_dc) {
+            msg_put(msg);
+            return;
+        }
+        // All other cases return a response
+        struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
+        msg->done = 1;
+        rsp->error = msg->error = 1;
+        rsp->err = msg->err = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
+        rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
+                                                    PEER_HOST_DOWN);
+        rsp->dmsg = dmsg_get();
+        rsp->peer = msg;
+        rsp->dmsg->id =  msg->id;
+        log_info("%lu:%lu <-> %lu:%lu Short circuit....", msg->id, msg->parent_id, rsp->id, rsp->parent_id);
+        conn_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
+                             rsp);
+        if (msg->swallow)
+            msg_put(msg);
+        return;
+    }
+
+    log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
+            msg->id, msg->parent_id, p_conn);
+    dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
+ 
+*/
+    log_debug(LOG_VERB, "forwarding %lu:%lu from client conn '%s' to peer conn '%.*s' on rack '%.*s' dc '%.*s' ",
+            msg->id, msg->parent_id,
+            dn_unresolve_peer_desc(c_conn->p.sd), peer->name.len, peer->name.data,
+            peer->rack.len, peer->rack.data,
+            peer->dc.len, peer->dc.data);
+    if (msg->expect_datastore_reply && !msg->swallow) {
+        conn_enqueue_outq(ctx, c_conn, msg);
+    }
+    ASSERT((c_conn->p.type == CONN_CLIENT) ||
+            (c_conn->p.type == CONN_DNODE_PEER_CLIENT));
+    dnode_peer_req_forward(ctx, peer, msg);
 }
 
 static void
@@ -616,6 +668,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     }
 
     msg_clone(msg, orig_mbuf, rack_msg);
+    log_info("msg (%d:%d) clone to remote rack msg (%d:%d)",
+             msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
     log_info("msg (%lu:%lu) clone to rack msg (%lu:%lu) for remote dc",
              msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
     rack_msg->swallow = true;
@@ -753,6 +807,8 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
     req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
+    log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
+             rsp->id, rsp->parent_id);
     return DN_OK;
 }
 

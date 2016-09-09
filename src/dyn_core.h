@@ -204,7 +204,8 @@ struct datastore {
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    msec_t             next_retry;    /* next retry time in msec */
+    usec_t             next_retry_us; /* next retry time in usec */
+    sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 };
 

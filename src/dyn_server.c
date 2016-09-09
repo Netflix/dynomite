@@ -199,7 +199,7 @@ server_failure(struct context *ctx, struct datastore *server)
 
 	next = now + pool->server_retry_timeout_ms;
 
-	log_debug(LOG_INFO, "update pool '%.*s' to delete server '%.*s' "
+	log_info("update pool '%.*s' to delete server '%.*s' "
 			"for next %"PRIu32" secs", pool->name.len,
 			pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
 			pool->server_retry_timeout_ms/1000);
@@ -207,7 +207,7 @@ server_failure(struct context *ctx, struct datastore *server)
 	stats_pool_incr(ctx, server_ejects);
 
 	server->failure_count = 0;
-	server->next_retry = next;
+	server->next_retry_us = next;
 
 	status = server_pool_run(pool);
 	if (status != DN_OK) {
@@ -402,15 +402,14 @@ server_ok(struct context *ctx, struct conn *conn)
     ASSERT(conn->p.type == CONN_SERVER);
 	ASSERT(conn->connected);
 
-	if (server->failure_count != 0) {
-           if (log_loggable(LOG_VERB)) {
-		   log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
-				 " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
-				 server->failure_count);
-           }
-           server->failure_count = 0;
-           server->next_retry = 0ULL;
-	}
+    if (log_loggable(LOG_VERB)) {
+        log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
+                  " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
+                  server->failure_count);
+    }
+    server->failure_count = 0;
+    server->next_retry_us = 0ULL;
+    server->reconnect_backoff_sec = 1LL;
 }
 
 static rstatus_t

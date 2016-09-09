@@ -63,6 +63,7 @@
     ACTION( peer_request_bytes,           STATS_COUNTER,      "total peer request bytes")                                 \
     ACTION( peer_responses,               STATS_COUNTER,      "# peer respones")                                          \
     ACTION( peer_response_bytes,          STATS_COUNTER,      "total peer response bytes")                                \
+    ACTION( peer_ejected_at,              STATS_TIMESTAMP,    "timestamp when peer was ejected")                          \
     ACTION( peer_ejects,                  STATS_COUNTER,      "# times a peer was ejected")                               \
     ACTION( peer_in_queue,                STATS_GAUGE,        "# local dc peer requests in incoming queue")                        \
     ACTION( remote_peer_in_queue,         STATS_GAUGE,        "# remote dc peer requests in incoming queue")                        \
