@@ -1051,8 +1051,9 @@ parse_request(int sd, struct stats_cmd *st_cmd)
             log_debug(LOG_VERB, "1: %s\n", reqline[1]);
             log_debug(LOG_VERB, "2: %s\n", reqline[2]);
 
-            if (strncmp( reqline[2], "HTTP/1.0", 8)!=0 &&
-                strncmp( reqline[2], "HTTP/1.1", 8)!=0 ) {
+            if (!reqline[1] || !reqline[2] ||
+                (strncmp( reqline[2], "HTTP/1.0", 8)!=0 &&
+                 strncmp( reqline[2], "HTTP/1.1", 8)!=0)) {
                 ssize_t wrote = write(sd, "HTTP/1.0 400 Bad Request\n", 25);
                 IGNORE_RET_VAL(wrote);
                 st_cmd->cmd = CMD_UNKNOWN;
