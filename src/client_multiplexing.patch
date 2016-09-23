@@ -1,0 +1,377 @@
+diff --git a/src/dyn_client.c b/src/dyn_client.c
+index db50b7f..830e18d 100644
+--- a/src/dyn_client.c
++++ b/src/dyn_client.c
+@@ -95,8 +95,10 @@ client_ref(struct conn *conn, void *owner)
+     conn->addrlen = 0;
+     conn->addr = NULL;
+ 
++    pthread_spin_lock(&pool->c_conn_lock);
+     pool->dn_conn_q++;
+     TAILQ_INSERT_TAIL(&pool->c_conn_q, conn, conn_tqe);
++    pthread_spin_unlock(&pool->c_conn_lock);
+ 
+     /* owner of the client connection is the server pool */
+     conn->owner = owner;
+@@ -136,9 +138,11 @@ client_unref_and_try_put(struct conn *conn)
+     struct server_pool *pool;
+     pool = conn->owner;
+     ASSERT(conn->owner != NULL);
++    pthread_spin_lock(&pool->c_conn_lock);
+     ASSERT(pool->dn_conn_q != 0);
+     pool->dn_conn_q--;
+     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
++    pthread_spin_unlock(&pool->c_conn_lock);
+     conn->waiting_to_unref = 1;
+     client_unref_internal_try_put(conn);
+ }
+diff --git a/src/dyn_conf.c b/src/dyn_conf.c
+index dc95b21..69ad556 100644
+--- a/src/dyn_conf.c
++++ b/src/dyn_conf.c
+@@ -384,6 +384,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
+ 
+     sp->ctx = NULL;
+     sp->p_conn = NULL;
++
++    int ret = pthread_spin_init(&sp->c_conn_lock, PTHREAD_PROCESS_PRIVATE);
+     sp->dn_conn_q = 0;
+     TAILQ_INIT(&sp->c_conn_q);
+ 
+diff --git a/src/dyn_core.c b/src/dyn_core.c
+index 1914321..57f53cf 100644
+--- a/src/dyn_core.c
++++ b/src/dyn_core.c
+@@ -283,17 +283,23 @@ pthread_ctx
+ core_get_ptctx_for_conn(struct context *ctx, struct conn *conn)
+ {
+     pthread_ctx ptctx0 = array_get(&ctx->thread_ctxs, 0);
+-    pthread_ctx ptctx1 = array_get(&ctx->thread_ctxs, 1);
+-    pthread_ctx ptctx2 = array_get(&ctx->thread_ctxs, 2);
+-    pthread_ctx ret = NULL;
++    pthread_ctx ptctx1 = (MAX_THREADS >= 2) ? array_get(&ctx->thread_ctxs, 1) : ptctx0;
++    pthread_ctx ptctx2 = (MAX_THREADS >= 3) ? array_get(&ctx->thread_ctxs, 2) : ptctx1;
++    uint32_t idx = rand() % MAX_THREADS;
++    pthread_ctx ret = array_get(&ctx->thread_ctxs, idx);
+     switch(conn->p.type)
+     {
+         case CONN_PROXY : ret = ptctx0; break;
+-        case CONN_CLIENT: ret = ptctx0; break;
+-        case CONN_SERVER: ret = g_ptctx; break;
+-        case CONN_DNODE_PEER_CLIENT: ret = conn->same_dc ? ptctx1 : ptctx2; break;
+-        case CONN_DNODE_PEER_SERVER: ret = conn->same_dc ? ptctx1 : ptctx2; break;
+         case CONN_DNODE_PEER_PROXY: ret = ptctx1; break;
++        case CONN_SERVER: ret = g_ptctx; break;
++
++        // Remaining connections can be allocated randomly
++        case CONN_CLIENT: ret = ptctx0; break;
++        //case CONN_CLIENT: break;
++        //case CONN_DNODE_PEER_CLIENT: ret = conn->same_dc ? ptctx1 : ptctx2; break;
++        case CONN_DNODE_PEER_CLIENT: break;
++        //case CONN_DNODE_PEER_SERVER: ret = conn->same_dc ? ptctx1 : ptctx2; break;
++        case CONN_DNODE_PEER_SERVER: break;
+         default: ret = g_ptctx; break;
+     }
+     log_notice("Returning ptctx %p(%d) for conn %p(%s)", ret, ret ? ret->tid : -1,
+@@ -304,8 +310,20 @@ core_get_ptctx_for_conn(struct context *ctx, struct conn *conn)
+ pthread_ctx
+ core_get_ptctx_for_peer(struct context *ctx, struct peer *peer)
+ {
+-    pthread_ctx ptctx1 = array_get(&ctx->thread_ctxs, 1);
+-    pthread_ctx ptctx2 = array_get(&ctx->thread_ctxs, 2);
++    //pthread_ctx ptctx1 = array_get(&ctx->thread_ctxs, 1);
++    //pthread_ctx ptctx2 = array_get(&ctx->thread_ctxs, 2);
+     // For now use the same as dnode_proxy, i.e g_ptctx
+-    return peer_is_same_dc(peer) ? ptctx1 : ptctx2;
++    //return peer_is_same_dc(peer) ? ptctx1 : ptctx2;
++    uint32_t idx = rand() % MAX_THREADS;
++    if (dn_strcmp(peer->rack.data, "dyno_sh_dev--useast1c") == 0)
++        idx = 1;
++    if (dn_strcmp(peer->rack.data, "dyno_sh_dev--useast1d") == 0)
++        idx = 2;
++    if (dn_strcmp(peer->rack.data, "dyno_sh_dev--useast1e") == 0)
++        idx = 3;
++    pthread_ctx ret = array_get(&ctx->thread_ctxs, idx);
++    log_notice("Assigning peer %.*s to ptctx %p(%d)",
++               peer->endpoint.pname.len, peer->endpoint.pname.data,
++               ret, ret ? ret->tid : -1);
++    return ret;
+ }
+diff --git a/src/dyn_core.h b/src/dyn_core.h
+index 148a035..e203518 100644
+--- a/src/dyn_core.h
++++ b/src/dyn_core.h
+@@ -63,7 +63,7 @@
+ # define DN_HAVE_BACKTRACE 1
+ #endif
+ 
+-#define MAX_THREADS 3
++#define MAX_THREADS 4
+ #define THROW_STATUS(s)                                             \
+                 {                                                   \
+                     rstatus_t __ret = (s);                          \
+@@ -208,6 +208,8 @@ struct server_pool {
+     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
+ 
+     struct conn        *p_conn;              /* proxy connection (listener) */
++
++    pthread_spinlock_t c_conn_lock;
+     uint32_t           dn_conn_q;            /* # client connection */
+     struct conn_tqh    c_conn_q;             /* client connection q */
+ 
+diff --git a/src/dyn_dnode_client.c b/src/dyn_dnode_client.c
+index ccf2e84..70a76c2 100644
+--- a/src/dyn_dnode_client.c
++++ b/src/dyn_dnode_client.c
+@@ -26,8 +26,10 @@ dnode_client_ref(struct conn *conn, void *owner)
+     conn->addrlen = 0;
+     conn->addr = NULL;
+ 
++    pthread_spin_lock(&pool->c_conn_lock);
+     pool->dn_conn_q++;
+     TAILQ_INSERT_TAIL(&pool->c_conn_q, conn, conn_tqe);
++    pthread_spin_unlock(&pool->c_conn_lock);
+ 
+     /* owner of the client connection is the server pool */
+     conn->owner = owner;
+@@ -47,9 +49,11 @@ dnode_client_unref(struct conn *conn)
+     pool = conn->owner;
+     conn->owner = NULL;
+ 
++    pthread_spin_lock(&pool->c_conn_lock);
+     ASSERT(pool->dn_conn_q != 0);
+     pool->dn_conn_q--;
+     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
++    pthread_spin_unlock(&pool->c_conn_lock);
+ 
+     log_debug(LOG_VVERB, "dyn: unref conn %p owner %p from pool '%.*s'", conn,
+               pool, pool->name.len, pool->name.data);
+diff --git a/src/dyn_dnode_peer.c b/src/dyn_dnode_peer.c
+index ad6410e..74c52d4 100644
+--- a/src/dyn_dnode_peer.c
++++ b/src/dyn_dnode_peer.c
+@@ -82,7 +82,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
+     conn->same_dc = peer_is_same_dc(peer)? 1 : 0;
+ 
+     conn->owner = owner;
+-    conn->ptctx = core_get_ptctx_for_conn(peer->owner->ctx, conn);
++    conn->ptctx = peer->ptctx;//core_get_ptctx_for_conn(peer->owner->ctx, conn);
+ 
+     if (log_loggable(LOG_VVERB)) {
+        log_debug(LOG_VVERB, "dyn: ref peer conn %p owner %p into '%.*s", conn, peer,
+diff --git a/src/dyn_log.c b/src/dyn_log.c
+index bf65347..f46351b 100644
+--- a/src/dyn_log.c
++++ b/src/dyn_log.c
+@@ -149,7 +149,7 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
+ 
+     len += dn_scnprintf(buf + len, size - len, "[%.*s.%03d] (%d) %s:%d ",
+                         strlen(buffer), buffer, (int64_t)curTime.tv_usec / 1000,
+-                        g_ptctx ? g_ptctx->tid : -1, file, line);
++                        g_ptctx ? g_ptctx->tid : 0, file, line);
+ 
+     va_start(args, fmt);
+     len += dn_vscnprintf(buf + len, size - len, fmt, args);
+diff --git a/src/dyn_message.c b/src/dyn_message.c
+index 67bec86..81d6dbe 100644
+--- a/src/dyn_message.c
++++ b/src/dyn_message.c
+@@ -241,8 +241,8 @@ _msg_get(struct conn *conn, const char *const caller)
+     ASSERT_LOG(!ret, "Failed to unlock spin lock. err:%d error: %s", ret, strerror(ret));
+ 
+ 
+-    //log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
+-            //alloc_msg_count, caller, conn_get_type_string(conn), conn->p.sd);
++    log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
++            alloc_msg_count, caller, conn_get_type_string(conn), conn->p.sd);
+ 
+     msg = dn_alloc(sizeof(*msg));
+     if (msg == NULL) {
+@@ -1013,7 +1013,7 @@ msg_recv(struct context *ctx, struct conn *conn)
+     rstatus_t status;
+     struct msg *msg;
+ 
+-    ASSERT(conn->p.recv_active);
++    ASSERT_LOG(conn->p.recv_active, "Conn %p", conn);
+     conn->recv_ready = 1;
+ 
+     do {
+@@ -1162,7 +1162,7 @@ msg_send(struct context *ctx, struct conn *conn)
+     rstatus_t status;
+     struct msg *msg;
+ 
+-    ASSERT(conn->p.send_active);
++    ASSERT_LOG(conn->p.send_active, "Conn %p", conn);
+ 
+     conn->send_ready = 1;
+     do {
+diff --git a/src/dyn_proxy.c b/src/dyn_proxy.c
+index 4e601ed..6f98d02 100644
+--- a/src/dyn_proxy.c
++++ b/src/dyn_proxy.c
+@@ -210,6 +210,9 @@ proxy_accept(struct context *ctx, struct conn *p)
+         }
+     }
+ 
++    log_notice("accepted %s %d on %s %d from '%s'", conn_get_type_string(c),
++               c->p.sd, conn_get_type_string(p), p->p.sd, dn_unresolve_peer_desc(c->p.sd));
++
+     status = thread_ctx_add_conn(c->ptctx, conn_get_pollable(c));
+     if (status < 0) {
+         log_error("event add conn from %s %d failed: %s",conn_get_type_string(p),
+@@ -218,9 +221,6 @@ proxy_accept(struct context *ctx, struct conn *p)
+         return status;
+     }
+ 
+-    log_notice("accepted %s %d on %s %d from '%s'", conn_get_type_string(c),
+-               c->p.sd, conn_get_type_string(p), p->p.sd, dn_unresolve_peer_desc(c->p.sd));
+-
+     return DN_OK;
+ }
+ 
+diff --git a/src/dyn_server.c b/src/dyn_server.c
+index 588345a..e07fb3e 100644
+--- a/src/dyn_server.c
++++ b/src/dyn_server.c
+@@ -508,7 +508,9 @@ void
+ server_pool_deinit(struct server_pool *sp)
+ {
+     ASSERT(sp->p_conn == NULL);
++    pthread_spin_lock(&sp->c_conn_lock);
+     ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
++    pthread_spin_unlock(&sp->c_conn_lock);
+ 
+     server_deinit(&sp->datastore);
+     sp->nlive_server = 0;
+diff --git a/src/dyn_thread_ctx.c b/src/dyn_thread_ctx.c
+index 3c2a6c0..955ea33 100644
+--- a/src/dyn_thread_ctx.c
++++ b/src/dyn_thread_ctx.c
+@@ -3,7 +3,7 @@
+ #include <dyn_server.h>
+ #include <dyn_dnode_peer.h>
+ 
+-static tid_t tid_counter = 0;
++static tid_t tid_counter = 1;
+ __thread pthread_ctx g_ptctx = NULL;
+ pthread_ctx
+ thread_ctx_create(void)
+@@ -80,14 +80,14 @@ handle_connection_events(void *arg, uint32_t events)
+ 
+ 	struct context *ctx = conn_to_ctx(conn);
+ 
+-    log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
++    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
+               conn_get_type_string(conn), conn->p.sd);
+ 
+ 	conn->events = events;
+ 
+ 	/* error takes precedence over read | write */
+ 	if (events & EVENT_ERR) {
+-        log_debug(LOG_VVVERB, "handing error on %s %d",
++        log_debug(LOG_VVERB, "handing error on %s %d",
+                   conn_get_type_string(conn), conn->p.sd);
+ 		if (conn->err && conn->dyn_mode) {
+ 			loga("conn err on dnode EVENT_ERR: %d", conn->err);
+@@ -99,7 +99,7 @@ handle_connection_events(void *arg, uint32_t events)
+ 
+ 	/* read takes precedence over write */
+ 	if (events & EVENT_READ) {
+-        log_debug(LOG_VVVERB, "handing read on %s %d",
++        log_debug(LOG_VVERB, "handing read on %s %d",
+                   conn_get_type_string(conn), conn->p.sd);
+ 		status = conn_recv(ctx, conn);
+ 
+@@ -119,7 +119,7 @@ handle_connection_events(void *arg, uint32_t events)
+ 	}
+ 
+ 	if (events & EVENT_WRITE) {
+-        log_debug(LOG_VVVERB, "handing write on %s %d",
++        log_debug(LOG_VVERB, "handing write on %s %d",
+                   conn_get_type_string(conn), conn->p.sd);
+ 		status = conn_send(ctx, conn);
+ 		if (status != DN_OK || conn->done || conn->err) {
+@@ -210,35 +210,35 @@ thread_ctx_deinit(void *elem, void *arg)
+ rstatus_t
+ thread_ctx_add_conn(pthread_ctx ptctx, struct pollable *conn)
+ {
+-    log_debug(LOG_VVVERB, "ptctx %p: adding conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
++    log_debug(LOG_VVERB, "ptctx %p: adding conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
+     return event_add_conn(ptctx->evb, conn);
+ }
+ 
+ rstatus_t
+ thread_ctx_del_conn(pthread_ctx ptctx, struct pollable *conn)
+ {
+-    log_debug(LOG_VVVERB, "ptctx %p: deleting conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
++    log_debug(LOG_VVERB, "ptctx %p: deleting conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
+     return event_del_conn(ptctx->evb, conn);
+ }
+ 
+ rstatus_t
+ thread_ctx_add_out(pthread_ctx ptctx, struct pollable *conn)
+ {
+-    log_debug(LOG_VVVERB, "ptctx %p: adding out conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
++    log_debug(LOG_VVERB, "ptctx %p: adding out conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
+     return event_add_out(ptctx->evb, conn);
+ }
+ 
+ rstatus_t
+ thread_ctx_del_out(pthread_ctx ptctx, struct pollable *conn)
+ {
+-    log_debug(LOG_VVVERB, "ptctx %p: deleting out conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
++    log_debug(LOG_VVERB, "ptctx %p: deleting out conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
+     return event_del_out(ptctx->evb, conn);
+ }
+ 
+ rstatus_t
+ thread_ctx_add_in(pthread_ctx ptctx, struct pollable *conn)
+ {
+-    log_debug(LOG_VVVERB, "ptctx %p: adding in conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
++    log_debug(LOG_VVERB, "ptctx %p: adding in conn %p, %s", ptctx, conn, pollable_get_type_string(conn));
+     return event_add_in(ptctx->evb, conn);
+ }
+ 
+diff --git a/src/dynomite.c b/src/dynomite.c
+index 7eec647..6ed828f 100644
+--- a/src/dynomite.c
++++ b/src/dynomite.c
+@@ -633,6 +633,7 @@ dn_run(struct instance *nci)
+         if (status != DN_OK) {
+             break;
+         }
++        sleep(1);
+     }
+ 
+     core_destroy(ctx);
+diff --git a/src/event/dyn_epoll.c b/src/event/dyn_epoll.c
+index 3e988c8..cbaf367 100644
+--- a/src/event/dyn_epoll.c
++++ b/src/event/dyn_epoll.c
+@@ -204,13 +204,15 @@ event_add_conn(struct event_base *evb, struct pollable *c)
+     event.data.ptr = c;
+ 
+     log_debug(LOG_DEBUG, "adding conn %p(%s) to active", c, pollable_get_type_string(c));
++    c->send_active = 1;
++    c->recv_active = 1;
+     status = epoll_ctl(ep, EPOLL_CTL_ADD, c->sd, &event);
+     if (status < 0) {
+         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
+                   strerror(errno));
+-    } else {
+-        c->send_active = 1;
+-        c->recv_active = 1;
++        // reset the flags
++        c->send_active = 0;
++        c->recv_active = 0;
+     }
+ 
+     return status;
+@@ -232,6 +234,7 @@ event_del_conn(struct event_base *evb, struct pollable *c)
+         log_error("epoll ctl on e %d sd %d failed: %s", ep, c->sd,
+                   strerror(errno));
+     } else {
++        log_error("conn %p making 0", c);
+         c->recv_active = 0;
+         c->send_active = 0;
+     }
