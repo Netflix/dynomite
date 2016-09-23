@@ -1,2 +1,6 @@
 language: c
 script: bash ./travis.sh
+# blocklist
+branches:
+  except:
+  - topology
