@@ -36,7 +36,6 @@ static int  isOsVarEval   = 0;
 
 static void evalOSVar();
 static uint32_t create_tcp_socket();
-static uint8_t *build_get_query(uint8_t *host, uint8_t *page);
 
 static int64_t last = 0; //storing last time for seeds check
 static uint32_t last_seeds_hash = 0;
@@ -52,7 +51,7 @@ static void evalOSVar(){
 
 static bool seeds_check()
 {
-    int64_t now = dn_msec_now();
+    msec_t now = dn_msec_now();
 
     int64_t delta = (int64_t)(now - last);
     log_debug(LOG_VERB, "Delta or elapsed time : %lu", delta);

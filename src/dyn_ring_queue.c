@@ -78,14 +78,14 @@ ring_msg_init(struct ring_msg *msg, uint32_t n, bool init_node)
 	if (msg == NULL)
 		return DN_ERROR;
 
-	rstatus_t status = array_init(&msg->nodes, n, sizeof(struct node));
+	rstatus_t status = array_init(&msg->nodes, n, sizeof(struct gossip_node));
 	if (status != DN_OK)
 		return status;
 
 	if (init_node) {
 		uint32_t i;
 		for(i=0; i<n; i++) {
-			struct node *node = array_push(&msg->nodes);
+			struct gossip_node *node = array_push(&msg->nodes);
 			node_init(node);
 		}
 	}
@@ -102,7 +102,7 @@ ring_msg_deinit(struct ring_msg *msg)
 
 	uint32_t i;
 	for(i=0; i<array_n(&msg->nodes); i++) {
-		struct node *node = array_get(&msg->nodes, i);
+		struct gossip_node *node = array_get(&msg->nodes, i);
 		node_deinit(node);
 	}
 	array_deinit(&msg->nodes);
@@ -119,10 +119,10 @@ ring_msg_deinit(struct ring_msg *msg)
 
 
 
-struct node *
+struct gossip_node *
 create_node()
 {
-	struct node *result = dn_alloc(sizeof(*result));
+	struct gossip_node *result = dn_alloc(sizeof(*result));
 	node_init(result);
 
 	return result;
@@ -130,7 +130,7 @@ create_node()
 
 
 rstatus_t
-node_init(struct node *node)
+node_init(struct gossip_node *node)
 {
 	if (node == NULL)
 		return DN_ERROR;
@@ -156,7 +156,7 @@ node_init(struct node *node)
 
 
 rstatus_t
-node_deinit(struct node *node)
+node_deinit(struct gossip_node *node)
 {
 	if (node == NULL)
 		return DN_ERROR;
@@ -175,7 +175,7 @@ node_deinit(struct node *node)
 
 
 rstatus_t
-node_copy(const struct node *src, struct node *dst)
+node_copy(const struct gossip_node *src, struct gossip_node *dst)
 {
 	if (src == NULL || dst == NULL)
 		return DN_ERROR;

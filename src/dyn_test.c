@@ -226,21 +226,21 @@ test_get_options(int argc, char **argv, struct instance *nci)
 
 
 static rstatus_t
-init_server(struct server *s)
+init_peer(struct node *s)
 {
     s->idx = 0;
     s->owner = NULL;
 
     struct string pname = string("127.0.0.1:8102");
-    string_copy(&s->pname, pname.data, pname.len);
+    string_copy(&s->endpoint.pname, pname.data, pname.len);
 
     struct string name = string("127.0.0.1");
     string_copy(&s->name, name.data, name.len);
 
     s->state = UNKNOWN;
 
-    s->port = (uint16_t)8102;
-    s->weight = (uint32_t)1;
+    s->endpoint.port = (uint16_t)8102;
+    s->endpoint.weight = (uint32_t)1;
 
     struct string rack = string("rack1");
     string_copy(&s->rack, rack.data, rack.len);
@@ -255,17 +255,18 @@ init_server(struct server *s)
     struct sockinfo *info = malloc(sizeof(struct sockinfo));
 
     memset(info, 0, sizeof(*info));
-    dn_resolve(&name, s->port, info);
+    dn_resolve(&name, s->endpoint.port, info);
 
-    s->family = info->family;
-    s->addrlen = info->addrlen;
-    s->addr = (struct sockaddr *)&info->addr;
+    s->endpoint.family = info->family;
+    s->endpoint.addrlen = info->addrlen;
+    s->endpoint.addr = (struct sockaddr *)&info->addr;
 
 
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry_us = 0LL;
+    s->next_retry_us = 0ULL;
+    s->reconnect_backoff_sec = 1LL;
     s->failure_count = 0;
 
     s->processed = 0;
@@ -337,7 +338,7 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
                 log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - more data but can't split!");
             }
 
-            nmsg = msg_get(msg->owner, msg->request, conn->data_store, __FUNCTION__);
+            nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
             mbuf_insert(&nmsg->mhdr, nbuf);
             nmsg->pos = nbuf->pos;
 
@@ -484,11 +485,11 @@ aes_test(void)
 
 /* Inspection test */
 static rstatus_t
-aes_msg_test(struct server *server)
+aes_msg_test(struct node *server)
 {
     //unsigned char* aes_key = generate_aes_key();
-    struct conn *conn = conn_get_peer(server, false, true);
-    struct msg *msg = msg_get(conn, true, conn->data_store, __FUNCTION__);
+    struct conn *conn = conn_get_peer(server, false);
+    struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     struct mbuf *mbuf1 = mbuf_get();
     struct string s1 = string("abc");
@@ -521,11 +522,11 @@ aes_msg_test(struct server *server)
 /*
 
 static rstatus_t
-aes_msg_test2(struct server *server)
+aes_msg_test2(struct node *server)
 {
     unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get_peer(server, false, true);
-    struct msg *msg = msg_get(conn, true, conn->redis);
+    struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     struct mbuf *mbuf1 = mbuf_get();
     mbuf_write_bytes(mbuf1, data, mbuf_size(mbuf1));
@@ -583,11 +584,11 @@ main(int argc, char **argv)
     //rstatus_t status;
     init_test(argc, argv);
 
-    struct server *server = malloc(sizeof(struct server));
-    init_server(server);
+    struct node *peer = malloc(sizeof(struct datastore));
+    init_peer(peer);
 
-    struct conn *conn = conn_get_peer(server, false, true);
-    struct msg *msg = msg_get(conn, true, conn->data_store, __FUNCTION__);
+    struct conn *conn = conn_get_peer(peer, false);
+    struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     //test payload larger than mbuf_size
     rstatus_t ret = DN_OK;
@@ -608,7 +609,7 @@ main(int argc, char **argv)
         goto err_out;
     }
 
-    ret = aes_msg_test(server);
+    ret = aes_msg_test(peer);
     if (ret != DN_OK) {
         loga("Error in testing aes_msg_test !!!");
         goto err_out;

@@ -10,4 +10,5 @@ noinst_LIBRARIES = libseedsprovider.a
 noinst_HEADERS = dyn_seeds_provider.h
 
 libseedsprovider_a_SOURCES =			\
-	dyn_florida.c			
+	dyn_florida.c			        \
+	dyn_dns.c

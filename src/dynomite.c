@@ -46,6 +46,9 @@
 #define DN_STATS_ADDR       STATS_ADDR
 #define DN_STATS_INTERVAL   STATS_INTERVAL
 
+#define DN_ENTROPY_PORT		ENTROPY_PORT
+#define DN_ENTROPY_ADDR		ENTROPY_ADDR
+
 #define DN_PID_FILE         NULL
 
 #define DN_MBUF_SIZE        MBUF_SIZE
@@ -312,6 +315,9 @@ dn_set_default_options(struct instance *nci)
     nci->stats_addr = DN_STATS_ADDR;
     nci->stats_interval = DN_STATS_INTERVAL;
 
+    nci->entropy_port = DN_ENTROPY_PORT;
+    nci->entropy_addr = DN_ENTROPY_ADDR;
+
     status = dn_gethostname(nci->hostname, DN_MAXHOSTNAMELEN);
     if (status < 0) {
         log_warn("gethostname failed, ignored: %s", strerror(errno));
@@ -575,17 +581,14 @@ dn_post_run(struct instance *nci)
     log_deinit();
 }
 
-static void
+static rstatus_t
 dn_run(struct instance *nci)
 {
     rstatus_t status;
-    struct context *ctx;
 
-    ctx = core_start(nci);
-    if (ctx == NULL) {
-        return;
-    }
+    THROW_STATUS(core_start(nci));
 
+    struct context *ctx = nci->ctx;
     ctx->enable_gossip = enable_gossip;
     ctx->admin_opt = (unsigned)admin_opt;
 
@@ -601,6 +604,7 @@ dn_run(struct instance *nci)
     }
 
     core_stop(ctx);
+    return DN_OK;
 }
 
 static void
@@ -652,7 +656,8 @@ main(int argc, char **argv)
         exit(1);
     }
 
-    dn_run(&nci);
+    status = dn_run(&nci);
+    IGNORE_RET_VAL(status);
 
     dn_post_run(&nci);
 

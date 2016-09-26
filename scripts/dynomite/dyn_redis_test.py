@@ -45,6 +45,7 @@ class OperationThread (threading.Thread):
         operation = self.options.operation
         host = self.options.host
         port = self.options.port
+        delay = self.options.delay
         start = self.start_num
         end   = self.end_num
         print "Starting thread: " + self.name +  ", start: " + str(start) + " and end: " + str(end)
@@ -53,16 +54,16 @@ class OperationThread (threading.Thread):
         #threadLock.acquire()
     
         if 'write' == operation :
-           write_ops(start, end, host, port, db=0)
+           write_ops(start, end, delay, host, port, db=0)
 
         elif 'read' == operation :
-           read_ops(start, end, host, port, db=0)
+           read_ops(start, end, delay, host, port, db=0)
 
         elif 'mread' == operation :
-           mread_ops(start, end, host, port, db=0)
+           mread_ops(start, end, delay, host, port, db=0)
 
         elif 'del' == operation :
-           del_ops(start, end, host, port, db=0)
+           del_ops(start, end, delay, host, port, db=0)
 
         elif 'swrite' == operation :
            r = redis.StrictRedis(host, port, db=0)
@@ -98,7 +99,7 @@ def get_conns(host, port, db, num):
 def generate_value(i):
     return payload_prefix + '_' + str(i)
 
-def write_ops(skipkeys, numkeys, host, port, db):
+def write_ops(skipkeys, numkeys, delay, host, port, db):
     conns = get_conns(host, port, db, num_conn)
     start = int(skipkeys)
     end   = int(numkeys)
@@ -111,13 +112,14 @@ def write_ops(skipkeys, numkeys, host, port, db):
            sys.stdout.write('.')
         try:
            r.set('key_' + str(i), generate_value(i))
+           time.sleep(int(delay))
         except redis.exceptions.ResponseError:
            print "reconnecting ..."
            r = redis.StrictRedis(host, port, db=0)
            conns[i % num_conn] = r
 
 
-def read_ops(skipkeys, numkeys, host, port, db):
+def read_ops(skipkeys, numkeys, delay, host, port, db):
     #r = redis.StrictRedis(host, port, db=0)
     conns = get_conns(host, port, db, num_conn)
     start = int(skipkeys)
@@ -129,6 +131,7 @@ def read_ops(skipkeys, numkeys, host, port, db):
         r = conns[i % num_conn]
         try:
             value = r.get('key_' + str(i))
+            time.sleep(int(delay))
         except redis.exceptions.ResponseError:
             print "reconnecting ..."
             r = redis.StrictRedis(host, port, db=0)
@@ -143,7 +146,7 @@ def read_ops(skipkeys, numkeys, host, port, db):
     print 'Error count: ' + str(error_count) 
 
 
-def del_ops(skipkeys, numkeys, host, port, db):
+def del_ops(skipkeys, numkeys, delay, host, port, db):
     #r = redis.StrictRedis(host, port, db=0)
     conns = get_conns(host, port, db, num_conn)
     start = int(skipkeys)
@@ -158,12 +161,13 @@ def del_ops(skipkeys, numkeys, host, port, db):
 
        try:
            r.delete('key_' + str(i))
+           time.sleep(int(delay))
        except redis.exceptions.ResponseError:
            print "reconnecting ..."
            r = redis.StrictRedis(host, port, db=0) 
 
 
-def mread_ops(skipkeys, numkeys, host, port, db):
+def mread_ops(skipkeys, numkeys, delay, host, port, db):
        r = redis.StrictRedis(host, port, db=0)
        start = int(skipkeys)
        end   = int(numkeys)
@@ -186,6 +190,7 @@ def mread_ops(skipkeys, numkeys, host, port, db):
        while (len(keys) > 0) :
           values = r.mget(keys)
           print values
+          time.sleep(int(delay))
           for key in values.keys() :
               keys.remove(key)
 
@@ -229,7 +234,11 @@ def main():
                       dest="numkeys",
                       default="100",
                       help="Number of keys. Default is 100\n")
-   
+    parser.add_option("-d", "--delay",
+                      action="store",
+   		      dest="delay",
+                      default="0",
+                      help="Delay between operations in seconds. Default is 0\n")
     parser.add_option("-s", "--payloadsize",
                       action="store",
                       dest="payloadsize",

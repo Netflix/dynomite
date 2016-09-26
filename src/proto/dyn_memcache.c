@@ -176,7 +176,6 @@ memcache_parse_req(struct msg *r)
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
     ASSERT(r->request);
-    ASSERT(r->data_store==DATA_MEMCACHE);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -623,7 +622,7 @@ memcache_parse_req(struct msg *r)
                     ASSERT(memcache_storage(r) || memcache_arithmetic(r) || memcache_delete(r) || memcache_touch(r));
                     r->token = NULL;
                     /* noreply_end <- p - 1 */
-                    r->noreply = 1;
+                    r->expect_datastore_reply = 0;
                     state = SW_AFTER_NOREPLY;
                     p = p - 1; /* go back by 1 byte */
                 } else {
@@ -782,7 +781,6 @@ memcache_parse_rsp(struct msg *r)
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
     ASSERT(!r->request);
-    ASSERT(r->data_store==DATA_MEMCACHE);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -1227,7 +1225,6 @@ memcache_pre_splitcopy(struct mbuf *mbuf, void *arg)
     struct string gets = string("gets "); /* 'gets ' string */
 
     ASSERT(r->request);
-    ASSERT(r->data_store==DATA_MEMCACHE);
     ASSERT(mbuf_empty(mbuf));
 
     switch (r->type) {
@@ -1255,7 +1252,6 @@ memcache_post_splitcopy(struct msg *r)
     struct string crlf = string(CRLF);
 
     ASSERT(r->request);
-    ASSERT(r->data_store==DATA_MEMCACHE);
     ASSERT(!STAILQ_EMPTY(&r->mhdr));
 
     mbuf = STAILQ_LAST(&r->mhdr, mbuf, next);

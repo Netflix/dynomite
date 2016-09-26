@@ -16,8 +16,11 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
 }
 
 static bool
-rspmgr_is_quourm_achieved(struct response_mgr *rspmgr)
+rspmgr_is_quorum_achieved(struct response_mgr *rspmgr)
 {
+    if (rspmgr->quorum_responses == 1 &&
+            rspmgr->good_responses == rspmgr->quorum_responses)
+        return true;
     if (rspmgr->good_responses < rspmgr->quorum_responses)
         return false;
 
@@ -58,7 +61,7 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
     // do the required calculation and tell if we are done here
     if (rspmgr->good_responses >= rspmgr->quorum_responses) {
         // We received enough good responses but do their checksum match?
-        if (rspmgr_is_quourm_achieved(rspmgr)) {
+        if (rspmgr_is_quorum_achieved(rspmgr)) {
             log_info("req %lu quorum achieved", rspmgr->msg->id);
             rspmgr->done = true;
         } else if (pending_responses) {
@@ -81,10 +84,10 @@ static void
 rspmgr_incr_non_quorum_responses_stats(struct response_mgr *rspmgr)
 {
     if (rspmgr->is_read)
-        stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
+        stats_pool_incr(conn_to_ctx(rspmgr->conn),
                         client_non_quorum_r_responses);
     else
-        stats_pool_incr(conn_to_ctx(rspmgr->conn), rspmgr->conn->owner,
+        stats_pool_incr(conn_to_ctx(rspmgr->conn),
                         client_non_quorum_w_responses);
 
 }
@@ -136,8 +139,7 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         return rspmgr->responses[0];
     } else {
         log_info("none of the responses match, returning error");
-        struct msg *rsp = msg_get(rspmgr->conn, false, rspmgr->conn->data_store,
-                                  __FUNCTION__);
+        struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
         rsp->error = 1;
         rsp->err = NO_QUORUM_ACHIEVED;
         rsp->dyn_error = NO_QUORUM_ACHIEVED;

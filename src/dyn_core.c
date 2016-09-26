@@ -31,209 +31,225 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 
-
-static uint32_t ctx_id; /* context generation */
-
-static struct context *
-core_ctx_create(struct instance *nci)
+static rstatus_t
+core_init_last(struct context *ctx)
 {
-	rstatus_t status;
-	struct context *ctx;
+    core_debug(ctx);
+    preselect_remote_rack_for_replication(ctx);
+    return DN_OK;
+}
 
-	srand((unsigned) time(NULL));
+static rstatus_t
+core_gossip_pool_init(struct context *ctx)
+{
+    //init ring msg queue
+    CBUF_Init(C2G_InQ);
+    CBUF_Init(C2G_OutQ);
 
-	ctx = dn_alloc(sizeof(*ctx));
-	if (ctx == NULL) {
-		return NULL;
-	}
-	ctx->id = ++ctx_id;
-	ctx->cf = NULL;
-	ctx->stats = NULL;
-	ctx->evb = NULL;
-	array_null(&ctx->pool);
-	ctx->max_timeout = nci->stats_interval;
-	ctx->timeout = ctx->max_timeout;
-	ctx->dyn_state = INIT;
+    //init stats msg queue
+    CBUF_Init(C2S_InQ);
+    CBUF_Init(C2S_OutQ);
 
-	/* parse and create configuration */
-	ctx->cf = conf_create(nci->conf_filename);
-	if (ctx->cf == NULL) {
-		loga("Failed to create context!!!");
-		dn_free(ctx);
-		return NULL;
-	}
+    THROW_STATUS(gossip_pool_init(ctx));
+    THROW_STATUS(core_init_last(ctx));
+    return DN_OK;
+}
 
-	/* initialize server pool from configuration */
-	status = server_pool_init(&ctx->pool, &ctx->cf->pool, ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize server pool!!!");
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
+static rstatus_t
+core_dnode_peer_pool_preconnect(struct context *ctx)
+{
+    THROW_STATUS(dnode_peer_pool_preconnect(ctx));
+    rstatus_t status = core_gossip_pool_init(ctx);
+    //if (status != DN_OK)
+      //  gossip_pool_deinit(ctx);
+    return status;
+}
+static rstatus_t
+core_dnode_peer_init(struct context *ctx)
+{
+	/* initialize peers */
+	THROW_STATUS(dnode_peer_init(ctx));
+	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
+	if (status != DN_OK)
+	    dnode_peer_pool_disconnect(ctx);
+    return status;
+}
 
-
-	/* crypto init */
-    status = crypto_init(ctx);
-    if (status != DN_OK) {
-   	loga("Failed to initialize crypto!!!");
-    	dn_free(ctx);
-    	return NULL;
-    }
-
-
-	/* create stats per server pool */
-	ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
-			                  nci->hostname, &ctx->pool, ctx);
-	if (ctx->stats == NULL) {
-		loga("Failed to create stats!!!");
-		crypto_deinit();
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* initialize event handling for client, proxy and server */
-	ctx->evb = event_base_create(EVENT_SIZE, &core_core);
-	if (ctx->evb == NULL) {
-		loga("Failed to create socket event handling!!!");
-		crypto_deinit();
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* preconnect? servers in server pool */
-	status = server_pool_preconnect(ctx);
-	if (status != DN_OK) {
-		loga("Failed to preconnect for server pool!!!");
-		crypto_deinit();
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
-	/* initialize proxy per server pool */
-	status = proxy_init(ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize proxy!!!");
-		crypto_deinit();
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
-
+static rstatus_t
+core_dnode_init(struct context *ctx)
+{
 	/* initialize dnode listener per server pool */
-	status = dnode_init(ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize dnode!!!");
-		crypto_deinit();
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
+    THROW_STATUS(dnode_init(ctx));
 
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
+    rstatus_t status = core_dnode_peer_init(ctx);
+    if (status != DN_OK)
+        dnode_peer_deinit(&ctx->pool.peers);
+    return status;
+}
 
-	/* initialize peers */
-	status = dnode_peer_init(&ctx->pool, ctx);
-	if (status != DN_OK) {
-		loga("Failed to initialize dnode peers!!!");
-		crypto_deinit();
-		dnode_deinit(ctx);
+static rstatus_t
+core_proxy_init(struct context *ctx)
+{
+	/* initialize proxy per server pool */
+    THROW_STATUS(proxy_init(ctx));
+    rstatus_t status = core_dnode_init(ctx);
+    if (status != DN_OK)
+        dnode_deinit(ctx);
+    return status;
+}
+
+static rstatus_t
+core_server_pool_preconnect(struct context *ctx)
+{
+	THROW_STATUS(server_pool_preconnect(ctx));
+
+     rstatus_t status = core_proxy_init(ctx);
+     if (status != DN_OK)
+        proxy_deinit(ctx);
+    return status;
+}
+
+static rstatus_t
+core_event_base_create(struct context *ctx)
+{
+    /* initialize event handling for client, proxy and server */
+    ctx->evb = event_base_create(EVENT_SIZE, &core_core);
+    if (ctx->evb == NULL) {
+	log_error("Failed to create socket event handling!!!");
+	return DN_ERROR;
+    }
+    rstatus_t status = core_server_pool_preconnect(ctx);
+    if (status != DN_OK)
 		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
+    return status;
+}
 
-	core_debug(ctx);
+static rstatus_t
+core_entropy_init(struct context *ctx)
+{
+    struct instance *nci = ctx->instance;
+    /* initializing anti-entropy */
+    ctx->entropy = entropy_init(ctx, nci->entropy_port, nci->entropy_addr);
+    if (ctx->entropy == NULL) {
+    	log_error("Failed to create entropy!!!");
+    }
 
-	/* preconntect peers - probably start gossip here */
-	status = dnode_peer_pool_preconnect(ctx);
-	if (status != DN_OK) {
-		loga("Failed to preconnect dnode peers!!!");
+    rstatus_t status = core_event_base_create(ctx);
+    if (status != DN_OK)
+       event_base_destroy(ctx->evb);
+    
+    return status;
+}
+
+static rstatus_t
+core_stats_create(struct context *ctx)
+{
+    struct instance *nci = ctx->instance;
+    ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
+			                  nci->hostname, &ctx->pool, ctx);
+    if (ctx->stats == NULL) {
+        log_error("Failed to create stats!!!");
+        return DN_ERROR;
+    }
+
+    rstatus_t status = core_entropy_init(ctx);
+    if (status != DN_OK)
+    	entropy_conn_destroy(ctx->entropy);
+    
+    return status;
+}
+
+static rstatus_t
+core_crypto_init(struct context *ctx)
+{
+    /* crypto init */
+    THROW_STATUS(crypto_init(&ctx->pool));
+    rstatus_t status = core_stats_create(ctx);
+    if (status != DN_OK)
+	stats_destroy(ctx->stats);
+    
+    return status;
+}
+
+static rstatus_t
+core_server_pool_init(struct context *ctx)
+{
+    THROW_STATUS(server_pool_init(&ctx->pool, &ctx->cf->pool, ctx));
+    rstatus_t status = core_crypto_init(ctx);
+    if (status != DN_OK)
 		crypto_deinit();
-		dnode_peer_deinit(&ctx->pool);
-		dnode_deinit(ctx);
-		server_pool_disconnect(ctx);
-		event_base_destroy(ctx->evb);
-		stats_destroy(ctx->stats);
-		server_pool_deinit(&ctx->pool);
-		conf_destroy(ctx->cf);
-		dn_free(ctx);
-		return NULL;
-	}
+    return status;
+}
 
-	//init ring msg queue
-	CBUF_Init(C2G_InQ);
-	CBUF_Init(C2G_OutQ);
+static rstatus_t
+core_ctx_create(struct instance *nci)
+{
+    struct context *ctx;
 
-	//init stats msg queue
-	CBUF_Init(C2S_InQ);
-	CBUF_Init(C2S_OutQ);
+    srand((unsigned) time(NULL));
 
-	gossip_pool_init(ctx);
-    preselect_remote_rack_for_replication(ctx);
+    ctx = dn_alloc(sizeof(*ctx));
+    if (ctx == NULL) {
+	loga("Failed to create context!!!");
+	return DN_ERROR;
+    }
+    nci->ctx = ctx;
+    ctx->instance = nci;
+    ctx->cf = NULL;
+    ctx->stats = NULL;
+    ctx->evb = NULL;
+    ctx->max_timeout = nci->stats_interval;
+    ctx->timeout = ctx->max_timeout;
+    ctx->dyn_state = INIT;
 
-	log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
+    /* parse and create configuration */
+    ctx->cf = conf_create(nci->conf_filename);
+    if (ctx->cf == NULL) {
+        loga("Failed to create conf!!!");
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+	return DN_ERROR;
+    }
 
-	return ctx;
+    rstatus_t status = core_server_pool_init(ctx);
+    if (status != DN_OK) {
+        server_pool_deinit(&ctx->pool);
+        conf_destroy(ctx->cf);
+        dn_free(ctx);
+        return DN_ERROR;
+    }
+    return status;
 }
 
 static void
 core_ctx_destroy(struct context *ctx)
 {
-	log_debug(LOG_VVERB, "destroy ctx %p id %"PRIu32"", ctx, ctx->id);
-	proxy_deinit(ctx);
-	server_pool_disconnect(ctx);
-	event_base_destroy(ctx->evb);
-	stats_destroy(ctx->stats);
-	server_pool_deinit(&ctx->pool);
-	conf_destroy(ctx->cf);
-	dn_free(ctx);
+    proxy_deinit(ctx);
+    server_pool_disconnect(ctx);
+    event_base_destroy(ctx->evb);
+    stats_destroy(ctx->stats);
+    server_pool_deinit(&ctx->pool);
+    conf_destroy(ctx->cf);
+    dn_free(ctx);
 }
 
-struct context *
+rstatus_t
 core_start(struct instance *nci)
 {
-	struct context *ctx;
-	//last = dn_msec_now();
+    mbuf_init(nci);
+    msg_init(nci);
+    conn_init();
 
-	mbuf_init(nci);
-	msg_init(nci);
-	conn_init();
+    rstatus_t status = core_ctx_create(nci);
+    if (status != DN_OK) {
+        conn_deinit();
+        msg_deinit();
+        dmsg_deinit();
+        mbuf_deinit();
+    }
 
-	ctx = core_ctx_create(nci);
-	if (ctx != NULL) {
-		nci->ctx = ctx;
-		return ctx;
-	}
-
-	conn_deinit();
-	msg_deinit();
-	dmsg_deinit();
-	mbuf_deinit();
-
-	return NULL;
+    return status;
 }
 
 void
@@ -331,7 +347,7 @@ core_timeout(struct context *ctx)
 	for (;;) {
 		struct msg *msg;
 		struct conn *conn;
-		int64_t now, then;
+		msec_t now, then;
 
 		msg = msg_tmo_min();
 		if (msg == NULL) {
@@ -368,15 +384,14 @@ core_timeout(struct context *ctx)
 
 		if (conn->dyn_mode) {
 			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
-		 	   struct server *server = conn->owner;
                 if (conn->same_dc)
-			        stats_pool_incr(ctx, server->owner, peer_timedout_requests);
+			        stats_pool_incr(ctx, peer_timedout_requests);
                 else
-			        stats_pool_incr(ctx, server->owner, remote_peer_timedout_requests);
+			        stats_pool_incr(ctx, remote_peer_timedout_requests);
 			}
 		} else {
 			if (conn->type == CONN_SERVER) { //storage server requests
-			   stats_server_incr(ctx, conn->owner, server_dropped_requests);
+			   stats_server_incr(ctx, server_dropped_requests);
 			}
 		}
 
@@ -454,48 +469,44 @@ void
 core_debug(struct context *ctx)
 {
 	log_debug(LOG_VERB, "=====================Peers info=====================");
-	uint32_t i, nelem;
-	for (i = 0, nelem = array_n(&ctx->pool); i < nelem; i++) {
-		struct server_pool *sp = (struct server_pool *) array_get(&ctx->pool, i);
-		log_debug(LOG_VERB, "Server pool          : %"PRIu32"", sp->idx);
-		uint32_t j, n;
-		for (j = 0, n = array_n(&sp->peers); j < n; j++) {
-			log_debug(LOG_VERB, "==============================================");
-			struct server *server = (struct server *) array_get(&sp->peers, j);
-			log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",server->dc);
-			log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", server->rack);
+    struct server_pool *sp = &ctx->pool;
+    log_debug(LOG_VERB, "Server pool          : '%.*s'", sp->name);
+    uint32_t j, n;
+    for (j = 0, n = array_n(&sp->peers); j < n; j++) {
+        log_debug(LOG_VERB, "==============================================");
+        struct node *peer = (struct node *) array_get(&sp->peers, j);
+        log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",peer ->dc);
+        log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", peer->rack);
 
-			log_debug(LOG_VERB, "\tPeer name          : '%.*s'", server->name);
-			log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", server->pname);
+        log_debug(LOG_VERB, "\tPeer name          : '%.*s'", peer->name);
+        log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", peer->endpoint.pname);
 
-			log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", server->state);
-			log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", server->port);
-			log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", server->is_local);
-			log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", server->failure_count);
-			log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&server->tokens));
+        log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", peer->state);
+        log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", peer->endpoint.port);
+        log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", peer->is_local);
+        log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", peer->failure_count);
+        log_debug(LOG_VERB, "\tPeer num tokens    : %d", array_n(&peer->tokens));
 
-			uint32_t k;
-			for (k = 0; k < array_n(&server->tokens); k++) {
-				struct dyn_token *token = (struct dyn_token *) array_get(&server->tokens, k);
-				print_dyn_token(token, 12);
-			}
-		}
+        uint32_t k;
+        for (k = 0; k < array_n(&peer->tokens); k++) {
+            struct dyn_token *token = (struct dyn_token *) array_get(&peer->tokens, k);
+            print_dyn_token(token, 12);
+        }
+    }
 
-		log_debug(LOG_VERB, "Peers Datacenters/racks/nodes .................................................");
-		uint32_t dc_index, dc_len;
-		for(dc_index = 0, dc_len = array_n(&sp->datacenters); dc_index < dc_len; dc_index++) {
-			struct datacenter *dc = array_get(&sp->datacenters, dc_index);
-			log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
-			uint32_t rack_index, rack_len;
-			for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
-				struct rack *rack = array_get(&dc->racks, rack_index);
-				log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
-				log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
-				log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
-			}
-		}
-
-	}
+    log_debug(LOG_VERB, "Peers Datacenters/racks/nodes .................................................");
+    uint32_t dc_index, dc_len;
+    for(dc_index = 0, dc_len = array_n(&sp->datacenters); dc_index < dc_len; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        log_debug(LOG_VERB, "Peer datacenter........'%.*s'", dc->name->len, dc->name->data);
+        uint32_t rack_index, rack_len;
+        for(rack_index=0, rack_len = array_n(&dc->racks); rack_index < rack_len; rack_index++) {
+            struct rack *rack = array_get(&dc->racks, rack_index);
+            log_debug(LOG_VERB, "\tPeer rack........'%.*s'", rack->name->len, rack->name->data);
+            log_debug(LOG_VERB, "\tPeer rack ncontinuumm    : %d", rack->ncontinuum);
+            log_debug(LOG_VERB, "\tPeer rack nserver_continuum    : %d", rack->nserver_continuum);
+        }
+    }
 	log_debug(LOG_VERB, "...............................................................................");
 }
 
@@ -534,6 +545,3 @@ core_loop(struct context *ctx)
 
 	return DN_OK;
 }
-
-
-

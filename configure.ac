@@ -2,10 +2,7 @@
 m4_ifndef([m4_esyscmd_s], [m4_define([m4_chomp_all], [m4_format([[%.*s]], m4_bregexp(m4_translit([[$1]], [/], [/ ]), [/*$]), [$1])])])
 m4_ifndef([m4_esyscmd_s], [m4_define([m4_esyscmd_s], [m4_chomp_all(m4_esyscmd([$1]))])])
 
-# Define the package version numbers and the bug reporting address
-m4_define([DN_MAJOR], 0)
-m4_define([DN_MINOR], 5)
-m4_define([DN_PATCH], 6)
+# Define the bug reporting address and package version
 m4_define([DN_BUGS], [dynomite@netflix.com])
 m4_define([DN_VERSION_STRING], m4_esyscmd_s([git describe --dirty --always --tags]))
 
@@ -31,7 +28,7 @@ AC_PROG_CXX
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
-AC_PROG_RANLIB
+LT_INIT
 AC_PROG_LIBTOOL
 
 # Checks for typedefs, structures, and compiler characteristics
@@ -209,6 +206,7 @@ AC_CONFIG_FILES([Makefile
                  src/Makefile
                  src/hashkit/Makefile
                  src/proto/Makefile
+                 src/entropy/Makefile                 
                  src/seedsprovider/Makefile
                  src/event/Makefile
                  src/tools/Makefile])
