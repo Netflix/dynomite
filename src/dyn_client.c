@@ -872,9 +872,10 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
     ASSERT(c_conn->type == CONN_CLIENT);
 
-    if (msg->is_read)
-        stats_pool_incr(ctx, client_read_requests);
-    else
+    if (msg->is_read) {
+        if (msg->type != MSG_REQ_REDIS_PING)
+            stats_pool_incr(ctx, client_read_requests);
+    } else
         stats_pool_incr(ctx, client_write_requests);
 
     key = NULL;
