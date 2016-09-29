@@ -1,7 +1,7 @@
 /*
  * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
  * Copyright (C) 2014 Netflix, Inc.
- */ 
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -705,22 +706,10 @@ stats_end_nesting(struct stats_buffer *buf, bool arr)
 
     pos = buf->data + buf->len;
 
-    // if last non-white space character is , remove it
-    // first count white spaces at end
-    int space_count = 0;
-    while (isspace(*(pos - space_count - 1))) {
-        space_count++;
-    }
-    if (*(pos - space_count - 1) == ',') {
-        // now remove , from end
-        pos -= (space_count + 1);
+    // eliminate the , if any
+    if (pos[-1] == ',') {
         buf->len--;
-        // put white spaces back
-        while (space_count > 0) {
-            *pos = *(pos + 1);
-            pos++;
-            space_count--;
-        }
+        pos--;
     }
     // append "},"
     if ((buf->len + 2) > buf->size) {
@@ -941,7 +930,7 @@ stats_add_node_details(struct stats *st, struct node *node)
     struct string port_str, token_str;
     string_set_text(&port_str, "port");
     string_set_text(&token_str, "token");
-    
+
     THROW_STATUS(stats_add_node_name(st, node));
     THROW_STATUS(stats_add_node_host(st, node));
     THROW_STATUS(stats_add_num(&st->clus_desc_buf, &port_str, node->port));
@@ -1893,7 +1882,7 @@ void
 _stats_server_incr(struct context *ctx, struct server *server,
                    stats_server_field_t fidx)
 {
-    
+
     struct stats_metric *stm;
 
     stm = stats_server_to_metric(ctx, server, fidx);
@@ -1903,7 +1892,7 @@ _stats_server_incr(struct context *ctx, struct server *server,
 
     log_debug(LOG_VVVERB, "incr field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.counter);
-    
+
 }
 
 void
@@ -1971,7 +1960,7 @@ _stats_server_set_ts(struct context *ctx, struct server *server,
 
     log_debug(LOG_VVVERB, "set ts field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.timestamp);
-   
+
 }
 
 //should use macro or something else to make this more elegant
