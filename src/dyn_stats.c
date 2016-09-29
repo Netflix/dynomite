@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <ctype.h>
 
 #include "dyn_core.h"
 #include "dyn_histogram.h"
@@ -705,10 +706,22 @@ stats_end_nesting(struct stats_buffer *buf, bool arr)
 
     pos = buf->data + buf->len;
 
-    // eliminate the , if any
-    if (pos[-1] == ',') {
+    // if last non-white space character is , remove it
+    // first count white spaces at end
+    int space_count = 0;
+    while (isspace(*(pos - space_count - 1))) {
+        space_count++;
+    }
+    if (*(pos - space_count - 1) == ',') {
+        // now remove , from end
+        pos -= (space_count + 1);
         buf->len--;
-        pos--;
+        // put white spaces back
+        while (space_count > 0) {
+            *pos = *(pos + 1);
+            pos++;
+            space_count--;
+        }
     }
     // append "},"
     if ((buf->len + 2) > buf->size) {
