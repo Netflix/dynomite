@@ -87,7 +87,7 @@ echo $RESULT
 # check a single stats port
 curl -s localhost:22222 | python -mjson.tool > /dev/null
 if [[ $? -ne 0 ]]; then
-    print "Stats are not working or not valid json"
+    echo "Stats are not working or not valid json"
     RESULT=1
 fi
 
