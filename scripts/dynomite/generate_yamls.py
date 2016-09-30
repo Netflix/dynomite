@@ -14,19 +14,21 @@ APPNAME='dyn_o_mite'
 CLIENT_PORT='8102'
 DYN_PEER_PORT=8101
 MEMCACHE_PORT='11211'
+MAX_TOKEN = 4294967295
 
 DEFAULT_DC = 'default_dc'
 
 # gen map of node to random count (3-7) of random tokens (0-MAX_INT)
 token_map = dict()
+token_item = (MAX_TOKEN // (len(sys.argv) -1))
 for i in range(1, len(sys.argv)):
     node = sys.argv[i]
-    token_cnt = 1 #random.randrange(2,7, 1)
     tokens = []
-    for j in range(token_cnt):
-        t = random.randint(0,4294967295)
-        tokens.append(t)
-    tokens.sort()
+    token_value = (token_item * i)
+    if token_value > MAX_TOKEN:
+        token_value = MAX_TOKEN
+
+    tokens.append(token_value)
 
     tok_str = ','.join(str(it) for it in tokens)
     token_map[node] = tok_str
@@ -59,5 +61,3 @@ for k,v in token_map.items():
     file_name = ip_dc[0] + '.yml'
     with open(file_name, 'w') as outfile:
         outfile.write( yaml.dump(outer, default_flow_style=False) )
-
-    
