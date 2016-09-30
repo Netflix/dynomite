@@ -84,6 +84,13 @@ sleep 10
 RESULT=$?
 echo $RESULT
 
+# check a single stats port
+curl -s localhost:22222/info | python -mjson.tool > /dev/null
+if [[ $? -ne 0 ]]; then
+    echo "Stats are not working or not valid json"
+    RESULT=1
+fi
+
 DYNOMITE_NODES=`pgrep dynomite | wc -l`
 REDIS_NODES=`pgrep redis-server | wc -l`
 
@@ -99,4 +106,3 @@ if [[ $REDIS_NODES -ne 6 ]]; then
 fi
 
 cleanup_and_exit
-
