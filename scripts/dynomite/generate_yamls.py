@@ -18,7 +18,7 @@ MAX_TOKEN = 4294967295
 
 DEFAULT_DC = 'default_dc'
 
-# gen map of node to random count (3-7) of random tokens (0-MAX_INT)
+# generate the equidistant tokens for the number of nodes given. max 4294967295
 token_map = dict()
 token_item = (MAX_TOKEN // (len(sys.argv) -1))
 for i in range(1, len(sys.argv)):
