@@ -92,6 +92,7 @@
  * TODOs: Minh: add explanation for peer-to-peer communication
  */
 
+#define DYN_KEEPALIVE_INTERVAL_S 15 /* seconds */
 static uint32_t nfree_connq;       /* # free conn q */
 static struct conn_tqh free_connq; /* free conn q */
 
@@ -532,7 +533,14 @@ conn_connect(struct context *ctx, struct conn *conn)
                 strerror(errno));
         goto error;
     }
-
+    status = dn_set_keepalive(conn->sd, DYN_KEEPALIVE_INTERVAL_S);
+    if (status != DN_OK) {
+        log_error("set keepalive on s %d for '%.*s' failed: %s",
+                conn->sd,  conn->pname.len, conn->pname.data,
+                strerror(errno));
+        // Continue since this is not catastrophic
+    }
+    
 
     if (conn->pname.data[0] != '/') {
         status = dn_set_tcpnodelay(conn->sd);
