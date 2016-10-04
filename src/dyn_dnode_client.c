@@ -83,11 +83,11 @@ static void
 dnode_client_close_stats(struct context *ctx, struct server_pool *pool, err_t err,
                    unsigned eof)
 {
-    stats_pool_decr(ctx, pool, dnode_client_connections);
+    stats_pool_decr(ctx, dnode_client_connections);
 
     if (eof) {
         //fix this also
-        stats_pool_incr(ctx, pool, dnode_client_eof);
+        stats_pool_incr(ctx, dnode_client_eof);
         return;
     }
 
@@ -103,7 +103,7 @@ dnode_client_close_stats(struct context *ctx, struct server_pool *pool, err_t er
     case EHOSTUNREACH:
     default:
         //fix this also
-        stats_pool_incr(ctx, pool, dnode_client_err);
+        stats_pool_incr(ctx, dnode_client_err);
         break;
     }
 }
@@ -283,7 +283,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
             if (string_compare(rack->name, &pool->rack) == 0 ) {
                 rack_msg = msg;
             } else {
-                rack_msg = msg_get(conn, msg->request, msg->data_store, __FUNCTION__);
+                rack_msg = msg_get(conn, msg->request, __FUNCTION__);
                 if (rack_msg == NULL) {
                     log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
                     continue;
@@ -346,9 +346,8 @@ dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct ms
     //use only the 1st pool
     conn->omsg_count++;
     histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    stats_pool_incr(ctx, pool, dnode_client_out_queue);
-    stats_pool_incr_by(ctx, pool, dnode_client_out_queue_bytes, msg->mlen);
+    stats_pool_incr(ctx, dnode_client_out_queue);
+    stats_pool_incr_by(ctx, dnode_client_out_queue_bytes, msg->mlen);
 }
 
 static void
@@ -363,9 +362,8 @@ dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct ms
     //use the 1st pool
     conn->omsg_count--;
     histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
-    struct server_pool *pool = (struct server_pool *) array_get(&ctx->pool, 0);
-    stats_pool_decr(ctx, pool, dnode_client_out_queue);
-    stats_pool_decr_by(ctx, pool, dnode_client_out_queue_bytes, msg->mlen);
+    stats_pool_decr(ctx, dnode_client_out_queue);
+    stats_pool_decr_by(ctx, dnode_client_out_queue_bytes, msg->mlen);
 }
 
 /* dnode sends a response back to a peer  */

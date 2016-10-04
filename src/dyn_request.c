@@ -32,7 +32,7 @@ req_get(struct conn *conn)
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
 
-    msg = msg_get(conn, true, conn->data_store, __FUNCTION__);
+    msg = msg_get(conn, true, __FUNCTION__);
     if (msg == NULL) {
         conn->err = errno;
     }
@@ -153,7 +153,7 @@ req_done(struct conn *conn, struct msg *msg)
 
     ASSERT(msg->frag_owner->nfrag == nfragment);
 
-    msg->post_coalesce(msg->frag_owner);
+    g_post_coalesce(msg->frag_owner);
 
     log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
               "fragments is done", conn->sd, id, nfragment);

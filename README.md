@@ -1,5 +1,8 @@
 
-# Dynomite [![Build Status](https://secure.travis-ci.org/Netflix/dynomite.png)](http://travis-ci.org/Netflix/dynomite)
+# Dynomite 
+
+[![Build Status](https://secure.travis-ci.org/Netflix/dynomite.png)](http://travis-ci.org/Netflix/dynomite)
+[![Dev chat at https://gitter.im/Netflix/dynomite](https://badges.gitter.im/Netflix/dynomite.svg)](https://gitter.im/Netflix/dynomite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 **Dynomite**, inspired by [Dynamo whitepaper](http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf), is a thin, distributed dynamo layer for different storage engines and protocols. Currently these include [Redis](http://redis.io) and [Memcached](http://www.memcached.org/).  Dynomite supports multi-datacenter replication and is designed for high availability.
 <center>![dynomite logo](images/dynomite-logo.png?raw=true =150x150)</center>
@@ -10,7 +13,7 @@ The ultimate goal with Dynomite is to be able to implement high availability and
 
 The stable version of Dynomite is the [master]( https://github.com/Netflix/dynomite/tree/master ) branch. 
 
-For questions or contributions, please consider reading [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+For questions or contributions, please consider reading [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Build
 
@@ -19,7 +22,7 @@ To build Dynomite from source with _debug logs enabled_ and _assertions disabled
     $ git clone git@github.com:Netflix/dynomite.git
     $ cd dynomite
     $ autoreconf -fvi
-    $ ./configure --enable-debug=log
+    $ ./configure --enable-debug=yes
     $ make
     $ src/dynomite -h
 
@@ -31,7 +34,7 @@ To build Dynomite in _debug mode_:
     $ CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full
     $ make
     $ sudo make install
-    
+
 ## Help
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
@@ -77,6 +80,7 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **server_retry_timeout**: The timeout value in msec to wait for before retrying on a temporarily ejected server, when auto_eject_host is set to true. Defaults to 30000 msec.
 + **server_failure_limit**: The number of consecutive failures on a server that would lead to it being temporarily ejected when auto_eject_host is set to true. Defaults to 2.
 + **servers**: A list of local server address, port and weight (name:port:weight or ip:port:weight) for this server pool. Usually there is just one.
++ **secure_server_option**: Encrypted communication. Must be one of 'none', 'rack', 'datacenter', or 'all'.
 
 For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 

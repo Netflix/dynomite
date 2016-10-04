@@ -31,7 +31,7 @@ dyn_parse_core(struct msg *r)
 {
    struct dmsg *dmsg;
    struct mbuf *b;
-   uint8_t *p, *token;
+   uint8_t *p = r->pos, *token;
    uint8_t ch = ' ';
    uint64_t num = 0;
 
@@ -124,7 +124,7 @@ dyn_parse_core(struct msg *r)
             log_debug(LOG_DEBUG, "num = %d", num);
          }
          if (isdigit(ch))  {
-            num = num*10 + (ch - '0');
+            num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "MSG ID : %d", num);
@@ -147,7 +147,7 @@ dyn_parse_core(struct msg *r)
             log_debug(LOG_DEBUG, "DYN_TYPE_ID: num = %d", num);
          }
          if (isdigit(ch))  {
-            num = num*10 + (ch - '0');
+            num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "Type Id: %d", num);
@@ -170,7 +170,7 @@ dyn_parse_core(struct msg *r)
             log_debug(LOG_DEBUG, "DYN_BIT_FIELD, num = %d", num);
          }
          if (isdigit(ch))  {
-            num = num*10 + (ch - '0');
+            num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
@@ -193,7 +193,7 @@ dyn_parse_core(struct msg *r)
             log_debug(LOG_DEBUG, "DYN_VERSION: num = %d", num);
          }
          if (isdigit(ch))  {
-            num = num*10 + (ch - '0');
+            num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "VERSION : %d", num);
@@ -213,7 +213,7 @@ dyn_parse_core(struct msg *r)
 
       case DYN_SAME_DC:
       	if (isdigit(ch)) {
-      		dmsg->same_dc = ch - '0';
+      		dmsg->same_dc = (uint8_t)(ch - '0');
       		if (log_loggable(LOG_DEBUG)) {
            	   log_debug(LOG_DEBUG, "DYN_SAME_DC %d", dmsg->same_dc);
       		}
@@ -237,12 +237,12 @@ dyn_parse_core(struct msg *r)
          if (ch == '*') {
             break;
          } else if (isdigit(ch))  {
-            num = num*10 + (ch - '0');
+            num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "Data len: %d", num);
             }
-            dmsg->mlen = num;
+            dmsg->mlen = (uint32_t)num;
             dyn_state = DYN_DATA;
             num = 0;
          } else {
@@ -285,12 +285,12 @@ dyn_parse_core(struct msg *r)
       case DYN_PAYLOAD_LEN:
 
          if (isdigit(ch))  {
-            num = num*10 + (ch - '0');
+            num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == CR)  {
             if (log_loggable(LOG_DEBUG)) {
                log_debug(LOG_DEBUG, "Payload len: %d", num);
             }
-            dmsg->plen = num;
+            dmsg->plen = (uint32_t)num;
             num = 0;
             dyn_state = DYN_CRLF_BEFORE_DONE;
          } else {
@@ -461,7 +461,7 @@ dyn_parse_req(struct msg *r)
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 		struct conn *conn = r->owner;
-		conn->same_dc = dmsg->same_dc;
+		conn->same_dc = !!dmsg->same_dc;
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_REQ &&
 				dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
@@ -480,7 +480,7 @@ dyn_parse_req(struct msg *r)
 			if (dmsg->mlen > 1) {
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
+				strncpy((char*)r->owner->aes_key, (char*)aes_decrypted_buf, strlen((char*)aes_decrypted_buf));
 			}
 
 			if (dmsg->plen + b->pos <= b->last) {
@@ -508,7 +508,7 @@ dyn_parse_req(struct msg *r)
 			}
 
 			//substract alraedy received bytes
-			dmsg->plen -= b->last - b->pos;
+			dmsg->plen -= (uint32_t)(b->last - b->pos);
 
 			return;
 		} else if (r->dyn_state == DYN_POST_DONE) {
@@ -558,7 +558,7 @@ void dyn_parse_rsp(struct msg *r)
 	if (dyn_parse_core(r)) {
 		struct dmsg *dmsg = r->dmsg;
 		struct conn *conn = r->owner;
-		conn->same_dc = dmsg->same_dc;
+		conn->same_dc = !!dmsg->same_dc;
 
 		if (dmsg->type != DMSG_UNKNOWN && dmsg->type != DMSG_RES) {
 			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
@@ -577,7 +577,8 @@ void dyn_parse_rsp(struct msg *r)
 			if (dmsg->mlen > 1) {
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-				strncpy(r->owner->aes_key, aes_decrypted_buf, strlen(aes_decrypted_buf));
+				strncpy((char *)r->owner->aes_key, (char *)aes_decrypted_buf,
+                        strlen((char *)aes_decrypted_buf));
 			}
 
 			if (dmsg->plen + b->pos <= b->last) {
@@ -604,7 +605,7 @@ void dyn_parse_rsp(struct msg *r)
 			}
 
 			//Subtract already received bytes
-			dmsg->plen -= b->last - b->pos;
+			dmsg->plen -= (uint32_t)(b->last - b->pos);
 			return;
 
 		} else if (r->dyn_state == DYN_POST_DONE) {
@@ -772,7 +773,7 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     unsigned char *aes_key = conn->aes_key;
 
     if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
-        mbuf_write_uint32(mbuf, dyn_rsa_size());
+        mbuf_write_uint32(mbuf, (uint32_t)dyn_rsa_size());
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -830,7 +831,7 @@ dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type, struct conn *c
     //write aes key
     unsigned char *aes_key = conn->aes_key;
     if (conn->dnode_secured) {
-       mbuf_write_uint32(mbuf, dyn_rsa_size());
+       mbuf_write_uint32(mbuf, (uint32_t)dyn_rsa_size());
     } else {
         mbuf_write_uint32(mbuf, 1);
     }
@@ -948,7 +949,7 @@ dmsg_parse(struct dmsg *dmsg)
    ts_len = 0;
    node_state_len = 0;
    pipe_p = start;
-   int count = 0;
+   uint32_t count = 0;
 
    do {
       q = dn_strrchr(p, start, '|');
@@ -1016,27 +1017,28 @@ dmsg_parse(struct dmsg *dmsg)
       //host_id = dmsg->data;
       //host_id_len = dmsg->mlen - (host_addr_len + node_state_len + ts_len + 3);
       host_id = pipe_p;
-      host_id_len = end - pipe_p - (host_addr_len + node_state_len + ts_len + 3) + 1;
+      host_id_len = (uint32_t)(end - pipe_p - (host_addr_len + node_state_len + ts_len + 3)
+                    + 1);
 
       end = p;
 
 
-      struct node *rnode = (struct node *) array_get(&ring_msg->nodes, count);
+      struct gossip_node *rnode = (struct gossip_node *) array_get(&ring_msg->nodes, count);
       dmsg_parse_host_id(host_id, host_id_len, &rnode->dc, &rnode->rack, &rnode->token);
 
 
       string_copy(&rnode->name, host_addr, host_addr_len);
       string_copy(&rnode->pname, host_addr, host_addr_len); //need to add port
 
-      rnode->port = sp->d_port;
+      rnode->port = sp->dnode_proxy_endpoint.port;
       rnode->is_local = false;
       rnode->is_seed = false;
 
       ts[ts_len] = '\0';
-      rnode->ts = atol(ts);
+      rnode->ts = (uint64_t)atol((char*)ts);
 
       node_state[node_state_len] = '\0';
-      rnode->state = (uint8_t) atoi(node_state);
+      rnode->state = (uint8_t) atoi((char*)node_state);
 
       count++;
    } while (pipe_p != start);
@@ -1091,10 +1093,10 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
 void
 data_store_parse_req(struct msg *r)
 {
-	if (r->data_store == DATA_REDIS) {
+	if (g_data_store == DATA_REDIS) {
 		return redis_parse_req(r);
 	}
-	else if (r->data_store == DATA_MEMCACHE){
+	else if (g_data_store == DATA_MEMCACHE){
 		return memcache_parse_req(r);
 	}
 	else{
@@ -1108,10 +1110,10 @@ data_store_parse_req(struct msg *r)
 void
 data_store_parse_rsp(struct msg *r)
 {
-	if (r->data_store == DATA_REDIS) {
+	if (g_data_store == DATA_REDIS) {
 		return redis_parse_rsp(r);
 	}
-	else if (r->data_store == DATA_MEMCACHE){
+	else if (g_data_store == DATA_MEMCACHE){
 		return memcache_parse_rsp(r);
 	}
 	else{

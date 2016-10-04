@@ -26,6 +26,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/resource.h>
 #include <netinet/in.h>
 #include <ctype.h>
 
@@ -185,7 +186,7 @@ stats_metric_deinit(struct array *metric)
 }
 
 static rstatus_t
-stats_server_init(struct stats_server *sts, struct server *s)
+stats_server_init(struct stats_server *sts, struct datastore *s)
 {
     sts->name = s->name;
     array_null(&sts->metric);
@@ -200,41 +201,21 @@ stats_server_init(struct stats_server *sts, struct server *s)
 }
 
 static rstatus_t
-stats_server_map(struct array *stats_server, struct array *server)
+stats_server_map(struct stats_server *sts, struct datastore *datastore)
 {
-    uint32_t i, nserver;
+    ASSERT(datastore != NULL);
+    THROW_STATUS(stats_server_init(sts, datastore));
 
-    nserver = array_n(server);
-    ASSERT(nserver != 0);
-
-    THROW_STATUS(array_init(stats_server, nserver, sizeof(struct stats_server)));
-
-    for (i = 0; i < nserver; i++) {
-        struct server *s = array_get(server, i);
-        struct stats_server *sts = array_push(stats_server);
-
-        THROW_STATUS(stats_server_init(sts, s));
-    }
-
-    log_debug(LOG_VVVERB, "map %"PRIu32" stats servers", nserver);
+    log_debug(LOG_VVVERB, "mapped stats servers");
 
     return DN_OK;
 }
 
 static void
-stats_server_unmap(struct array *stats_server)
+stats_server_unmap(struct stats_server *sts)
 {
-    uint32_t i, nserver;
-
-    nserver = array_n(stats_server);
-
-    for (i = 0; i < nserver; i++) {
-        struct stats_server *sts = array_pop(stats_server);
-        stats_metric_deinit(&sts->metric);
-    }
-    array_deinit(stats_server);
-
-    log_debug(LOG_VVVERB, "unmap %"PRIu32" stats servers", nserver);
+    stats_metric_deinit(&sts->metric);
+    log_debug(LOG_VVVERB, "unmap stats servers");
 }
 
 static rstatus_t
@@ -244,81 +225,35 @@ stats_pool_init(struct stats_pool *stp, struct server_pool *sp)
 
     stp->name = sp->name;
     array_null(&stp->metric);
-    array_null(&stp->server);
 
     THROW_STATUS(stats_pool_metric_init(&stp->metric));
 
-    status = stats_server_map(&stp->server, &sp->server);
+    status = stats_server_map(&stp->server, sp->datastore);
     if (status != DN_OK) {
         stats_metric_deinit(&stp->metric);
         return status;
     }
 
-    log_debug(LOG_VVVERB, "init stats pool '%.*s' with %"PRIu32" metric and "
-              "%"PRIu32" server", stp->name.len, stp->name.data,
-              array_n(&stp->metric), array_n(&stp->metric));
+    log_debug(LOG_VVVERB, "init stats pool '%.*s' with %"PRIu32" metric",
+              stp->name.len, stp->name.data, array_n(&stp->metric));
 
     return DN_OK;
 }
 
 static void
-stats_pool_reset(struct array *stats_pool)
+stats_pool_reset(struct stats_pool *stp)
 {
-    uint32_t i, npool;
+    stats_metric_reset(&stp->metric);
 
-    npool = array_n(stats_pool);
-
-    for (i = 0; i < npool; i++) {
-        struct stats_pool *stp = array_get(stats_pool, i);
-        uint32_t j, nserver;
-
-        stats_metric_reset(&stp->metric);
-
-        nserver = array_n(&stp->server);
-        for (j = 0; j < nserver; j++) {
-            struct stats_server *sts = array_get(&stp->server, j);
-            stats_metric_reset(&sts->metric);
-        }
-    }
-}
-
-static rstatus_t
-stats_pool_map(struct array *stats_pool, struct array *server_pool)
-{
-    uint32_t i, npool;
-
-    npool = array_n(server_pool);
-    ASSERT(npool != 0);
-
-    THROW_STATUS(array_init(stats_pool, npool, sizeof(struct stats_pool)));
-
-    for (i = 0; i < npool; i++) {
-        struct server_pool *sp = array_get(server_pool, i);
-        struct stats_pool *stp = array_push(stats_pool);
-
-        THROW_STATUS(stats_pool_init(stp, sp));
-    }
-
-    log_debug(LOG_VVVERB, "map %"PRIu32" stats pools", npool);
-
-    return DN_OK;
+    struct stats_server *sts = &stp->server;
+    stats_metric_reset(&sts->metric);
 }
 
 static void
-stats_pool_unmap(struct array *stats_pool)
+stats_pool_unmap(struct stats_pool *stp)
 {
-    uint32_t i, npool;
-
-    npool = array_n(stats_pool);
-
-    for (i = 0; i < npool; i++) {
-        struct stats_pool *stp = array_pop(stats_pool);
-        stats_metric_deinit(&stp->metric);
-        stats_server_unmap(&stp->server);
-    }
-    array_deinit(stats_pool);
-
-    log_debug(LOG_VVVERB, "unmap %"PRIu32" stats pool", npool);
+    stats_metric_deinit(&stp->metric);
+    stats_server_unmap(&stp->server);
 }
 
 static rstatus_t
@@ -330,7 +265,6 @@ stats_create_bufs(struct stats *st)
     uint32_t pool_extra = 8;        /* '"pool_name": { ' + ' }' */
     uint32_t server_extra = 8;      /* '"server_name": { ' + ' }' */
     size_t size = 0;
-    uint32_t i;
 
     ASSERT(st->buf.data == NULL && st->buf.size == 0);
 
@@ -422,39 +356,37 @@ stats_create_bufs(struct stats *st)
     size += int64_max_digits;
     size += key_value_extra;
 
-    /* server pools */
-    for (i = 0; i < array_n(&st->sum); i++) {
-        struct stats_pool *stp = array_get(&st->sum, i);
-        uint32_t j;
+    size += st->dyn_memory_str.len;
+    size += int64_max_digits;
+    size += key_value_extra;
 
-        size += stp->name.len;
-        size += pool_extra;
+    struct stats_pool *stp = &st->sum;
+    uint32_t j;
 
-        for (j = 0; j < array_n(&stp->metric); j++) {
-            struct stats_metric *stm = array_get(&stp->metric, j);
+    size += stp->name.len;
+    size += pool_extra;
 
-            size += stm->name.len;
-            size += int64_max_digits;
-            size += key_value_extra;
-        }
+    for (j = 0; j < array_n(&stp->metric); j++) {
+        struct stats_metric *stm = array_get(&stp->metric, j);
 
-        /* servers per pool */
-        for (j = 0; j < array_n(&stp->server); j++) {
-            struct stats_server *sts = array_get(&stp->server, j);
-            uint32_t k;
+        size += stm->name.len;
+        size += int64_max_digits;
+        size += key_value_extra;
+    }
 
-            size += sts->name.len;
-            size += server_extra;
+    /* servers per pool */
+    struct stats_server *sts = &stp->server;
+    uint32_t k;
 
-            for (k = 0; k < array_n(&sts->metric); k++) {
-                struct stats_metric *stm = array_get(&sts->metric, k);
+    size += sts->name.len;
+    size += server_extra;
 
-                size += stm->name.len;
-                size += int64_max_digits;
-                size += key_value_extra;
-            }
-        }
+    for (k = 0; k < array_n(&sts->metric); k++) {
+        struct stats_metric *stm = array_get(&sts->metric, k);
 
+        size += stm->name.len;
+        size += int64_max_digits;
+        size += key_value_extra;
     }
 
     /* footer */
@@ -519,6 +451,34 @@ stats_add_string(struct stats_buffer *buf, struct string *key, struct string *va
 }
 
 static rstatus_t
+stats_add_num_last(struct stats_buffer *buf, struct string *key, int64_t val, bool last)
+{
+    uint8_t *pos;
+    size_t room;
+    int n;
+
+    pos = buf->data + buf->len;
+    room = buf->size - buf->len - 1;
+
+    if (!last) {
+        n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
+                       val);
+    } else {
+        n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64"\n", key->len, key->data,
+                       val);
+    }
+
+    if (n < 0 || n >= (int)room) {
+        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
+        return DN_ERROR;
+    }
+
+    buf->len += (size_t)n;
+
+    return DN_OK;
+}
+
+static rstatus_t
 stats_add_num_str(struct stats_buffer *buf, const char *key, int64_t val)
 {
     uint8_t *pos;
@@ -540,23 +500,12 @@ stats_add_num_str(struct stats_buffer *buf, const char *key, int64_t val)
 static rstatus_t
 stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
 {
-    uint8_t *pos;
-    size_t room;
-    int n;
+	if (stats_add_num_last(buf,key, val, false) == DN_ERROR) {
+		return DN_ERROR;
+	}
 
-    pos = buf->data + buf->len;
-    room = buf->size - buf->len - 1;
+	return DN_OK;
 
-    n = dn_snprintf(pos, room, "\"%.*s\":%"PRId64",\n", key->len, key->data,
-                    val);
-    if (n < 0 || n >= (int)room) {
-        log_debug(LOG_ERR, "no room size:%u len %u", buf->size, buf->len);
-        return DN_ERROR;
-    }
-
-    buf->len += (size_t)n;
-
-    return DN_OK;
 }
 
 static rstatus_t
@@ -603,30 +552,30 @@ stats_add_header(struct stats *st)
                  (int64_t)st->payload_size_histo.mean));
 
     THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_region_rtt",
-                                   (int64_t)st->cross_region_latency_histo.mean));
+                (int64_t)st->cross_region_latency_histo.mean));
     THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_region_rtt",
-                                   (int64_t)st->cross_region_latency_histo.val_99th));
+                (int64_t)st->cross_region_latency_histo.val_99th));
     THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_zone_latency",
-                                   (int64_t)st->cross_zone_latency_histo.mean));
+                (int64_t)st->cross_zone_latency_histo.mean));
     THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_zone_latency",
-                                   (int64_t)st->cross_zone_latency_histo.val_99th));
+                (int64_t)st->cross_zone_latency_histo.val_99th));
     THROW_STATUS(stats_add_num_str(&st->buf, "average_server_latency",
-                                   (int64_t)st->server_latency_histo.mean));
+                (int64_t)st->server_latency_histo.mean));
     THROW_STATUS(stats_add_num_str(&st->buf, "99_server_latency",
-                                   (int64_t)st->server_latency_histo.val_99th));
+                (int64_t)st->server_latency_histo.val_99th));
 
     THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_region_queue_wait",
-                                   (int64_t)st->cross_region_queue_wait_time_histo.mean));
+                (int64_t)st->cross_region_queue_wait_time_histo.mean));
     THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_region_queue_wait",
-                                   (int64_t)st->cross_region_queue_wait_time_histo.val_99th));
+                (int64_t)st->cross_region_queue_wait_time_histo.val_99th));
     THROW_STATUS(stats_add_num_str(&st->buf, "average_cross_zone_queue_wait",
-                                   (int64_t)st->cross_zone_queue_wait_time_histo.mean));
+                (int64_t)st->cross_zone_queue_wait_time_histo.mean));
     THROW_STATUS(stats_add_num_str(&st->buf, "99_cross_zone_queue_wait",
-                                   (int64_t)st->cross_zone_queue_wait_time_histo.val_99th));
+                (int64_t)st->cross_zone_queue_wait_time_histo.val_99th));
     THROW_STATUS(stats_add_num_str(&st->buf, "average_server_queue_wait",
-                                   (int64_t)st->server_queue_wait_time_histo.mean));
+                (int64_t)st->server_queue_wait_time_histo.mean));
     THROW_STATUS(stats_add_num_str(&st->buf, "99_server_queue_wait",
-                                   (int64_t)st->server_queue_wait_time_histo.val_99th));
+                (int64_t)st->server_queue_wait_time_histo.val_99th));
 
     THROW_STATUS(stats_add_num(&st->buf, &st->client_out_queue_99,
                  (int64_t)st->client_out_queue.val_99th));
@@ -652,6 +601,8 @@ stats_add_header(struct stats *st)
                  (int64_t)st->alloc_mbufs));
     THROW_STATUS(stats_add_num(&st->buf, &st->free_mbufs_str,
                  (int64_t)st->free_mbufs));
+    THROW_STATUS(stats_add_num(&st->buf, &st->dyn_memory_str,
+                 (int64_t)st->dyn_memory));
 
     return DN_OK;
 }
@@ -735,14 +686,19 @@ stats_end_nesting(struct stats_buffer *buf, bool arr)
 }
 
 static rstatus_t
-stats_copy_metric(struct stats *st, struct array *metric)
+stats_copy_metric(struct stats *st, struct array *metric, bool trim_comma)
 {
     uint32_t i;
 
-    for (i = 0; i < array_n(metric); i++) {
+    // Do not include last element in loop as we need to check if it gets a comma
+    for (i = 0; i < array_n(metric) - 1; i++) {
         struct stats_metric *stm = array_get(metric, i);
         THROW_STATUS(stats_add_num(&st->buf, &stm->name, stm->value.counter));
     }
+
+    // Last metric inside dyn_o_mite:{} does not get a comma
+    struct stats_metric *stm = array_get(metric, array_n(metric) - 1);
+    THROW_STATUS(stats_add_num_last(&st->buf, &stm->name, stm->value.counter, trim_comma));
 
     return DN_OK;
 }
@@ -784,35 +740,25 @@ stats_aggregate_metric(struct array *dst, struct array *src)
 static void
 stats_aggregate(struct stats *st)
 {
-    uint32_t i;
-
     if (st->aggregate == 0) {
-        log_debug(LOG_PVERB, "skip aggregate of shadow %p to sum %p as "
-                  "generator is slow", st->shadow.elem, st->sum.elem);
+        log_debug(LOG_PVERB, "skip aggregate of shadow to sum as generator is slow");
         return;
     }
 
-    log_debug(LOG_PVERB, "aggregate stats shadow %p to sum %p", st->shadow.elem,
-              st->sum.elem);
+    log_debug(LOG_PVERB, "aggregate stats shadow %p to sum %p", &st->shadow,
+              &st->sum);
 
-    for (i = 0; i < array_n(&st->shadow); i++) {
-        struct stats_pool *stp1, *stp2;
-        uint32_t j;
+    struct stats_pool  *stp1 = &st->shadow;
+    struct stats_pool  *stp2 = &st->sum;
+    stats_aggregate_metric(&st->sum.metric, &st->shadow.metric);
 
-        stp1 = array_get(&st->shadow, i);
-        stp2 = array_get(&st->sum, i);
-        stats_aggregate_metric(&stp2->metric, &stp1->metric);
+    struct stats_server *sts1, *sts2;
 
-        for (j = 0; j < array_n(&stp1->server); j++) {
-            struct stats_server *sts1, *sts2;
+    sts1 = &stp1->server;
+    sts2 = &stp2->server;
+    stats_aggregate_metric(&sts2->metric, &sts1->metric);
 
-            sts1 = array_get(&stp1->server, j);
-            sts2 = array_get(&stp2->server, j);
-            stats_aggregate_metric(&sts2->metric, &sts1->metric);
-        }
-    }
-
-    static int64_t last_reset = 0;
+    static msec_t last_reset = 0;
     if (!last_reset)
         last_reset = dn_msec_now();
     if ((last_reset + 5*60*1000) < dn_msec_now()) {
@@ -847,36 +793,29 @@ stats_aggregate(struct stats *st)
 static rstatus_t
 stats_make_info_rsp(struct stats *st)
 {
-    uint32_t i;
 
     THROW_STATUS(stats_add_header(st));
 
-    for (i = 0; i < array_n(&st->sum); i++) {
-        struct stats_pool *stp = array_get(&st->sum, i);
-        uint32_t j;
+    struct stats_pool *stp = &st->sum;
 
-        THROW_STATUS(stats_begin_nesting(&st->buf, &stp->name, false));
-        /* copy pool metric from sum(c) to buffer */
-        THROW_STATUS(stats_copy_metric(st, &stp->metric));
+    THROW_STATUS(stats_begin_nesting(&st->buf, &stp->name, false));
+    /* copy pool metric from sum(c) to buffer */
+    THROW_STATUS(stats_copy_metric(st, &stp->metric, false));
 
-        for (j = 0; j < array_n(&stp->server); j++) {
-            struct stats_server *sts = array_get(&stp->server, j);
+    struct stats_server *sts = &stp->server;
 
-            THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
-            /* copy server metric from sum(c) to buffer */
-            THROW_STATUS(stats_copy_metric(st, &sts->metric));
-            THROW_STATUS(stats_end_nesting(&st->buf, false));
-        }
+    THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
+    /* copy server metric from sum(c) to buffer */
+    THROW_STATUS(stats_copy_metric(st, &sts->metric, true));
+    THROW_STATUS(stats_end_nesting(&st->buf, false));
 
-        THROW_STATUS(stats_end_nesting(&st->buf, false));
-    }
-
+    THROW_STATUS(stats_end_nesting(&st->buf, false));
     THROW_STATUS(stats_add_footer(&st->buf));
 
     return DN_OK;
 }
 
-static void
+static rstatus_t
 get_host_from_pname(struct string *host, struct string *pname)
 {
     uint8_t *found = dn_strchr(pname->data,
@@ -885,18 +824,18 @@ get_host_from_pname(struct string *host, struct string *pname)
     if (found) {
         size_t hostlen = found - pname->data;
         THROW_STATUS(string_copy(host, pname->data, hostlen));
-        return;
+        return DN_OK;
     }
     THROW_STATUS(string_copy(host, pname->data, pname->len));
-    return;
+    return DN_OK;
 }
 
 static rstatus_t
-stats_add_node_host(struct stats *st, struct node *node)
+stats_add_node_host(struct stats *st, struct gossip_node *node)
 {
     struct string host_str;
     string_set_text(&host_str, "host");
-    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    struct server_pool *sp = &st->ctx->pool;
     struct string host;
     // pname is host:port. for local its 0.0.0.0:port
     // so try to get the hostname if local otherwise use whats in pname
@@ -913,11 +852,11 @@ stats_add_node_host(struct stats *st, struct node *node)
 }
 
 static rstatus_t
-stats_add_node_name(struct stats *st, struct node *node)
+stats_add_node_name(struct stats *st, struct gossip_node *node)
 {
     struct string name_str;
     string_set_text(&name_str, "name");
-    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    struct server_pool *sp = &st->ctx->pool;
     // name is the ip address
     if (node->is_local) {
         // get the ip aka name
@@ -937,7 +876,7 @@ stats_add_node_name(struct stats *st, struct node *node)
 }
 
 static rstatus_t
-stats_add_node_details(struct stats *st, struct node *node)
+stats_add_node_details(struct stats *st, struct gossip_node *node)
 {
     struct string port_str, token_str;
     string_set_text(&port_str, "port");
@@ -946,7 +885,7 @@ stats_add_node_details(struct stats *st, struct node *node)
     THROW_STATUS(stats_add_node_name(st, node));
     THROW_STATUS(stats_add_node_host(st, node));
     THROW_STATUS(stats_add_num(&st->clus_desc_buf, &port_str, node->port));
-    THROW_STATUS(stats_add_num(&st->clus_desc_buf, &token_str, *(node->token.mag)));
+    THROW_STATUS(stats_add_num_last(&st->clus_desc_buf, &token_str, *(node->token.mag), true));
     return DN_OK;
 }
 
@@ -961,7 +900,7 @@ stats_add_rack_details(struct stats *st, struct gossip_rack *rack)
     THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, &servers_str, true));
     uint32_t ni;
     for(ni = 0; ni < array_n(&rack->nodes); ni++) {
-        struct node *node = array_get(&rack->nodes, ni);
+        struct gossip_node *node = array_get(&rack->nodes, ni);
         THROW_STATUS(stats_begin_nesting(&st->clus_desc_buf, NULL, false));
         THROW_STATUS(stats_add_node_details(st, node));
         THROW_STATUS(stats_end_nesting(&st->clus_desc_buf, false));
@@ -995,7 +934,7 @@ stats_add_dc_details(struct stats *st, struct gossip_dc *dc)
 static rstatus_t
 stats_resize_clus_desc_buf(struct stats *st)
 {
-    struct server_pool *sp = array_get(&st->ctx->pool, 0);
+    struct server_pool *sp = &st->ctx->pool;
     ASSERT(sp);
     size_t size = 1024 * array_n(&sp->peers);
     size = DN_ALIGN(size, DN_ALIGNMENT);
@@ -1207,7 +1146,7 @@ stats_http_rsp(int sd, uint8_t *content, size_t len)
     ssize_t n;
     uint8_t http_header[MAX_HTTP_HEADER_SIZE];
     memset( (void*)http_header, (int)'\0', MAX_HTTP_HEADER_SIZE );
-    n = dn_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %u \r\n\r\n", header_str.len, header_str.data, len);
+    n = dn_snprintf(http_header, MAX_HTTP_HEADER_SIZE, "%.*s %lu \r\n\r\n", header_str.len, header_str.data, len);
 
     if (n < 0 || n >= MAX_HTTP_HEADER_SIZE) {
            return DN_ERROR;
@@ -1319,12 +1258,12 @@ stats_send_rsp(struct stats *st)
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_PEER_DOWN || cmd == CMD_PEER_UP || cmd == CMD_PEER_RESET) {
         log_debug(LOG_VERB, "st_cmd.req_data '%.*s' ", st_cmd.req_data);
-        struct server_pool *sp = array_get(&st->ctx->pool, 0);
+        struct server_pool *sp = &st->ctx->pool;
         uint32_t i, len;
 
         //I think it is ok to keep this simple without a synchronization
         for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-            struct server *peer = array_get(&sp->peers, i);
+            struct node *peer = array_get(&sp->peers, i);
             log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
 
             if (string_compare(&st_cmd.req_data, &all) == 0) {
@@ -1457,7 +1396,7 @@ stats_stop_aggregator(struct stats *st)
 
 struct stats *
 stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
-             char *source, struct array *server_pool, struct context *ctx)
+             char *source, struct server_pool *sp, struct context *ctx)
 {
     rstatus_t status;
     struct stats *st;
@@ -1476,10 +1415,6 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->buf.len = 0;
     st->buf.data = NULL;
     st->buf.size = 0;
-
-    array_null(&st->current);
-    array_null(&st->shadow);
-    array_null(&st->sum);
 
     st->tid = (pthread_t) -1;
     st->sd = -1;
@@ -1527,9 +1462,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     string_set_text(&st->free_msgs_str, "free_msgs");
     string_set_text(&st->alloc_mbufs_str, "alloc_mbufs");
     string_set_text(&st->free_mbufs_str, "free_mbufs");
-
-    //only display the first pool
-    struct server_pool *sp = (struct server_pool*) array_get(server_pool, 0);
+    string_set_text(&st->dyn_memory_str, "dyn_memory");
 
     string_set_text(&st->rack_str, "rack");
 
@@ -1565,20 +1498,21 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
     st->free_msgs = 0;
     st->alloc_mbufs = 0;
     st->free_mbufs = 0;
+    st->dyn_memory = 0;
 
     /* map server pool to current (a), shadow (b) and sum (c) */
 
-    status = stats_pool_map(&st->current, server_pool);
+    status = stats_pool_init(&st->current, sp);
     if (status != DN_OK) {
         goto error;
     }
 
-    status = stats_pool_map(&st->shadow, server_pool);
+    status = stats_pool_init(&st->shadow, sp);
     if (status != DN_OK) {
         goto error;
     }
 
-    status = stats_pool_map(&st->sum, server_pool);
+    status = stats_pool_init(&st->sum, sp);
     if (status != DN_OK) {
         goto error;
     }
@@ -1616,24 +1550,25 @@ stats_destroy(struct stats *st)
 void
 stats_swap(struct stats *st)
 {
+    struct rusage r_usage;
     if (!stats_enabled) {
         return;
     }
 
     if (st->aggregate == 1) {
         log_debug(LOG_PVERB, "skip swap of current %p shadow %p as aggregator "
-                  "is busy", st->current.elem, st->shadow.elem);
+                  "is busy", &st->current, &st->shadow);
         return;
     }
 
     if (st->updated == 0) {
         log_debug(LOG_PVERB, "skip swap of current %p shadow %p as there is "
-                  "nothing new", st->current.elem, st->shadow.elem);
+                  "nothing new", &st->current, &st->shadow);
         return;
     }
 
-    log_debug(LOG_PVERB, "swap stats current %p shadow %p", st->current.elem,
-              st->shadow.elem);
+    log_debug(LOG_PVERB, "swap stats current %p shadow %p", &st->current,
+              &st->shadow);
 
 
     //set the latencies
@@ -1663,7 +1598,13 @@ stats_swap(struct stats *st)
     st->alloc_mbufs = mbuf_alloc_get_count();
     st->free_mbufs = mbuf_free_queue_size();
 
-    array_swap(&st->current, &st->shadow);
+    getrusage(RUSAGE_SELF,&r_usage);
+    st->dyn_memory  = r_usage.ru_maxrss;
+
+    // swap current and shadow
+    struct stats_pool temp = st->current;
+    st->current = st->shadow;
+    st->shadow = temp;
 
     /*
      * Reset current (a) stats before giving it back to generator to keep
@@ -1676,67 +1617,43 @@ stats_swap(struct stats *st)
 
 }
 
-uint64_t _stats_pool_get_ts(struct context *ctx, struct server_pool *pool,
-                     stats_pool_field_t fidx)
+uint64_t
+_stats_pool_get_ts(struct context *ctx,
+                   stats_pool_field_t fidx)
 {
    struct stats *st = ctx->stats;
-   struct stats_pool *stp;
-   struct stats_metric *stm;
-   uint32_t pidx = pool->idx;
-
-   stp = array_get(&st->current, pidx);
-   stm = array_get(&stp->metric, fidx);
-
+   struct stats_pool *stp = &st->current;
+   struct stats_metric *stm = array_get(&stp->metric, fidx);
    return stm->value.counter;
 }
 
-int64_t _stats_pool_get_val(struct context *ctx, struct server_pool *pool,
-                     stats_pool_field_t fidx)
+int64_t
+_stats_pool_get_val(struct context *ctx,
+                    stats_pool_field_t fidx)
 {
-   struct stats *st = ctx->stats;
-   struct stats_pool *stp;
-   struct stats_metric *stm;
-   uint32_t pidx = pool->idx;
-
-   stp = array_get(&st->current, pidx);
-   stm = array_get(&stp->metric, fidx);
-
-   return stm->value.counter;
+    struct stats *st = ctx->stats;
+    struct stats_pool *stp = &st->current;
+    struct stats_metric *stm = array_get(&stp->metric, fidx);
+    return stm->value.counter;
 }
 
 
 static struct stats_metric *
-stats_pool_to_metric(struct context *ctx, struct server_pool *pool,
+stats_pool_to_metric(struct context *ctx,
                      stats_pool_field_t fidx)
 {
-    struct stats *st;
-    struct stats_pool *stp;
-    struct stats_metric *stm;
-    uint32_t pidx;
-
-    pidx = pool->idx;
-
-    st = ctx->stats;
-    stp = array_get(&st->current, pidx);
-    stm = array_get(&stp->metric, fidx);
-
+    struct stats *st = ctx->stats;
+    struct stats_pool *stp = &st->current;
+    struct stats_metric *stm = array_get(&stp->metric, fidx);
     st->updated = 1;
-
-    log_debug(LOG_VVVERB, "metric '%.*s' in pool %"PRIu32"", stm->name.len,
-              stm->name.data, pidx);
-
     return stm;
 }
 
-
-
 void
-_stats_pool_incr(struct context *ctx, struct server_pool *pool,
+_stats_pool_incr(struct context *ctx,
                  stats_pool_field_t fidx)
 {
-    struct stats_metric *stm;
-
-    stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter++;
@@ -1745,16 +1662,11 @@ _stats_pool_incr(struct context *ctx, struct server_pool *pool,
               stm->name.data, stm->value.counter);
 }
 
-
-
-
 void
-_stats_pool_decr(struct context *ctx, struct server_pool *pool,
+_stats_pool_decr(struct context *ctx,
                  stats_pool_field_t fidx)
 {
-    struct stats_metric *stm;
-
-    stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter--;
@@ -1764,12 +1676,10 @@ _stats_pool_decr(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_incr_by(struct context *ctx, struct server_pool *pool,
+_stats_pool_incr_by(struct context *ctx,
                     stats_pool_field_t fidx, int64_t val)
 {
-    struct stats_metric *stm;
-
-    stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter += val;
@@ -1779,12 +1689,10 @@ _stats_pool_incr_by(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_decr_by(struct context *ctx, struct server_pool *pool,
+_stats_pool_decr_by(struct context *ctx,
                     stats_pool_field_t fidx, int64_t val)
 {
-    struct stats_metric *stm;
-
-    stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter -= val;
@@ -1794,12 +1702,10 @@ _stats_pool_decr_by(struct context *ctx, struct server_pool *pool,
 }
 
 void
-_stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
+_stats_pool_set_ts(struct context *ctx,
                    stats_pool_field_t fidx, int64_t val)
 {
-    struct stats_metric *stm;
-
-    stm = stats_pool_to_metric(ctx, pool, fidx);
+    struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_TIMESTAMP);
     stm->value.timestamp = val;
@@ -1808,34 +1714,23 @@ _stats_pool_set_ts(struct context *ctx, struct server_pool *pool,
               stm->name.data, stm->value.timestamp);
 }
 
-uint64_t _stats_server_get_ts(struct context *ctx, struct server *server,
+uint64_t
+_stats_server_get_ts(struct context *ctx,
                      stats_server_field_t fidx)
 {
-   struct stats *st;
-   struct stats_pool *stp;
-   struct stats_server *sts;
-   struct stats_metric *stm;
-   uint32_t pidx, sidx;
-
-   sidx = server->idx;
-   pidx = server->owner->idx;
-
-   st = ctx->stats;
-   stp = array_get(&st->current, pidx);
-   sts = array_get(&stp->server, sidx);
-   stm = array_get(&sts->metric, fidx);
-
+   struct stats *st = ctx->stats;
+   struct stats_pool *stp = &st->current;
+   struct stats_server *sts = &stp->server;
+   struct stats_metric *stm = array_get(&sts->metric, fidx);
 
    return stm->value.timestamp;
 }
 
 void
-_stats_pool_set_val(struct context *ctx, struct server_pool *pool,
-                      stats_pool_field_t fidx, int64_t val)
+_stats_pool_set_val(struct context *ctx,
+                    stats_pool_field_t fidx, int64_t val)
 {
-   struct stats_metric *stm;
-
-   stm = stats_pool_to_metric(ctx, pool, fidx);
+   struct stats_metric *stm = stats_pool_to_metric(ctx, fidx);
 
    stm->value.counter = val;
 
@@ -1843,61 +1738,41 @@ _stats_pool_set_val(struct context *ctx, struct server_pool *pool,
              stm->name.data, stm->value.counter);
 }
 
-int64_t _stats_server_get_val(struct context *ctx, struct server *server,
-      stats_server_field_t fidx)
+int64_t
+_stats_server_get_val(struct context *ctx,
+                      stats_server_field_t fidx)
 {
-   struct stats *st;
-   struct stats_pool *stp;
-   struct stats_server *sts;
-   struct stats_metric *stm;
-   uint32_t pidx, sidx;
-
-   sidx = server->idx;
-   pidx = server->owner->idx;
-
-   st = ctx->stats;
-   stp = array_get(&st->current, pidx);
-   sts = array_get(&stp->server, sidx);
-   stm = array_get(&sts->metric, fidx);
-
+   struct stats *st = ctx->stats;
+   struct stats_pool *stp = &st->current;
+   struct stats_server *sts = &stp->server;
+   struct stats_metric *stm = array_get(&sts->metric, fidx);
 
    return stm->value.counter;
 }
 
 static struct stats_metric *
-stats_server_to_metric(struct context *ctx, struct server *server,
+stats_server_to_metric(struct context *ctx,
                        stats_server_field_t fidx)
 {
-    struct stats *st;
-    struct stats_pool *stp;
-    struct stats_server *sts;
-    struct stats_metric *stm;
-    uint32_t pidx, sidx;
-
-    sidx = server->idx;
-    pidx = server->owner->idx;
-
-    st = ctx->stats;
-    stp = array_get(&st->current, pidx);
-    sts = array_get(&stp->server, sidx);
-    stm = array_get(&sts->metric, fidx);
+   struct stats *st = ctx->stats;
+   struct stats_pool *stp = &st->current;
+   struct stats_server *sts = &stp->server;
+   struct stats_metric *stm = array_get(&sts->metric, fidx);
 
     st->updated = 1;
 
-    log_debug(LOG_VVVERB, "metric '%.*s' in pool %"PRIu32" server %"PRIu32"",
-              stm->name.len, stm->name.data, pidx, sidx);
+    log_debug(LOG_VVVERB, "metric '%.*s' for server",
+              stm->name.len, stm->name.data);
 
     return stm;
 }
 
 void
-_stats_server_incr(struct context *ctx, struct server *server,
+_stats_server_incr(struct context *ctx,
                    stats_server_field_t fidx)
 {
     
-    struct stats_metric *stm;
-
-    stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter++;
@@ -1908,13 +1783,11 @@ _stats_server_incr(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_decr(struct context *ctx, struct server *server,
+_stats_server_decr(struct context *ctx,
                    stats_server_field_t fidx)
 {
 
-    struct stats_metric *stm;
-
-    stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter--;
@@ -1925,13 +1798,11 @@ _stats_server_decr(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_incr_by(struct context *ctx, struct server *server,
+_stats_server_incr_by(struct context *ctx,
                       stats_server_field_t fidx, int64_t val)
 {
 
-    struct stats_metric *stm;
-
-    stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_COUNTER || stm->type == STATS_GAUGE);
     stm->value.counter += val;
@@ -1942,13 +1813,11 @@ _stats_server_incr_by(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_decr_by(struct context *ctx, struct server *server,
+_stats_server_decr_by(struct context *ctx,
                       stats_server_field_t fidx, int64_t val)
 {
 
-    struct stats_metric *stm;
-
-    stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_GAUGE);
     stm->value.counter -= val;
@@ -1959,13 +1828,11 @@ _stats_server_decr_by(struct context *ctx, struct server *server,
 }
 
 void
-_stats_server_set_ts(struct context *ctx, struct server *server,
-                     stats_server_field_t fidx, int64_t val)
+_stats_server_set_ts(struct context *ctx,
+                     stats_server_field_t fidx, uint64_t val)
 {
 
-    struct stats_metric *stm;
-
-    stm = stats_server_to_metric(ctx, server, fidx);
+    struct stats_metric *stm = stats_server_to_metric(ctx, fidx);
 
     ASSERT(stm->type == STATS_TIMESTAMP);
     stm->value.timestamp = val;

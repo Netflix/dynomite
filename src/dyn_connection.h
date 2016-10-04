@@ -95,6 +95,7 @@ struct conn {
     void               *owner;        /* connection owner - server_pool / server */
 
     int                sd;            /* socket descriptor */
+    struct string      pname;
     int                family;        /* socket address family */
     socklen_t          addrlen;       /* socket length */
     struct sockaddr    *addr;         /* socket address (ref in server or server_pool) */
@@ -128,12 +129,9 @@ struct conn {
     unsigned           dnode_secured:1;      /* is a secured connection? */
     unsigned           dnode_crypto_state:1; /* crypto state */
     unsigned char      aes_key[50]; //aes_key[34];              /* a place holder for AES key */
-
-    int				   data_store;
     unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
-    uint32_t           last_received;         /* last ts to receive a byte */
     uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
     uint32_t           non_bytes_recv;        /* #times or epoll triggers we receive no bytes */
     //uint32_t           non_bytes_send;        /* #times or epoll triggers that we are not able to send any bytes */
@@ -143,22 +141,7 @@ struct conn {
     connection_type_t  type;
 };
 
-static inline char *
-conn_get_type_string(struct conn *conn)
-{
-    switch(conn->type) {
-        case CONN_UNSPECIFIED: return "UNSPEC";
-        case CONN_PROXY : return "PROXY";
-        case CONN_CLIENT: return "CLIENT";
-        case CONN_SERVER: return "SERVER";
-        case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
-        case CONN_DNODE_PEER_CLIENT: return conn->same_dc ?
-                                            "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
-        case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
-                                            "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
-    }
-    return "INVALID";
-}
+char * conn_get_type_string(struct conn *conn);
 
 static inline rstatus_t
 conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
@@ -211,11 +194,14 @@ void conn_set_read_consistency(struct conn *conn, consistency_t cons);
 consistency_t conn_get_read_consistency(struct conn *conn);
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *test_conn_get(void);
-struct conn *conn_get(void *owner, bool client, int data_store);
+struct conn *conn_get(void *owner, bool client);
 struct conn *conn_get_proxy(void *owner);
-struct conn *conn_get_peer(void *owner, bool client, int data_store);
+struct conn *conn_get_peer(void *owner, bool client);
 struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
+rstatus_t conn_listen(struct context *ctx, struct conn *p);
+rstatus_t conn_connect(struct context *ctx, struct conn *conn);
+
 ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv_data(struct conn *conn, struct array *sendv, size_t nsend);
 void conn_init(void);

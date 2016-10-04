@@ -422,4 +422,73 @@ error:
     evp = -1;
 }
 
+void
+event_loop_entropy(event_entropy_cb_t cb, void *arg)
+{
+    struct entropy *ent = arg;
+    int status, evp;
+    port_event_t event;
+    struct timespec ts, *tsp;
+
+    evp = port_create();
+    if (evp < 0) {
+        log_error("port create failed: %s", strerror(errno));
+        return;
+    }
+
+    status = port_associate(evp, PORT_SOURCE_FD, ent->sd, POLLIN, NULL);
+    if (status < 0) {
+        log_error("port associate on evp %d sd %d failed: %s", evp, ent->sd,
+                  strerror(errno));
+        goto error;
+    }
+
+    /* port_getn should block indefinitely if ent->interval < 0 */
+    if (ent->interval < 0) {
+        tsp = NULL;
+    } else {
+        tsp = &ts;
+        tsp->tv_sec = ent->interval / 1000LL;
+        tsp->tv_nsec = (ent->interval % 1000LL) * 1000000LL;
+    }
+
+
+    for (;;) {
+        unsigned int nreturned = 1;
+
+        status = port_getn(evp, &event, 1, &nreturned, tsp);
+        if (status != DN_OK) {
+            if (errno == EINTR || errno == EAGAIN) {
+                continue;
+            }
+
+            if (errno != ETIME) {
+                log_error("port getn on evp %d with m %d failed: %s", evp,
+                          ent->sd, strerror(errno));
+                goto error;
+            }
+        }
+
+        ASSERT(nreturned <= 1);
+
+        if (nreturned == 1) {
+            /* re-associate monitoring descriptor with the port */
+            status = port_associate(evp, PORT_SOURCE_FD, ent->sd, POLLIN, NULL);
+            if (status < 0) {
+                log_error("port associate on evp %d sd %d failed: %s", evp, ent->sd,
+                          strerror(errno));
+            }
+        }
+
+        cb(ent, &nreturned);
+    }
+
+error:
+    status = close(evp);
+    if (status < 0) {
+        log_error("close evp %d failed, ignored: %s", evp, strerror(errno));
+    }
+    evp = -1;
+}
+
 #endif /* DN_HAVE_EVENT_PORTS */

@@ -149,7 +149,32 @@ static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
-int8_t g_timeout_factor = 1;
+uint8_t g_timeout_factor = 1;
+func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
+func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
+func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
+func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
+
+void
+set_datastore_ops(void)
+{
+    switch(g_data_store) {
+        case DATA_REDIS:
+            g_pre_splitcopy = redis_pre_splitcopy;
+            g_post_splitcopy = redis_post_splitcopy;
+            g_pre_coalesce = redis_pre_coalesce;
+            g_post_coalesce = redis_post_coalesce;
+            break;
+        case DATA_MEMCACHE:
+            g_pre_splitcopy = memcache_pre_splitcopy;
+            g_post_splitcopy = memcache_post_splitcopy;
+            g_pre_coalesce = memcache_pre_coalesce;
+            g_post_coalesce = memcache_post_coalesce;
+            break;
+        default:
+            return;
+    }
+}
 
 static inline rstatus_t
 msg_cant_handle_response(struct msg *req, struct msg *rsp)
@@ -186,10 +211,10 @@ void
 msg_tmo_insert(struct msg *msg, struct conn *conn)
 {
     struct rbnode *node;
-    int timeout;
+    msec_t timeout;
 
     //ASSERT(msg->request);
-    ASSERT(!msg->quit && !msg->noreply);
+    ASSERT(!msg->quit && msg->expect_datastore_reply);
 
     timeout = conn->dyn_mode? dnode_peer_timeout(msg, conn) : server_timeout(conn);
     if (timeout <= 0) {
@@ -256,6 +281,7 @@ _msg_get(struct conn *conn, const char *const caller)
 
     alloc_msg_count++;
 
+
     if (alloc_msg_count % 1000 == 0)
         log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
                  alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
@@ -274,7 +300,7 @@ done:
     msg->parent_id = 0;
     msg->peer = NULL;
     msg->owner = NULL;
-    msg->stime_in_microsec = 0L;
+    msg->stime_in_microsec = 0ULL;
     msg->request_send_time = 0L;
     msg->request_inqueue_enqueue_time_us = 0L;
     msg->awaiting_rsps = 0;
@@ -291,11 +317,6 @@ done:
 
     msg->parser = NULL;
     msg->result = MSG_PARSE_OK;
-
-    msg->pre_splitcopy = NULL;
-    msg->post_splitcopy = NULL;
-    msg->pre_coalesce = NULL;
-    msg->post_coalesce = NULL;
 
     msg->type = MSG_UNKNOWN;
 
@@ -321,7 +342,7 @@ done:
     msg->ferror = 0;
     msg->request = 0;
     msg->quit = 0;
-    msg->noreply = 0;
+    msg->expect_datastore_reply = 1;
     msg->done = 0;
     msg->fdone = 0;
     msg->first_fragment = 0;
@@ -329,7 +350,6 @@ done:
     msg->swallow = 0;
     msg->dnode_header_prepended = 0;
     msg->rsp_sent = 0;
-    msg->data_store = DATA_REDIS;
 
     //dynomite
     msg->is_read = 1;
@@ -353,7 +373,7 @@ size_t msg_free_queue_size(void)
 }
 
 struct msg *
-msg_get(struct conn *conn, bool request, int data_store, const char * const caller)
+msg_get(struct conn *conn, bool request, const char * const caller)
 {
     struct msg *msg;
 
@@ -364,9 +384,8 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
 
     msg->owner = conn;
     msg->request = request ? 1 : 0;
-    msg->data_store = data_store;
 
-    if (data_store == DATA_REDIS) {
+    if (g_data_store == DATA_REDIS) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -380,11 +399,7 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
                msg->parser = redis_parse_rsp;
             }
         }
-        msg->pre_splitcopy = redis_pre_splitcopy;
-        msg->post_splitcopy = redis_post_splitcopy;
-        msg->pre_coalesce = redis_pre_coalesce;
-        msg->post_coalesce = redis_post_coalesce;
-    } else if (data_store == DATA_MEMCACHE) {
+    } else if (g_data_store == DATA_MEMCACHE) {
         if (request) {
             if (conn->dyn_mode) {
                msg->parser = dyn_parse_req;
@@ -398,12 +413,8 @@ msg_get(struct conn *conn, bool request, int data_store, const char * const call
                msg->parser = memcache_parse_rsp;
             }
         }
-        msg->pre_splitcopy = memcache_pre_splitcopy;
-        msg->post_splitcopy = memcache_post_splitcopy;
-        msg->pre_coalesce = memcache_pre_coalesce;
-        msg->post_coalesce = memcache_post_coalesce;
     } else{
-    	log_debug(LOG_VVERB,"incorrect selection of data store %d", data_store);
+    	log_debug(LOG_VVERB,"incorrect selection of data store %d", g_data_store);
     	exit(0);
     }
 
@@ -421,15 +432,9 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->parent_id = src->id;
     target->owner = src->owner;
     target->request = src->request;
-    target->data_store = src->data_store;
 
     target->parser = src->parser;
-    target->pre_splitcopy = src->pre_splitcopy;
-    target->post_splitcopy = src->post_splitcopy; 
-    target->pre_coalesce = src->pre_coalesce;
-    target->post_coalesce = src->post_coalesce;
-
-    target->noreply = src->noreply;
+    target->expect_datastore_reply = src->expect_datastore_reply;
     target->swallow = src->swallow;
     target->type = src->type;
     target->key_start = src->key_start;
@@ -469,7 +474,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? dn_strerror(err) : "unknown";
-    char *protstr = conn->data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
+    char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source = dyn_error_source(dyn_err);
 
     msg = _msg_get(conn, __FUNCTION__);
@@ -595,7 +600,8 @@ uint32_t msg_length(struct msg *msg)
     struct mbuf *mbuf;
 
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
-        count += mbuf->last - mbuf->start;
+        ASSERT(mbuf->last >= mbuf->start);
+        count += (uint32_t)(mbuf->last - mbuf->start);
     }
 
     return count;
@@ -664,6 +670,7 @@ msg_empty(struct msg *msg)
 uint32_t
 msg_payload_crc32(struct msg *msg)
 {
+    ASSERT(msg != NULL);
     // take a continous buffer crc
     uint32_t crc = 0;
     struct mbuf *mbuf;
@@ -688,7 +695,7 @@ msg_payload_crc32(struct msg *msg)
             }
         }
 
-        crc = crc32_sz(start, end - start, crc);
+        crc = crc32_sz((char *)start, end - start, crc);
     }
     return crc;
 
@@ -720,7 +727,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, conn->data_store, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -748,18 +755,18 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
            (conn->type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request);
 
-    nbuf = mbuf_split(&msg->mhdr, msg->pos, msg->pre_splitcopy, msg);
+    nbuf = mbuf_split(&msg->mhdr, msg->pos, g_pre_splitcopy, msg);
     if (nbuf == NULL) {
         return DN_ENOMEM;
     }
 
-    status = msg->post_splitcopy(msg);
+    status = g_post_splitcopy(msg);
     if (status != DN_OK) {
         mbuf_put(nbuf);
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, msg->data_store, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -824,7 +831,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
     msg->frag_owner->nfrag++;
 
     if (!conn->dyn_mode) {
-       stats_pool_incr(ctx, conn->owner, fragments);
+       stats_pool_incr(ctx, fragments);
     } else {
         
     }
