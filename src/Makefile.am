@@ -37,6 +37,7 @@ dynomite_SOURCES =			                          \
         dyn_core.c dyn_core.h                                     \
         dyn_connection.c dyn_connection.h                         \
         dyn_client.c dyn_client.h                                 \
+        dyn_dict_msg_id.h dyn_dict_msg_id.c                       \
         dyn_dnode_client.h dyn_dnode_client.c                     \
         dyn_dnode_msg.c dyn_dnode_msg.h                           \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \
@@ -82,6 +83,7 @@ dynomite_test_SOURCES =                                           \
         dyn_core.c dyn_core.h                                     \
         dyn_connection.c dyn_connection.h                         \
         dyn_client.c dyn_client.h                                 \
+        dyn_dict_msg_id.h dyn_dict_msg_id.c                       \
         dyn_dnode_client.h dyn_dnode_client.c                     \
         dyn_dnode_msg.c dyn_dnode_msg.h                           \
         dyn_dnode_peer.c  dyn_dnode_peer.h                        \

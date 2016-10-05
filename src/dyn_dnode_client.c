@@ -6,6 +6,7 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_dnode_client.h"
+#include "dyn_dict_msg_id.h"
 
 static void
 dnode_client_ref(struct conn *conn, void *owner)
@@ -29,6 +30,7 @@ dnode_client_ref(struct conn *conn, void *owner)
 
     /* owner of the client connection is the server pool */
     conn->owner = owner;
+    conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     log_debug(LOG_VVERB, "dyn: ref conn %p owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
@@ -43,6 +45,8 @@ dnode_client_unref(struct conn *conn)
 
     pool = conn->owner;
     conn->owner = NULL;
+    dictRelease(conn->outstanding_msgs_dict);
+    conn->outstanding_msgs_dict = NULL;
 
     ASSERT(pool->dn_conn_q != 0);
     pool->dn_conn_q--;
@@ -137,6 +141,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
                   msg->type);
         }
 
+        dictDelete(conn->outstanding_msgs_dict, &msg->id);
         req_put(msg);
     }
 
@@ -156,6 +161,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
                       msg->error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
             }
+            dictDelete(conn->outstanding_msgs_dict, &msg->id);
             req_put(msg);
         } else {
             msg->swallow = 1;
@@ -184,20 +190,37 @@ dnode_client_close(struct context *ctx, struct conn *conn)
 }
 
 static rstatus_t
-dnode_client_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
+dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 {
     // Forward the response to the caller which is client connection.
     rstatus_t status = DN_OK;
     struct context *ctx = conn_to_ctx(conn);
-    /* There is no hash table on the dnode client side. So we rely on rsp->peer
-       to get the corresponding request */
-    ASSERT_LOG(rsp->peer, "rsp %d:%d does not have a peer", rsp->id, rsp->parent_id);
-    struct msg *req = rsp->peer;
+
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+    // Fetch the original request
+    struct msg *req = dictFetchValue(conn->outstanding_msgs_dict, &reqid);
+    if (!req) {
+        log_notice("looks like we already cleanedup the request for %d", reqid);
+        rsp_put(rsp);
+        return DN_OK;
+    }
+
+    // dnode client has no extra logic of coalescing etc like the client/coordinator.
+    // Hence all work for this request is done at this time
     req->peer = NULL;
     req->selected_rsp = rsp;
-    status = event_add_out(ctx->evb, conn);
-    if (status != DN_OK) {
-        conn->err = errno;
+    //rsp->peer = NULL;
+
+    // Remove the message from the hash table. 
+    dictDelete(conn->outstanding_msgs_dict, &reqid);
+
+    // If this request is first in the out queue, then the connection is ready,
+    // add the connection to epoll for writing
+    if (conn_is_req_first_in_outqueue(conn, req)) {
+        status = event_add_out(ctx->evb, conn);
+        if (status != DN_OK) {
+            conn->err = errno;
+        }
     }
     return status;
 }
@@ -247,6 +270,9 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
     pool = conn->owner;
     key = NULL;
     keylen = 0;
+
+    log_debug(LOG_DEBUG, "conn %p adding message %d:%d", conn, msg->id, msg->parent_id);
+    dictAdd(conn->outstanding_msgs_dict, &msg->id, msg);
 
     if (!string_empty(&pool->hash_tag)) {
         struct string *tag = &pool->hash_tag;

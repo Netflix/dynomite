@@ -116,6 +116,13 @@ conn_get_type_string(struct conn *conn)
     return "INVALID";
 }
 
+bool
+conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req)
+{
+    struct msg *first_req_in_outqueue = TAILQ_FIRST(&conn->omsg_q);
+    return req == first_req_in_outqueue;
+}
+
 /*
  * Return the context associated with this connection.
  */
