@@ -182,6 +182,11 @@ core_server_pool_init(struct context *ctx)
     return status;
 }
 
+/**
+ * Create a context for the dynomite process.
+ * @param[in,out] nci Dynomite instance.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_ctx_create(struct instance *nci)
 {
@@ -234,6 +239,11 @@ core_ctx_destroy(struct context *ctx)
     dn_free(ctx);
 }
 
+/**
+ * Initialize memory buffers, message queue, and connections.
+ * @param[in] nci Dynomite instance
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 core_start(struct instance *nci)
 {
@@ -252,6 +262,11 @@ core_start(struct instance *nci)
     return status;
 }
 
+/**
+ * Deinitialize connections, message queue, memory buffers and destroy the
+ * context.
+ * @param[in] ctx Dynomite process context.
+ */
 void
 core_stop(struct context *ctx)
 {
@@ -510,13 +525,18 @@ core_debug(struct context *ctx)
 	log_debug(LOG_VERB, "...............................................................................");
 }
 
-
+/**
+ * Process elements in the circular buffer.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_process_messages(void)
 {
 	log_debug(LOG_VVVERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
 
+	// Continue to process messages while the circular buffer is not empty
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
+		// Get an element from the beginning of the circular buffer
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
 			msg->cb(msg);
@@ -528,6 +548,11 @@ core_process_messages(void)
 	return DN_OK;
 }
 
+/**
+ *
+ * @param[in] ctx Dynomite process context.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 core_loop(struct context *ctx)
 {

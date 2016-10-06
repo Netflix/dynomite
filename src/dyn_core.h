@@ -169,6 +169,13 @@ typedef enum data_store {
 
 extern data_store_t g_data_store;
 
+/**
+ * @brief An instance of the Dynomite server.
+ *
+ * Dynomite server properties including log level, log file, conf file,
+ * statistics port and collection interval, statistics address, hostname, pid,
+ * pid file and various other properties.
+ */
 struct instance {
     struct context  *ctx;                        /* active context */
     int             log_level;                   /* log level */
@@ -308,6 +315,14 @@ struct server_pool {
 	struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
 };
 
+/**
+ * @brief Context of the Dynomite process.
+ *
+ * Context of the Dynomite process including it's configuration including
+ * dynomite itself plus statistics, entropy, the server pool (i.e. connections),
+ * the event base, timeout, dynomite state, gossip and whether or not the admin
+ * functionality is enabled/disabled.
+ */
 struct context {
     struct instance    *instance;   /* back pointer to instance */
     struct conf        *cf;         /* configuration */
