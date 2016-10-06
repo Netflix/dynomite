@@ -208,4 +208,5 @@ void conn_init(void);
 void conn_deinit(void);
 void conn_print(struct conn *conn);
 
+bool conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req);
 #endif
