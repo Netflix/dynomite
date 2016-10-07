@@ -2,7 +2,7 @@
 
 '''
 script for generating dynomite yaml files for every node in a cluster.
-This script should be run per rack for all nodes in the rack and so the tokens are equallys distributed.
+This script should be run per rack for all nodes in the rack and so the tokens are equally distributed.
 usage: <script> publicIp:rack_name publicIp:rack_name publicIp:rack_name ...
 outputs one yaml file per input node(for a single rack)
 restric generation of the confs for all hosts per rack and not across rack.

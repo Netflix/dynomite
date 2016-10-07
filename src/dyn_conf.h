@@ -47,7 +47,9 @@ struct conf_listen {
     unsigned        valid:1; /* valid? */
 };
 
-
+/** \struct conf_server
+ * Server configuration.
+ */
 struct conf_server {
     struct string   pname;       /* server: as "name:port:weight" */
     struct string   name;        /* name */
@@ -61,6 +63,9 @@ struct conf_server {
     unsigned        is_secure:1; /* is the connection to the server secure? */
 };
 
+/** \struct conf_pool
+ * Connection pool configuration.
+ */
 struct conf_pool {
     struct string      name;                  /* pool name (root node) */
     struct conf_listen listen;                /* listen: */
