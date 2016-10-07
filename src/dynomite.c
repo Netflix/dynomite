@@ -307,7 +307,6 @@ dn_remove_pidfile(struct instance *nci)
 /**
  * Set the dynomite instance properties to the default values and get the
  * hostname.
- *
  * @param nci dynomite instance
  */
 static void
@@ -345,7 +344,6 @@ dn_set_default_options(struct instance *nci)
 
 /**
  * Parse the command line options.
- *
  * @param argc argument count
  * @param argv argument values
  * @param nci dynomite instance
@@ -595,7 +593,6 @@ dn_pre_run(struct instance *nci)
 /**
  * Cleanup when shutting down Dynomite. Delete the PID, print a done message,
  * and close the logging file descriptor.
- *
  * @param[in] nci Dynomite instance.
  */
 static void
@@ -616,7 +613,6 @@ dn_post_run(struct instance *nci)
  * Call method to initialize buffers, messages and connections. Then start the
  * core dynomite loop to process messsages. When dynomite is shutting down, call
  * method to deinitialize buffers, messsages and connections.
- *
  * @param[in] nci Dynomite instance.
  * @return rstatus_t Return status code.
  */

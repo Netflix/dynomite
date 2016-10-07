@@ -286,7 +286,6 @@ core_start(struct instance *nci)
 /**
  * Deinitialize connections, message queue, memory buffers and destroy the
  * context.
- *
  * @param[in] ctx Dynomite process context.
  */
 void
@@ -549,7 +548,6 @@ core_debug(struct context *ctx)
 
 /**
  * Process elements in the circular buffer.
- *
  * @return rstatus_t Return status code.
  */
 static rstatus_t
@@ -573,7 +571,6 @@ core_process_messages(void)
 
 /**
  * Primary loop for the Dynomite server process.
- *
  * @param[in] ctx Dynomite process context.
  * @return rstatus_t Return status code.
  */

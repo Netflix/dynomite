@@ -485,7 +485,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
 /**
  * Output the entire configuration into the log file.
- *
  * @param[in] cf Dynomite configuration.
  */
 static void
