@@ -77,6 +77,10 @@ dnode_close(struct context *ctx, struct conn *conn)
     conn_put(conn);
 }
 
+/*
+ * Initialize the Dynomite node. Check the connection and backend data store,
+ * then log a message with the socket descriptor, the Dynomite
+ */
 rstatus_t
 dnode_init(struct context *ctx)
 {
