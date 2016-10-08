@@ -1395,11 +1395,6 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     log_info("c_conn:%p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
              rsp->id, rsp->parent_id);
-    /* establish rsp <-> req (response <-> request) link */
-    req->peer = rsp;
-    rsp->peer = req;
-
-    g_pre_coalesce(rsp);
 
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
                (c_conn->type == CONN_DNODE_PEER_CLIENT),
