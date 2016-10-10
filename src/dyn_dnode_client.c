@@ -207,9 +207,9 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 
     // dnode client has no extra logic of coalescing etc like the client/coordinator.
     // Hence all work for this request is done at this time
-    req->peer = NULL;
+    ASSERT_LOG(!req->peer, "req %lu:%lu has peer set", req->id, req->parent_id);
     req->selected_rsp = rsp;
-    //rsp->peer = NULL;
+    rsp->peer = req;
 
     // Remove the message from the hash table. 
     dictDelete(conn->outstanding_msgs_dict, &reqid);
