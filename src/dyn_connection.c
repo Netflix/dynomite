@@ -33,7 +33,7 @@
 #include "proto/dyn_proto.h"
 
 /*
- *                   dn_connection.[ch]
+ *                   dyn_connection.[ch]
  *                Connection (struct conn)
  *                 +         +          +
  *                 |         |          |
@@ -390,6 +390,9 @@ conn_put(struct conn *conn)
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
 }
 
+/**
+ * Initialize connections.
+ */
 void
 conn_init(void)
 {

@@ -26,24 +26,28 @@ static unsigned char aes_key[AES_KEYLEN];
 static EVP_CIPHER_CTX *aes_encrypt_ctx;
 static EVP_CIPHER_CTX *aes_decrypt_ctx;
 
-
+/**
+ * Read the PEM key file.
+ * @param[in,out] pem_key_file PEM key file.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
 {
     FILE * fp;
 
-   if (string_empty(pem_key_file)) {
-        log_error("Could NOT read RSA pem key file with empty name");
+    if (string_empty(pem_key_file)) {
+        log_error("Error: PEM key file name is empty. Unable to read file.");
         return DN_ERROR;
-   }
+    }
 
-   unsigned char file_name[pem_key_file->len + 1];
-   memcpy(file_name, pem_key_file->data, pem_key_file->len);
-   file_name[pem_key_file->len] = '\0';
+    unsigned char file_name[pem_key_file->len + 1];
+    memcpy(file_name, pem_key_file->data, pem_key_file->len);
+    file_name[pem_key_file->len] = '\0';
 
-   if( access(file_name, F_OK ) < 0 ) {
+    if( access(file_name, F_OK ) < 0 ) {
         log_error("Error: file %s does not exist", file_name);
         return DN_ERROR;
-   }
+    }
 
     if(NULL != (fp= fopen(file_name, "r")) )
     {
@@ -57,7 +61,6 @@ static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
     } else {
         log_error("Error: could NOT locate RSA pem key file at %s", file_name);
         return DN_ERROR;
-
     }
 
     rsa_size = RSA_size(rsa);
@@ -97,10 +100,13 @@ static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
    */
 
     return DN_OK;
-
 }
 
-
+/**
+ * Load the RSA PEM key file.
+ * @param[in] sp Server pool.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 load_private_rsa_key(struct server_pool *sp)
 {
@@ -113,12 +119,14 @@ load_private_rsa_key(struct server_pool *sp)
     return DN_OK;
 }
 
-
-
+/**
+ * Initialize AES.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 aes_init(void)
 {
-    // Initalize contexts
+    // Initialize contexts
     aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
     aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 
@@ -143,7 +151,11 @@ aes_init(void)
     return DN_OK;
 }
 
-
+/**
+ * Initialize AES and load the PEM key file.
+ * @param[in] sp Server pool.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 crypto_init(struct server_pool *sp)
 {

@@ -20,6 +20,12 @@
  * limitations under the License.
  */
 
+/*! \file dyn_rbtree.c
+    \brief A red-black tree.
+
+    Create and maintain a red-black tree.
+*/
+
 #include "dyn_core.h"
 
 void
@@ -33,6 +39,11 @@ rbtree_node_init(struct rbnode *node)
     /* color is left uninitialized */
 }
 
+/**
+ * Initialize a red-black tree.
+ * @param[in,out] tree
+ * @param[in,out] node
+ */
 void
 rbtree_init(struct rbtree *tree, struct rbnode *node)
 {

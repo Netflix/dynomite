@@ -561,6 +561,13 @@ server_pool_disconnect(struct context *ctx)
     datastore_disconnect(ctx->pool.datastore);
 }
 
+/**
+ * Initialize the server pool.
+ * @param[in,out] sp Server pool configuration.
+ * @param[in] cp Connection pool configuration.
+ * @param[in] ctx Context.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *ctx)
 {
@@ -571,7 +578,11 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 	return DN_OK;
 }
 
-
+/**
+ * Deinitialize the server pool which includes deinitialization of the backend
+ * data store and setting the number of live backend servers to 0.
+ * @param[in,out] sp Server pool.
+ */
 void
 server_pool_deinit(struct server_pool *sp)
 {
