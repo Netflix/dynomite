@@ -46,34 +46,11 @@
 #include "dyn_server.h"
 #include "dyn_client.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_dict_msg_id.h"
 
 static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
 static rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
-
-static unsigned int
-dict_msg_id_hash(const void *key)
-{
-    msgid_t id = *(msgid_t*)key;
-    return dictGenHashFunction(key, sizeof(id));
-}
-
-static int
-dict_msg_id_cmp(void *privdata, const void *key1, const void *key2)
-{
-    msgid_t id1 = *(msgid_t*)key1;
-    msgid_t id2 = *(msgid_t*)key2;
-    return id1 == id2;
-}
-
-dictType msg_table_dict_type = {
-    dict_msg_id_hash,            /* hash function */
-    NULL,                        /* key dup */
-    NULL,                        /* val dup */
-    dict_msg_id_cmp,             /* key compare */
-    NULL,                        /* key destructor */
-    NULL                         /* val destructor */
-};
 
 
 static void
@@ -267,17 +244,18 @@ client_close(struct context *ctx, struct conn *conn)
     client_unref(conn);
 }
 
-// A response handler first deletes the link between the response and the
-// request. This request can be a request clone at the dnode_server connection.
+/* Handle a response to a given request. if this is a quorum setting, choose the
+ * right response. Then make sure all the requests are satisfied in a fragmented
+ * request scenario and then use the post coalesce logic to cook up a combined
+ * response
+ */
 static rstatus_t
 client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 {
-    // First lets delink the response and message that earlier code did
-    if (rsp->peer) {
-        rsp->peer->peer = NULL;
-    }
-    rsp->peer = NULL;
-    // now the handler owns the response. the caller owns the request
+    ASSERT_LOG(!rsp->peer, "response %lu:%lu has peer set",
+               rsp->id, rsp->parent_id);
+
+    // now the handler owns the response.
     ASSERT(conn->type == CONN_CLIENT);
     // Fetch the original request
     struct msg *req = dictFetchValue(conn->outstanding_msgs_dict, &reqid);
@@ -311,10 +289,13 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             }
         }
     } else if (status == DN_OK) {
-        struct context *ctx = conn_to_ctx(conn);
-        status = event_add_out(ctx->evb, conn);
-        if (status != DN_OK) {
-            conn->err = errno;
+        g_pre_coalesce(req->selected_rsp);
+        if (req_done(conn, req)) {
+            struct context *ctx = conn_to_ctx(conn);
+            status = event_add_out(ctx->evb, conn);
+            if (status != DN_OK) {
+                conn->err = errno;
+            }
         }
     }
     return status;
@@ -437,30 +418,27 @@ static void
 req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
                   err_t err)
 {
-    rstatus_t status;
-
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
                  "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
                  strerror(err));
     }
 
-    msg->done = 1;
-    msg->error = 1;
-    msg->err = err;
-
     if (!msg->expect_datastore_reply) {
         req_put(msg);
         return;
     }
 
-    if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
-        status = event_add_out(ctx->evb, conn);
-        if (status != DN_OK) {
-            conn->err = err;
-        }
-    }
+    // Create an appropriate response for the request so its propagated up;
+    // This response gets dropped in rsp_make_error anyways. But since this is
+    // an error path its ok with the overhead.
+    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
+    rsp->peer = msg;
+    rsp->error = 1;
+    rsp->err = err;
 
+    rstatus_t status = conn_handle_response(conn, msg->id, rsp);
+    IGNORE_RET_VAL(status);
 }
 
 static void
@@ -981,14 +959,10 @@ msg_get_rsp_handler(struct msg *req)
 static rstatus_t
 msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
-    ASSERT_LOG(!req->selected_rsp, "req %d already has a rsp %d, adding new rsp %d",
-               req->id, req->selected_rsp->id, rsp->id);
+    ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one. req: %d:%d \
+                prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
+                req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
     req->awaiting_rsps = 0;
-    if (req->peer)
-        log_warn("Received more than one response for dc_one. req: %d:%d \
-                 prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
-                 req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
-    req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
     log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
@@ -1020,7 +994,6 @@ msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rsp = rspmgr_get_response(&req->rspmgr);
     ASSERT(rsp);
     rspmgr_free_other_responses(&req->rspmgr, rsp);
-    req->peer = NULL;
     rsp->peer = req;
     req->selected_rsp = rsp;
     req->err = rsp->err;

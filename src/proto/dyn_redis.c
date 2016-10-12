@@ -1355,7 +1355,7 @@ redis_parse_req(struct msg *r)
                      if (r->rnarg == 0) {
                          goto done;
                      }
-                     state = SW_KEY_LEN;
+                     state = SW_FRAGMENT;
                  } else if (redis_argkvx(r)) {
                      if (r->narg % 2 == 0) {
                          goto error;
@@ -2554,7 +2554,7 @@ redis_pre_coalesce(struct msg *r)
 void
 redis_post_coalesce(struct msg *r)
 {
-    struct msg *pr = r->peer; /* peer response */
+    struct msg *pr = r->selected_rsp; /* peer response */
     struct mbuf *mbuf;
     int n;
 

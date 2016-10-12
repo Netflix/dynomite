@@ -317,6 +317,10 @@ mbuf_split(struct mhdr *h, uint8_t *pos, func_mbuf_copy_t cb, void *cbarg)
     return nbuf;
 }
 
+/**
+ * Initialize memory buffers to store network packets/socket buffers.
+ * @param[in,out] nci Dynomite instance.
+ */
 void
 mbuf_init(struct instance *nci)
 {

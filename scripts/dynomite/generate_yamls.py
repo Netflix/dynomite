@@ -2,34 +2,32 @@
 
 '''
 script for generating dynomite yaml files for every node in a cluster.
-tokens randomly generated, with a variable count per node, as well.
-
+This script should be run per rack for all nodes in the rack and so the tokens are equally distributed.
 usage: <script> publicIp:rack_name publicIp:rack_name publicIp:rack_name ...
-outputs one yaml file per input node
+outputs one yaml file per input node(for a single rack)
+restric generation of the confs for all hosts per rack and not across rack.
 '''
 
-import yaml, sys, random
+import yaml, sys
 
 APPNAME='dyn_o_mite'
 CLIENT_PORT='8102'
 DYN_PEER_PORT=8101
 MEMCACHE_PORT='11211'
+MAX_TOKEN = 4294967295
 
 DEFAULT_DC = 'default_dc'
 
-# gen map of node to random count (3-7) of random tokens (0-MAX_INT)
+# generate the equidistant tokens for the number of nodes given. max 4294967295
 token_map = dict()
+token_item = (MAX_TOKEN // (len(sys.argv) -1))
 for i in range(1, len(sys.argv)):
     node = sys.argv[i]
-    token_cnt = 1 #random.randrange(2,7, 1)
-    tokens = []
-    for j in range(token_cnt):
-        t = random.randint(0,4294967295)
-        tokens.append(t)
-    tokens.sort()
+    token_value = (token_item * i)
+    if token_value > MAX_TOKEN:
+        token_value = MAX_TOKEN
 
-    tok_str = ','.join(str(it) for it in tokens)
-    token_map[node] = tok_str
+    token_map[node] = token_value
 
 for k,v in token_map.items():
     # get the peers ready, and yank the current one from the dict
@@ -38,7 +36,7 @@ for k,v in token_map.items():
     dyn_seeds = []
     for y,z in dyn_seeds_map.items():
         key = y.split(':')
-        dyn_seeds.append(key[0] + ':' + str(DYN_PEER_PORT) + ':' + key[1] + ':' + DEFAULT_DC + ':' + z);
+        dyn_seeds.append(key[0] + ':' + str(DYN_PEER_PORT) + ':' + key[1] + ':' + DEFAULT_DC + ':' + str(z));
 
     ip_dc = k.split(':');
     data = {
@@ -56,8 +54,7 @@ for k,v in token_map.items():
         }
 
     outer = {APPNAME: data}
+    
     file_name = ip_dc[0] + '.yml'
     with open(file_name, 'w') as outfile:
         outfile.write( yaml.dump(outer, default_flow_style=False) )
-
-    

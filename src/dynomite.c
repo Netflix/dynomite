@@ -90,6 +90,11 @@ static struct option long_options[] = {
 
 static char short_options[] = "hVtdDgv:o:c:s:i:a:p:m:M:x:y";
 
+/**
+ * Daemonize dynomite and redirect stdin, stdout and stderr to /dev/null.
+ * @param[in] dump_core If set to 0 then dynomite tries to chdir to /.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 dn_daemonize(int dump_core)
 {
@@ -299,6 +304,11 @@ dn_remove_pidfile(struct instance *nci)
     }
 }
 
+/**
+ * Set the dynomite instance properties to the default values and get the
+ * hostname.
+ * @param nci dynomite instance
+ */
 static void
 dn_set_default_options(struct instance *nci)
 {
@@ -334,6 +344,13 @@ dn_set_default_options(struct instance *nci)
     nci->pidfile = 0;
 }
 
+/**
+ * Parse the command line options.
+ * @param argc argument count
+ * @param argv argument values
+ * @param nci dynomite instance
+ * @return return status
+ */
 static rstatus_t
 dn_get_options(int argc, char **argv, struct instance *nci)
 {
@@ -533,6 +550,12 @@ dn_test_conf(struct instance *nci)
     return true;
 }
 
+/**
+ * Final setup before running Dynomite. Initialize logging, daemonize dynomite,
+ * get the PID, and initialize POSIX signal handling.
+ * @param[in] nci Dynomite instance.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 dn_pre_run(struct instance *nci)
 {
@@ -569,6 +592,11 @@ dn_pre_run(struct instance *nci)
     return DN_OK;
 }
 
+/**
+ * Cleanup when shutting down Dynomite. Delete the PID, print a done message,
+ * and close the logging file descriptor.
+ * @param[in] nci Dynomite instance.
+ */
 static void
 dn_post_run(struct instance *nci)
 {
@@ -583,6 +611,13 @@ dn_post_run(struct instance *nci)
     log_deinit();
 }
 
+/**
+ * Call method to initialize buffers, messages and connections. Then start the
+ * core dynomite loop to process messsages. When dynomite is shutting down, call
+ * method to deinitialize buffers, messsages and connections.
+ * @param[in] nci Dynomite instance.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 dn_run(struct instance *nci)
 {
@@ -609,6 +644,9 @@ dn_run(struct instance *nci)
     return DN_OK;
 }
 
+/**
+ * Set unlimited core dump resource limits.
+ */
 static void
 dn_coredump_init(void)
 {

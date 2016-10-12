@@ -88,6 +88,7 @@
 int dn_set_blocking(int sd);
 int dn_set_nonblocking(int sd);
 int dn_set_reuseaddr(int sd);
+int dn_set_keepalive(int sd, int val);
 int dn_set_tcpnodelay(int sd);
 int dn_set_linger(int sd, int timeout);
 int dn_set_sndbuf(int sd, int size);

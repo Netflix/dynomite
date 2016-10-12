@@ -33,7 +33,7 @@
 #include "proto/dyn_proto.h"
 
 /*
- *                   dn_connection.[ch]
+ *                   dyn_connection.[ch]
  *                Connection (struct conn)
  *                 +         +          +
  *                 |         |          |
@@ -92,6 +92,7 @@
  * TODOs: Minh: add explanation for peer-to-peer communication
  */
 
+#define DYN_KEEPALIVE_INTERVAL_S 15 /* seconds */
 static uint32_t nfree_connq;       /* # free conn q */
 static struct conn_tqh free_connq; /* free conn q */
 
@@ -113,6 +114,13 @@ conn_get_type_string(struct conn *conn)
                                             "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
     }
     return "INVALID";
+}
+
+bool
+conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req)
+{
+    struct msg *first_req_in_outqueue = TAILQ_FIRST(&conn->omsg_q);
+    return req == first_req_in_outqueue;
 }
 
 /*
@@ -382,6 +390,9 @@ conn_put(struct conn *conn)
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
 }
 
+/**
+ * Initialize connections.
+ */
 void
 conn_init(void)
 {
@@ -532,7 +543,14 @@ conn_connect(struct context *ctx, struct conn *conn)
                 strerror(errno));
         goto error;
     }
-
+    status = dn_set_keepalive(conn->sd, DYN_KEEPALIVE_INTERVAL_S);
+    if (status != DN_OK) {
+        log_error("set keepalive on s %d for '%.*s' failed: %s",
+                conn->sd,  conn->pname.len, conn->pname.data,
+                strerror(errno));
+        // Continue since this is not catastrophic
+    }
+    
 
     if (conn->pname.data[0] != '/') {
         status = dn_set_tcpnodelay(conn->sd);

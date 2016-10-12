@@ -561,6 +561,13 @@ server_pool_disconnect(struct context *ctx)
     datastore_disconnect(ctx->pool.datastore);
 }
 
+/**
+ * Initialize the server pool.
+ * @param[in,out] sp Server pool configuration.
+ * @param[in] cp Connection pool configuration.
+ * @param[in] ctx Context.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *ctx)
 {
@@ -571,7 +578,11 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 	return DN_OK;
 }
 
-
+/**
+ * Deinitialize the server pool which includes deinitialization of the backend
+ * data store and setting the number of live backend servers to 0.
+ * @param[in,out] sp Server pool.
+ */
 void
 server_pool_deinit(struct server_pool *sp)
 {
@@ -899,13 +910,6 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
         histo_add(&st->server_latency_histo, delay);
     }
     conn_dequeue_outq(ctx, s_conn, req);
-    req->done = 1;
-
-    /* establish rsp <-> req (response <-> request) link */
-    req->peer = rsp;
-    rsp->peer = req;
-
-    g_pre_coalesce(rsp);
 
     c_conn = req->owner;
     log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
@@ -915,13 +919,9 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     server_rsp_forward_stats(ctx, rsp);
-    // this should really be the message's response handler be doing it
-    if (req_done(c_conn, req)) {
-        // handler owns the response now
-        status = conn_handle_response(c_conn, c_conn->type == CONN_CLIENT ?
-                                      req->id : req->parent_id, rsp);
-        IGNORE_RET_VAL(status);
-     }
+    // handler owns the response now
+    status = conn_handle_response(c_conn, req->id, rsp);
+    IGNORE_RET_VAL(status);
 }
 
 static void

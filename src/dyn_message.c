@@ -635,6 +635,10 @@ msg_dump(struct msg *msg)
 
 }
 
+/**
+ * Initialize the message queue.
+ * @param[in] nci Dynomite instance.
+ */
 void
 msg_init(struct instance *nci)
 {

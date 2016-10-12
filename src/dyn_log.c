@@ -32,6 +32,13 @@
 
 static struct logger logger;
 
+/**
+ * Initialize logging including log level and output target. Logging output may
+ * be sent to standard error or to a log file.
+ * @param[in] level Log level.
+ * @param[in] name Full path to the log file.
+ * @return
+ */
 int
 log_init(int level, char *name)
 {
@@ -53,6 +60,9 @@ log_init(int level, char *name)
     return 0;
 }
 
+/**
+ * Close the logging file descriptor.
+ */
 void
 log_deinit(void)
 {

@@ -28,7 +28,11 @@
 #define BUFFER_SIZE				(16 * 1024)				// BUFFER_SIZE 16384
 #define CIPHER_SIZE				(BUFFER_SIZE + 1024)    // CIPHER_SIZE must be larger than BUFFER_SIZE
 
-/* Structure for sending AOF to Spark Cluster */
+/**
+ * @brief Structure for sending AOF to Spark Cluster
+ *
+ * Structure for sending AOF to Spark Cluster
+ */
 struct entropy {
     struct context    *ctx;
     uint16_t          port;           		  /* port */

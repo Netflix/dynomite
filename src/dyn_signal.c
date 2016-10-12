@@ -38,6 +38,11 @@ static struct signal signals[] = {
     { 0,        NULL,     0,                 NULL }
 };
 
+/**
+ * Initialize the list of POSIX signals that dynomite can respond to and map
+ * each signal to a handler function.
+ * @return status
+ */
 rstatus_t
 signal_init(void)
 {
