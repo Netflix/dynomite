@@ -424,6 +424,9 @@ dnode_peer_failure(struct context *ctx, struct node *server)
         return;
     }
 
+	if (server->failure_count < pool->server_failure_limit) {
+		return;
+	}
 
     now = dn_usec_now();
     if (now < 0) {
