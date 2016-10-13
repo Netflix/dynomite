@@ -43,6 +43,27 @@ def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     time.sleep(7);
     c.run_verify("exists", key)
 
+def run_multikey_test(c, max_keys=1000, max_payload=10):
+    #Set some
+    test_name="MULTIKEY"
+    print "Running %s tests" % test_name
+    for n in range(0, 100):
+        kv_pairs = {}
+        len = random.randint(1, 5)
+        for x in range(0, len):
+            key_id = random.randint(0, max_keys-1)
+            key = create_key(test_name, key_id)
+            value = string_generator(size=random.randint(1, max_payload))
+            kv_pairs[key] = value
+        c.run_verify("mset", kv_pairs)
+        keys = []
+        len = random.randint(1, 50)
+        for x in range(0, len):
+            key_id = random.randint(0, max_keys-1)
+            key = create_key(test_name, key_id)
+            keys.append(key)
+        c.run_verify("mget", keys)
+
 def run_hash_tests(c, max_keys=10, max_fields=1000):
     def create_key_field(keyid=None, fieldid=None):
         if keyid is None:
@@ -134,6 +155,7 @@ def main(args):
         run_key_value_tests(c)
         run_key_value_tests(c, max_payload=16384*1024)
         run_hash_tests(c, max_keys=10, max_fields=100)
+        run_multikey_test(c)
         print "All test ran fine"
     except ResultMismatchError as r:
         print r;
