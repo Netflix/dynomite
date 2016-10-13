@@ -626,7 +626,7 @@ msg_dump(struct msg *msg)
         uint8_t *p, *q;
         long int len;
 
-        p = mbuf->pos;
+        p = mbuf->start;
         q = mbuf->last;
         len = q - p;
 
