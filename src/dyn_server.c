@@ -574,7 +574,7 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
     THROW_STATUS(server_pool_run(sp));
-	log_debug(LOG_DEBUG, "inited server pool");
+	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
 
