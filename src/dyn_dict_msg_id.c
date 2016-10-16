@@ -1,4 +1,12 @@
-#include <libio.h> // For NULL
+#ifdef __APPLE__
+// http://clc-wiki.net/wiki/C_standard_library:string.h:NULL
+// Portable C90 version: NULL ((void*)0)
+# ifndef NULL
+#  define NULL 0
+# endif
+#else
+# include <libio.h> // For NULL
+#endif
 #include "dyn_types.h"
 #include "dyn_dict_msg_id.h"
 
