@@ -74,7 +74,7 @@ static struct option long_options[] = {
     { "daemonize",            no_argument,        NULL,   'd' },
     { "describe-stats",       no_argument,        NULL,   'D' },
     { "gossip",               no_argument,        NULL,   'g' },
-    { "verbose",              required_argument,  NULL,   'v' },
+    { "verbosity",            required_argument,  NULL,   'v' },
     { "output",               required_argument,  NULL,   'o' },
     { "conf-file",            required_argument,  NULL,   'c' },
     { "stats-port",           required_argument,  NULL,   's' },
@@ -305,8 +305,8 @@ dn_remove_pidfile(struct instance *nci)
 }
 
 /**
- * Set the dynomite instance properties to the default values and get the
- * hostname.
+ * Set the dynomite instance properties to the default values, except the
+ * hostname which is set via gethostname().
  * @param nci dynomite instance
  */
 static void

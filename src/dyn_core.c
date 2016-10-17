@@ -173,7 +173,7 @@ core_stats_create(struct context *ctx)
 
 /**
  * Initialize crypto and create the Dynomite server performance statistics.
- * @param[in,out] ctx Context.
+ * @param[in,out] ctx Dynomite server context.
  * @return rstatus_t Return status code.
  */
 static rstatus_t
@@ -560,6 +560,9 @@ core_process_messages(void)
 		// Get an element from the beginning of the circular buffer
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
+			// CBUF_Push
+			// ./src/dyn_dnode_msg.c
+			// ./src/dyn_gossip.c
 			msg->cb(msg);
 			core_debug(msg->sp->ctx);
 			ring_msg_deinit(msg);

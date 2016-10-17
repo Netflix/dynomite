@@ -43,20 +43,22 @@ To build Dynomite in _debug mode_:
                       [-M max alloc messages]
 
     Options:
-      -h, --help             : this help
-      -V, --version          : show version and exit
-      -t, --test-conf        : test configuration for syntax errors and exit
-      -d, --daemonize        : run as a daemon
-      -D, --describe-stats   : print stats description and exit
-      -v, --verbosity=N      : set logging level (default: 5, min: 0, max: 11)
-      -o, --output=S         : set logging file (default: stderr)
-      -c, --conf-file=S      : set configuration file (default: conf/dynomite.yml)
-      -s, --stats-port=N     : set stats monitoring port (default: 22222)
-      -a, --stats-addr=S     : set stats monitoring ip (default: 0.0.0.0)
-      -i, --stats-interval=N : set stats aggregation interval in msec (default: 30000 msec)
-      -p, --pid-file=S       : set pid file (default: off)
-      -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: 16384 bytes)
-      -M, --max-msgs=N       : set max number of messages to allocate (default: 2000000)
+      -h, --help              : this help
+      -V, --version           : show version and exit
+      -t, --test-conf         : test configuration for syntax errors and exit
+      -g, --gossip            : enable gossip (default: disabled)
+      -d, --daemonize         : run as a daemon
+      -D, --describe-stats    : print stats description and exit
+      -v, --verbosity=N       : set logging level (default: 5, min: 0, max: 11)
+      -o, --output=S          : set logging file (default: stderr)
+      -c, --conf-file=S       : set configuration file (default: conf/dynomite.yml)
+      -s, --stats-port=N      : set stats monitoring port (default: 22222)
+      -a, --stats-addr=S      : set stats monitoring ip (default: 0.0.0.0)
+      -i, --stats-interval=N  : set stats aggregation interval in msec (default: 30000 msec)
+      -p, --pid-file=S        : set pid file (default: off)
+      -m, --mbuf-size=N       : set size of mbuf chunk in bytes (default: 16384 bytes)
+      -M, --max-msgs=N        : set max number of messages to allocate (default: 200000)
+      -x, --admin-operation=N : set size of admin operation (default: 0)
 
 
 ## Configuration

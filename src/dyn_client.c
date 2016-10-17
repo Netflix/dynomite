@@ -775,6 +775,12 @@ request_send_to_all_dcs(struct msg *msg)
     return false;
 }
 
+/**
+ * Determine if a request should be forwarded to all replicas within the local
+ * DC.
+ * @param[in] msg Message.
+ * @return bool True if message should be forwarded to all local replicas, else false
+ */
 static bool
 request_send_to_all_local_racks(struct msg *msg)
 {

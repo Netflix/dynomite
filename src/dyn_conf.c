@@ -4,7 +4,6 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
  * Copyright (C) 2011 Twitter, Inc.
@@ -22,6 +21,13 @@
  * limitations under the License.
  */
 
+/**
+ * @file dyn_conf.c
+ * @brief Dynomite configuration.
+ *
+ * Set default configuration values, parse dynomite.yaml, and update the various
+ * configuration structs including connections and server pool.
+ */
 #include "dyn_core.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
@@ -185,7 +191,12 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     return DN_OK;
 }
 
-// Copy seed struct conf_server to struct server
+/**
+ * Copy seed struct conf_server to struct server
+ * @param elem conf_server
+ * @param data server
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 conf_seed_each_transform(void *elem, void *data)
 {
@@ -390,6 +401,13 @@ get_secure_server_option(struct string option)
     return SECURE_OPTION_NONE;
 }
 
+/**
+ * Copy connection pool configuration parsed from dynomite.yaml into the server
+ * pool.
+ * @param[in,out] sp Server pool.
+ * @param cp
+ * @return
+ */
 rstatus_t
 conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 {

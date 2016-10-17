@@ -966,6 +966,7 @@ dmsg_parse(struct dmsg *dmsg)
 
    struct server_pool *sp = (struct server_pool *) dmsg->owner->owner->owner;
    ring_msg->sp = sp;
+
    ring_msg->cb = gossip_msg_peer_update;
 
    count = 0;

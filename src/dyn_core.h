@@ -185,10 +185,10 @@ struct instance {
     int             stats_interval;              /* stats aggregation interval */
     char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
-    uint16_t        entropy_port;                  /* send reconciliation port */
-    char            *entropy_addr;                 /* send reconciliation addr */
+    uint16_t        entropy_port;                /* send reconciliation port */
+    char            *entropy_addr;               /* send reconciliation addr */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
-    size_t			alloc_msgs_max;			 /* allocated messages buffer size */
+    size_t          alloc_msgs_max;              /* allocated messages buffer size */
     pid_t           pid;                         /* process id */
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
