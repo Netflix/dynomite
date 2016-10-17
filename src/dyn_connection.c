@@ -513,12 +513,16 @@ rstatus_t
 conn_connect(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-    if ((conn->type == CONN_DNODE_PEER_SERVER)  &&
-        (ctx->admin_opt > 0))
+
+    // Outgoing connection to another Dynomite node and admin mode is disabled
+    if ((conn->type == CONN_DNODE_PEER_SERVER) && (ctx->admin_opt > 0))
         return DN_OK;
 
+    // Only continue if the connection type is:
+    // 1. CONN_DNODE_PEER_SERVER: Outbound connection to another Dynomite node
+    // 2. CONN_SERVER: Outbound connection to backend datastore (Redis, ARDB)
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
-           (conn->type == CONN_SERVER));
+            (conn->type == CONN_SERVER));
 
     if (conn->sd > 0) {
         /* already connected on peer connection */
@@ -535,7 +539,6 @@ conn_connect(struct context *ctx, struct conn *conn)
     log_debug(LOG_WARN, "connecting to '%.*s' on p %d", conn->pname.len,
             conn->pname.data, conn->sd);
 
-
     status = dn_set_nonblocking(conn->sd);
     if (status != DN_OK) {
         log_error("set nonblock on s %d for '%.*s' failed: %s",
@@ -550,7 +553,6 @@ conn_connect(struct context *ctx, struct conn *conn)
                 strerror(errno));
         // Continue since this is not catastrophic
     }
-    
 
     if (conn->pname.data[0] != '/') {
         status = dn_set_tcpnodelay(conn->sd);
@@ -587,12 +589,10 @@ conn_connect(struct context *ctx, struct conn *conn)
         goto error;
     }
 
-
     ASSERT(!conn->connecting);
     conn->connected = 1;
     log_debug(LOG_WARN, "connected on s %d to '%.*s'", conn->sd,
             conn->pname.len, conn->pname.data);
-
 
     return DN_OK;
 
