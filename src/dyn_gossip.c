@@ -551,7 +551,6 @@ gossip_add_node(struct server_pool *sp, struct string *dc, struct gossip_rack *g
     node_count++;
     gnode->state = state;
 
-    // ASA: 3rd param is callback
     status = gossip_msg_to_core(sp, gnode, dnode_peer_add);
     return status;
 }
