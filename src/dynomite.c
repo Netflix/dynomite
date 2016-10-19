@@ -197,6 +197,10 @@ dn_daemonize(int dump_core)
     return DN_OK;
 }
 
+/**
+ * Print start messages.
+ * @param[in] nci Dynomite instance
+ */
 static void
 dn_print_run(struct instance *nci)
 {
@@ -208,8 +212,7 @@ dn_print_run(struct instance *nci)
         loga("dynomite-%s started on pid %d", VERSION, nci->pid);
     } else {
         loga("dynomite-%s built for %s %s %s started on pid %d",
-             VERSION, name.sysname, name.release, name.machine,
-             nci->pid);
+             VERSION, name.sysname, name.release, name.machine, nci->pid);
     }
 
     loga("run, rabbit run / dig that hole, forget the sun / "
@@ -527,9 +530,11 @@ dn_get_options(int argc, char **argv, struct instance *nci)
     return DN_OK;
 }
 
-/*
- * Returns true if configuration file has a valid syntax, otherwise
- * returns false
+/**
+ * Test the dynomite.yml configuration file's syntax.
+ * @param[in] nci Dynomite instance
+ * @return bool true if the configuration file has a valid syntax or false if
+ *         syntax is invalid
  */
 static bool
 dn_test_conf(struct instance *nci)
@@ -545,7 +550,7 @@ dn_test_conf(struct instance *nci)
 
     conf_destroy(cf);
 
-    log_stderr("dynomite: configuration file '%s' syntax is ok",
+    log_stderr("dynomite: configuration file '%s' syntax is valid",
                nci->conf_filename);
     return true;
 }
@@ -614,7 +619,7 @@ dn_post_run(struct instance *nci)
 /**
  * Call method to initialize buffers, messages and connections. Then start the
  * core dynomite loop to process messsages. When dynomite is shutting down, call
- * method to deinitialize buffers, messsages and connections.
+ * method to deinitialize buffers, messages and connections.
  * @param[in] nci Dynomite instance.
  * @return rstatus_t Return status code.
  */
