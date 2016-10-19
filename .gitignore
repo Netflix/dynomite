@@ -1,5 +1,6 @@
 # IDE
 .idea
+CMakeLists.txt
 
 # Compiled Object files
 *.lo
