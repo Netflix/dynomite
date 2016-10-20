@@ -434,6 +434,7 @@ server_close(struct context *ctx, struct conn *conn)
 static void
 server_connected(struct context *ctx, struct conn *conn)
 {
+	struct datastore *server = conn->owner;
 
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connecting && !conn->connected);
