@@ -349,8 +349,6 @@ void dn_stacktrace(int skip_count);
 
 int _scnprintf(char *buf, size_t size, const char *fmt, ...);
 int _vscnprintf(char *buf, size_t size, const char *fmt, va_list args);
-typedef uint64_t msec_t;
-typedef uint64_t usec_t;
 usec_t dn_usec_now(void);
 msec_t dn_msec_now(void);
 
