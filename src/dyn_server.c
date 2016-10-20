@@ -120,7 +120,6 @@ server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
-    struct datastore *s = *pdatastore;
     ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 }
 
@@ -435,7 +434,6 @@ server_close(struct context *ctx, struct conn *conn)
 static void
 server_connected(struct context *ctx, struct conn *conn)
 {
-	struct datastore *server = conn->owner;
 
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connecting && !conn->connected);
