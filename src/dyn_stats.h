@@ -189,6 +189,9 @@ struct stats_buffer {
     size_t   size;  /* buffer alloc size */
 };
 
+/** \struct stats
+ * Dynomite server performance statistics.
+ */
 struct stats {
     struct context           *ctx;
     uint16_t                  port;           /* stats monitoring port */

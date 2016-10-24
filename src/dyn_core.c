@@ -125,6 +125,11 @@ core_event_base_create(struct context *ctx)
     return status;
 }
 
+/**
+ * Initialize anti-entropy.
+ * @param[in,out] ctx Context.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_entropy_init(struct context *ctx)
 {
@@ -142,6 +147,12 @@ core_entropy_init(struct context *ctx)
     return status;
 }
 
+/**
+ * Create the Dynomite server performance statistics and assign it to the
+ * context, plus initialize anti-entropy.
+ * @param[in,out] ctx Context.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_stats_create(struct context *ctx)
 {
@@ -160,6 +171,11 @@ core_stats_create(struct context *ctx)
     return status;
 }
 
+/**
+ * Initialize crypto and create the Dynomite server performance statistics.
+ * @param[in,out] ctx Dynomite server context.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_crypto_init(struct context *ctx)
 {
@@ -172,6 +188,11 @@ core_crypto_init(struct context *ctx)
     return status;
 }
 
+/**
+ * Initialize the server pool.
+ * @param[in,out] ctx Context.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_server_pool_init(struct context *ctx)
 {
@@ -182,6 +203,11 @@ core_server_pool_init(struct context *ctx)
     return status;
 }
 
+/**
+ * Create a context for the dynomite process.
+ * @param[in,out] nci Dynomite instance.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_ctx_create(struct instance *nci)
 {
@@ -191,8 +217,8 @@ core_ctx_create(struct instance *nci)
 
     ctx = dn_alloc(sizeof(*ctx));
     if (ctx == NULL) {
-	loga("Failed to create context!!!");
-	return DN_ERROR;
+        loga("Failed to create context!!!");
+        return DN_ERROR;
     }
     nci->ctx = ctx;
     ctx->instance = nci;
@@ -209,7 +235,7 @@ core_ctx_create(struct instance *nci)
         loga("Failed to create conf!!!");
         conf_destroy(ctx->cf);
         dn_free(ctx);
-	return DN_ERROR;
+        return DN_ERROR;
     }
 
     rstatus_t status = core_server_pool_init(ctx);
@@ -234,6 +260,11 @@ core_ctx_destroy(struct context *ctx)
     dn_free(ctx);
 }
 
+/**
+ * Initialize memory buffers, message queue, and connections.
+ * @param[in] nci Dynomite instance.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 core_start(struct instance *nci)
 {
@@ -252,6 +283,11 @@ core_start(struct instance *nci)
     return status;
 }
 
+/**
+ * Deinitialize connections, message queue, memory buffers and destroy the
+ * context.
+ * @param[in] ctx Dynomite process context.
+ */
 void
 core_stop(struct context *ctx)
 {
@@ -510,15 +546,23 @@ core_debug(struct context *ctx)
 	log_debug(LOG_VERB, "...............................................................................");
 }
 
-
+/**
+ * Process elements in the circular buffer.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 core_process_messages(void)
 {
 	log_debug(LOG_VVVERB, "length of C2G_OutQ : %d", CBUF_Len( C2G_OutQ ));
 
+	// Continue to process messages while the circular buffer is not empty
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
+		// Get an element from the beginning of the circular buffer
 		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
 		if (msg != NULL && msg->cb != NULL) {
+			// CBUF_Push
+			// ./src/dyn_dnode_msg.c
+			// ./src/dyn_gossip.c
 			msg->cb(msg);
 			core_debug(msg->sp->ctx);
 			ring_msg_deinit(msg);
@@ -528,6 +572,11 @@ core_process_messages(void)
 	return DN_OK;
 }
 
+/**
+ * Primary loop for the Dynomite server process.
+ * @param[in] ctx Dynomite process context.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 core_loop(struct context *ctx)
 {

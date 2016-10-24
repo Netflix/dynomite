@@ -86,11 +86,13 @@ req_done(struct conn *conn, struct msg *msg)
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
 
-    if (msg == NULL || (!msg->done && !msg->selected_rsp)) {
+    if (msg == NULL)
         return false;
-    }
 
     ASSERT(msg->request);
+
+    if (!msg->selected_rsp)
+        return false;
 
     id = msg->frag_id;
     if (id == 0) {
@@ -108,18 +110,16 @@ req_done(struct conn *conn, struct msg *msg)
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
 
-        if (!cmsg->done) {
+        if (!cmsg->selected_rsp)
             return false;
-        }
     }
 
     for (pmsg = msg, cmsg = TAILQ_NEXT(msg, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
 
-        if (!cmsg->done) {
+        if (!cmsg->selected_rsp)
             return false;
-        }
     }
 
     if (!pmsg->last_fragment) {

@@ -1,8 +1,8 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storage engines.
  * Copyright (C) 2014 Netflix, Inc.
  */ 
-
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -21,6 +21,13 @@
  * limitations under the License.
  */
 
+/**
+ * @file dyn_conf.c
+ * @brief Dynomite configuration.
+ *
+ * Set default configuration values, parse dynomite.yaml, and update the various
+ * configuration structs including connections and server pool.
+ */
 #include "dyn_core.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
@@ -104,6 +111,11 @@ struct command {
     int           offset;
 };
 
+/**
+ * Initialize the server configuration with empty values.
+ * @param[in,out] cs Server configuration.
+ * @return rstatus_t Return status code.
+ */
 static rstatus_t
 conf_server_init(struct conf_server *cs)
 {
@@ -134,6 +146,10 @@ conf_server_init(struct conf_server *cs)
     return DN_OK;
 }
 
+/**
+ * Deinitialize the server configuration and free memory.
+ * @param[in,out] cs Server configuration.
+ */
 static void
 conf_server_deinit(struct conf_server *cs)
 {
@@ -175,7 +191,12 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     return DN_OK;
 }
 
-// Copy seed struct conf_server to struct server
+/**
+ * Copy seed struct conf_server to struct server
+ * @param elem conf_server
+ * @param data server
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 conf_seed_each_transform(void *elem, void *data)
 {
@@ -229,6 +250,12 @@ conf_seed_each_transform(void *elem, void *data)
     return DN_OK;
 }
 
+/**
+ * Initialize the connection pool configuration.
+ * @param[in,out] cp Connection pool configuration.
+ * @param name Pool name.
+ * @return rstatus_t Return status code.
+ */
 //TODOs: make sure to do a mem release for all these
 static rstatus_t
 conf_pool_init(struct conf_pool *cp, struct string *name)
@@ -319,6 +346,10 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     return DN_OK;
 }
 
+/**
+ * De-initialize the connection pool configuration and free memory.
+ * @param[in,out] cp Connection pool configuration.
+ */
 static void
 conf_pool_deinit(struct conf_pool *cp)
 {
@@ -370,6 +401,13 @@ get_secure_server_option(struct string option)
     return SECURE_OPTION_NONE;
 }
 
+/**
+ * Copy connection pool configuration parsed from dynomite.yaml into the server
+ * pool.
+ * @param[in,out] sp Server pool.
+ * @param cp
+ * @return
+ */
 rstatus_t
 conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 {
@@ -463,6 +501,10 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     return DN_OK;
 }
 
+/**
+ * Output the entire configuration into the log file.
+ * @param[in] cf Dynomite configuration.
+ */
 static void
 conf_dump(struct conf *cf)
 {

@@ -169,6 +169,13 @@ typedef enum data_store {
 
 extern data_store_t g_data_store;
 
+/** \struct instance
+ * @brief An instance of the Dynomite server.
+ *
+ * Dynomite server properties including log level, log file, conf file,
+ * statistics port and collection interval, statistics address, hostname, pid,
+ * pid file and various other properties.
+ */
 struct instance {
     struct context  *ctx;                        /* active context */
     int             log_level;                   /* log level */
@@ -178,10 +185,10 @@ struct instance {
     int             stats_interval;              /* stats aggregation interval */
     char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
-    uint16_t        entropy_port;                  /* send reconciliation port */
-    char            *entropy_addr;                 /* send reconciliation addr */
+    uint16_t        entropy_port;                /* send reconciliation port */
+    char            *entropy_addr;               /* send reconciliation addr */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
-    size_t			alloc_msgs_max;			 /* allocated messages buffer size */
+    size_t          alloc_msgs_max;              /* allocated messages buffer size */
     pid_t           pid;                         /* process id */
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
@@ -233,6 +240,9 @@ struct datastore {
     uint32_t           failure_count; /* # consecutive failures */
 };
 
+/** \struct node
+ * @brief Dynomite server node.
+ */
 struct node {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
@@ -256,6 +266,15 @@ struct node {
     dyn_state_t        state;         /* state of the server - used mainly in peers  */
 };
 
+/** \struct server_pool
+ * @brief Server pool.
+ *
+ * Server configuration including proxy connection, client connections, data
+ * center and rack information, plus hash information such as distribution type
+ * and hash type. Contains limits including client and server connection limits.
+ * Contains cluster information such as seeds and seed provider, plus node
+ * information such as dc, rack, node token and runtime environment.
+ */
 struct server_pool {
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
@@ -300,7 +319,7 @@ struct server_pool {
 
     int                g_interval;           /* gossip interval */
     struct string      dc;                   /* server's dc */
-    struct string      env;                  /* aws, network, ect */
+    struct string      env;                  /* aws, network, etc */
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     secure_server_option_t secure_server_option;
     struct string      pem_key_file;
@@ -308,6 +327,14 @@ struct server_pool {
 	struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
 };
 
+/** \struct context
+ * @brief Context of the Dynomite process.
+ *
+ * Context of the Dynomite process including it's configuration including
+ * dynomite itself plus statistics, entropy, the server pool (i.e. connections),
+ * the event base, timeout, dynomite state, gossip and whether or not the admin
+ * functionality is enabled/disabled.
+ */
 struct context {
     struct instance    *instance;   /* back pointer to instance */
     struct conf        *cf;         /* configuration */

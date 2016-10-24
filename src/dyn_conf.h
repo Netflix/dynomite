@@ -19,6 +19,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/**
+ * @file dyn_conf.h
+ * @brief Dynomite configuration (header).
+ *
+ * Set default configuration values, parse dynomite.yaml, and update the various
+ * configuration structs including connections and server pool.
+ */
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -47,7 +55,9 @@ struct conf_listen {
     unsigned        valid:1; /* valid? */
 };
 
-
+/** \struct conf_server
+ * Server configuration.
+ */
 struct conf_server {
     struct string   pname;       /* server: as "name:port:weight" */
     struct string   name;        /* name */
@@ -61,6 +71,9 @@ struct conf_server {
     unsigned        is_secure:1; /* is the connection to the server secure? */
 };
 
+/** \struct conf_pool
+ * Connection pool configuration.
+ */
 struct conf_pool {
     struct string      name;                  /* pool name (root node) */
     struct conf_listen listen;                /* listen: */
@@ -106,7 +119,7 @@ struct conf {
     char          *fname;           /* file name (ref in argv[]) */
     FILE          *fh;              /* file handle */
     struct array  arg;              /* string[] (parsed {key, value} pairs) */
-    struct conf_pool pool;             /* conf_pool[] (parsed pools) */
+    struct conf_pool pool;          /* conf_pool[] (parsed pools) */
     uint32_t      depth;            /* parsed tree depth */
     yaml_parser_t parser;           /* yaml parser */
     yaml_event_t  event;            /* yaml event */

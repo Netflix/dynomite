@@ -27,6 +27,9 @@
 #define _DYN_SIGNAL_H_
 
 
+/**
+ * @brief POSIX signal
+ */
 struct signal {
     int  signo;
     char *signame;

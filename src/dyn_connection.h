@@ -200,6 +200,14 @@ struct conn *conn_get_peer(void *owner, bool client);
 struct conn *conn_get_dnode(void *owner);
 void conn_put(struct conn *conn);
 rstatus_t conn_listen(struct context *ctx, struct conn *p);
+
+/**
+ * Open an outgoing socket connection to either another Dynomite node or to a
+ * backend data store (such as Redis or ARDB).
+ * @param[in] ctx Dynomite server context.
+ * @param[in,out] conn Outbound socket connection.
+ * @return rstatus_t Return status code.
+ */
 rstatus_t conn_connect(struct context *ctx, struct conn *conn);
 
 ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);
@@ -208,4 +216,5 @@ void conn_init(void);
 void conn_deinit(void);
 void conn_print(struct conn *conn);
 
+bool conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req);
 #endif
