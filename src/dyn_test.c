@@ -436,7 +436,6 @@ aes_test(void)
     unsigned char *enc_msg = NULL;
     char *dec_msg          = NULL;
     size_t enc_msg_len;
-    int dec_msg_len;
 
     loga("=======================AES======================");
     int i=0;
@@ -471,9 +470,8 @@ aes_test(void)
             log_debug(LOG_VERB, "AES decryption failed\n");
             return ret;
         }
-        dec_msg_len = ret; /* if success aes_decrypt returns len */
 
-        log_debug(LOG_VERB, "%lu bytes decrypted\n", dec_msg_len);
+        log_debug(LOG_VERB, "%lu bytes decrypted\n", ret);
         log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
 
         free(enc_msg);
