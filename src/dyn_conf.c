@@ -817,7 +817,7 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
     return CONF_OK;
 }
 
-/* Parses servers: from yaml */
+/* Parses server:port:data_store from yaml */
 static char *
 conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 {
