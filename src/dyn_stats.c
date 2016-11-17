@@ -1395,7 +1395,7 @@ stats_stop_aggregator(struct stats *st)
 }
 
 struct stats *
-stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
+stats_create(uint16_t stats_port, struct string * stats_ip, int stats_interval,
              char *source, struct server_pool *sp, struct context *ctx)
 {
     rstatus_t status;
@@ -1408,7 +1408,7 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     st->port = stats_port;
     st->interval = stats_interval;
-    string_set_raw(&st->addr, stats_ip);
+    string_set_raw(&st->addr, stats_ip->data);
 
     st->start_ts = (int64_t)time(NULL);
 

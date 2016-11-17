@@ -47,6 +47,10 @@
 #define CONF_STR_DC_QUORUM                   "dc_quorum"
 #define CONF_STR_DC_SAFE_QUORUM              "dc_safe_quorum"
 
+#define CONF_STR_STATS_ADDR                  "0.0.0.0" // default stats port
+#define CONF_DEFAULT_STATS_PORT              22222
+#define CONF_DEFAULT_STATS_INTERVAL          (30 * 1000) /* in msec */
+
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
     struct string   name;    /* name */
@@ -107,11 +111,17 @@ struct conf_pool {
     struct string      read_consistency;
     struct string      write_consistency;
     struct string      pem_key_file;
-    struct string      recon_key_file;       /* file with Key encryption in reconciliation */
-    struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
+    struct string      recon_key_file;        /* file with Key encryption in reconciliation */
+    struct string      recon_iv_file;         /* file with Initialization Vector encryption in reconciliation */
     struct string      dc;                    /* this node's dc */
     struct string      env;                   /* aws, google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
+
+    /* stats info */
+    uint16_t           stats_port;            /* stats monitoring port */
+    int                stats_interval;        /* stats aggregation interval */
+    struct string      stats_addr;            /* stats monitoring addr */
+
 };
 
 

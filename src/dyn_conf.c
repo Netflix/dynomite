@@ -289,6 +289,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->stats_interval = CONF_UNSET_NUM;
+    cp->stats_port = CONF_UNSET_NUM;
 
     //initialization for dynomite
     string_init(&cp->dyn_seed_provider);
@@ -300,6 +302,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->pem_key_file);
     string_init(&cp->recon_key_file);
     string_init(&cp->recon_iv_file);
+    string_init(&cp->stats_addr);
     string_init(&cp->dc);
     string_init(&cp->env);
     cp->dyn_listen.port = 0;
@@ -372,6 +375,7 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->pem_key_file);
     string_deinit(&cp->recon_key_file);
     string_deinit(&cp->recon_iv_file);
+    string_deinit(&cp->stats_addr);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
 
@@ -580,6 +584,14 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  write_consistency: \"%.*s\"",
             cp->write_consistency.len,
             cp->write_consistency.data);
+
+    log_debug(LOG_VVERB, "  stats_port: %d", cp->stats_port);
+    log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
+
+
+    log_debug(LOG_VVERB, "  stats_addr: \"%.*s\"",
+            cp->stats_addr.len,
+            cp->stats_addr.data);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }
@@ -1416,6 +1428,18 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, write_consistency) },
 
+	{ string("stats_port"),
+	  conf_set_string,
+	  offsetof(struct conf_pool, stats_port) },
+
+	{ string("stats_interval"),
+	  conf_set_string,
+	  offsetof(struct conf_pool, stats_interval) },
+
+	{ string("stats_addr"),
+	  conf_set_string,
+	  offsetof(struct conf_pool, stats_addr) },
+
     null_command
 };
 
@@ -2179,6 +2203,21 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                       (const uint8_t *)CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting write_consistency to default value:%s",
                 CONF_STR_DC_ONE);
+    }
+
+    if (string_empty(&cp->stats_addr)) {
+        string_copy_c(&cp->stats_addr,
+                      (const uint8_t *)CONF_STR_STATS_ADDR);
+        log_debug(LOG_INFO, "setting stats_addr to default value:%s",
+        		CONF_STR_STATS_ADDR);
+    }
+
+    if (cp->stats_port == CONF_UNSET_NUM) {
+        cp->stats_port = CONF_DEFAULT_STATS_PORT;
+    }
+
+    if (cp->stats_interval == CONF_UNSET_NUM) {
+        cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL;
     }
 
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&

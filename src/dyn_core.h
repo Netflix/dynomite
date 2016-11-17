@@ -181,9 +181,6 @@ struct instance {
     int             log_level;                   /* log level */
     char            *log_filename;               /* log filename */
     char            *conf_filename;              /* configuration filename */
-    uint16_t        stats_port;                  /* stats monitoring port */
-    int             stats_interval;              /* stats aggregation interval */
-    char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
     uint16_t        entropy_port;                /* send reconciliation port */
     char            *entropy_addr;               /* send reconciliation addr */
@@ -283,8 +280,8 @@ struct server_pool {
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
 
-    struct datastore   *datastore;               /* underlying datastore */
-    struct array       datacenters;                /* racks info  */
+    struct datastore   *datastore;           /* underlying datastore */
+    struct array       datacenters;          /* racks info  */
     uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
 

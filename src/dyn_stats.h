@@ -121,7 +121,7 @@
 
 #define STATS_ADDR      "0.0.0.0"
 #define STATS_PORT      22222
-#define STATS_INTERVAL  (30 * 1000) /* in msec */
+#define STATS_INTERVAL  (30 * 1000)     /* in msec */
 
 typedef enum stats_type {
     STATS_INVALID,
@@ -423,8 +423,9 @@ uint64_t _stats_server_get_ts(struct context *ctx, stats_server_field_t fidx);
 void _stats_server_set_val(struct context *ctx, stats_server_field_t fidx, int64_t val);
 int64_t _stats_server_get_val(struct context *ctx, stats_server_field_t fidx);
 
-struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,
-		                   struct server_pool *sp, struct context *ctx);
+struct stats *stats_create(uint16_t stats_port, struct string * stats_ip, int stats_interval,
+        char *source, struct server_pool *sp, struct context *ctx);
+
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
 
