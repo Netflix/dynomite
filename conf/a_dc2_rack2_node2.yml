@@ -14,3 +14,5 @@ dyn_o_mite:
   secure_server_option: datacenter
   pem_key_file: conf/dynomite.pem
   data_store: 0
+  stats_port: 22225
+  
