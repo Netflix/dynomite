@@ -60,6 +60,7 @@ server_unref(struct conn *conn)
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->owner != NULL);
 
+    conn_event_del_conn(conn);
 	server = conn->owner;
 	conn->owner = NULL;
 
@@ -964,7 +965,7 @@ req_send_next(struct context *ctx, struct conn *conn)
     nmsg = TAILQ_FIRST(&conn->imsg_q);
     if (nmsg == NULL) {
         /* nothing to send as the server inq is empty */
-        status = event_del_out(ctx->evb, conn);
+        status = conn_event_del_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }

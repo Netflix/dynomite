@@ -29,6 +29,7 @@
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
+#include "event/dyn_event.h"
 
 #include "proto/dyn_proto.h"
 
@@ -263,6 +264,60 @@ test_conn_get(void)
    return _conn_get();
 }
 
+static void
+add_to_ready_q(struct context *ctx, struct conn *conn)
+{
+    // This check is required to check if the connection is already
+    // on the ready queue
+    if (conn->ready_tqe.tqe_prev == NULL) {
+        struct server_pool *pool = &ctx->pool;
+        TAILQ_INSERT_TAIL(&pool->ready_conn_q, conn, ready_tqe);
+    }
+}
+
+static void
+remove_from_ready_q(struct context *ctx, struct conn *conn)
+{
+    // This check is required to check if the connection is already
+    // on the ready queue
+    if (conn->ready_tqe.tqe_prev != NULL) {
+        struct server_pool *pool = &ctx->pool;
+        TAILQ_REMOVE(&pool->ready_conn_q, conn, ready_tqe);
+    }
+}
+
+rstatus_t
+conn_event_del_conn(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    remove_from_ready_q(ctx, conn);
+    return event_del_conn(ctx->evb, conn);
+}
+
+rstatus_t
+conn_event_add_out(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    add_to_ready_q(ctx, conn);
+    return event_add_out(ctx->evb, conn);
+}
+
+rstatus_t
+conn_event_add_conn(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    add_to_ready_q(ctx, conn);
+    return event_add_conn(ctx->evb, conn);
+}
+
+rstatus_t
+conn_event_del_out(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    remove_from_ready_q(ctx, conn);
+    return event_del_out(ctx->evb, conn);
+}
+
 struct conn *
 conn_get_peer(void *owner, bool client)
 {
@@ -490,7 +545,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = event_add_conn(ctx->evb, p);
+    status = conn_event_add_conn(p);
     if (status < 0) {
         log_error("event add conn p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -498,7 +553,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = event_del_out(ctx->evb, p);
+    status = conn_event_del_out(p);
     if (status < 0) {
         log_error("event del out p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -563,7 +618,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         }
     }
 
-    status = event_add_conn(ctx->evb, conn);
+    status = conn_event_add_conn(conn);
     if (status != DN_OK) {
         log_error("event add conn s %d for '%.*s' failed: %s",
                 conn->sd, conn->pname.len, conn->pname.data,

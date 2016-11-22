@@ -33,7 +33,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
     }
 
     if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }
@@ -71,7 +71,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
-    status = event_add_out(ctx->evb, p_conn);
+    status = conn_event_add_out(p_conn);
     if (status != DN_OK) {
         dnode_req_forward_error(ctx, p_conn, msg);
         p_conn->err = errno;
@@ -171,7 +171,7 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
     mbuf_insert_head(&msg->mhdr, nbuf);
 
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg);
             conn->err = errno;
@@ -267,7 +267,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     /* enqueue the message (request) into peer inq */
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg);
             conn->err = errno;

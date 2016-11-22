@@ -92,6 +92,7 @@ typedef enum connection_type {
 
 struct conn {
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
+    TAILQ_ENTRY(conn)  ready_tqe;     /* link in ready connection q */
     void               *owner;        /* connection owner - server_pool / server */
 
     int                sd;            /* socket descriptor */
@@ -217,4 +218,8 @@ void conn_deinit(void);
 void conn_print(struct conn *conn);
 
 bool conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req);
+rstatus_t conn_event_add_conn(struct conn * conn);
+rstatus_t conn_event_add_out(struct conn * conn);
+rstatus_t conn_event_del_conn(struct conn * conn);
+rstatus_t conn_event_del_out(struct conn * conn);
 #endif

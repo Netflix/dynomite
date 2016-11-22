@@ -140,7 +140,6 @@ struct dyn_ring;
 
 
 #include "entropy/dyn_entropy.h"
-#include "event/dyn_event.h"
 
 #define ENCRYPTION 1
 
@@ -279,6 +278,7 @@ struct server_pool {
     struct conn        *p_conn;              /* proxy connection (listener) */
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
+    struct conn_tqh    ready_conn_q;         /* ready connection q */
 
     struct datastore   *datastore;           /* underlying datastore */
     struct array       datacenters;          /* racks info  */

@@ -40,6 +40,7 @@ dnode_unref(struct conn *conn)
     ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner != NULL);
 
+    conn_event_del_conn(conn);
     pool = conn->owner;
     conn->owner = NULL;
 
@@ -204,7 +205,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         }
     }
 
-    status = event_add_conn(ctx->evb, c);
+    status = conn_event_add_conn(c);
     if (status < 0) {
         log_error("dyn: event add conn from %s %d failed: %s",
                   conn_get_type_string(p), p->sd, strerror(errno));

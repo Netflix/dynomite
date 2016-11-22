@@ -25,6 +25,7 @@
 #ifdef DN_HAVE_EPOLL
 
 #include <sys/epoll.h>
+#include <dyn_event.h>
 
 struct event_base *
 event_base_create(int nevent, event_cb_t cb)

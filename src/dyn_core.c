@@ -30,6 +30,7 @@
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
+#include "event/dyn_event.h"
 
 static rstatus_t
 core_init_last(struct context *ctx)
@@ -358,7 +359,7 @@ core_close(struct context *ctx, struct conn *conn)
 
     core_close_log(conn);
 
-	status = event_del_conn(ctx->evb, conn);
+	status = conn_event_del_conn(conn);
 	if (status < 0) {
 		log_warn("event del conn %d failed, ignored: %s",
 		          conn->sd, strerror(errno));
@@ -595,6 +596,17 @@ core_loop(struct context *ctx)
 	}
 
 	core_timeout(ctx);
+    // go through all the ready queue and send each of them
+    struct server_pool *sp = &ctx->pool;
+    struct conn *conn, *nconn;
+    TAILQ_FOREACH_SAFE(conn, &sp->ready_conn_q, ready_tqe, nconn) {
+		rstatus_t status = core_send(ctx, conn);
+        if (status == DN_OK) {
+            conn_event_del_out(conn);
+        } else {
+            TAILQ_REMOVE(&sp->ready_conn_q, conn, ready_tqe);
+        }
+    }
 	stats_swap(ctx->stats);
 
 	return DN_OK;
