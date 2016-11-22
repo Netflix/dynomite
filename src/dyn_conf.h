@@ -114,7 +114,7 @@ struct conf_pool {
     struct string      recon_key_file;        /* file with Key encryption in reconciliation */
     struct string      recon_iv_file;         /* file with Initialization Vector encryption in reconciliation */
     struct string      dc;                    /* this node's dc */
-    struct string      env;                   /* aws, google, network, ... */
+    struct string      env;                   /* AWS, Google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
 
     /* stats info */

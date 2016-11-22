@@ -491,6 +491,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->stats_endpoint.family = cp->stats_listen.info.family;
     sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
     sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
+    sp->stats_interval = cp->stats_interval;
 
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;

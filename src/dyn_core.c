@@ -157,10 +157,8 @@ static rstatus_t
 core_stats_create(struct context *ctx)
 {
     struct instance *nci = ctx->instance;
-    struct conf *conf = ctx->cf;
-    struct conf_pool *cp = &conf->pool;
 
-    ctx->stats = stats_create(cp->stats_port, &cp->stats_addr, cp->stats_interval,
+    ctx->stats = stats_create(cp->stats_port, &cp->stats_addr, ctx->pool->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
         log_error("Failed to create stats!!!");
