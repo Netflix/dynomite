@@ -485,6 +485,13 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->tokens = cp->tokens;
     sp->env = cp->env;
 
+    /* dynomite stats init */
+    sp->stats_endpoint.pname = cp->stats_listen.pname;
+    sp->stats_endpoint.port = (uint16_t)cp->stats_listen.port;
+    sp->stats_endpoint.family = cp->stats_listen.info.family;
+    sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
+    sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
+
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
     sp->recon_key_file = cp->recon_key_file;
@@ -585,13 +592,7 @@ conf_dump(struct conf *cf)
             cp->write_consistency.len,
             cp->write_consistency.data);
 
-    log_debug(LOG_VVERB, "  stats_port: %d", cp->stats_port);
     log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
-
-
-    log_debug(LOG_VVERB, "  stats_addr: \"%.*s\"",
-            cp->stats_addr.len,
-            cp->stats_addr.data);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }

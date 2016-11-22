@@ -118,9 +118,8 @@ struct conf_pool {
     uint32_t           conn_msg_rate;         /* conn msg per sec */
 
     /* stats info */
-    uint16_t           stats_port;            /* stats monitoring port */
     int                stats_interval;        /* stats aggregation interval */
-    struct string      stats_addr;            /* stats monitoring addr */
+    struct conf_listen stats_listen;          /* stats_listen: socket info for stats */
 
 };
 
