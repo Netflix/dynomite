@@ -100,6 +100,10 @@ static struct string dist_strings[] = {
 
 #define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
+#define CONF_DEFAULT_STATS_PNAME             "0.0.0.0:22222" // default stats port
+#define CONF_DEFAULT_STATS_PORT              22222
+#define CONF_DEFAULT_STATS_INTERVAL          (30 * 1000) /* in msec */
+
 #define PEM_KEY_FILE      "conf/dynomite.pem"
 #define RECON_KEY_FILE    "conf/recon_key.pem"
 #define RECON_IV_FILE     "conf/recon_iv.pem"
@@ -302,12 +306,17 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->pem_key_file);
     string_init(&cp->recon_key_file);
     string_init(&cp->recon_iv_file);
-    string_init(&cp->stats_addr);
+    string_init(&cp->stats_listen.pname);
+    string_init(&cp->stats_listen.name);
     string_init(&cp->dc);
     string_init(&cp->env);
     cp->dyn_listen.port = 0;
     memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
     cp->dyn_listen.valid = 0;
+
+    cp->stats_listen.port = 0;
+    memset(&cp->stats_listen.info, 0, sizeof(cp->stats_listen.info));
+    cp->stats_listen.valid = 0;
 
     cp->dyn_read_timeout = CONF_UNSET_NUM;
     cp->dyn_write_timeout = CONF_UNSET_NUM;
@@ -375,7 +384,8 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->pem_key_file);
     string_deinit(&cp->recon_key_file);
     string_deinit(&cp->recon_iv_file);
-    string_deinit(&cp->stats_addr);
+    string_deinit(&cp->stats_listen.pname);
+    string_deinit(&cp->stats_listen.name);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
 
@@ -594,6 +604,8 @@ conf_dump(struct conf *cf)
             cp->write_consistency.data);
 
     log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
+    log_debug(LOG_VVERB, "  stats_listen: %.*s",
+            cp->stats_listen.pname.len, cp->stats_listen.pname.data);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }
@@ -2098,6 +2110,11 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         return DN_ERROR;
     }
 
+    if (!cp->stats_listen.valid) {
+        log_error("conf: directive \"stats_listen:\" is missing");
+        return DN_ERROR;
+    }
+
     /* set default values for unset directives */
 
     if (cp->distribution == CONF_UNSET_DIST) {
@@ -2201,17 +2218,6 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                       (const uint8_t *)CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting write_consistency to default value:%s",
                 CONF_STR_DC_ONE);
-    }
-
-    if (string_empty(&cp->stats_addr)) {
-        string_copy_c(&cp->stats_addr,
-                      (const uint8_t *)CONF_STR_STATS_ADDR);
-        log_debug(LOG_INFO, "setting stats_addr to default value:%s",
-        		CONF_STR_STATS_ADDR);
-    }
-
-    if (cp->stats_port == CONF_UNSET_NUM) {
-        cp->stats_port = CONF_DEFAULT_STATS_PORT;
     }
 
     if (cp->stats_interval == CONF_UNSET_NUM) {

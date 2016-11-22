@@ -47,10 +47,6 @@
 #define CONF_STR_DC_QUORUM                   "dc_quorum"
 #define CONF_STR_DC_SAFE_QUORUM              "dc_safe_quorum"
 
-#define CONF_STR_STATS_ADDR                  "0.0.0.0" // default stats port
-#define CONF_DEFAULT_STATS_PORT              22222
-#define CONF_DEFAULT_STATS_INTERVAL          (30 * 1000) /* in msec */
-
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
     struct string   name;    /* name */
