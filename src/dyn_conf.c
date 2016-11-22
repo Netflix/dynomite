@@ -1430,17 +1430,13 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, write_consistency) },
 
-	{ string("stats_port"),
-	  conf_set_string,
-	  offsetof(struct conf_pool, stats_port) },
+	{ string("stats_listen"),
+	  conf_set_listen,
+	  offsetof(struct conf_pool, stats_listen) },
 
 	{ string("stats_interval"),
 	  conf_set_string,
 	  offsetof(struct conf_pool, stats_interval) },
-
-	{ string("stats_addr"),
-	  conf_set_string,
-	  offsetof(struct conf_pool, stats_addr) },
 
     null_command
 };
