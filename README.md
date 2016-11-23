@@ -81,6 +81,7 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **servers**: A list of local server address, port and weight (name:port:weight or ip:port:weight) for this server pool. Currently, there is just one.
 + **secure_server_option**: Encrypted communication. Must be one of 'none', 'rack', 'datacenter', or 'all'.
 + **stats_listen**: The address and port number for the REST endpoint and for accessing statistics.
++ **stats_interval**: set stats aggregation interval in msec (default: 30000 msec).
 
 For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 
