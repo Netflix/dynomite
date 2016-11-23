@@ -5,4 +5,4 @@ dyn_o_mite:
   servers:
   - 127.0.0.1:22122:1
   data_store: 0
-  stats_listen: 0.0.0.0:22222
+

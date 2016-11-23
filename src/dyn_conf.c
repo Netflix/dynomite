@@ -2109,11 +2109,6 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         return DN_ERROR;
     }
 
-    if (!cp->stats_listen.valid) {
-        log_error("conf: directive \"stats_listen:\" is missing");
-        return DN_ERROR;
-    }
-
     /* set default values for unset directives */
 
     if (cp->distribution == CONF_UNSET_DIST) {
@@ -2220,7 +2215,15 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (cp->stats_interval == CONF_UNSET_NUM) {
-        cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL;
+            cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL;
+    }
+
+    if (!cp->stats_listen.valid) {
+        log_error("conf: directive \"stats_listen:\" is missing - using defaults %s:%d",
+        		CONF_DEFAULT_STATS_PNAME, CONF_DEFAULT_STATS_PORT);
+        cp->stats_listen.port=CONF_DEFAULT_STATS_PORT;
+        string_copy_c(&cp->stats_listen.pname,
+                              (const uint8_t *)CONF_DEFAULT_STATS_PNAME);
     }
 
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
