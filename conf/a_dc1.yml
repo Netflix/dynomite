@@ -14,4 +14,4 @@ dyn_o_mite:
   secure_server_option: datacenter
   pem_key_file: conf/dynomite.pem
   data_store: 0
-  stats_listen: 127.0.0.1:22221
+  stats_listen: 0.0.0.0:22221

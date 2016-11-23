@@ -8,3 +8,4 @@ dyn_o_mite:
   - 127.0.0.1:6379:1
  tokens: '0'
  data_store: 0
+ stats_listen: 0.0.0.0:22222
