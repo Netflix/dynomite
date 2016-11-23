@@ -695,6 +695,7 @@ redis_parse_req(struct msg *r)
 
                 if (str4icmp(m, 's', 'c', 'a', 'n')) {
                     r->type = MSG_REQ_REDIS_SCAN;
+                    r->msg_type = 1; //local only
                     r->is_read = 1;
                     break;
                 }
