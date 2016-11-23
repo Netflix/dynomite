@@ -294,7 +294,6 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
     cp->stats_interval = CONF_UNSET_NUM;
-    cp->stats_port = CONF_UNSET_NUM;
 
     //initialization for dynomite
     string_init(&cp->dyn_seed_provider);

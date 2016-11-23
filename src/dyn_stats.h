@@ -423,8 +423,8 @@ uint64_t _stats_server_get_ts(struct context *ctx, stats_server_field_t fidx);
 void _stats_server_set_val(struct context *ctx, stats_server_field_t fidx, int64_t val);
 int64_t _stats_server_get_val(struct context *ctx, stats_server_field_t fidx);
 
-struct stats *stats_create(uint16_t stats_port, struct string * stats_ip, int stats_interval,
-        char *source, struct server_pool *sp, struct context *ctx);
+struct stats * stats_create(uint16_t stats_port, struct string pname, int stats_interval,
+             char *source, struct server_pool *sp, struct context *ctx);
 
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);

@@ -1395,11 +1395,15 @@ stats_stop_aggregator(struct stats *st)
 }
 
 struct stats *
-stats_create(uint16_t stats_port, struct string * stats_ip, int stats_interval,
+stats_create(uint16_t stats_port, struct string pname, int stats_interval,
              char *source, struct server_pool *sp, struct context *ctx)
 {
     rstatus_t status;
     struct stats *st;
+
+    struct string stats_ip;
+    get_host_from_pname(&stats_ip, &pname);
+
 
     st = dn_alloc(sizeof(*st));
     if (st == NULL) {
@@ -1408,7 +1412,9 @@ stats_create(uint16_t stats_port, struct string * stats_ip, int stats_interval,
 
     st->port = stats_port;
     st->interval = stats_interval;
-    string_set_raw(&st->addr, stats_ip->data);
+    if (string_duplicate(&st->addr,&stats_ip) != DN_OK) {
+    	goto error;
+    }
 
     st->start_ts = (int64_t)time(NULL);
 

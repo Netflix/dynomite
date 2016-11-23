@@ -159,7 +159,7 @@ core_stats_create(struct context *ctx)
     struct instance *nci = ctx->instance;
     struct server_pool *sp = &ctx->pool;
 
-    ctx->stats = stats_create(sp->stats_endpoint.port, &cp->stats_addr, sp->stats_interval,
+    ctx->stats = stats_create(sp->stats_endpoint.port, sp->stats_endpoint.pname, sp->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
         log_error("Failed to create stats!!!");
