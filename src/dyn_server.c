@@ -120,6 +120,7 @@ server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
+
     struct datastore *s = *pdatastore;
     ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 }
@@ -574,7 +575,7 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
     THROW_STATUS(server_pool_run(sp));
-	log_debug(LOG_DEBUG, "inited server pool");
+	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
 

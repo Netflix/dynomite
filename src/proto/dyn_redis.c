@@ -26,8 +26,9 @@
 #include "../dyn_core.h"
 #include "dyn_proto.h"
 
-#define RSP_STRING(ACTION)                                                          \
-    ACTION( pong,             "+PONG\r\n"                                         ) \
+#define RSP_STRING(ACTION)                                   \
+    ACTION( ok,               "+OK\r\n"                     ) \
+    ACTION( pong,             "+PONG\r\n"                   ) \
 
 #define DEFINE_ACTION(_var, _str) static struct string rsp_##_var = string(_str);
     RSP_STRING( DEFINE_ACTION )
@@ -1468,6 +1469,11 @@ redis_parse_req(struct msg *r)
                         goto done;
                     }
                     state = SW_ARGN_LEN;
+                 } else if (redis_argkvx(r)) {
+                     if (r->rnarg == 0) {
+                         goto done;
+                     }
+                     state = SW_FRAGMENT;
                 } else if (redis_argeval(r)) {
                     if (r->rnarg < 2) {
                     	log_error("Dynomite EVAL/EVALSHA requires at least 1 key");
@@ -2406,6 +2412,11 @@ redis_pre_splitcopy(struct mbuf *mbuf, void *arg)
                         r->narg - 1);
         break;
 
+     case MSG_REQ_REDIS_MSET:
+        n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$4\r\nmset\r\n",
+                        r->narg - 2);
+        break;
+
     case MSG_REQ_REDIS_DEL:
         n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$3\r\ndel\r\n",
                         r->narg - 1);
@@ -2428,6 +2439,9 @@ redis_post_splitcopy(struct msg *r)
 {
     struct mbuf *hbuf, *nhbuf;         /* head mbuf and new head mbuf */
     struct string hstr = string("*2"); /* header string */
+    if (r->type == MSG_REQ_REDIS_MSET) {
+        string_set_text(&hstr, "*3");
+    }
 
     ASSERT(r->request);
     ASSERT(r->type == MSG_REQ_REDIS_MGET || r->type == MSG_REQ_REDIS_DEL);
@@ -2531,6 +2545,14 @@ redis_pre_coalesce(struct msg *r)
         }
         break;
 
+    case MSG_RSP_REDIS_STATUS:
+        if (pr->type == MSG_REQ_REDIS_MSET) {       /* MSET segments */
+            mbuf = STAILQ_FIRST(&r->mhdr);
+            r->mlen -= mbuf_length(mbuf);
+            mbuf_rewind(mbuf);
+        }
+        break;
+
     default:
         /*
          * Valid responses for a fragmented request are MSG_RSP_REDIS_INTEGER or,
@@ -2558,6 +2580,7 @@ redis_post_coalesce(struct msg *r)
     struct msg *pr = r->selected_rsp; /* peer response */
     struct mbuf *mbuf;
     int n;
+    rstatus_t status = DN_OK;
 
     ASSERT(r->request && r->first_fragment);
     if (r->error || r->ferror) {
@@ -2594,6 +2617,12 @@ redis_post_coalesce(struct msg *r)
         pr->mlen += (uint32_t)n;
         break;
 
+    case MSG_RSP_REDIS_STATUS:
+        status = msg_append(pr, rsp_ok.data, rsp_ok.len);
+        if (status != DN_OK) {
+            pr->error = 1;        /* mark this msg as err */
+            pr->err = errno;
+        }
     default:
         NOT_REACHED();
     }

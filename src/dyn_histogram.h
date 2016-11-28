@@ -22,15 +22,15 @@ struct histogram {
 };
 
 
-rstatus_t histo_init(struct histogram *histo);
-rstatus_t histo_reset(struct histogram *histo);
-void histo_add(struct histogram *histo, uint64_t val);
-uint64_t histo_get_bucket(struct histogram *histo, int bucket);
-void histo_get_buckets(struct histogram *histo, uint64_t* my_buckets);
-uint64_t histo_percentile(struct histogram *histo, double percentile);
-uint64_t histo_mean(struct histogram *histo);
-uint64_t histo_max(struct histogram *histo);
-void histo_compute(struct histogram *histo);
+rstatus_t histo_init(volatile struct histogram *histo);
+rstatus_t histo_reset(volatile struct histogram *histo);
+void histo_add(volatile struct histogram *histo, uint64_t val);
+uint64_t histo_get_bucket(volatile struct histogram *histo, int bucket);
+void histo_get_buckets(volatile struct histogram *histo, uint64_t* my_buckets);
+uint64_t histo_percentile(volatile struct histogram *histo, double percentile);
+uint64_t histo_mean(volatile struct histogram *histo);
+uint64_t histo_max(volatile struct histogram *histo);
+void histo_compute(volatile struct histogram *histo);
 
 
 #endif /* DYN_HISTOGRAM_H_ */
