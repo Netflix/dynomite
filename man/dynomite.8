@@ -1,4 +1,4 @@
-.TH DYNOMITE 8 "December 15, 2015" "v0.5.6"
+.TH DYNOMITE 8 "November 23, 2016" "v0.5.9"
 .SH NAME
 dynomite - a generic dynamo implementation for different key/value storage engines.
 .SH SYNOPSIS
@@ -87,21 +87,6 @@ Set logging file to
 Set the configuration file to
 .IR file .
 .TP
-.BI \-s\  port \fR,\ \fB\-\-stats-port= port
-Set the statistics monitoring port to
-.IR port .
-(default: 22222)
-.TP
-.BI \-a\  ip-address \fR,\ \fB\-\-stats-addr= ip-address
-Set the statistics monitoring IP address to
-.IR ip-address .
-(default: 0.0.0.0)
-.TP
-.BI \-i\  N \fR,\ \fB\-\-stats-interval= N
-Set statistics aggregation interval to
-.IR N
-milliseconds. (default: 30000)
-.TP
 .BI \-p\  file \fR,\ \fB\-\-pid-file= file
 Set the pid file to
 .IR file .
@@ -125,4 +110,4 @@ Set the size of admin operation to
 .BR redis-server (1)
 .br
 .SH AUTHOR
-Dynomite was originally written by Netflix, Inc. as a fork of Twitter twemproxy. Dynomite is currently developed by Netflix, Inc. and the open source community. 
+Dynomite is developed by Netflix, Inc. Dynomite is currently developed by Netflix, Inc. and the open source community. 

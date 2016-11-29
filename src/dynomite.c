@@ -42,10 +42,6 @@
 #define DN_LOG_MAX          LOG_PVERB
 #define DN_LOG_PATH         NULL
 
-#define DN_STATS_PORT       STATS_PORT
-#define DN_STATS_ADDR       STATS_ADDR
-#define DN_STATS_INTERVAL   STATS_INTERVAL
-
 #define DN_ENTROPY_PORT		ENTROPY_PORT
 #define DN_ENTROPY_ADDR		ENTROPY_ADDR
 
@@ -77,9 +73,6 @@ static struct option long_options[] = {
     { "verbosity",            required_argument,  NULL,   'v' },
     { "output",               required_argument,  NULL,   'o' },
     { "conf-file",            required_argument,  NULL,   'c' },
-    { "stats-port",           required_argument,  NULL,   's' },
-    { "stats-interval",       required_argument,  NULL,   'i' },
-    { "stats-addr",           required_argument,  NULL,   'a' },
     { "pid-file",             required_argument,  NULL,   'p' },
     { "mbuf-size",            required_argument,  NULL,   'm' },
     { "max-msgs",             required_argument,  NULL,   'M' },
@@ -233,8 +226,7 @@ dn_show_usage(void)
 {
     log_stderr(
         "Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]" CRLF
-        "                  [-c conf file] [-s stats port] [-a stats addr]" CRLF
-        "                  [-i stats interval] [-p pid file] [-m mbuf size]" CRLF
+        "                  [-c conf file] [-p pid file] [-m mbuf size]" CRLF
         "                  [-M max alloc messages]" CRLF
         "");
     log_stderr(
@@ -249,9 +241,6 @@ dn_show_usage(void)
         "  -v, --verbosity=N            : set logging level (default: %d, min: %d, max: %d)" CRLF
         "  -o, --output=S               : set logging file (default: %s)" CRLF
         "  -c, --conf-file=S            : set configuration file (default: %s)" CRLF
-        "  -s, --stats-port=N           : set stats monitoring port (default: %d)" CRLF
-        "  -a, --stats-addr=S           : set stats monitoring ip (default: %s)" CRLF
-        "  -i, --stats-interval=N       : set stats aggregation interval in msec (default: %d msec)" CRLF
         "  -p, --pid-file=S             : set pid file (default: %s)" CRLF
         "  -m, --mbuf-size=N            : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
         "  -M, --max-msgs=N             : set max number of messages to allocate (default: %d)" CRLF
@@ -260,7 +249,6 @@ dn_show_usage(void)
         DN_LOG_DEFAULT, DN_LOG_MIN, DN_LOG_MAX,
         DN_LOG_PATH != NULL ? DN_LOG_PATH : "stderr",
         DN_CONF_PATH,
-        DN_STATS_PORT, DN_STATS_ADDR, DN_STATS_INTERVAL,
         DN_PID_FILE != NULL ? DN_PID_FILE : "off",
         DN_MBUF_SIZE, DN_ALLOC_MSGS,
         0);
@@ -323,10 +311,6 @@ dn_set_default_options(struct instance *nci)
     nci->log_filename = DN_LOG_PATH;
 
     nci->conf_filename = DN_CONF_PATH;
-
-    nci->stats_port = DN_STATS_PORT;
-    nci->stats_addr = DN_STATS_ADDR;
-    nci->stats_interval = DN_STATS_INTERVAL;
 
     nci->entropy_port = DN_ENTROPY_PORT;
     nci->entropy_addr = DN_ENTROPY_ADDR;
@@ -411,35 +395,6 @@ dn_get_options(int argc, char **argv, struct instance *nci)
 
         case 'c':
             nci->conf_filename = optarg;
-            break;
-
-        case 's':
-            value = dn_atoi(optarg, strlen(optarg));
-            if (value < 0) {
-                log_stderr("dynomite: option -s requires a number");
-                return DN_ERROR;
-            }
-            if (!dn_valid_port(value)) {
-                log_stderr("dynomite: option -s value %d is not a valid "
-                           "port", value);
-                return DN_ERROR;
-            }
-
-            nci->stats_port = (uint16_t)value;
-            break;
-
-        case 'i':
-            value = dn_atoi(optarg, strlen(optarg));
-            if (value < 0) {
-                log_stderr("dynomite: option -i requires a number");
-                return DN_ERROR;
-            }
-
-            nci->stats_interval = value;
-            break;
-
-        case 'a':
-            nci->stats_addr = optarg;
             break;
 
         case 'p':

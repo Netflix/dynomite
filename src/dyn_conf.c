@@ -100,6 +100,10 @@ static struct string dist_strings[] = {
 
 #define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
+#define CONF_DEFAULT_STATS_PNAME             "0.0.0.0:22222" // default stats port
+#define CONF_DEFAULT_STATS_PORT              22222
+#define CONF_DEFAULT_STATS_INTERVAL_MS       (30 * 1000) /* in msec */
+
 #define PEM_KEY_FILE      "conf/dynomite.pem"
 #define RECON_KEY_FILE    "conf/recon_key.pem"
 #define RECON_IV_FILE     "conf/recon_iv.pem"
@@ -289,6 +293,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->stats_interval = CONF_UNSET_NUM;
 
     //initialization for dynomite
     string_init(&cp->dyn_seed_provider);
@@ -300,11 +305,17 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->pem_key_file);
     string_init(&cp->recon_key_file);
     string_init(&cp->recon_iv_file);
+    string_init(&cp->stats_listen.pname);
+    string_init(&cp->stats_listen.name);
     string_init(&cp->dc);
     string_init(&cp->env);
     cp->dyn_listen.port = 0;
     memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
     cp->dyn_listen.valid = 0;
+
+    cp->stats_listen.port = 0;
+    memset(&cp->stats_listen.info, 0, sizeof(cp->stats_listen.info));
+    cp->stats_listen.valid = 0;
 
     cp->dyn_read_timeout = CONF_UNSET_NUM;
     cp->dyn_write_timeout = CONF_UNSET_NUM;
@@ -372,6 +383,8 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->pem_key_file);
     string_deinit(&cp->recon_key_file);
     string_deinit(&cp->recon_iv_file);
+    string_deinit(&cp->stats_listen.pname);
+    string_deinit(&cp->stats_listen.name);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
 
@@ -481,6 +494,14 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->tokens = cp->tokens;
     sp->env = cp->env;
 
+    /* dynomite stats init */
+    sp->stats_endpoint.pname = cp->stats_listen.pname;
+    sp->stats_endpoint.port = (uint16_t)cp->stats_listen.port;
+    sp->stats_endpoint.family = cp->stats_listen.info.family;
+    sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
+    sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
+    sp->stats_interval = cp->stats_interval;
+
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
     sp->recon_key_file = cp->recon_key_file;
@@ -580,6 +601,10 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  write_consistency: \"%.*s\"",
             cp->write_consistency.len,
             cp->write_consistency.data);
+
+    log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
+    log_debug(LOG_VVERB, "  stats_listen: %.*s",
+            cp->stats_listen.pname.len, cp->stats_listen.pname.data);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }
@@ -805,7 +830,7 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
     return CONF_OK;
 }
 
-/* Parses servers: from yaml */
+/* Parses server:port:data_store from yaml */
 static char *
 conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 {
@@ -1415,6 +1440,14 @@ static struct command conf_commands[] = {
     { string("write_consistency"),
       conf_set_string,
       offsetof(struct conf_pool, write_consistency) },
+
+	{ string("stats_listen"),
+	  conf_set_listen,
+	  offsetof(struct conf_pool, stats_listen) },
+
+	{ string("stats_interval"),
+	  conf_set_string,
+	  offsetof(struct conf_pool, stats_interval) },
 
     null_command
 };
@@ -2179,6 +2212,18 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                       (const uint8_t *)CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting write_consistency to default value:%s",
                 CONF_STR_DC_ONE);
+    }
+
+    if (cp->stats_interval == CONF_UNSET_NUM) {
+            cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL_MS;
+    }
+
+    if (!cp->stats_listen.valid) {
+        log_error("conf: directive \"stats_listen:\" is missing - using defaults %s",
+        		CONF_DEFAULT_STATS_PNAME, CONF_DEFAULT_STATS_PORT);
+        cp->stats_listen.port=CONF_DEFAULT_STATS_PORT;
+        string_copy_c(&cp->stats_listen.pname,
+                              (const uint8_t *)CONF_DEFAULT_STATS_PNAME);
     }
 
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&

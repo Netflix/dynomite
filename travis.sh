@@ -34,15 +34,15 @@ function launch_redis() {
 }
 function launch_dynomite() {
     ./_binaries/dynomite -d -o ./logs/a_dc1.log \
-                         -c ./conf/a_dc1.yml -s 22221 -M100000 -v6
+                         -c ./conf/a_dc1.yml -M100000 -v6
     ./_binaries/dynomite -d -o ./logs/a_dc2_rack1_node1.log \
-                         -c ./conf/a_dc2_rack1_node1.yml -s 22222 -M100000 -v6
+                         -c ./conf/a_dc2_rack1_node1.yml -M100000 -v6
     ./_binaries/dynomite -d -o ./logs/a_dc2_rack1_node2.log \
-                         -c ./conf/a_dc2_rack1_node2.yml -s 22223 -M100000 -v6
+                         -c ./conf/a_dc2_rack1_node2.yml -M100000 -v6
     ./_binaries/dynomite -d -o ./logs/a_dc2_rack2_node1.log \
-                         -c ./conf/a_dc2_rack2_node1.yml -s 22224 -M100000 -v6
+                         -c ./conf/a_dc2_rack2_node1.yml -M100000 -v6
     ./_binaries/dynomite -d -o ./logs/a_dc2_rack2_node2.log \
-                         -c ./conf/a_dc2_rack2_node2.yml -s 22225 -M100000 -v6
+                         -c ./conf/a_dc2_rack2_node2.yml -M100000 -v6
 }
 
 function kill_redis() {

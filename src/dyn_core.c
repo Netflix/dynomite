@@ -157,7 +157,9 @@ static rstatus_t
 core_stats_create(struct context *ctx)
 {
     struct instance *nci = ctx->instance;
-    ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
+    struct server_pool *sp = &ctx->pool;
+
+    ctx->stats = stats_create(sp->stats_endpoint.port, sp->stats_endpoint.pname, sp->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
         log_error("Failed to create stats!!!");
@@ -225,8 +227,6 @@ core_ctx_create(struct instance *nci)
     ctx->cf = NULL;
     ctx->stats = NULL;
     ctx->evb = NULL;
-    ctx->max_timeout = nci->stats_interval;
-    ctx->timeout = ctx->max_timeout;
     ctx->dyn_state = INIT;
 
     /* parse and create configuration */
@@ -237,6 +237,11 @@ core_ctx_create(struct instance *nci)
         dn_free(ctx);
         return DN_ERROR;
     }
+
+    struct conf_pool *cp = &ctx->cf->pool;
+    ctx->max_timeout = cp->stats_interval;
+    ctx->timeout = ctx->max_timeout;
+
 
     rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
