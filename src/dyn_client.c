@@ -895,6 +895,14 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         }
     }
 
+    if (msg->msg_type == 1) {
+        // Strictly local host only
+        msg->consistency = DC_ONE;
+        msg->rsp_handler = msg_local_one_rsp_handler;
+        local_req_forward(ctx, c_conn, msg, key, keylen);
+        return;
+    }
+
     if (msg->is_read) {
         msg->consistency = conn_get_read_consistency(c_conn);
     } else {
