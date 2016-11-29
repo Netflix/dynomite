@@ -321,8 +321,8 @@ struct server_pool {
     secure_server_option_t secure_server_option;
     struct string      pem_key_file;
     struct string      recon_key_file;       /* file with Key encryption in reconciliation */
-	struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
-	struct endpoint    stats_endpoint;       /* stats_listen: socket info for stats */
+    struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
+    struct endpoint    stats_endpoint;       /* stats_listen: socket info for stats */
     int                stats_interval;       /* stats aggregation interval */
 
 };

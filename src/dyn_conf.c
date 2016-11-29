@@ -102,7 +102,7 @@ static struct string dist_strings[] = {
 
 #define CONF_DEFAULT_STATS_PNAME             "0.0.0.0:22222" // default stats port
 #define CONF_DEFAULT_STATS_PORT              22222
-#define CONF_DEFAULT_STATS_INTERVAL          (30 * 1000) /* in msec */
+#define CONF_DEFAULT_STATS_INTERVAL_MS       (30 * 1000) /* in msec */
 
 #define PEM_KEY_FILE      "conf/dynomite.pem"
 #define RECON_KEY_FILE    "conf/recon_key.pem"
@@ -2215,11 +2215,11 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (cp->stats_interval == CONF_UNSET_NUM) {
-            cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL;
+            cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL_MS;
     }
 
     if (!cp->stats_listen.valid) {
-        log_error("conf: directive \"stats_listen:\" is missing - using defaults %s:%d",
+        log_error("conf: directive \"stats_listen:\" is missing - using defaults %s",
         		CONF_DEFAULT_STATS_PNAME, CONF_DEFAULT_STATS_PORT);
         cp->stats_listen.port=CONF_DEFAULT_STATS_PORT;
         string_copy_c(&cp->stats_listen.pname,

@@ -119,9 +119,6 @@
 	ACTION( redis_req_sortedsets,		  STATS_COUNTER,	  "# Redis sortedsets")										  \
 	ACTION( redis_req_other,			  STATS_COUNTER,	  "# Redis other")											  \
 
-#define STATS_ADDR      "0.0.0.0"
-#define STATS_PORT      22222
-#define STATS_INTERVAL  (30 * 1000)     /* in msec */
 
 typedef enum stats_type {
     STATS_INVALID,
