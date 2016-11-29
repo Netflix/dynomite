@@ -528,7 +528,6 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 
     ASSERT(!rsp->request && req->request);
     ASSERT(req->selected_rsp == rsp);
-    ASSERT(req->done && !req->swallow);
     log_debug(LOG_DEBUG, "DNODE RSP SENT %s %d dmsg->id %u",
               conn_get_type_string(conn),
              conn->sd, req->dmsg->id);

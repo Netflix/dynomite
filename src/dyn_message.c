@@ -497,8 +497,8 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     msg->mlen = (uint32_t)n;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" error '%s'",
-              msg, msg->id, msg->mlen, errstr);
+       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" err %d error '%s'",
+                 msg, msg->id, msg->mlen, err, errstr);
     }
 
     return msg;
@@ -1074,7 +1074,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     struct array sendv;                  /* send iovec */
     size_t nsend, nsent;                 /* bytes to send; bytes sent */
     size_t limit;                        /* bytes to send limit */
-    ssize_t n;                           /* bytes sent by sendv */
+    ssize_t n = 0;                       /* bytes sent by sendv */
 
     if (log_loggable(LOG_VVERB)) {
        loga("About to dump out the content of msg");
@@ -1130,11 +1130,10 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         }
     }
 
-    ASSERT(!TAILQ_EMPTY(&send_msgq) && nsend != 0);
-
     conn->smsg = NULL;
 
-    n = conn_sendv_data(conn, &sendv, nsend);
+    if (nsend != 0)
+        n = conn_sendv_data(conn, &sendv, nsend);
 
     nsent = n > 0 ? (size_t)n : 0;
 

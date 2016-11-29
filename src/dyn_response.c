@@ -55,30 +55,32 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *pmsg;        /* peer message (response) */
     struct msg *cmsg, *nmsg; /* current and next message (request) */
     uint64_t id;
-    err_t err;
+    err_t err = 0, dyn_err = 0;
 
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
     ASSERT(msg->request && req_error(conn, msg));
     ASSERT(msg->owner == conn);
 
+    // first grab the error from the current msg
+    err = msg->err;
+    dyn_err = msg->dyn_error;
+
     id = msg->frag_id;
     if (id != 0) {
-        for (err = 0, cmsg = TAILQ_NEXT(msg, c_tqe);
+        for (cmsg = TAILQ_NEXT(msg, c_tqe);
              cmsg != NULL && cmsg->frag_id == id;
              cmsg = nmsg) {
             nmsg = TAILQ_NEXT(cmsg, c_tqe);
 
             /* dequeue request (error fragment) from client outq */
             conn_dequeue_outq(ctx, conn, cmsg);
-            if (err == 0 && cmsg->err != 0) {
+            if (!err && cmsg->err != 0) {
                 err = cmsg->err;
+                dyn_err = cmsg->dyn_error;
             }
-
             req_put(cmsg);
         }
-    } else {
-        err = msg->err;
     }
 
     pmsg = msg->selected_rsp;
@@ -89,7 +91,7 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
         rsp_put(pmsg);
     }
 
-    return msg_get_error(conn, msg->dyn_error, err);
+    return msg_get_error(conn, dyn_err, err);
 }
 
 struct msg *
