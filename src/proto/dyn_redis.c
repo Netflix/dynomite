@@ -2444,7 +2444,8 @@ redis_post_splitcopy(struct msg *r)
     }
 
     ASSERT(r->request);
-    ASSERT(r->type == MSG_REQ_REDIS_MGET || r->type == MSG_REQ_REDIS_DEL);
+    ASSERT(r->type == MSG_REQ_REDIS_MGET || r->type == MSG_REQ_REDIS_DEL ||
+           r->type == MSG_REQ_REDIS_MSET);
     ASSERT(!STAILQ_EMPTY(&r->mhdr));
 
     nhbuf = mbuf_get();
@@ -2553,6 +2554,12 @@ redis_pre_coalesce(struct msg *r)
         }
         break;
 
+    case MSG_RSP_REDIS_ERROR:
+        pr->error = r->error;
+        pr->err = r->err;
+        pr->dyn_error = r->dyn_error;
+        break;
+
     default:
         /*
          * Valid responses for a fragmented request are MSG_RSP_REDIS_INTEGER or,
@@ -2560,8 +2567,9 @@ redis_pre_coalesce(struct msg *r)
          * with EINVAL errno
          */
         mbuf = STAILQ_FIRST(&r->mhdr);
-        log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
-                    "with unknown type %d", r->type);
+        if (mbuf)
+            log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
+                        "with unknown type %d", r->type);
         pr->error = 1;
         pr->err = EINVAL;
         break;
@@ -2623,7 +2631,13 @@ redis_post_coalesce(struct msg *r)
             pr->error = 1;        /* mark this msg as err */
             pr->err = errno;
         }
+        break;
     default:
+        log_error("req %lu:%lu type %u has rsp %lu:%lu with invalid type %u",
+                  r->id, r->parent_id, r->type, pr->id, pr->parent_id, pr->type);
+        if (log_loggable(LOG_INFO)) {
+            msg_dump(pr);
+        }
         NOT_REACHED();
     }
 }
