@@ -252,9 +252,6 @@ client_close(struct context *ctx, struct conn *conn)
 static rstatus_t
 client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 {
-    ASSERT_LOG(!rsp->peer, "response %lu:%lu has peer set",
-               rsp->id, rsp->parent_id);
-
     // now the handler owns the response.
     ASSERT(conn->type == CONN_CLIENT);
     // Fetch the original request
@@ -700,6 +697,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         // All other cases return a response
         struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
         msg->done = 1;
+        rsp->type = MSG_RSP_REDIS_ERROR;
         rsp->error = msg->error = 1;
         rsp->err = msg->err = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
         rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
@@ -1025,7 +1023,7 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     conn->omsg_count++;
     histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
     TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
-    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
+    log_debug(LOG_VERB, "conn %p enqueue outq %lu:%lu", conn, msg->id, msg->parent_id);
 }
 
 static void
@@ -1041,7 +1039,7 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
     conn->omsg_count--;
     histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
     TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
-    log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
+    log_debug(LOG_VERB, "conn %p dequeue outq %lu:%lu", conn, msg->id, msg->parent_id);
 }
 
 struct conn_ops client_ops = {
