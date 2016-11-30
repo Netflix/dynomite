@@ -140,9 +140,9 @@ rspmgr_get_response(struct response_mgr *rspmgr)
     } else {
         log_info("none of the responses match, returning error");
         struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
-        rsp->error = 1;
-        rsp->err = NO_QUORUM_ACHIEVED;
-        rsp->dyn_error = NO_QUORUM_ACHIEVED;
+        rsp->is_error = 1;
+        rsp->error_code = NO_QUORUM_ACHIEVED;
+        rsp->dyn_error_code = NO_QUORUM_ACHIEVED;
         ASSERT(rspmgr->err_rsp == NULL);
         rspmgr->err_rsp = rsp;
         rspmgr->error_responses++;
@@ -171,7 +171,7 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
 {
     log_info("req %d submitting response %d awaiting_rsps %d",
               rspmgr->msg->id, rsp->id, rspmgr->msg->awaiting_rsps);
-    if (rsp->error) {
+    if (rsp->is_error) {
         log_debug(LOG_VERB, "Received error response %d:%d for req %d:%d",
                   rsp->id, rsp->parent_id, rspmgr->msg->id, rspmgr->msg->parent_id);
         rspmgr->error_responses++;

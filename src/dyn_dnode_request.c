@@ -24,8 +24,8 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
             strerror(errno));
 
     msg->done = 1;
-    msg->error = 1;
-    msg->err = errno;
+    msg->is_error = 1;
+    msg->error_code = errno;
 
     if (!msg->expect_datastore_reply || msg->swallow) {
         req_put(msg);
@@ -44,7 +44,7 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 static void
 dnode_peer_req_forward_stats(struct context *ctx, struct node *server, struct msg *msg)
 {
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
     stats_pool_incr(ctx, peer_requests);
     stats_pool_incr_by(ctx, peer_request_bytes, msg->mlen);
 }

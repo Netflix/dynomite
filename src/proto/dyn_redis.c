@@ -2538,8 +2538,8 @@ redis_pre_coalesce(struct msg *r)
         if (pr->first_fragment) {
             mbuf = mbuf_get();
             if (mbuf == NULL) {
-                pr->error = 1;
-                pr->err = EINVAL;
+                pr->is_error = 1;
+                pr->error_code = EINVAL;
                 return;
             }
             STAILQ_INSERT_HEAD(&r->mhdr, mbuf, next);
@@ -2555,9 +2555,9 @@ redis_pre_coalesce(struct msg *r)
         break;
 
     case MSG_RSP_REDIS_ERROR:
-        pr->error = r->error;
-        pr->err = r->err;
-        pr->dyn_error = r->dyn_error;
+        pr->is_error = r->is_error;
+        pr->error_code = r->error_code;
+        pr->dyn_error_code = r->dyn_error_code;
         break;
 
     default:
@@ -2570,8 +2570,8 @@ redis_pre_coalesce(struct msg *r)
         if (mbuf)
             log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
                         "with unknown type %d", r->type);
-        pr->error = 1;
-        pr->err = EINVAL;
+        pr->is_error = 1;
+        pr->error_code = EINVAL;
         break;
     }
 }
@@ -2591,7 +2591,7 @@ redis_post_coalesce(struct msg *r)
     rstatus_t status = DN_OK;
 
     ASSERT(r->request && r->first_fragment);
-    if (r->error || r->ferror) {
+    if (r->is_error || r->is_ferror) {
         /* do nothing, if msg is in error */
         return;
     }
@@ -2628,8 +2628,8 @@ redis_post_coalesce(struct msg *r)
     case MSG_RSP_REDIS_STATUS:
         status = msg_append(pr, rsp_ok.data, rsp_ok.len);
         if (status != DN_OK) {
-            pr->error = 1;        /* mark this msg as err */
-            pr->err = errno;
+            pr->is_error = 1;        /* mark this msg as err */
+            pr->error_code = errno;
         }
         break;
     default:

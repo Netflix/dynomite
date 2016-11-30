@@ -198,7 +198,7 @@ client_close(struct context *ctx, struct conn *conn)
         conn->rmsg = NULL;
 
         ASSERT(msg->peer == NULL);
-        ASSERT(msg->request && !msg->done);
+        ASSERT(msg->is_request && !msg->done);
 
         log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
                   "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
@@ -219,13 +219,13 @@ client_close(struct context *ctx, struct conn *conn)
         if (msg->done) {
             log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
                       "%"PRIu32" type %d", conn->sd,
-                      msg->error ? "error": "completed", msg->id, msg->mlen,
+                      msg->is_error ? "error": "completed", msg->id, msg->mlen,
                       msg->type);
             req_put(msg);
         } else {
             msg->swallow = 1;
 
-            ASSERT(msg->request);
+            ASSERT(msg->is_request);
             ASSERT(msg->peer == NULL);
 
             log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
@@ -323,7 +323,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             conn->rmsg = NULL;
 
             ASSERT(msg->peer == NULL);
-            ASSERT(msg->request && !msg->done);
+            ASSERT(msg->is_request && !msg->done);
 
             log_error("eof c %d discarding incomplete req %"PRIu64" len "
                       "%"PRIu32"", conn->sd, msg->id, msg->mlen);
@@ -348,7 +348,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 
     msg = conn->rmsg;
     if (msg != NULL) {
-        ASSERT(msg->request);
+        ASSERT(msg->is_request);
         return msg;
     }
 
@@ -431,8 +431,8 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     rsp->peer = msg;
-    rsp->error = 1;
-    rsp->err = err;
+    rsp->is_error = 1;
+    rsp->error_code = err;
 
     rstatus_t status = conn_handle_response(conn, msg->id, rsp);
     IGNORE_RET_VAL(status);
@@ -532,7 +532,7 @@ req_redis_stats(struct context *ctx, struct msg *msg)
 static void
 req_forward_stats(struct context *ctx, struct msg *msg)
 {
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
 
     if (msg->is_read) {
        stats_server_incr(ctx, read_requests);
@@ -698,10 +698,10 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
         struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
         msg->done = 1;
         rsp->type = MSG_RSP_REDIS_ERROR;
-        rsp->error = msg->error = 1;
-        rsp->err = msg->err = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
-        rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
-                                                    PEER_HOST_DOWN);
+        rsp->is_error = msg->is_error = 1;
+        rsp->error_code = msg->error_code = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
+        rsp->dyn_error_code = msg->dyn_error_code = (p_conn ? PEER_HOST_NOT_CONNECTED:
+                                                              PEER_HOST_DOWN);
         rsp->dmsg = dmsg_get();
         rsp->peer = msg;
         rsp->dmsg->id =  msg->id;
@@ -741,7 +741,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
         if (string_compare(rack->name, &pool->rack) == 0 ) {
             rack_msg = msg;
         } else {
-            rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
+            rack_msg = msg_get(c_conn, msg->is_request, __FUNCTION__);
             if (rack_msg == NULL) {
                 log_debug(LOG_VERB, "whelp, looks like yer screwed "
                         "now, buddy. no inter-rack messages for "
@@ -806,7 +806,7 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     if (rack == NULL)
         rack = array_get(&dc->racks, 0);
 
-    struct msg *rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
+    struct msg *rack_msg = msg_get(c_conn, msg->is_request, __FUNCTION__);
     if (rack_msg == NULL) {
         log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
         msg_put(rack_msg);
@@ -939,10 +939,10 @@ req_recv_done(struct context *ctx, struct conn *conn,
               struct msg *msg, struct msg *nmsg)
 {
     ASSERT(conn->type == CONN_CLIENT);
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
     ASSERT(msg->owner == conn);
     ASSERT(conn->rmsg == msg);
-    ASSERT(nmsg == NULL || nmsg->request);
+    ASSERT(nmsg == NULL || nmsg->is_request);
 
     if (!msg->is_read)
         stats_histo_add_payloadsize(ctx, msg->mlen);
@@ -1008,16 +1008,16 @@ msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rspmgr_free_other_responses(&req->rspmgr, rsp);
     rsp->peer = req;
     req->selected_rsp = rsp;
-    req->err = rsp->err;
-    req->error = rsp->error;
-    req->dyn_error = rsp->dyn_error;
+    req->error_code = rsp->error_code;
+    req->is_error = rsp->is_error;
+    req->dyn_error_code = rsp->dyn_error_code;
     return DN_OK;
 }
 
 static void
 req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
     ASSERT(conn->type == CONN_CLIENT);
 
     conn->omsg_count++;
@@ -1029,7 +1029,7 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg
 static void
 req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
 {
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
     ASSERT(conn->type == CONN_CLIENT);
 
     if (msg->stime_in_microsec) {

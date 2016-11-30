@@ -399,7 +399,7 @@ core_timeout(struct context *ctx)
 
 		/* skip over req that are in-error or done */
 
-		if (msg->error || msg->done) {
+		if (msg->is_error || msg->done) {
 			msg_tmo_delete(msg);
 			continue;
 		}

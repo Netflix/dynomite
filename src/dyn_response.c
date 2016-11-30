@@ -44,7 +44,7 @@ rsp_put(struct msg *msg)
 {
     if (!msg)
         return;
-    ASSERT(!msg->request);
+    ASSERT(!msg->is_request);
     //ASSERT(msg->peer == NULL);
     msg_put(msg);
 }
@@ -55,16 +55,16 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
     struct msg *pmsg;        /* peer message (response) */
     struct msg *cmsg, *nmsg; /* current and next message (request) */
     uint64_t id;
-    err_t err = 0, dyn_err = 0;
+    err_t error_code = 0, dyn_error_code = 0;
 
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
-    ASSERT(msg->request && req_error(conn, msg));
+    ASSERT(msg->is_request && req_error(conn, msg));
     ASSERT(msg->owner == conn);
 
     // first grab the error from the current msg
-    err = msg->err;
-    dyn_err = msg->dyn_error;
+    error_code = msg->error_code;
+    dyn_error_code = msg->dyn_error_code;
 
     id = msg->frag_id;
     if (id != 0) {
@@ -75,9 +75,9 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
             /* dequeue request (error fragment) from client outq */
             conn_dequeue_outq(ctx, conn, cmsg);
-            if (!err && cmsg->err != 0) {
-                err = cmsg->err;
-                dyn_err = cmsg->dyn_error;
+            if (!error_code && cmsg->error_code != 0) {
+                error_code = cmsg->error_code;
+                dyn_error_code = cmsg->dyn_error_code;
             }
             req_put(cmsg);
         }
@@ -85,13 +85,13 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
 
     pmsg = msg->selected_rsp;
     if (pmsg != NULL) {
-        ASSERT(!pmsg->request && pmsg->peer == msg);
+        ASSERT(!pmsg->is_request && pmsg->peer == msg);
         msg->selected_rsp = NULL;
         pmsg->peer = NULL;
         rsp_put(pmsg);
     }
 
-    return msg_get_error(conn, dyn_err, err);
+    return msg_get_error(conn, dyn_error_code, error_code);
 }
 
 struct msg *
@@ -121,7 +121,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
 
     rsp = conn->smsg;
     if (rsp != NULL) {
-        ASSERT(!rsp->request);
+        ASSERT(!rsp->is_request);
         ASSERT(rsp->peer != NULL);
         req = TAILQ_NEXT(rsp->peer, c_tqe);
     }
@@ -130,7 +130,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         conn->smsg = NULL;
         return NULL;
     }
-    ASSERT(req->request && !req->swallow);
+    ASSERT(req->is_request && !req->swallow);
 
     if (req_error(conn, req)) {
         rsp = rsp_make_error(ctx, conn, req);
@@ -149,7 +149,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
     } else {
         rsp = req->selected_rsp;
     }
-    ASSERT(!rsp->request);
+    ASSERT(!rsp->is_request);
 
     conn->smsg = rsp;
 
@@ -177,7 +177,7 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
     ASSERT_LOG(!req->rsp_sent, "request %d:%d already had a response sent",
                req->id, req->parent_id);
 
-    ASSERT(!rsp->request && req->request);
+    ASSERT(!rsp->is_request && req->is_request);
     ASSERT(req->selected_rsp == rsp);
     req->rsp_sent = 1;
 
