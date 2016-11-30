@@ -27,46 +27,46 @@
 struct msg *
 req_get(struct conn *conn)
 {
-    struct msg *msg;
+    struct msg *req;
 
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
 
-    msg = msg_get(conn, true, __FUNCTION__);
-    if (msg == NULL) {
+    req = msg_get(conn, true, __FUNCTION__);
+    if (req == NULL) {
         conn->err = errno;
     }
 
-    return msg;
+    return req;
 }
 
 void
-req_put(struct msg *msg)
+req_put(struct msg *req)
 {
-    struct msg *pmsg; /* peer message (response) */
+    struct msg *rsp; /* peer message (response) */
 
-    ASSERT(msg->is_request);
+    ASSERT(req->is_request);
 
-    pmsg = msg->peer;
-    if (pmsg != NULL) {
-        ASSERT(!pmsg->is_request && pmsg->peer == msg);
-        msg->peer = NULL;
-        pmsg->peer = NULL;
-        rsp_put(pmsg);
+    rsp = req->peer;
+    if (rsp != NULL) {
+        ASSERT(!rsp->is_request && rsp->peer == req);
+        req->peer = NULL;
+        rsp->peer = NULL;
+        rsp_put(rsp);
     }
-    if (pmsg != msg->selected_rsp) {
-        pmsg = msg->selected_rsp;
-        if (pmsg != NULL) {
-            ASSERT(!pmsg->is_request && pmsg->peer == msg);
-            msg->selected_rsp = NULL;
-            pmsg->peer = NULL;
-            rsp_put(pmsg);
+    if (rsp != req->selected_rsp) {
+        rsp = req->selected_rsp;
+        if (rsp != NULL) {
+            ASSERT(!rsp->is_request && rsp->peer == req);
+            req->selected_rsp = NULL;
+            rsp->peer = NULL;
+            rsp_put(rsp);
         }
     }
 
-    msg_tmo_delete(msg);
+    msg_tmo_delete(req);
 
-    msg_put(msg);
+    msg_put(req);
 }
 
 /*
@@ -77,7 +77,7 @@ req_put(struct msg *msg)
  * fragments.
  */
 bool
-req_done(struct conn *conn, struct msg *msg)
+req_done(struct conn *conn, struct msg *req)
 {
     struct msg *cmsg, *pmsg; /* current and previous message */
     uint64_t id;             /* fragment id */
@@ -86,27 +86,27 @@ req_done(struct conn *conn, struct msg *msg)
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
 
-    if (msg == NULL)
+    if (req == NULL)
         return false;
 
-    ASSERT(msg->is_request);
+    ASSERT(req->is_request);
 
-    if (!msg->selected_rsp)
+    if (!req->selected_rsp)
         return false;
 
-    id = msg->frag_id;
+    id = req->frag_id;
     if (id == 0) {
         return true;
     }
 
-    if (msg->fdone) {
+    if (req->fdone) {
         /* request has already been marked as done */
         return true;
     }
 
     /* check all fragments of the given request vector are done */
 
-    for (pmsg = msg, cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
+    for (pmsg = req, cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
 
@@ -114,7 +114,7 @@ req_done(struct conn *conn, struct msg *msg)
             return false;
     }
 
-    for (pmsg = msg, cmsg = TAILQ_NEXT(msg, c_tqe);
+    for (pmsg = req, cmsg = TAILQ_NEXT(req, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
 
@@ -134,26 +134,26 @@ req_done(struct conn *conn, struct msg *msg)
      * future req_done calls for any of fragments of this request
      */
 
-    msg->fdone = 1;
+    req->fdone = 1;
     nfragment = 1;
 
-    for (pmsg = msg, cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
+    for (pmsg = req, cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
         cmsg->fdone = 1;
         nfragment++;
     }
 
-    for (pmsg = msg, cmsg = TAILQ_NEXT(msg, c_tqe);
+    for (pmsg = req, cmsg = TAILQ_NEXT(req, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
         cmsg->fdone = 1;
         nfragment++;
     }
 
-    ASSERT(msg->frag_owner->nfrag == nfragment);
+    ASSERT(req->frag_owner->nfrag == nfragment);
 
-    g_post_coalesce(msg->frag_owner);
+    g_post_coalesce(req->frag_owner);
 
     log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
               "fragments is done", conn->sd, id, nfragment);
@@ -169,31 +169,31 @@ req_done(struct conn *conn, struct msg *msg)
  * receiving response for any its fragments.
  */
 bool
-req_error(struct conn *conn, struct msg *msg)
+req_error(struct conn *conn, struct msg *req)
 {
     struct msg *cmsg; /* current message */
     uint64_t id;
     uint32_t nfragment;
 
-    ASSERT(msg->is_request && req_done(conn, msg));
+    ASSERT(req->is_request && req_done(conn, req));
 
-    if (msg->is_error) {
+    if (req->is_error) {
         return true;
     }
 
-    id = msg->frag_id;
+    id = req->frag_id;
     if (id == 0) {
         return false;
     }
 
-    if (msg->is_ferror) {
+    if (req->is_ferror) {
         /* request has already been marked to be in error */
         return true;
     }
 
     /* check if any of the fragments of the given request are in error */
 
-    for (cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
+    for (cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
 
@@ -202,7 +202,7 @@ req_error(struct conn *conn, struct msg *msg)
         }
     }
 
-    for (cmsg = TAILQ_NEXT(msg, c_tqe);
+    for (cmsg = TAILQ_NEXT(req, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
 
@@ -220,17 +220,17 @@ ferror:
      * future req_error calls for any of fragments of this request
      */
 
-    msg->is_ferror = 1;
+    req->is_ferror = 1;
     nfragment = 1;
 
-    for (cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
+    for (cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
         cmsg->is_ferror = 1;
         nfragment++;
     }
 
-    for (cmsg = TAILQ_NEXT(msg, c_tqe);
+    for (cmsg = TAILQ_NEXT(req, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
         cmsg->is_ferror = 1;
