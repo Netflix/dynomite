@@ -177,7 +177,7 @@ req_error(struct conn *conn, struct msg *msg)
 
     ASSERT(msg->request && req_done(conn, msg));
 
-    if (msg->error) {
+    if (msg->is_error) {
         return true;
     }
 
@@ -186,7 +186,7 @@ req_error(struct conn *conn, struct msg *msg)
         return false;
     }
 
-    if (msg->ferror) {
+    if (msg->is_ferror) {
         /* request has already been marked to be in error */
         return true;
     }
@@ -197,7 +197,7 @@ req_error(struct conn *conn, struct msg *msg)
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
 
-        if (cmsg->error) {
+        if (cmsg->is_error) {
             goto ferror;
         }
     }
@@ -206,7 +206,7 @@ req_error(struct conn *conn, struct msg *msg)
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
 
-        if (cmsg->error) {
+        if (cmsg->is_error) {
             goto ferror;
         }
     }
@@ -220,20 +220,20 @@ ferror:
      * future req_error calls for any of fragments of this request
      */
 
-    msg->ferror = 1;
+    msg->is_ferror = 1;
     nfragment = 1;
 
     for (cmsg = TAILQ_PREV(msg, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
-        cmsg->ferror = 1;
+        cmsg->is_ferror = 1;
         nfragment++;
     }
 
     for (cmsg = TAILQ_NEXT(msg, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
-        cmsg->ferror = 1;
+        cmsg->is_ferror = 1;
         nfragment++;
     }
 

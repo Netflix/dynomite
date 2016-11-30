@@ -213,7 +213,7 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     struct rbnode *node;
     msec_t timeout;
 
-    //ASSERT(msg->request);
+    //ASSERT(msg->is_request);
     ASSERT(!msg->quit && msg->expect_datastore_reply);
 
     timeout = conn->dyn_mode? dnode_peer_timeout(msg, conn) : server_timeout(conn);
@@ -337,10 +337,10 @@ done:
     msg->rlen = 0;
     msg->integer = 0;
 
-    msg->err = 0;
-    msg->error = 0;
-    msg->ferror = 0;
-    msg->request = 0;
+    msg->error_code = 0;
+    msg->is_error = 0;
+    msg->is_ferror = 0;
+    msg->is_request = 0;
     msg->quit = 0;
     msg->expect_datastore_reply = 1;
     msg->done = 0;
@@ -356,7 +356,7 @@ done:
     msg->dyn_state = 0;
     msg->dmsg = NULL;
     msg->msg_type = 0;
-    msg->dyn_error = 0;
+    msg->dyn_error_code = 0;
     msg->rsp_handler = msg_cant_handle_response;
     msg->consistency = DC_ONE;
     return msg;
@@ -383,7 +383,7 @@ msg_get(struct conn *conn, bool request, const char * const caller)
     }
 
     msg->owner = conn;
-    msg->request = request ? 1 : 0;
+    msg->is_request = request ? 1 : 0;
 
     if (g_data_store == DATA_REDIS) {
         if (request) {
@@ -420,7 +420,7 @@ msg_get(struct conn *conn, bool request, const char * const caller)
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
-              msg, msg->id, msg->request, conn->sd);
+              msg, msg->id, msg->is_request, conn->sd);
     }
 
     return msg;
@@ -431,7 +431,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 {
     target->parent_id = src->id;
     target->owner = src->owner;
-    target->request = src->request;
+    target->is_request = src->is_request;
 
     target->parser = src->parser;
     target->expect_datastore_reply = src->expect_datastore_reply;
@@ -558,7 +558,7 @@ msg_put(struct msg *msg)
    	    return;
     }
 
-    if (msg->request && msg->awaiting_rsps != 0) {
+    if (msg->is_request && msg->awaiting_rsps != 0) {
         log_error("Not freeing req %d, awaiting_rsps = %u",
                   msg->id, msg->awaiting_rsps);
         return;
@@ -619,8 +619,8 @@ msg_dump(struct msg *msg)
     }
 
     loga("msg dump id %"PRIu64" request %d len %"PRIu32" type %d done %d "
-         "error %d (err %d)", msg->id, msg->request, msg->mlen, msg->type,
-         msg->done, msg->error, msg->err);
+         "error %d (err %d)", msg->id, msg->is_request, msg->mlen, msg->type,
+         msg->done, msg->is_error, msg->error_code);
 
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
         uint8_t *p, *q;
@@ -668,7 +668,7 @@ msg_deinit(void)
 bool
 msg_empty(struct msg *msg)
 {
-    return msg->mlen == 0 ? true : (msg->dyn_error == BAD_FORMAT? true : false);
+    return msg->mlen == 0 ? true : (msg->dyn_error_code == BAD_FORMAT? true : false);
 }
 
 uint32_t
@@ -731,7 +731,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -757,7 +757,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
 
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, g_pre_splitcopy, msg);
     if (nbuf == NULL) {
@@ -770,7 +770,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -1012,7 +1012,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             } else { //clean up the mess and recover it
                 mbuf_insert(&msg->mhdr, nbuf);
                 msg->pos = nbuf->last;
-                msg->dyn_error = BAD_FORMAT;
+                msg->dyn_error_code = BAD_FORMAT;
             }
         }
 

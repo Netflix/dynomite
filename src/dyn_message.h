@@ -325,10 +325,10 @@ struct msg {
     uint32_t             nfrag;           /* # fragment */
     uint64_t             frag_id;         /* id of fragmented message */
 
-    err_t                err;             /* errno on error? */
-    unsigned             error:1;         /* error? */
-    unsigned             ferror:1;        /* one or more fragments are in error? */
-    unsigned             request:1;       /* request? or response? */
+    err_t                error_code;      /* errno on error? */
+    unsigned             is_error:1;      /* error? */
+    unsigned             is_ferror:1;     /* one or more fragments are in error? */
+    unsigned             is_request:1;    /* request? or response? */
     unsigned             quit:1;          /* quit request? */
     unsigned             expect_datastore_reply:1;       /* expect datastore reply */
     unsigned             done:1;          /* done? */
@@ -347,7 +347,7 @@ struct msg {
     //dynomite
     struct dmsg          *dmsg;          /* dyn message */
     int                  dyn_state;
-    dyn_error_t          dyn_error;      /* error code for dynomite */
+    dyn_error_t          dyn_error_code; /* error code for dynomite */
     uint8_t              msg_type;       /* for special message types
                                               0 : normal,
                                               1 : local cmd only no matter what

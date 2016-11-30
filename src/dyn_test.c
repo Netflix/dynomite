@@ -335,7 +335,7 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
                 log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - more data but can't split!");
             }
 
-            nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
+            nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
             mbuf_insert(&nmsg->mhdr, nbuf);
             nmsg->pos = nbuf->pos;
 

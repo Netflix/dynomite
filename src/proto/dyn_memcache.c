@@ -1330,8 +1330,8 @@ memcache_pre_coalesce(struct msg *r)
         mbuf = STAILQ_FIRST(&r->mhdr);
         log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
                     "with unknown type %d", r->type);
-        pr->error = 1;
-        pr->err = EINVAL;
+        pr->is_error = 1;
+        pr->error_code = EINVAL;
         break;
     }
 }
