@@ -1207,7 +1207,7 @@ stats_send_rsp(struct stats *st)
                         "/writes_only\n/loglevelup\n/logleveldown\n/historeset\n"\
                         "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum>\n"\
                         "/get_timeout_factor\n/set_timeout_factor/<1-10>\n/peer/<up|down|reset>\n"\
-                        "/state/<writes_only|normal|%s>\n\n", "resuming");
+                        "/state/<get_state|writes_only|normal|%s>\n\n", "resuming");
         return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_NORMAL) {
         st->ctx->dyn_state = NORMAL;
