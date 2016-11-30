@@ -161,6 +161,27 @@ typedef enum dyn_state {
 	UNKNOWN     = 12
 } dyn_state_t;
 
+static inline char*
+get_state(dyn_state_t s) {
+	switch(s)
+	{
+		case INIT: return "INIT";
+		case STANDBY: return "STANDBY";
+		case WRITES_ONLY: return "WRITES_ONLY";
+		case RESUMING: return "RESUMING";
+		case NORMAL: return "NORMAL";
+		case SUSPENDING: return "SUSPENDING";
+		case LEAVING: return "LEAVING";
+		case JOINING: return "JOINING";
+		case DOWN: return "DOWN";
+		case REMOVED: return "REMOVED";
+		case EXITING: return "EXITING";
+		case RESET: return "RESET";
+		case UNKNOWN: return "Unknown";
+	}
+	return "INVALID STATE";
+}
+
 typedef enum data_store {
 	DATA_REDIS        = 0, /* Data store is Redis */
 	DATA_MEMCACHE	  = 1  /* Data store is Memcache */
