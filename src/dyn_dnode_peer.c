@@ -53,6 +53,7 @@ dnode_peer_unref(struct conn *conn)
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->owner != NULL);
+    conn_event_del_conn(conn);
 
     peer = conn->owner;
     conn->owner = NULL;
@@ -1610,7 +1611,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 
      //p_conn->enqueue_outq(ctx, p_conn, pmsg);
      //if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-     //   status = event_add_out(ctx->evb, p_conn);
+     //   status = conn_event_add_out(p_conn);
      //   if (status != DN_OK) {
      //      p_conn->err = errno;
      //   }
@@ -1618,7 +1619,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 
 
     if (TAILQ_FIRST(&p_conn->omsg_q) != NULL && req_done(p_conn, TAILQ_FIRST(&p_conn->omsg_q))) {
-        status = event_add_out(ctx->evb, p_conn);
+        status = conn_event_add_out(p_conn);
         if (status != DN_OK) {
             p_conn->err = errno;
         }
@@ -1654,7 +1655,7 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
         }
 
         //requeue
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         IGNORE_RET_VAL(status);
 
         return NULL;

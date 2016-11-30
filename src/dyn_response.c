@@ -111,7 +111,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
             log_debug(LOG_INFO, "c %d is done", conn->sd);
         }
 
-        status = event_del_out(ctx->evb, conn);
+        status = conn_event_del_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }

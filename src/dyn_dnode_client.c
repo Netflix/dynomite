@@ -43,6 +43,7 @@ dnode_client_unref(struct conn *conn)
     ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->owner != NULL);
 
+    conn_event_del_conn(conn);
     pool = conn->owner;
     conn->owner = NULL;
     dictRelease(conn->outstanding_msgs_dict);
@@ -217,7 +218,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     // If this request is first in the out queue, then the connection is ready,
     // add the connection to epoll for writing
     if (conn_is_req_first_in_outqueue(conn, req)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }
