@@ -175,7 +175,7 @@ memcache_parse_req(struct msg *r)
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -780,7 +780,7 @@ memcache_parse_rsp(struct msg *r)
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    ASSERT(!r->request);
+    ASSERT(!r->is_request);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -1224,7 +1224,7 @@ memcache_pre_splitcopy(struct mbuf *mbuf, void *arg)
     struct string get = string("get ");   /* 'get ' string */
     struct string gets = string("gets "); /* 'gets ' string */
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(mbuf_empty(mbuf));
 
     switch (r->type) {
@@ -1251,7 +1251,7 @@ memcache_post_splitcopy(struct msg *r)
     struct mbuf *mbuf;
     struct string crlf = string(CRLF);
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(!STAILQ_EMPTY(&r->mhdr));
 
     mbuf = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -1271,8 +1271,8 @@ memcache_pre_coalesce(struct msg *r)
     struct msg *pr = r->peer; /* peer request */
     struct mbuf *mbuf;
 
-    ASSERT(!r->request);
-    ASSERT(pr->request);
+    ASSERT(!r->is_request);
+    ASSERT(pr->is_request);
 
     if (pr->frag_id == 0) {
         /* do nothing, if not a response to a fragmented request */

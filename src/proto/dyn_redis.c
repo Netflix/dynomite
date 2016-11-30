@@ -413,7 +413,7 @@ redis_parse_req(struct msg *r)
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -1889,7 +1889,7 @@ redis_parse_rsp(struct msg *r)
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    ASSERT(!r->request);
+    ASSERT(!r->is_request);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -2402,7 +2402,7 @@ redis_pre_splitcopy(struct mbuf *mbuf, void *arg)
     struct msg *r = arg;
     int n;
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(r->narg > 1);
     ASSERT(mbuf_empty(mbuf));
 
@@ -2443,7 +2443,7 @@ redis_post_splitcopy(struct msg *r)
         string_set_text(&hstr, "*3");
     }
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(r->type == MSG_REQ_REDIS_MGET || r->type == MSG_REQ_REDIS_DEL ||
            r->type == MSG_REQ_REDIS_MSET);
     ASSERT(!STAILQ_EMPTY(&r->mhdr));
@@ -2487,8 +2487,8 @@ redis_pre_coalesce(struct msg *r)
     struct msg *pr = r->peer; /* peer request */
     struct mbuf *mbuf;
 
-    ASSERT(!r->request);
-    ASSERT(pr->request);
+    ASSERT(!r->is_request);
+    ASSERT(pr->is_request);
 
     if (pr->frag_id == 0) {
         /* do nothing, if not a response to a fragmented request */
@@ -2590,13 +2590,13 @@ redis_post_coalesce(struct msg *r)
     int n;
     rstatus_t status = DN_OK;
 
-    ASSERT(r->request && r->first_fragment);
+    ASSERT(r->is_request && r->first_fragment);
     if (r->is_error || r->is_ferror) {
         /* do nothing, if msg is in error */
         return;
     }
 
-    ASSERT(!pr->request);
+    ASSERT(!pr->is_request);
 
     switch (pr->type) {
     case MSG_RSP_REDIS_INTEGER:

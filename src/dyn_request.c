@@ -45,11 +45,11 @@ req_put(struct msg *msg)
 {
     struct msg *pmsg; /* peer message (response) */
 
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
 
     pmsg = msg->peer;
     if (pmsg != NULL) {
-        ASSERT(!pmsg->request && pmsg->peer == msg);
+        ASSERT(!pmsg->is_request && pmsg->peer == msg);
         msg->peer = NULL;
         pmsg->peer = NULL;
         rsp_put(pmsg);
@@ -57,7 +57,7 @@ req_put(struct msg *msg)
     if (pmsg != msg->selected_rsp) {
         pmsg = msg->selected_rsp;
         if (pmsg != NULL) {
-            ASSERT(!pmsg->request && pmsg->peer == msg);
+            ASSERT(!pmsg->is_request && pmsg->peer == msg);
             msg->selected_rsp = NULL;
             pmsg->peer = NULL;
             rsp_put(pmsg);
@@ -89,7 +89,7 @@ req_done(struct conn *conn, struct msg *msg)
     if (msg == NULL)
         return false;
 
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
 
     if (!msg->selected_rsp)
         return false;
@@ -175,7 +175,7 @@ req_error(struct conn *conn, struct msg *msg)
     uint64_t id;
     uint32_t nfragment;
 
-    ASSERT(msg->request && req_done(conn, msg));
+    ASSERT(msg->is_request && req_done(conn, msg));
 
     if (msg->is_error) {
         return true;
