@@ -1113,7 +1113,7 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 }
 
                 if (strncmp(reqline[1], "/state", 6) == 0) {
-                    log_debug(LOG_VERB, "Setting state - URL Parameters : %s", reqline[1]);
+                    log_debug(LOG_VERB, "Setting/Getting state - URL Parameters : %s", reqline[1]);
                     char* state = reqline[1] + 7;
                     log_debug(LOG_VERB, "cmd : %s", state);
                     if (strcmp(state, "standby") == 0) {
@@ -1127,6 +1127,9 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                         return;
                     } else if (strcmp(state, "resuming") == 0) {
                         st_cmd->cmd = CMD_RESUMING;
+                        return;
+                    } else if (strcmp(state, "get_state") == 0) {
+                        st_cmd->cmd = CMD_GET_STATE;
                         return;
                     }
                 }
@@ -1223,6 +1226,10 @@ stats_send_rsp(struct stats *st)
     } else if (cmd == CMD_RESUMING) {
         st->ctx->dyn_state = RESUMING;
         return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_GET_STATE) {
+        char rsp[1024];
+        dn_sprintf(rsp, "State: %s\n", get_state(st->ctx->dyn_state));
+        return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_LOG_LEVEL_UP) {
         log_level_up();
         return stats_http_rsp(sd, ok.data, ok.len);
