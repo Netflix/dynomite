@@ -47,21 +47,12 @@ req_put(struct msg *req)
 
     ASSERT(req->is_request);
 
-    rsp = req->peer;
+    rsp = req->selected_rsp;
     if (rsp != NULL) {
         ASSERT(!rsp->is_request && rsp->peer == req);
-        req->peer = NULL;
+        req->selected_rsp = NULL;
         rsp->peer = NULL;
         rsp_put(rsp);
-    }
-    if (rsp != req->selected_rsp) {
-        rsp = req->selected_rsp;
-        if (rsp != NULL) {
-            ASSERT(!rsp->is_request && rsp->peer == req);
-            req->selected_rsp = NULL;
-            rsp->peer = NULL;
-            rsp_put(rsp);
-        }
     }
 
     msg_tmo_delete(req);

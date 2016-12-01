@@ -675,22 +675,22 @@ dmsg_init(void)
 void
 dmsg_deinit(void)
 {
-    struct dmsg *msg, *nmsg;
+    struct dmsg *dmsg, *ndmsg;
 
-    for (msg = TAILQ_FIRST(&free_dmsgq); msg != NULL;
-         msg = nmsg, nfree_dmsgq--) {
+    for (dmsg = TAILQ_FIRST(&free_dmsgq); dmsg != NULL;
+         dmsg = ndmsg, nfree_dmsgq--) {
         ASSERT(nfree_dmsgq > 0);
-        nmsg = TAILQ_NEXT(msg, m_tqe);
-        dmsg_free(msg);
+        ndmsg = TAILQ_NEXT(dmsg, m_tqe);
+        dmsg_free(dmsg);
     }
     ASSERT(nfree_dmsgq == 0);
 }
 
 
 bool
-dmsg_empty(struct dmsg *msg)
+dmsg_empty(struct dmsg *dmsg)
 {
-    return msg->mlen == 0 ? true : false;
+    return dmsg->mlen == 0 ? true : false;
 }
 
 

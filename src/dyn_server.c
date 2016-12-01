@@ -338,7 +338,6 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
         return;
     }
     req->done = 1;
-    req->peer = rsp;
     rsp->peer = req;
     rsp->is_error = req->is_error = 1;
     rsp->error_code = req->error_code = conn->err;
@@ -363,7 +362,7 @@ static void
 server_close(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
-	struct msg *msg, *nmsg; /* current and next message */
+	struct msg *req, *nmsg; /* current and next message */
 
     ASSERT(conn->type == CONN_SERVER);
 
@@ -378,25 +377,25 @@ server_close(struct context *ctx, struct conn *conn)
 	}
 
     uint32_t out_counter = 0;
-	for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
-		nmsg = TAILQ_NEXT(msg, s_tqe);
+	for (req = TAILQ_FIRST(&conn->omsg_q); req != NULL; req = nmsg) {
+		nmsg = TAILQ_NEXT(req, s_tqe);
 
 		/* dequeue the message (request) from server outq */
-        conn_dequeue_outq(ctx, conn, msg);
-        server_ack_err(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, req);
+        server_ack_err(ctx, conn, req);
         out_counter++;
 	}
 	ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
     uint32_t in_counter = 0;
-    for (msg = TAILQ_FIRST(&conn->imsg_q); msg != NULL; msg = nmsg) {
-		nmsg = TAILQ_NEXT(msg, s_tqe);
+    for (req = TAILQ_FIRST(&conn->imsg_q); req != NULL; req = nmsg) {
+		nmsg = TAILQ_NEXT(req, s_tqe);
 
 		/* dequeue the message (request) from server inq */
-		conn_dequeue_inq(ctx, conn, msg);
-        // We should also remove the msg from the timeout rbtree.
-        msg_tmo_delete(msg);
-        server_ack_err(ctx, conn, msg);
+		conn_dequeue_inq(ctx, conn, req);
+        // We should also remove the req from the timeout rbtree.
+        msg_tmo_delete(req);
+        server_ack_err(ctx, conn, req);
         in_counter++;
 
 		stats_server_incr(ctx, server_dropped_requests);
@@ -406,17 +405,17 @@ server_close(struct context *ctx, struct conn *conn)
     log_warn("close %s %d Dropped %u outqueue & %u inqueue requests",
              conn_get_type_string(conn), conn->sd, out_counter, in_counter);
 
-	msg = conn->rmsg;
-	if (msg != NULL) {
+	struct msg *rsp = conn->rmsg;
+	if (rsp != NULL) {
 		conn->rmsg = NULL;
 
-		ASSERT(!msg->is_request);
-		ASSERT(msg->peer == NULL);
+		ASSERT(!rsp->is_request);
+		ASSERT(rsp->peer == NULL);
 
-		rsp_put(msg);
+		rsp_put(rsp);
 
 		log_debug(LOG_INFO, "close s %d discarding rsp %"PRIu64" len %"PRIu32" "
-				"in error", conn->sd, msg->id, msg->mlen);
+				"in error", conn->sd, rsp->id, rsp->mlen);
 	}
 
 	ASSERT(conn->smsg == NULL);
@@ -766,13 +765,13 @@ server_get_rack_by_dc_rack(struct server_pool *sp, struct string *rackname, stru
 struct msg *
 rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-    struct msg *msg;
+    struct msg *rsp;
 
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
            (conn->type == CONN_SERVER));
 
     if (conn->eof) {
-        msg = conn->rmsg;
+        rsp = conn->rmsg;
 
         if (conn->dyn_mode) {
             if (conn->non_bytes_recv > MAX_CONN_ALLOWABLE_NON_RECV) {
@@ -780,20 +779,20 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
                 return NULL;
             }
             conn->eof = 0;
-            return msg;
+            return rsp;
         }
 
         /* server sent eof before sending the entire request */
-        if (msg != NULL) {
+        if (rsp != NULL) {
             conn->rmsg = NULL;
 
-            ASSERT(msg->peer == NULL);
-            ASSERT(!msg->is_request);
+            ASSERT(rsp->peer == NULL);
+            ASSERT(!rsp->is_request);
 
             log_error("eof s %d discarding incomplete rsp %"PRIu64" len "
-                      "%"PRIu32"", conn->sd, msg->id, msg->mlen);
+                      "%"PRIu32"", conn->sd, rsp->id, rsp->mlen);
 
-            rsp_put(msg);
+            rsp_put(rsp);
         }
 
         /*
@@ -810,67 +809,67 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
         return NULL;
     }
 
-    msg = conn->rmsg;
-    if (msg != NULL) {
-        ASSERT(!msg->is_request);
-        return msg;
+    rsp = conn->rmsg;
+    if (rsp != NULL) {
+        ASSERT(!rsp->is_request);
+        return rsp;
     }
 
     if (!alloc) {
         return NULL;
     }
 
-    msg = rsp_get(conn);
-    if (msg != NULL) {
-        conn->rmsg = msg;
+    rsp = rsp_get(conn);
+    if (rsp != NULL) {
+        conn->rmsg = rsp;
     }
 
-    return msg;
+    return rsp;
 }
 
 static bool
-server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
+server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *rsp)
 {
-    struct msg *pmsg;
+    struct msg *req;
 
     ASSERT(conn->type == CONN_SERVER);
 
-    if (msg_empty(msg)) {
+    if (msg_empty(rsp)) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "filter empty rsp %"PRIu64" on s %d", msg->id,
+        log_debug(LOG_VERB, "filter empty rsp %"PRIu64" on s %d", rsp->id,
                   conn->sd);
-        rsp_put(msg);
+        rsp_put(rsp);
         return true;
     }
 
-    pmsg = TAILQ_FIRST(&conn->omsg_q);
-    if (pmsg == NULL) {
+    req= TAILQ_FIRST(&conn->omsg_q);
+    if (req== NULL) {
         log_debug(LOG_VERB, "filter stray rsp %"PRIu64" len %"PRIu32" on s %d",
-                  msg->id, msg->mlen, conn->sd);
-        rsp_put(msg);
+                  rsp->id, rsp->mlen, conn->sd);
+        rsp_put(rsp);
         return true;
     }
 
-    if (!pmsg->expect_datastore_reply) {
-         conn_dequeue_outq(ctx, conn, pmsg);
-         req_put(pmsg);
-         rsp_put(msg);
+    if (!req->expect_datastore_reply) {
+         conn_dequeue_outq(ctx, conn, req);
+         req_put(req);
+         rsp_put(rsp);
          return true;
     }
 
-    ASSERT(pmsg->peer == NULL);
-    ASSERT(pmsg->is_request && !pmsg->done);
+    ASSERT(req->selected_rsp == NULL);
+    ASSERT(req->is_request && !req->done);
 
-    if (pmsg->swallow) {
-        conn_dequeue_outq(ctx, conn, pmsg);
-        pmsg->done = 1;
+    if (req->swallow) {
+        conn_dequeue_outq(ctx, conn, req);
+        req->done = 1;
 
         log_debug(LOG_DEBUG, "swallow rsp %"PRIu64" len %"PRIu32" of req "
-                  "%"PRIu64" on s %d", msg->id, msg->mlen, pmsg->id,
+                  "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
                   conn->sd);
 
-        rsp_put(msg);
-        req_put(pmsg);
+        rsp_put(rsp);
+        req_put(req);
         return true;
     }
 
@@ -878,16 +877,16 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-server_rsp_forward_stats(struct context *ctx, struct msg *msg)
+server_rsp_forward_stats(struct context *ctx, struct msg *rsp)
 {
-	ASSERT(!msg->is_request);
+	ASSERT(!rsp->is_request);
 
-	if (msg->is_read) {
+	if (rsp->is_read) {
 		stats_server_incr(ctx, read_responses);
-		stats_server_incr_by(ctx, read_response_bytes, msg->mlen);
+		stats_server_incr_by(ctx, read_response_bytes, rsp->mlen);
 	} else {
 		stats_server_incr(ctx, write_responses);
-		stats_server_incr_by(ctx, write_response_bytes, msg->mlen);
+		stats_server_incr_by(ctx, write_response_bytes, rsp->mlen);
 	}
 }
 
@@ -904,7 +903,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
 
     /* dequeue peer message (request) from server */
     req = TAILQ_FIRST(&s_conn->omsg_q);
-    ASSERT(req != NULL && req->peer == NULL);
+    ASSERT(req != NULL && req->selected_rsp == NULL);
     ASSERT(req->is_request && !req->done);
     if (req->request_send_time) {
         struct stats *st = ctx->stats;
@@ -927,29 +926,29 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
 }
 
 static void
-rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
+rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *rsp,
                      struct msg *nmsg)
 {
     ASSERT(conn->type == CONN_SERVER);
-    ASSERT(msg != NULL && conn->rmsg == msg);
-    ASSERT(!msg->is_request);
-    ASSERT(msg->owner == conn);
+    ASSERT(rsp != NULL && conn->rmsg == rsp);
+    ASSERT(!rsp->is_request);
+    ASSERT(rsp->owner == conn);
     ASSERT(nmsg == NULL || !nmsg->is_request);
 
     /* enqueue next message (response), if any */
     conn->rmsg = nmsg;
 
-    if (server_rsp_filter(ctx, conn, msg)) {
+    if (server_rsp_filter(ctx, conn, rsp)) {
         return;
     }
-    server_rsp_forward(ctx, conn, msg);
+    server_rsp_forward(ctx, conn, rsp);
 }
 
 struct msg *
 req_send_next(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-    struct msg *msg, *nmsg; /* current and next message */
+    struct msg *req, *nmsg; /* current and next message */
 
     ASSERT((conn->type == CONN_SERVER) ||
            (conn->type == CONN_DNODE_PEER_SERVER));
@@ -973,10 +972,10 @@ req_send_next(struct context *ctx, struct conn *conn)
         return NULL;
     }
 
-    msg = conn->smsg;
-    if (msg != NULL) {
-        ASSERT(msg->is_request && !msg->done);
-        nmsg = TAILQ_NEXT(msg, s_tqe);
+    req = conn->smsg;
+    if (req != NULL) {
+        ASSERT(req->is_request && !req->done);
+        nmsg = TAILQ_NEXT(req, s_tqe);
     }
 
     conn->smsg = nmsg;
@@ -996,40 +995,40 @@ req_send_next(struct context *ctx, struct conn *conn)
 }
 
 void
-req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
+req_send_done(struct context *ctx, struct conn *conn, struct msg *req)
 {
     ASSERT((conn->type == CONN_SERVER) ||
            (conn->type == CONN_DNODE_PEER_SERVER));
-    ASSERT(msg != NULL && conn->smsg == NULL);
-    ASSERT(msg->is_request && !msg->done);
-    //ASSERT(msg->owner == conn);
+    ASSERT(req != NULL && conn->smsg == NULL);
+    ASSERT(req->is_request && !req->done);
+    //ASSERT(req->owner == conn);
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "send done req %"PRIu64" len %"PRIu32" type %d on "
-                "s %d", msg->id, msg->mlen, msg->type, conn->sd);
+                "s %d", req->id, req->mlen, req->type, conn->sd);
     }
 
     /* dequeue the message (request) from server inq */
-    conn_dequeue_inq(ctx, conn, msg);
-    msg->request_send_time = dn_usec_now();
+    conn_dequeue_inq(ctx, conn, req);
+    req->request_send_time = dn_usec_now();
 
     /*
      * expect_datastore_reply request instructs the server to send response. So,
      * enqueue message (request) in server outq, if response is expected.
      * Otherwise, free the request
      */
-    if (msg->expect_datastore_reply || (conn->type == CONN_SERVER))
-        conn_enqueue_outq(ctx, conn, msg);
+    if (req->expect_datastore_reply || (conn->type == CONN_SERVER))
+        conn_enqueue_outq(ctx, conn, req);
     else
-        req_put(msg);
+        req_put(req);
 }
 
 static void
-req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    ASSERT(msg->is_request);
+    ASSERT(req->is_request);
     ASSERT(conn->type == CONN_SERVER);
-    msg->request_inqueue_enqueue_time_us = dn_usec_now();
+    req->request_inqueue_enqueue_time_us = dn_usec_now();
 
     /*
      * timeout clock starts ticking the instant the message is enqueued into
@@ -1039,66 +1038,66 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg
      * expect_datastore_reply request have timeouts because client is expecting
      * a response
      */
-    if (msg->expect_datastore_reply) {
-        msg_tmo_insert(msg, conn);
+    if (req->expect_datastore_reply) {
+        msg_tmo_insert(req, conn);
     }
 
-    TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
-    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, msg->id, msg->parent_id);
+    TAILQ_INSERT_TAIL(&conn->imsg_q, req, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, req->id, req->parent_id);
 
     conn->imsg_count++;
     histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
     stats_server_incr(ctx, in_queue);
-    stats_server_incr_by(ctx, in_queue_bytes, msg->mlen);
+    stats_server_incr_by(ctx, in_queue_bytes, req->mlen);
 }
 
 static void
-req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    ASSERT(msg->is_request);
+    ASSERT(req->is_request);
     ASSERT(conn->type == CONN_SERVER);
 
-    TAILQ_REMOVE(&conn->imsg_q, msg, s_tqe);
-    log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, msg->id, msg->parent_id);
-    int64_t delay = dn_usec_now() - msg->request_inqueue_enqueue_time_us;
+    TAILQ_REMOVE(&conn->imsg_q, req, s_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, req->id, req->parent_id);
+    int64_t delay = dn_usec_now() - req->request_inqueue_enqueue_time_us;
     histo_add(&ctx->stats->server_queue_wait_time_histo, delay);
 
     conn->imsg_count--;
     histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
     stats_server_decr(ctx, in_queue);
-    stats_server_decr_by(ctx, in_queue_bytes, msg->mlen);
+    stats_server_decr_by(ctx, in_queue_bytes, req->mlen);
 }
 
 static void
-req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    ASSERT(msg->is_request);
+    ASSERT(req->is_request);
     ASSERT(conn->type == CONN_SERVER);
 
-    TAILQ_INSERT_TAIL(&conn->omsg_q, msg, s_tqe);
-    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
+    TAILQ_INSERT_TAIL(&conn->omsg_q, req, s_tqe);
+    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, req->id, req->parent_id);
 
     conn->omsg_count++;
     histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
     stats_server_incr(ctx, out_queue);
-    stats_server_incr_by(ctx, out_queue_bytes, msg->mlen);
+    stats_server_incr_by(ctx, out_queue_bytes, req->mlen);
 }
 
 static void
-req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    ASSERT(msg->is_request);
+    ASSERT(req->is_request);
     ASSERT(conn->type == CONN_SERVER);
 
-    msg_tmo_delete(msg);
+    msg_tmo_delete(req);
 
-    TAILQ_REMOVE(&conn->omsg_q, msg, s_tqe);
-    log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, msg->id, msg->parent_id);
+    TAILQ_REMOVE(&conn->omsg_q, req, s_tqe);
+    log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, req->id, req->parent_id);
 
     conn->omsg_count--;
     histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
     stats_server_decr(ctx, out_queue);
-    stats_server_decr_by(ctx, out_queue_bytes, msg->mlen);
+    stats_server_decr_by(ctx, out_queue_bytes, req->mlen);
 }
 
 struct conn_ops server_ops = {

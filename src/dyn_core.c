@@ -387,20 +387,20 @@ static void
 core_timeout(struct context *ctx)
 {
 	for (;;) {
-		struct msg *msg;
+		struct msg *req;
 		struct conn *conn;
 		msec_t now, then;
 
-		msg = msg_tmo_min();
-		if (msg == NULL) {
+		req = msg_tmo_min();
+		if (req == NULL) {
 			ctx->timeout = ctx->max_timeout;
 			return;
 		}
 
 		/* skip over req that are in-error or done */
 
-		if (msg->is_error || msg->done) {
-			msg_tmo_delete(msg);
+		if (req->is_error || req->done) {
+			msg_tmo_delete(req);
 			continue;
 		}
 
@@ -409,8 +409,8 @@ core_timeout(struct context *ctx)
 		 * out server
 		 */
 
-		conn = msg->tmo_rbe.data;
-		then = msg->tmo_rbe.key;
+		conn = req->tmo_rbe.data;
+		then = req->tmo_rbe.key;
 
 		now = dn_msec_now();
 		if (now < then) {
@@ -419,10 +419,10 @@ core_timeout(struct context *ctx)
 			return;
 		}
 
-        log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", msg->id,
-                 conn_get_type_string(conn), conn->sd, msg->tmo_rbe.timeout);
+        log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", req->id,
+                 conn_get_type_string(conn), conn->sd, req->tmo_rbe.timeout);
 
-		msg_tmo_delete(msg);
+		msg_tmo_delete(req);
 
 		if (conn->dyn_mode) {
 			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
@@ -564,14 +564,14 @@ core_process_messages(void)
 	// Continue to process messages while the circular buffer is not empty
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		// Get an element from the beginning of the circular buffer
-		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
-		if (msg != NULL && msg->cb != NULL) {
+		struct ring_msg *ring_msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
+		if (ring_msg != NULL && ring_msg->cb != NULL) {
 			// CBUF_Push
 			// ./src/dyn_dnode_msg.c
 			// ./src/dyn_gossip.c
-			msg->cb(msg);
-			core_debug(msg->sp->ctx);
-			ring_msg_deinit(msg);
+			ring_msg->cb(ring_msg);
+			core_debug(ring_msg->sp->ctx);
+			ring_msg_deinit(ring_msg);
 		}
 	}
 

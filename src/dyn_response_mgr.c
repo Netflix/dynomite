@@ -3,7 +3,7 @@
 #include "dyn_dnode_peer.h"
 
 void
-init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
+init_response_mgr(struct response_mgr *rspmgr, struct msg *req, bool is_read,
                   uint8_t max_responses, struct conn *conn)
 {
     memset(rspmgr, 0, sizeof(struct response_mgr));
@@ -11,8 +11,8 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *msg, bool is_read,
     rspmgr->max_responses = max_responses;
     rspmgr->quorum_responses = max_responses/2 + 1;
     rspmgr->conn = conn;
-    rspmgr->msg = msg;
-    msg->awaiting_rsps = max_responses;
+    rspmgr->msg = req;
+    req->awaiting_rsps = max_responses;
 }
 
 static bool
