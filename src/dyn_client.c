@@ -197,7 +197,7 @@ client_close(struct context *ctx, struct conn *conn)
     if (req != NULL) {
         conn->rmsg = NULL;
 
-        ASSERT(req->peer == NULL);
+        ASSERT(req->selected_rsp == NULL);
         ASSERT(req->is_request && !req->done);
 
         log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
@@ -226,7 +226,7 @@ client_close(struct context *ctx, struct conn *conn)
             req->swallow = 1;
 
             ASSERT(req->is_request);
-            ASSERT(req->peer == NULL);
+            ASSERT(req->selected_rsp == NULL);
 
             log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
                       "len %"PRIu32" type %d", conn->sd, req->id, req->mlen,
@@ -322,7 +322,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
         if (req != NULL) {
             conn->rmsg = NULL;
 
-            ASSERT(req->peer == NULL);
+            ASSERT(req->selected_rsp == NULL);
             ASSERT(req->is_request && !req->done);
 
             log_error("eof c %d discarding incomplete req %"PRIu64" len "
@@ -401,7 +401,7 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
     struct msg *rsp = msg_get_rsp_integer(c_conn);
     if (req->expect_datastore_reply)
         conn_enqueue_outq(ctx, c_conn, req);
-    req->peer = rsp;
+    req->selected_rsp = rsp;
     rsp->peer = req;
     req->selected_rsp = rsp;
 
@@ -971,9 +971,10 @@ msg_get_rsp_handler(struct msg *req)
 static rstatus_t
 msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
-    ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one. req: %d:%d \
-                prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
-                req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
+    ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one.\
+               req: %d:%d prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
+               req->selected_rsp->id, req->selected_rsp->parent_id, rsp->id,
+               rsp->parent_id);
     req->awaiting_rsps = 0;
     rsp->peer = req;
     req->selected_rsp = rsp;

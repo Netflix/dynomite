@@ -68,12 +68,12 @@ DYNOMITE_NODES=`pgrep dynomite | wc -l`
 REDIS_NODES=`pgrep redis-server | wc -l`
 
 if [[ $DYNOMITE_NODES -ne 5 ]]; then
-    print "Not all dynomite nodes are running"
+    echo "Not all dynomite nodes are running"
     RESULT=1
     cleanup_and_exit
 fi
 if [[ $REDIS_NODES -ne 6 ]]; then
-    print "Not all redis nodes are running"
+    echo "Not all redis nodes are running"
     RESULT=1
     cleanup_and_exit
 fi
@@ -95,12 +95,12 @@ DYNOMITE_NODES=`pgrep dynomite | wc -l`
 REDIS_NODES=`pgrep redis-server | wc -l`
 
 if [[ $DYNOMITE_NODES -ne 5 ]]; then
-    print "Not all dynomite nodes are running"
+    echo "Not all dynomite nodes are running"
     RESULT=1
     cleanup_and_exit
 fi
 if [[ $REDIS_NODES -ne 6 ]]; then
-    print "Not all redis nodes are running"
+    echo "Not all redis nodes are running"
     RESULT=1
     cleanup_and_exit
 fi

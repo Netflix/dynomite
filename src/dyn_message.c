@@ -185,13 +185,13 @@ msg_cant_handle_response(struct msg *req, struct msg *rsp)
 static struct msg *
 msg_from_rbe(struct rbnode *node)
 {
-    struct msg *msg;
+    struct msg *req;
     int offset;
 
     offset = offsetof(struct msg, tmo_rbe);
-    msg = (struct msg *)((char *)node - offset);
+    req = (struct msg *)((char *)node - offset);
 
-    return msg;
+    return req;
 }
 
 struct msg *
@@ -208,21 +208,21 @@ msg_tmo_min(void)
 }
 
 void
-msg_tmo_insert(struct msg *msg, struct conn *conn)
+msg_tmo_insert(struct msg *req, struct conn *conn)
 {
     struct rbnode *node;
     msec_t timeout;
 
-    //ASSERT(msg->is_request);
-    ASSERT(!msg->quit && msg->expect_datastore_reply);
+    //ASSERT(req->is_request);
+    ASSERT(!req->quit && req->expect_datastore_reply);
 
-    timeout = conn->dyn_mode? dnode_peer_timeout(msg, conn) : server_timeout(conn);
+    timeout = conn->dyn_mode? dnode_peer_timeout(req, conn) : server_timeout(conn);
     if (timeout <= 0) {
         return;
     }
     timeout = timeout * g_timeout_factor;
 
-    node = &msg->tmo_rbe;
+    node = &req->tmo_rbe;
     node->timeout = timeout;
     node->key = dn_msec_now() + timeout;
     node->data = conn;
@@ -230,17 +230,17 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     rbtree_insert(&tmo_rbt, node);
 
     if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "insert msg %"PRIu64" into tmo rbt with expiry of "
-              "%d msec", msg->id, timeout);
+       log_debug(LOG_VERB, "insert req %"PRIu64" into tmo rbt with expiry of "
+              "%d msec", req->id, timeout);
     }
 }
 
 void
-msg_tmo_delete(struct msg *msg)
+msg_tmo_delete(struct msg *req)
 {
     struct rbnode *node;
 
-    node = &msg->tmo_rbe;
+    node = &req->tmo_rbe;
 
     /* already deleted */
 
@@ -251,7 +251,7 @@ msg_tmo_delete(struct msg *msg)
     rbtree_delete(&tmo_rbt, node);
 
     if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
+       log_debug(LOG_VERB, "delete req %"PRIu64" from tmo rbt", req->id);
     }
 }
 
@@ -470,73 +470,73 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 struct msg *
 msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
 {
-    struct msg *msg;
+    struct msg *rsp;
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? dn_strerror(err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source = dyn_error_source(dyn_err);
 
-    msg = _msg_get(conn, __FUNCTION__);
-    if (msg == NULL) {
+    rsp = _msg_get(conn, __FUNCTION__);
+    if (rsp == NULL) {
         return NULL;
     }
 
-    msg->state = 0;
-    msg->type = MSG_RSP_MC_SERVER_ERROR;
+    rsp->state = 0;
+    rsp->type = MSG_RSP_MC_SERVER_ERROR;
 
     mbuf = mbuf_get();
     if (mbuf == NULL) {
-        msg_put(msg);
+        msg_put(rsp);
         return NULL;
     }
-    mbuf_insert(&msg->mhdr, mbuf);
+    mbuf_insert(&rsp->mhdr, mbuf);
 
     n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s %s"CRLF, protstr, source, errstr);
     mbuf->last += n;
-    msg->mlen = (uint32_t)n;
+    rsp->mlen = (uint32_t)n;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" err %d error '%s'",
-                 msg, msg->id, msg->mlen, err, errstr);
+       log_debug(LOG_VVERB, "get rsp %p id %"PRIu64" len %"PRIu32" err %d error '%s'",
+                 rsp, rsp->id, rsp->mlen, err, errstr);
     }
 
-    return msg;
+    return rsp;
 }
 
 
 struct msg *
 msg_get_rsp_integer(struct conn *conn)
 {
-    struct msg *msg;
+    struct msg *rsp;
     struct mbuf *mbuf;
     int n;
 
-    msg = _msg_get(conn, __FUNCTION__);
-    if (msg == NULL) {
+    rsp = _msg_get(conn, __FUNCTION__);
+    if (rsp == NULL) {
         return NULL;
     }
 
-    msg->state = 0;
-    msg->type = MSG_RSP_REDIS_INTEGER;
+    rsp->state = 0;
+    rsp->type = MSG_RSP_REDIS_INTEGER;
 
     mbuf = mbuf_get();
     if (mbuf == NULL) {
-        msg_put(msg);
+        msg_put(rsp);
         return NULL;
     }
-    mbuf_insert(&msg->mhdr, mbuf);
+    mbuf_insert(&rsp->mhdr, mbuf);
 
     n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":0\r\n");
     mbuf->last += n;
-    msg->mlen = (uint32_t)n;
+    rsp->mlen = (uint32_t)n;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" ",
-              msg, msg->id, msg->mlen);
+       log_debug(LOG_VVERB, "get rsp %p id %"PRIu64" len %"PRIu32" ",
+              rsp, rsp->id, rsp->mlen);
     }
 
-    return msg;
+    return rsp;
 }
 
 static void
@@ -672,9 +672,9 @@ msg_empty(struct msg *msg)
 }
 
 uint32_t
-msg_payload_crc32(struct msg *msg)
+msg_payload_crc32(struct msg *rsp)
 {
-    ASSERT(msg != NULL);
+    ASSERT(rsp != NULL);
     // take a continous buffer crc
     uint32_t crc = 0;
     struct mbuf *mbuf;
@@ -682,16 +682,16 @@ msg_payload_crc32(struct msg *msg)
        payload offset. which is somewhere in the mbufs. Skip the mbufs till we
        find the start of the payload. If there is no dyno header, we start from
        the beginning of the first mbuf */
-    bool start_found = msg->dmsg ? false : true;
+    bool start_found = rsp->dmsg ? false : true;
 
-    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+    STAILQ_FOREACH(mbuf, &rsp->mhdr, next) {
         uint8_t *start = mbuf->start;
         uint8_t *end = mbuf->last;
         if (!start_found) {
             // if payload start is within this mbuf
-            if ((mbuf->start <= msg->dmsg->payload) &&
-                (msg->dmsg->payload < mbuf->last)) {
-                start = msg->dmsg->payload;
+            if ((mbuf->start <= rsp->dmsg->payload) &&
+                (rsp->dmsg->payload < mbuf->last)) {
+                start = rsp->dmsg->payload;
                 start_found = true;
             } else {
                 // else skip this mbuf

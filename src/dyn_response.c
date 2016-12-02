@@ -26,49 +26,49 @@
 struct msg *
 rsp_get(struct conn *conn)
 {
-    struct msg *msg;
+    struct msg *rsp;
 
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
            (conn->type == CONN_SERVER));
 
-    msg = msg_get(conn, false, __FUNCTION__);
-    if (msg == NULL) {
+    rsp = msg_get(conn, false, __FUNCTION__);
+    if (rsp == NULL) {
         conn->err = errno;
     }
 
-    return msg;
+    return rsp;
 }
 
 void
-rsp_put(struct msg *msg)
+rsp_put(struct msg *rsp)
 {
-    if (!msg)
+    if (!rsp)
         return;
-    ASSERT(!msg->is_request);
-    //ASSERT(msg->peer == NULL);
-    msg_put(msg);
+    ASSERT(!rsp->is_request);
+    //ASSERT(rsp->peer == NULL);
+    msg_put(rsp);
 }
 
 static struct msg *
-rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
+rsp_make_error(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    struct msg *pmsg;        /* peer message (response) */
+    struct msg *rsp;        /* peer message (response) */
     struct msg *cmsg, *nmsg; /* current and next message (request) */
     uint64_t id;
     err_t error_code = 0, dyn_error_code = 0;
 
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
-    ASSERT(msg->is_request && req_error(conn, msg));
-    ASSERT(msg->owner == conn);
+    ASSERT(req->is_request && req_error(conn, req));
+    ASSERT(req->owner == conn);
 
-    // first grab the error from the current msg
-    error_code = msg->error_code;
-    dyn_error_code = msg->dyn_error_code;
+    // first grab the error from the current req
+    error_code = req->error_code;
+    dyn_error_code = req->dyn_error_code;
 
-    id = msg->frag_id;
+    id = req->frag_id;
     if (id != 0) {
-        for (cmsg = TAILQ_NEXT(msg, c_tqe);
+        for (cmsg = TAILQ_NEXT(req, c_tqe);
              cmsg != NULL && cmsg->frag_id == id;
              cmsg = nmsg) {
             nmsg = TAILQ_NEXT(cmsg, c_tqe);
@@ -83,12 +83,12 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *msg)
         }
     }
 
-    pmsg = msg->selected_rsp;
-    if (pmsg != NULL) {
-        ASSERT(!pmsg->is_request && pmsg->peer == msg);
-        msg->selected_rsp = NULL;
-        pmsg->peer = NULL;
-        rsp_put(pmsg);
+    rsp = req->selected_rsp;
+    if (rsp != NULL) {
+        ASSERT(!rsp->is_request && rsp->peer == req);
+        req->selected_rsp = NULL;
+        rsp->peer = NULL;
+        rsp_put(rsp);
     }
 
     return msg_get_error(conn, dyn_error_code, error_code);
@@ -104,7 +104,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
                (conn->type = CONN_CLIENT), "conn %s", conn_get_type_string(conn));
 
     req = TAILQ_FIRST(&conn->omsg_q);
-    if (req == NULL || (!req->selected_rsp && !req_done(conn, req))) {
+    if (req == NULL || !req_done(conn, req)) {
         /* nothing is outstanding, initiate close? */
         if (req == NULL && conn->eof) {
             conn->done = 1;
