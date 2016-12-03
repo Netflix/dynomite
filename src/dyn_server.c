@@ -123,6 +123,7 @@ server_deinit(struct datastore **pdatastore)
         return;
 
     struct datastore *s = *pdatastore;
+    IGNORE_RET_VAL(s);
     ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
 }
 
@@ -156,36 +157,6 @@ server_conn(struct datastore *datastore)
 	TAILQ_INSERT_TAIL(&datastore->s_conn_q, conn, conn_tqe);
 
 	return conn;
-}
-
-static rstatus_t
-server_pool_run(struct server_pool *pool)
-{
-	ASSERT(pool->datastore != NULL);
-
-	switch (pool->dist_type) {
-	case DIST_KETAMA:
-		return ketama_update(pool);
-
-	case DIST_VNODE:
-		//return vnode_update(pool);
-		break;
-
-	case DIST_MODULA:
-		return modula_update(pool);
-
-	case DIST_RANDOM:
-		return random_update(pool);
-
-	case DIST_SINGLE:
-		return DN_OK;
-
-	default:
-		NOT_REACHED();
-		return DN_ERROR;
-	}
-
-	return DN_OK;
 }
 
 static rstatus_t
@@ -234,7 +205,6 @@ server_failure(struct context *ctx, struct datastore *server)
 {
 	struct server_pool *pool = server->owner;
 	msec_t now, next;
-	rstatus_t status;
 
 	if (!pool->auto_eject_hosts) {
 		return;
@@ -268,12 +238,6 @@ server_failure(struct context *ctx, struct datastore *server)
 
 	server->failure_count = 0;
 	server->next_retry_us = next;
-
-	status = server_pool_run(pool);
-	if (status != DN_OK) {
-		log_error("updating pool '%.*s' failed: %s",
-				pool->name.len, pool->name.data, strerror(errno));
-	}
 }
 
 static void
@@ -361,7 +325,6 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 static void
 server_close(struct context *ctx, struct conn *conn)
 {
-	rstatus_t status;
 	struct msg *req, *nmsg; /* current and next message */
 
     ASSERT(conn->type == CONN_SERVER);
@@ -424,7 +387,7 @@ server_close(struct context *ctx, struct conn *conn)
 
 	conn_unref(conn);
 
-	status = close(conn->sd);
+	rstatus_t status = close(conn->sd);
 	if (status < 0) {
 		log_error("close s %d failed, ignored: %s", conn->sd, strerror(errno));
 	}
@@ -473,10 +436,6 @@ server_ok(struct context *ctx, struct conn *conn)
 static rstatus_t
 server_pool_update(struct server_pool *pool)
 {
-	rstatus_t status;
-	usec_t now;
-	uint32_t pnlive_server; /* prev # live server */
-
 	if (!pool->auto_eject_hosts) {
 		return DN_OK;
 	}
@@ -485,7 +444,7 @@ server_pool_update(struct server_pool *pool)
 		return DN_OK;
 	}
 
-	now = dn_usec_now();
+	usec_t now = dn_usec_now();
 	if (now == 0) {
 		return DN_ERROR;
 	}
@@ -497,20 +456,6 @@ server_pool_update(struct server_pool *pool)
 		}
 		return DN_OK;
 	}
-
-	pnlive_server = pool->nlive_server;
-
-	status = server_pool_run(pool);
-	if (status != DN_OK) {
-		log_error("updating pool with dist %d failed: %s",
-				pool->dist_type, strerror(errno));
-		return status;
-	}
-
-	log_debug(LOG_INFO, "update pool '%.*s' to add %"PRIu32" servers",
-			pool->name.len, pool->name.data,
-			pool->nlive_server - pnlive_server);
-
 
 	return DN_OK;
 }
@@ -574,7 +519,6 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 {
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
-    THROW_STATUS(server_pool_run(sp));
 	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
@@ -1059,7 +1003,7 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *req
 
     TAILQ_REMOVE(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, req->id, req->parent_id);
-    int64_t delay = dn_usec_now() - req->request_inqueue_enqueue_time_us;
+    usec_t delay = dn_usec_now() - req->request_inqueue_enqueue_time_us;
     histo_add(&ctx->stats->server_queue_wait_time_histo, delay);
 
     conn->imsg_count--;

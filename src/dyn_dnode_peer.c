@@ -13,6 +13,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_node_snitch.h"
 #include "dyn_token.h"
+#include "dyn_vnode.h"
 
 static rstatus_t dnode_peer_pool_update(struct server_pool *pool);
 
@@ -1131,8 +1132,8 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
     }*/
 
     if (log_loggable(LOG_VERB)) {
-        log_debug(LOG_VERB, "dyn: key '%.*s' on dist %d maps to server '%.*s'", keylen,
-                key, pool->dist_type, server->endpoint.pname.len, server->endpoint.pname.data);
+        log_debug(LOG_VERB, "dyn: key '%.*s' maps to server '%.*s'", keylen,
+                key, server->endpoint.pname.len, server->endpoint.pname.data);
     }
 
     return server;

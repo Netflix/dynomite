@@ -79,7 +79,7 @@ struct conf_pool {
     struct conf_listen listen;                /* listen: */
     hash_type_t        hash;                  /* hash: */
     struct string      hash_tag;              /* hash_tag: */
-    dist_type_t        distribution;          /* distribution: */
+    void               *distribution;          /* Deprecated: distribution */
     msec_t             timeout;               /* timeout: */
     int                backlog;               /* backlog: */
     int                client_connections;    /* client_connections: */

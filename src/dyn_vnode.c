@@ -27,7 +27,7 @@
 #include <dyn_dnode_peer.h>
 #include <dyn_core.h>
 #include <dyn_server.h>
-#include <dyn_hashkit.h>
+#include <dyn_vnode.h>
 
 static int
 vnode_item_cmp(const void *t1, const void *t2)
