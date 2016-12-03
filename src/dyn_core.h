@@ -85,25 +85,6 @@ typedef int err_t;     /* error type */
 
 #define IGNORE_RET_VAL(x) x;
 
-struct array;
-struct string;
-struct context;
-struct conn;
-struct conn_tqh;
-struct msg;
-struct msg_tqh;
-struct server;
-struct server_pool;
-struct mbuf;
-struct mhdr;
-struct conf;
-struct stats;
-struct entropy_conn;
-struct instance;
-struct event_base;
-struct rack;
-struct dyn_ring;
-
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -308,7 +289,6 @@ struct server_pool {
 
     struct string      name;                 /* pool name (ref in conf_pool) */
     struct endpoint    proxy_endpoint;
-    int                dist_type;            /* distribution type (dist_type_t) */
     int                key_hash_type;        /* key hash type (hash_type_t) */
     hash_t             key_hash;             /* key hasher */
     struct string      hash_tag;             /* key hash tag (ref in conf_pool) */

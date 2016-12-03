@@ -50,13 +50,6 @@ static hash_t hash_algos[] = {
 };
 #undef DEFINE_ACTION
 
-#define DEFINE_ACTION(_dist, _name) string(#_name),
-static struct string dist_strings[] = {
-    DIST_CODEC( DEFINE_ACTION )
-    null_string
-};
-#undef DEFINE_ACTION
-
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
 #define CONF_ROOT_DEPTH     1
@@ -66,7 +59,6 @@ static struct string dist_strings[] = {
 #define CONF_UNSET_PTR  NULL
 #define CONF_DEFAULT_SERVERS    8
 #define CONF_UNSET_HASH (hash_type_t) -1
-#define CONF_UNSET_DIST (dist_type_t) -1
 
 #define CONF_DEFAULT_HASH                    HASH_MURMUR
 #define CONF_DEFAULT_DIST                    DIST_VNODE
@@ -221,7 +213,7 @@ conf_seed_each_transform(void *elem, void *data)
 
     uint8_t *p = cseed->name.data + cseed->name.len - 1;
     uint8_t *start = cseed->name.data;
-    string_copy(&s->name, start, dn_strrchr(p, start, ':') - start);
+    string_copy(&s->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
 
     s->rack = cseed->rack;
     s->dc = cseed->dc;
@@ -280,7 +272,6 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->hash = CONF_UNSET_HASH;
     string_init(&cp->hash_tag);
-    cp->distribution = CONF_UNSET_DIST;
 
     cp->timeout = CONF_UNSET_NUM;
     cp->backlog = CONF_UNSET_NUM;
@@ -452,7 +443,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     sp->key_hash_type = cp->hash;
     sp->key_hash = hash_algos[cp->hash];
-    sp->dist_type = cp->distribution;
     sp->hash_tag = cp->hash_tag;
 
     g_data_store = cp->data_store;
@@ -545,7 +535,6 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  hash: %d", cp->hash);
     log_debug(LOG_VVERB, "  hash_tag: \"%.*s\"", cp->hash_tag.len,
             cp->hash_tag.data);
-    log_debug(LOG_VVERB, "  distribution: %d", cp->distribution);
     log_debug(LOG_VVERB, "  client_connections: %d",
             cp->client_connections);
     const char * temp_log = "unknown";
@@ -1256,30 +1245,8 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 static char *
 conf_set_distribution(struct conf *cf, struct command *cmd, void *conf)
 {
-    uint8_t *p;
-    dist_type_t *dp;
-    struct string *value, *dist;
-
-    p = conf;
-    dp = (dist_type_t *)(p + cmd->offset);
-
-    if (*dp != CONF_UNSET_DIST) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    for (dist = dist_strings; dist->len != 0; dist++) {
-        if (string_compare(value, dist) != 0) {
-            continue;
-        }
-
-        *dp = dist - dist_strings;
-
-        return CONF_OK;
-    }
-
-    return "is not a valid distribution";
+    log_warn("Field \"distribution\" in the conf file is deprecated");
+    return CONF_OK;
 }
 
 static char *
@@ -2111,10 +2078,6 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     /* set default values for unset directives */
-
-    if (cp->distribution == CONF_UNSET_DIST) {
-        cp->distribution = CONF_DEFAULT_DIST;
-    }
 
     if (string_empty(&cp->dyn_seed_provider)) {
     	string_copy_c(&cp->dyn_seed_provider, (const uint8_t *)CONF_DEFAULT_SEED_PROVIDER);

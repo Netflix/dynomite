@@ -20,11 +20,7 @@ libhashkit_a_SOURCES =		\
 	dyn_fnv.c		\
 	dyn_hsieh.c		\
 	dyn_jenkins.c		\
-	dyn_ketama.c		\
 	dyn_md5.c		\
-	dyn_modula.c		\
 	dyn_murmur.c		\
 	dyn_one_at_a_time.c	\
-	dyn_random.c		\
-	dyn_vnode.c             \
 	dyn_murmur3.c
