@@ -279,6 +279,27 @@ extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
 extern uint8_t g_timeout_factor;
 
+typedef enum msg_routing {
+    ROUTING_NORMAL = 0,
+    ROUTING_LOCAL_NODE_ONLY = 1, /* Ignore the key hashing */
+    ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY = 2, /* apply key hashing, but local rack only */
+    ROUTING_ALL_NODES_LOCAL_RACK_ONLY = 3, /* Ignore key hashing, local rack only */
+} msg_routing_t;
+
+static inline char*
+get_msg_routing_string(msg_routing_t route)
+{
+    switch(route)
+    {
+        case ROUTING_NORMAL: return "ROUTING_NORMAL";
+        case ROUTING_LOCAL_NODE_ONLY: return "ROUTING_LOCAL_NODE_ONLY";
+        case ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY: return "ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY";
+        case ROUTING_ALL_NODES_LOCAL_RACK_ONLY: return "ROUTING_ALL_NODES_LOCAL_RACK_ONLY";
+    }
+    return "INVALID MSG ROUTING TYPE";
+}
+
+
 struct msg {
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
     TAILQ_ENTRY(msg)     s_tqe;           /* link in server q */
@@ -348,12 +369,7 @@ struct msg {
     struct dmsg          *dmsg;          /* dyn message */
     int                  dyn_state;
     dyn_error_t          dyn_error;      /* error code for dynomite */
-    uint8_t              msg_type;       /* for special message types
-                                              0 : normal,
-                                              1 : local cmd only no matter what
-                                              2 : cmd to all nodes in same RACK no matter whats
-                                              3 : cmd to all RACKs (one node from each RACK)
-                                          */
+    msg_routing_t        msg_routing;
     unsigned             is_read:1;       /*  0 : write
                                               1 : read */
     msg_response_handler_t rsp_handler;

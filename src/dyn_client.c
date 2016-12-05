@@ -636,7 +636,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *ms
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key, keylen, msg->msg_type);
+    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key, keylen, msg->msg_routing);
     if (!peer->is_local) {
         send_rsp_integer(ctx, c_conn, msg);
         return;
@@ -661,7 +661,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     struct node * peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
-                                                keylen, msg->msg_type);
+                                                keylen, msg->msg_routing);
     if (peer->is_local) {
         log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
                   msg->id, msg->parent_id);
@@ -780,9 +780,12 @@ request_send_to_all_local_racks(struct msg *msg)
 {
     if (!msg->is_read)
         return true;
-    if ((msg->type == MSG_REQ_REDIS_PING) ||
-        (msg->type == MSG_REQ_REDIS_INFO))
+
+    /* There is a routing override set by the parser on this message. Do not
+     * propagate it to other racks irrespective of the consistency setting */
+    if (msg->msg_routing != ROUTING_NORMAL)
         return false;
+
     if ((msg->consistency == DC_QUORUM) ||
         (msg->consistency == DC_SAFE_QUORUM))
         return true;
@@ -895,7 +898,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         }
     }
 
-    if (msg->msg_type == 1) {
+    if (msg->msg_routing == ROUTING_LOCAL_NODE_ONLY) {
         // Strictly local host only
         msg->consistency = DC_ONE;
         msg->rsp_handler = msg_local_one_rsp_handler;
@@ -958,8 +961,7 @@ static msg_response_handler_t
 msg_get_rsp_handler(struct msg *req)
 {
     if ((req->consistency == DC_ONE) ||
-        (req->type == MSG_REQ_REDIS_PING) ||
-        (req->type == MSG_REQ_REDIS_INFO))
+        (req->msg_routing != ROUTING_NORMAL))
         return msg_local_one_rsp_handler;
     return msg_quorum_rsp_handler;
 }
