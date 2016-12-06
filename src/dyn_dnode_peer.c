@@ -1140,7 +1140,7 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
 struct node *
 dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
                        struct rack *rack, uint8_t *key, uint32_t keylen,
-                       uint8_t msg_type)
+                       msg_routing_t msg_routing)
 {
     rstatus_t status;
     struct node *peer;
@@ -1153,7 +1153,7 @@ dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
         return NULL;
     }
 
-    if (msg_type == 1) {  //always local
+    if (msg_routing == ROUTING_LOCAL_NODE_ONLY) {  //always local
         peer = array_get(&pool->peers, 0);
     } else {
         /* from a given {key, keylen} pick a peer from pool */

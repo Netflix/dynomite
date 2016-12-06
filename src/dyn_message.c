@@ -355,7 +355,7 @@ done:
     msg->is_read = 1;
     msg->dyn_state = 0;
     msg->dmsg = NULL;
-    msg->msg_type = 0;
+    msg->msg_routing = ROUTING_NORMAL;
     msg->dyn_error = 0;
     msg->rsp_handler = msg_cant_handle_response;
     msg->consistency = DC_ONE;
