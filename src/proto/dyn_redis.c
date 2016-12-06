@@ -626,14 +626,14 @@ redis_parse_req(struct msg *r)
 
                 if (str4icmp(m, 'k', 'e', 'y', 's')) { /* Yannis: Need to identify how this is defined in Redis protocol */
                     r->type = MSG_REQ_REDIS_KEYS;
-                    r->msg_type = 1; //local only
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     r->is_read = 1;
                     break;
                 }
 
                 if (str4icmp(m, 'i', 'n', 'f', 'o')) {
                     r->type = MSG_REQ_REDIS_INFO;
-                    r->msg_type = 1; //local only
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     p = p + 1;
                     r->is_read = 1;
                     goto done;
@@ -677,6 +677,7 @@ redis_parse_req(struct msg *r)
 
                 if (str4icmp(m, 'p', 'i', 'n', 'g')) {
                     r->type = MSG_REQ_REDIS_PING;
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     p = p + 1;
                     r->is_read = 1;
                     goto done;
@@ -696,7 +697,7 @@ redis_parse_req(struct msg *r)
 
                 if (str4icmp(m, 's', 'c', 'a', 'n')) {
                     r->type = MSG_REQ_REDIS_SCAN;
-                    r->msg_type = 1; //local only
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     r->is_read = 1;
                     break;
                 }
@@ -772,12 +773,14 @@ redis_parse_req(struct msg *r)
 
                 if (str5icmp(m, 'h', 'v', 'a', 'l', 's')) {
                     r->type = MSG_REQ_REDIS_HVALS;
+                    r->msg_routing = ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY;
                     r->is_read = 1;
                     break;
                 }
 
                 if (str5icmp(m, 'h', 's', 'c', 'a', 'n')) {
                     r->type = MSG_REQ_REDIS_HSCAN;
+                    r->msg_routing = ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY;
                     r->is_read = 1;
                     break;
                 }
@@ -832,6 +835,7 @@ redis_parse_req(struct msg *r)
 
                 if (str5icmp(m, 's', 's', 'c', 'a', 'n')) {
                     r->type = MSG_REQ_REDIS_SSCAN;
+                    r->msg_routing = ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY;
                     r->is_read = 1;
                     break;
                 }
@@ -850,6 +854,7 @@ redis_parse_req(struct msg *r)
 
                 if (str5icmp(m, 'z', 's', 'c', 'a', 'n')) {
                      r->type = MSG_REQ_REDIS_ZSCAN;
+                    r->msg_routing = ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY;
                      r->is_read = 1;
                      break;
                 }
@@ -984,7 +989,7 @@ redis_parse_req(struct msg *r)
 
                 if (str6icmp(m, 'c', 'o', 'n', 'f', 'i', 'g')) {
                 	r->type = MSG_REQ_REDIS_CONFIG;
-                    r->msg_type = 1; //local only
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                 	r->is_read = 1;
                 	break;
                 }
@@ -1048,7 +1053,7 @@ redis_parse_req(struct msg *r)
 
                 if (str7icmp(m, 's', 'l', 'a', 'v', 'e', 'o', 'f')) {
                     r->type = MSG_REQ_REDIS_SLAVEOF;
-                    r->msg_type = 1;
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     r->is_read = 0;
                     break;
                 }
