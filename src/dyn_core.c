@@ -227,7 +227,6 @@ core_ctx_create(struct instance *nci)
     ctx->cf = NULL;
     ctx->stats = NULL;
     ctx->evb = NULL;
-    ctx->dyn_state = INIT;
 
     /* parse and create configuration */
     ctx->cf = conf_create(nci->conf_filename);
@@ -242,10 +241,18 @@ core_ctx_create(struct instance *nci)
     ctx->max_timeout = cp->stats_interval;
     ctx->timeout = ctx->max_timeout;
 
+    /* Gossip status */
+    struct server_pool *sp = &ctx->pool;
+    ctx->dyn_state = INIT;
+    if (!sp->enable_gossip) {
+    	ctx->dyn_state = NORMAL;
+    } else {
+    	loga("Gossip state: Initialization");
+    }
 
     rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
-        server_pool_deinit(&ctx->pool);
+        server_pool_deinit(sp);
         conf_destroy(ctx->cf);
         dn_free(ctx);
         return DN_ERROR;

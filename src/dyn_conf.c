@@ -62,8 +62,9 @@ static struct string dist_strings[] = {
 #define CONF_ROOT_DEPTH     1
 #define CONF_MAX_DEPTH      CONF_ROOT_DEPTH + 1
 #define CONF_DEFAULT_ARGS       3
-#define CONF_UNSET_NUM  0
-#define CONF_UNSET_PTR  NULL
+#define CONF_UNSET_BOOL  false
+#define CONF_UNSET_NUM   0
+#define CONF_UNSET_PTR   NULL
 #define CONF_DEFAULT_SERVERS    8
 #define CONF_UNSET_HASH (hash_type_t) -1
 #define CONF_UNSET_DIST (dist_type_t) -1
@@ -329,6 +330,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     array_null(&cp->dyn_seeds);
 
     cp->valid = 0;
+    cp->enable_gossip = CONF_UNSET_BOOL;
 
     status = string_duplicate(&cp->name, name);
     if (status != DN_OK) {
@@ -493,6 +495,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
+    sp->enable_gossip = cp->enable_gossip;
 
     /* dynomite stats init */
     sp->stats_endpoint.pname = cp->stats_listen.pname;
@@ -1410,16 +1413,16 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, secure_server_option) },
 
     { string("pem_key_file"),
-        conf_set_string,
-        offsetof(struct conf_pool, pem_key_file) },
+      conf_set_string,
+      offsetof(struct conf_pool, pem_key_file) },
 
 	{ string("recon_key_file"),
-	    conf_set_string,
-	    offsetof(struct conf_pool, recon_key_file) },
+      conf_set_string,
+	  offsetof(struct conf_pool, recon_key_file) },
 
 	{ string("recon_iv_file"),
-		conf_set_string,
-		offsetof(struct conf_pool, recon_iv_file) },
+      conf_set_string,
+      offsetof(struct conf_pool, recon_iv_file) },
 
     { string("datacenter"),
       conf_set_string,
@@ -1448,6 +1451,10 @@ static struct command conf_commands[] = {
 	{ string("stats_interval"),
 	  conf_set_string,
 	  offsetof(struct conf_pool, stats_interval) },
+
+	{ string("enable_gossip"),
+	  conf_set_bool,
+	  offsetof(struct conf_pool, enable_gossip) },
 
     null_command
 };
@@ -2215,7 +2222,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (cp->stats_interval == CONF_UNSET_NUM) {
-            cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL_MS;
+        cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL_MS;
     }
 
     if (!cp->stats_listen.valid) {

@@ -15,4 +15,5 @@ dyn_o_mite:
   pem_key_file: conf/dynomite.pem
   data_store: 0
   stats_listen: 0.0.0.0:22224
+  enable_gossip: true
   
