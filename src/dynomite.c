@@ -581,6 +581,10 @@ dn_run(struct instance *nci)
     struct context *ctx = nci->ctx;
     ctx->admin_opt = (unsigned)admin_opt;
 
+    struct server_pool *sp = &ctx->pool;
+    if (!sp->enable_gossip)
+    	ctx->dyn_state = NORMAL;
+
     /* run rabbit run */
     for (;;) {
         status = core_loop(ctx);
