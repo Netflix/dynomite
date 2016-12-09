@@ -228,7 +228,6 @@ core_ctx_create(struct instance *nci)
     ctx->cf = NULL;
     ctx->stats = NULL;
     ctx->evb = NULL;
-    ctx->dyn_state = INIT;
 
     /* parse and create configuration */
     ctx->cf = conf_create(nci->conf_filename);
@@ -243,6 +242,8 @@ core_ctx_create(struct instance *nci)
     ctx->max_timeout = cp->stats_interval;
     ctx->timeout = ctx->max_timeout;
 
+    /* Gossip initialization */
+    ctx->dyn_state = INIT;
 
     rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {

@@ -803,7 +803,7 @@ gossip_loop(void *arg)
             gn_pool.ctx->dyn_state = NORMAL;
         }
 
-        if (!sp->ctx->enable_gossip) {
+        if (!sp->enable_gossip) {
             //gossip_debug();
             continue;  //no gossiping
         }

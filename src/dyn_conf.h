@@ -112,6 +112,7 @@ struct conf_pool {
     struct string      dc;                    /* this node's dc */
     struct string      env;                   /* AWS, Google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
+    bool               enable_gossip;         /* enable/disable gossip */
 
     /* stats info */
     int                stats_interval;        /* stats aggregation interval */

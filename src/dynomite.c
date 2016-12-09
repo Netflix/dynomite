@@ -60,7 +60,6 @@ static int show_version;
 static int test_conf;
 static int admin_opt = 0;
 static int daemonize;
-static bool enable_gossip = false;
 static int describe_stats;
 
 static struct option long_options[] = {
@@ -69,7 +68,6 @@ static struct option long_options[] = {
     { "test-conf",            no_argument,        NULL,   't' },
     { "daemonize",            no_argument,        NULL,   'd' },
     { "describe-stats",       no_argument,        NULL,   'D' },
-    { "gossip",               no_argument,        NULL,   'g' },
     { "verbosity",            required_argument,  NULL,   'v' },
     { "output",               required_argument,  NULL,   'o' },
     { "conf-file",            required_argument,  NULL,   'c' },
@@ -234,7 +232,6 @@ dn_show_usage(void)
         "  -h, --help             : this help" CRLF
         "  -V, --version          : show version and exit" CRLF
         "  -t, --test-conf        : test configuration for syntax errors and exit" CRLF
-        "  -g, --gossip           : enable gossip (default: disable)" CRLF
         "  -d, --daemonize        : run as a daemon" CRLF
         "  -D, --describe-stats   : print stats description and exit");
     log_stderr(
@@ -374,10 +371,6 @@ dn_get_options(int argc, char **argv, struct instance *nci)
         case 'D':
             describe_stats = 1;
             show_version = 1;
-            break;
-
-        case 'g':
-            enable_gossip = true;
             break;
 
         case 'v':
@@ -586,10 +579,10 @@ dn_run(struct instance *nci)
     THROW_STATUS(core_start(nci));
 
     struct context *ctx = nci->ctx;
-    ctx->enable_gossip = enable_gossip;
     ctx->admin_opt = (unsigned)admin_opt;
 
-    if (!ctx->enable_gossip)
+    struct server_pool *sp = &ctx->pool;
+    if (!sp->enable_gossip)
     	ctx->dyn_state = NORMAL;
 
     /* run rabbit run */
