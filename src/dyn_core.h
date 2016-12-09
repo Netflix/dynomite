@@ -325,7 +325,7 @@ struct server_pool {
     struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
     struct endpoint    stats_endpoint;       /* stats_listen: socket info for stats */
     int                stats_interval;       /* stats aggregation interval */
-
+    bool               enable_gossip;        /* enable/disable gossip */
 };
 
 /** \struct context
@@ -347,7 +347,6 @@ struct context {
     int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
-    unsigned           enable_gossip:1;   /* enable/disable gossip */
     unsigned           admin_opt;   /* admin mode */
 };
 
