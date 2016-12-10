@@ -394,8 +394,9 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             nci->pid_filename = optarg;
             break;
 
-        case 'm':
-            value = dn_atoi(optarg, strlen(optarg));
+        case 'm': // deprecated argument
+            loga("-m or --mbuf-size command line arguments has been deprecated. Use YAML");
+        	value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
                 log_stderr("dynomite: option -m requires a non-zero number");
                 return DN_ERROR;
@@ -415,7 +416,8 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             nci->mbuf_chunk_size = (size_t)value;
             break;
 
-        case 'M':
+        case 'M': // deprecated argument
+            loga("-M or max-msgs command line argument has been deprecated. Use YAML");
             value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
                 log_stderr("dynomite: option -M requires a non-zero number");

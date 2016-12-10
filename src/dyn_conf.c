@@ -81,6 +81,14 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_VNODE_TOKENS            1
 #define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
 
+#define CONF_DEFAULT_MBUF_SIZE               MBUF_SIZE
+#define CONF_DEFAULT_MBUF_MIN_SIZE           MBUF_MIN_SIZE
+#define CONF_DEFAULT_MBUF_MAX_SIZE           MBUF_MAX_SIZE
+
+#define CONF_DEFAULT_ALLOC_MSGS			     ALLOC_MSGS
+#define CONF_DEFAULT_MIN_ALLOC_MSGS	         MIN_ALLOC_MSGS
+#define CONF_DEFAULT_MAX_ALLOC_MSGS	         MAX_ALLOC_MSGS
+
 #define CONF_STR_NONE                        "none"
 #define CONF_STR_DC                          "datacenter"
 #define CONF_STR_RACK                        "rack"
@@ -97,9 +105,9 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_STATS_PORT              22222
 #define CONF_DEFAULT_STATS_INTERVAL_MS       (30 * 1000) /* in msec */
 
-#define PEM_KEY_FILE      "conf/dynomite.pem"
-#define RECON_KEY_FILE    "conf/recon_key.pem"
-#define RECON_IV_FILE     "conf/recon_iv.pem"
+#define PEM_KEY_FILE                         "conf/dynomite.pem"
+#define RECON_KEY_FILE                       "conf/recon_key.pem"
+#define RECON_IV_FILE                        "conf/recon_iv.pem"
 
 data_store_t g_data_store = CONF_DEFAULT_DATASTORE;
 struct command {
@@ -322,6 +330,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->valid = 0;
     cp->enable_gossip = CONF_UNSET_BOOL;
+    cp->mbuf_chunk_size = CONF_UNSET_NUM;
+    cp->alloc_msgs_max = CONF_UNSET_NUM;
 
     status = string_duplicate(&cp->name, name);
     if (status != DN_OK) {
@@ -495,6 +505,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
     sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
     sp->stats_interval = cp->stats_interval;
+    sp->mbuf_chunk_size = cp->mbuf_chunk_size;
+    sp->alloc_msgs_max = cp->alloc_msgs_max;
 
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
@@ -598,6 +610,11 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
     log_debug(LOG_VVERB, "  stats_listen: %.*s",
             cp->stats_listen.pname.len, cp->stats_listen.pname.data);
+
+    log_debug(LOG_VVERB, "  enable_gossip: %s", cp->enable_gossip ? "true" : "false");
+
+    log_debug(LOG_VVERB, "  mbuf_size: %d", cp->mbuf_chunk_size);
+    log_debug(LOG_VVERB, "  max_msgs: %d", cp->alloc_msgs_max);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }
@@ -1424,6 +1441,14 @@ static struct command conf_commands[] = {
       conf_set_bool,
       offsetof(struct conf_pool, enable_gossip) },
 
+    { string("mbuf_size"),
+      conf_set_num,
+      offsetof(struct conf_pool, mbuf_chunk_size) },
+
+    { string("max_msgs"),
+      conf_set_num,
+      offsetof(struct conf_pool, alloc_msgs_max) },
+
     null_command
 };
 
@@ -2154,6 +2179,46 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;
     }
 
+    if (cp->mbuf_chunk_size == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting mbuf_size to default value:%d",CONF_DEFAULT_MBUF_SIZE);
+    	cp->mbuf_chunk_size = CONF_DEFAULT_MBUF_SIZE;
+    }
+    else {
+    	/* Validating mbuf_chunk_size correctness */
+        if (cp->mbuf_chunk_size <= 0) {
+           log_stderr("mbuf_size: requires a positive number");
+    	   return DN_ERROR;
+    	}
+
+    	if (cp->mbuf_chunk_size < CONF_DEFAULT_MBUF_MIN_SIZE || cp->mbuf_chunk_size > CONF_DEFAULT_MBUF_MAX_SIZE) {
+    	   log_stderr("mbuf_size: mbuf chunk size must be between %zu and"
+    	              " %zu bytes", CONF_DEFAULT_MBUF_MIN_SIZE, CONF_DEFAULT_MBUF_MAX_SIZE);
+    	   return DN_ERROR;
+    	}
+
+    	if ((cp->mbuf_chunk_size / 16) * 16 != cp->mbuf_chunk_size) {
+    	   log_stderr("mbuf_size: mbuf chunk size must be a multiple of 16");
+    	   return DN_ERROR;
+    	}
+    }
+
+    if (cp->alloc_msgs_max == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting max_msgs to default value:%d",CONF_DEFAULT_MAX_ALLOC_MSGS);
+    	cp->alloc_msgs_max = CONF_DEFAULT_MAX_ALLOC_MSGS;
+    }
+    else {
+        if (cp->alloc_msgs_max <= 0) {
+            log_stderr("dynomite: option -M requires a non-zero number");
+            return DN_ERROR;
+        }
+
+        if (cp->alloc_msgs_max < CONF_DEFAULT_ALLOC_MSGS || cp->alloc_msgs_max > CONF_DEFAULT_ALLOC_MSGS) {
+            log_stderr("max_msgs: max allocated messages buffer must be between %zu and"
+                       " %zu messages", CONF_DEFAULT_ALLOC_MSGS, CONF_DEFAULT_ALLOC_MSGS);
+            return DN_ERROR;
+        }
+    }
+
     if (string_empty(&cp->rack)) {
         string_copy_c(&cp->rack, (const uint8_t *)CONF_DEFAULT_RACK);
         log_debug(LOG_INFO, "setting rack to default value:%s", CONF_DEFAULT_RACK);
@@ -2186,6 +2251,7 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (cp->stats_interval == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting stats_interval to default value:%d",CONF_DEFAULT_STATS_INTERVAL_MS);
         cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL_MS;
     }
 

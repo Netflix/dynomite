@@ -113,6 +113,8 @@ struct conf_pool {
     struct string      env;                   /* AWS, Google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
     bool               enable_gossip;         /* enable/disable gossip */
+    size_t             mbuf_chunk_size;       /* mbuf chunk size */
+    size_t             alloc_msgs_max;        /* allocated messages buffer size */
 
     /* stats info */
     int                stats_interval;        /* stats aggregation interval */
