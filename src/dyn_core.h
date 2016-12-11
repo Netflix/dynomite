@@ -326,8 +326,8 @@ struct server_pool {
     struct endpoint    stats_endpoint;       /* stats_listen: socket info for stats */
     int                stats_interval;       /* stats aggregation interval */
     bool               enable_gossip;        /* enable/disable gossip */
-    size_t             mbuf_chunk_size;             /* mbuf chunk size */
-    size_t             alloc_msgs_max;              /* allocated messages buffer size */
+    size_t             mbuf_size;            /* mbuf chunk size */
+    size_t             alloc_msgs_max;       /* allocated messages buffer size */
 };
 
 /** \struct context

@@ -47,6 +47,8 @@
 #define CONF_STR_DC_QUORUM                   "dc_quorum"
 #define CONF_STR_DC_SAFE_QUORUM              "dc_safe_quorum"
 
+#define UNSET_NUM                            0
+
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
     struct string   name;    /* name */
@@ -113,7 +115,7 @@ struct conf_pool {
     struct string      env;                   /* AWS, Google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
     bool               enable_gossip;         /* enable/disable gossip */
-    size_t             mbuf_chunk_size;       /* mbuf chunk size */
+    size_t             mbuf_size;             /* mbuf chunk size */
     size_t             alloc_msgs_max;        /* allocated messages buffer size */
 
     /* stats info */

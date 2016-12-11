@@ -224,8 +224,8 @@ dn_show_usage(void)
 {
     log_stderr(
         "Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]" CRLF
-        "                  [-c conf file] [-p pid file] [-m mbuf size]" CRLF
-        "                  [-M max alloc messages]" CRLF
+        "                  [-c conf file] [-p pid file] [-m mbuf size (deprecated)]" CRLF
+        "                  [-M max alloc messages (deprecated)]" CRLF
         "");
     log_stderr(
         "Options:" CRLF
@@ -240,8 +240,8 @@ dn_show_usage(void)
         "  -c, --conf-file=S            : set configuration file (default: %s)" CRLF
         "  -p, --pid-file=S             : set pid file (default: %s)" CRLF
         "  -m, --mbuf-size=N            : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -M, --max-msgs=N             : set max number of messages to allocate (default: %d)" CRLF
-        "  -x, --admin-operation=N      : set size of admin operation (default: %d)" CRLF
+        "  -M, --max-msgs=N             : set max number of messages to allocate (default: %d - deprecated)" CRLF
+        "  -x, --admin-operation=N      : set size of admin operation (default: %d - deprecated)" CRLF
         "",
         DN_LOG_DEFAULT, DN_LOG_MIN, DN_LOG_MAX,
         DN_LOG_PATH != NULL ? DN_LOG_PATH : "stderr",

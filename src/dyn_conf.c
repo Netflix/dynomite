@@ -56,7 +56,7 @@ static hash_t hash_algos[] = {
 #define CONF_MAX_DEPTH      CONF_ROOT_DEPTH + 1
 #define CONF_DEFAULT_ARGS       3
 #define CONF_UNSET_BOOL false
-#define CONF_UNSET_NUM  0
+#define CONF_UNSET_NUM  UNSET_NUM
 #define CONF_UNSET_PTR  NULL
 #define CONF_DEFAULT_SERVERS    8
 #define CONF_UNSET_HASH (hash_type_t) -1
@@ -93,7 +93,6 @@ static hash_t hash_algos[] = {
 #define CONF_STR_DC                          "datacenter"
 #define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
-
 
 #define CONF_DEFAULT_RACK                    "localrack"
 #define CONF_DEFAULT_DC                      "localdc"
@@ -330,7 +329,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->valid = 0;
     cp->enable_gossip = CONF_UNSET_BOOL;
-    cp->mbuf_chunk_size = CONF_UNSET_NUM;
+    cp->mbuf_size = CONF_UNSET_NUM;
     cp->alloc_msgs_max = CONF_UNSET_NUM;
 
     status = string_duplicate(&cp->name, name);
@@ -505,7 +504,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
     sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
     sp->stats_interval = cp->stats_interval;
-    sp->mbuf_chunk_size = cp->mbuf_chunk_size;
+    sp->mbuf_size = cp->mbuf_size;
     sp->alloc_msgs_max = cp->alloc_msgs_max;
 
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
@@ -613,7 +612,7 @@ conf_dump(struct conf *cf)
 
     log_debug(LOG_VVERB, "  enable_gossip: %s", cp->enable_gossip ? "true" : "false");
 
-    log_debug(LOG_VVERB, "  mbuf_size: %d", cp->mbuf_chunk_size);
+    log_debug(LOG_VVERB, "  mbuf_size: %d", cp->mbuf_size);
     log_debug(LOG_VVERB, "  max_msgs: %d", cp->alloc_msgs_max);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
@@ -1443,7 +1442,7 @@ static struct command conf_commands[] = {
 
     { string("mbuf_size"),
       conf_set_num,
-      offsetof(struct conf_pool, mbuf_chunk_size) },
+      offsetof(struct conf_pool, mbuf_size) },
 
     { string("max_msgs"),
       conf_set_num,
@@ -2179,42 +2178,49 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;
     }
 
-    if (cp->mbuf_chunk_size == CONF_UNSET_NUM) {
-    	log_debug(LOG_INFO,"setting mbuf_size to default value:%d",CONF_DEFAULT_MBUF_SIZE);
-    	cp->mbuf_chunk_size = CONF_DEFAULT_MBUF_SIZE;
+    if (cp->mbuf_size == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting mbuf_size to default value:%d", CONF_DEFAULT_MBUF_SIZE);
+    	/*
+    	 * After backward compatibility is supported, enable this
+    	 *     	cp->mbuf_size = CONF_DEFAULT_MBUF_SIZE;
+    	 */
     }
     else {
-    	/* Validating mbuf_chunk_size correctness */
-        if (cp->mbuf_chunk_size <= 0) {
-           log_stderr("mbuf_size: requires a positive number");
+    	/* Validating mbuf_size correctness */
+        if (cp->mbuf_size <= 0) {
+           log_stderr(LOG_INFO,"mbuf_size: requires a positive number");
     	   return DN_ERROR;
     	}
 
-    	if (cp->mbuf_chunk_size < CONF_DEFAULT_MBUF_MIN_SIZE || cp->mbuf_chunk_size > CONF_DEFAULT_MBUF_MAX_SIZE) {
-    	   log_stderr("mbuf_size: mbuf chunk size must be between %zu and"
+    	if (cp->mbuf_size < CONF_DEFAULT_MBUF_MIN_SIZE || cp->mbuf_size > CONF_DEFAULT_MBUF_MAX_SIZE) {
+    	   log_stderr(LOG_INFO,"mbuf_size: mbuf chunk size must be between %zu and"
     	              " %zu bytes", CONF_DEFAULT_MBUF_MIN_SIZE, CONF_DEFAULT_MBUF_MAX_SIZE);
     	   return DN_ERROR;
     	}
 
-    	if ((cp->mbuf_chunk_size / 16) * 16 != cp->mbuf_chunk_size) {
-    	   log_stderr("mbuf_size: mbuf chunk size must be a multiple of 16");
+    	if ((cp->mbuf_size / 16) * 16 != cp->mbuf_size) {
+    	   log_stderr(LOG_INFO,"mbuf_size: mbuf size must be a multiple of 16");
     	   return DN_ERROR;
     	}
     }
 
     if (cp->alloc_msgs_max == CONF_UNSET_NUM) {
     	log_debug(LOG_INFO,"setting max_msgs to default value:%d",CONF_DEFAULT_MAX_ALLOC_MSGS);
-    	cp->alloc_msgs_max = CONF_DEFAULT_MAX_ALLOC_MSGS;
+    	/*
+    	 * After backward compatibility is supported, enable this
+    	 * cp->alloc_msgs_max = CONF_DEFAULT_MAX_ALLOC_MSGS;
+    	 */
+
     }
     else {
         if (cp->alloc_msgs_max <= 0) {
-            log_stderr("dynomite: option -M requires a non-zero number");
+            log_stderr(LOG_INFO,"dynomite: option -M requires a non-zero number");
             return DN_ERROR;
         }
 
-        if (cp->alloc_msgs_max < CONF_DEFAULT_ALLOC_MSGS || cp->alloc_msgs_max > CONF_DEFAULT_ALLOC_MSGS) {
-            log_stderr("max_msgs: max allocated messages buffer must be between %zu and"
-                       " %zu messages", CONF_DEFAULT_ALLOC_MSGS, CONF_DEFAULT_ALLOC_MSGS);
+        if (cp->alloc_msgs_max < CONF_DEFAULT_MIN_ALLOC_MSGS || cp->alloc_msgs_max > CONF_DEFAULT_MAX_ALLOC_MSGS) {
+            log_stderr(LOG_INFO,"max_msgs: max allocated messages buffer must be between %zu and"
+                       " %zu messages", CONF_DEFAULT_MIN_ALLOC_MSGS, CONF_DEFAULT_MAX_ALLOC_MSGS);
             return DN_ERROR;
         }
     }

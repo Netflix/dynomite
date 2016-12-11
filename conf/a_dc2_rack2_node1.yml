@@ -16,3 +16,5 @@ dyn_o_mite:
   data_store: 0
   stats_listen: 0.0.0.0:22224
   enable_gossip: false
+  mbuf_size: 16384
+  max_msgs: 300000

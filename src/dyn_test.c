@@ -43,13 +43,10 @@ static struct option long_options[] = {
     { "version",        no_argument,        NULL,   'V' },
     { "test-conf",      no_argument,        NULL,   't' },
     { "describe-stats", no_argument,        NULL,   'D' },
-    { "gossip",         no_argument,        NULL,   'g' },
     { "verbose",        required_argument,  NULL,   'v' },
     { "output",         required_argument,  NULL,   'o' },
     { "conf-file",      required_argument,  NULL,   'c' },
     { "pid-file",       required_argument,  NULL,   'p' },
-    { "mbuf-size",      required_argument,  NULL,   'm' },
-    { "max_msgs",       required_argument,  NULL,   'M' },
     { NULL,             0,                  NULL,    0  }
 };
 
@@ -72,14 +69,10 @@ dn_show_usage(void)
         "  -v, --verbosity=N      : set logging level (default: %d, min: %d, max: %d)" CRLF
         "  -o, --output=S         : set logging file (default: %s)" CRLF
         "  -c, --conf-file=S      : set configuration file (default: %s)" CRLF
-        "  -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -M, --max-msgs=N       : set max number of messages to allocate (default: %d)" CRLF
         "",
         TEST_LOG_DEFAULT, TEST_LOG_DEFAULT, TEST_LOG_DEFAULT,
         TEST_LOG_PATH != NULL ? TEST_LOG_PATH : "stderr",
-        TEST_CONF_PATH,
-        TEST_MBUF_SIZE,
-		TEST_ALLOCS_MSGS);
+        TEST_CONF_PATH);
 }
 
 
@@ -554,6 +547,7 @@ init_test(int argc, char **argv)
     rstatus_t status;
     struct instance nci;
 
+
     test_set_default_options(&nci);
 
     status = test_get_options(argc, argv, &nci);
@@ -564,11 +558,15 @@ init_test(int argc, char **argv)
 
     test_pre_run(&nci);
 
+    core_start(&nci);
     test_mbuf_chunk_size = nci.mbuf_chunk_size;
     position = 0;
-    mbuf_init(&nci);
-    msg_init(&nci);
     conn_init();
+    struct context *ctx = nci.ctx;
+    struct server_pool *sp = &ctx->pool;
+
+    mbuf_init(sp->mbuf_size);
+    msg_init(sp->alloc_msgs_max);
 
     crypto_init_for_test();
 }

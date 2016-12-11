@@ -3,6 +3,7 @@
 
 [![Build Status](https://secure.travis-ci.org/Netflix/dynomite.png)](http://travis-ci.org/Netflix/dynomite)
 [![Dev chat at https://gitter.im/Netflix/dynomite](https://badges.gitter.im/Netflix/dynomite.svg)](https://gitter.im/Netflix/dynomite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/Netflix/dynomite/blob/dev/LICENSE)
 
 **Dynomite**, inspired by [Dynamo whitepaper](http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf), is a thin, distributed dynamo layer for different storage engines and protocols. Currently these include [Redis](http://redis.io) and [Memcached](http://www.memcached.org/).  Dynomite supports multi-datacenter replication and is designed for high availability.
 <center>![dynomite logo](images/dynomite-logo.png?raw=true =150x150)</center>
@@ -39,8 +40,7 @@ To build Dynomite in _debug mode_:
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
                       [-c conf file] [-s stats port] [-a stats addr]
-                      [-i stats interval] [-p pid file] [-m mbuf size]
-                      [-M max alloc messages]
+                      [-i stats interval] [-p pid file] 
 
     Options:
       -h, --help              : this help
@@ -53,8 +53,6 @@ To build Dynomite in _debug mode_:
       -o, --output=S          : set logging file (default: stderr)
       -c, --conf-file=S       : set configuration file (default: conf/dynomite.yml)
       -p, --pid-file=S        : set pid file (default: off)
-      -m, --mbuf-size=N       : set size of mbuf chunk in bytes (default: 16384 bytes)
-      -M, --max-msgs=N        : set max number of messages to allocate (default: 200000)
       -x, --admin-operation=N : set size of admin operation (default: 0)
 
 
@@ -66,6 +64,7 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **datacenter**: The name of the datacenter.  Please refer to [architecture document](https://github.com/Netflix/dynomite/wiki/Architecture).
 + **rack**: The name of the rack.  Please refer to [architecture document](https://github.com/Netflix/dynomite/wiki/Architecture).
 + **dyn_listen**: The port that dynomite nodes use to inter-communicate and gossip.
++ **enable_gossip**: enable gossip instead of static tokens (default: false). Gossip is experimental.
 + **gos_interval**: The sleeping time in milliseconds at the end of a gossip round.
 + **tokens**: The token(s) owned by a node.  Currently, we don't support vnode yet so this only works with one token for the time being.
 + **dyn_seed_provider**: A seed provider implementation to provide a list of seed nodes.
@@ -82,6 +81,8 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **secure_server_option**: Encrypted communication. Must be one of 'none', 'rack', 'datacenter', or 'all'.
 + **stats_listen**: The address and port number for the REST endpoint and for accessing statistics.
 + **stats_interval**: set stats aggregation interval in msec (default: 30000 msec).
++ **mbuf_size**: size of mbuf chunk in bytes (default: 16384 bytes).
++ **max_msgs**: max number of messages to allocate (default: 200000).
 
 For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 

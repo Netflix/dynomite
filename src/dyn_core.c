@@ -274,16 +274,36 @@ core_ctx_destroy(struct context *ctx)
 rstatus_t
 core_start(struct instance *nci)
 {
-    mbuf_init(nci);
-    msg_init(nci);
+
     conn_init();
 
     rstatus_t status = core_ctx_create(nci);
     if (status != DN_OK) {
         conn_deinit();
-        msg_deinit();
-        dmsg_deinit();
-        mbuf_deinit();
+    }
+
+    /**
+     * Providing mbuf_size and alloc_msgs through the command line
+     * has been deprecated. For backward compatibility
+     * we support both ways here: One through nci (command line)
+     * and one through the YAML file (server_pool).
+     */
+    struct context *ctx = nci->ctx;
+    struct server_pool *sp = &ctx->pool;
+
+    if(sp->mbuf_size == UNSET_NUM) {
+       loga("mbuf_size not in YAML: using deprecated way  %d", nci->mbuf_chunk_size);
+       mbuf_init(nci->mbuf_chunk_size);
+    } else {
+       loga("YAML provided mbuf_size: %d", sp->mbuf_size);
+       mbuf_init(sp->mbuf_size);
+    }
+    if(sp->alloc_msgs_max == UNSET_NUM) {
+       loga("max_msgs not in YAML: using deprecated way %d", nci->alloc_msgs_max);
+       msg_init(nci->alloc_msgs_max);
+    } else {
+       loga("YAML provided max_msgs: %d", sp->alloc_msgs_max);
+       msg_init(sp->alloc_msgs_max);
     }
 
     return status;
