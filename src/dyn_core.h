@@ -233,7 +233,7 @@ struct datastore {
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
 
-    usec_t             next_retry_us; /* next retry time in usec */
+    msec_t             next_retry_ms; /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 };
@@ -244,13 +244,13 @@ struct datastore {
 struct node {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
-    struct endpoint     endpoint;
+    struct endpoint    endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
     uint32_t           ns_conn_q;     /* # server connection */
     struct conn_tqh    s_conn_q;      /* server connection q */
 
-    usec_t             next_retry_us;    /* next retry time in usec */
+    msec_t             next_retry_ms;    /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 

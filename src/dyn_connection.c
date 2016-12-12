@@ -291,7 +291,9 @@ conn_event_del_conn(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
     remove_from_ready_q(ctx, conn);
-    return event_del_conn(ctx->evb, conn);
+    if (conn->sd != -1)
+        return event_del_conn(ctx->evb, conn);
+    return DN_OK;
 }
 
 rstatus_t
@@ -591,8 +593,8 @@ conn_connect(struct context *ctx, struct conn *conn)
         status = DN_ERROR;
         goto error;
     }
-    log_debug(LOG_WARN, "connecting to '%.*s' on p %d", conn->pname.len,
-            conn->pname.data, conn->sd);
+    log_warn("connecting to %s '%.*s' from sd %d", conn_get_type_string(conn),
+             conn->pname.len, conn->pname.data, conn->sd);
 
     status = dn_set_nonblocking(conn->sd);
     if (status != DN_OK) {
