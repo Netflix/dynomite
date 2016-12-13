@@ -62,7 +62,7 @@ mbuf_full(struct mbuf *mbuf)
     return mbuf->last == mbuf->end? true : false;
 }
 
-void mbuf_init(struct instance *nci);
+void mbuf_init(size_t mbuf_chunk_size);
 void mbuf_deinit(void);
 struct mbuf *mbuf_get(void);
 void mbuf_put(struct mbuf *mbuf);

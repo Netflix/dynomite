@@ -406,7 +406,7 @@ struct msg *msg_tmo_min(void);
 void msg_tmo_insert(struct msg *msg, struct conn *conn);
 void msg_tmo_delete(struct msg *msg);
 
-void msg_init(struct instance *nci);
+void msg_init(size_t alloc_msgs_max);
 rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target);
 void msg_deinit(void);
 struct msg *msg_get(struct conn *conn, bool request, const char* const caller);

@@ -5,4 +5,6 @@ dyn_o_mite:
   servers:
   - 127.0.0.1:22122:1
   data_store: 0
+  mbuf_size: 16384
+  max_msgs: 300000
 

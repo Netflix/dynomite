@@ -637,16 +637,16 @@ msg_dump(struct msg *msg)
 
 /**
  * Initialize the message queue.
- * @param[in] nci Dynomite instance.
+ * @param[in] alloc_msgs_max Dynomite instance.
  */
 void
-msg_init(struct instance *nci)
+msg_init(size_t msgs_max)
 {
     log_debug(LOG_DEBUG, "msg size %d", sizeof(struct msg));
     msg_id = 0;
     frag_id = 0;
     nfree_msgq = 0;
-    alloc_msgs_max = nci->alloc_msgs_max;
+    alloc_msgs_max = msgs_max;
     TAILQ_INIT(&free_msgq);
     rbtree_init(&tmo_rbt, &tmo_rbs);
 }

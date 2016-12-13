@@ -69,12 +69,14 @@ Seeing a `SERVER_ERROR` or `-ERR` response should be considered as a transient f
 
 ## read, writev and mbuf
 
-All memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero copy for requests and responses flowing through the proxy. By default an mbuf is 16K bytes in size and this value can be tuned between 512 and 65K bytes using -m or --mbuf-size=N argument. Every connection has at least one mbuf allocated to it. This means that the number of concurrent connections dynomite can support is dependent on the mbuf size. A small mbuf allows us to handle more connections, while a large mbuf allows us to read and write more data to and from kernel socket buffers.
+All memory for incoming requests and outgoing responses is allocated in mbuf. Mbuf enables zero copy for requests and responses flowing through the proxy. By default an mbuf is 16K bytes in size and this value can be tuned between 512 and 65K bytes using the `mbuf_size` property in the configuration file. Every connection has at least one mbuf allocated to it. This means that the number of concurrent connections dynomite can support is dependent on the mbuf size. A small mbuf allows us to handle more connections, while a large mbuf allows us to read and write more data to and from kernel socket buffers.
 
 If dynomite is meant to handle a large number of concurrent client connections, you should set the mbuf size to 512 or 1K bytes.
 
 ## Maximum Key Length
-The memcache ascii protocol [specification](notes/memcache.txt) limits the maximum length of the key to 250 characters. The key should not include whitespace, or '\r' or '\n' character. For redis, we have no such limitation. However, dynomite requires the key to be stored in a contiguous memory region. Since all requests and responses in dynomite are stored in mbuf, the maximum length of the redis key is limited by the size of the maximum available space for data in mbuf (mbuf_data_size()). This means that if you want your redis instances to handle large keys, you might want to choose large mbuf size set using -m or --mbuf-size=N command-line argument.
+The memcache ascii protocol [specification](notes/memcache.txt) limits the maximum length of the key to 250 characters. The key should not include whitespace, or '\r' or '\n' character. For redis, we have no such limitation. However, dynomite requires the key to be stored in a contiguous memory region. Since all requests and responses in dynomite are stored in mbuf, the maximum length of the redis key is limited by the size of the maximum available space for data in mbuf (mbuf_data_size()). This means that if you want your redis instances to handle large keys, you might want to choose larger mbuf size, for example 
+
+    mbuf_size: 16384
 
 ## Node Names for Consistent Hashing
 
