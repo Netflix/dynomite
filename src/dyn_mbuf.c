@@ -319,7 +319,7 @@ mbuf_split(struct mhdr *h, uint8_t *pos, func_mbuf_copy_t cb, void *cbarg)
 
 /**
  * Initialize memory buffers to store network packets/socket buffers.
- * @param[in,out] mbuf_chunk_size
+ * @param[in,out] mbuf_size
  */
 void
 mbuf_init(size_t mbuf_size)

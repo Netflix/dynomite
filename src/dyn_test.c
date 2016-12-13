@@ -17,23 +17,23 @@
 #include "dyn_conf.h"
 #include "dyn_signal.h"
 
-#define TEST_CONF_PATH        "conf/dynomite.yml"
+#define TEST_CONF_PATH                 "conf/dynomite.yml"
 
-#define TEST_LOG_DEFAULT       LOG_PVERB
-#define TEST_LOG_PATH          NULL
-#define TEST_MBUF_SIZE         512
-#define TEST_ALLOCS_MSGS	   200000
+#define TEST_LOG_DEFAULT               LOG_PVERB
+#define TEST_LOG_PATH                  NULL
 
+#define TEST_MBUF_SIZE                 16384
+#define TEST_ALLOC_MSGS_MAX            300000
 
 static int show_help;
 static int test_conf;
+
 
 static char *data = "$2014$ 1 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo1\r\n$4\r\nbar1\r\n"
                     "$2014$ 2 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo2\r\n$413\r\nbar01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567892222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222\r\n"
                     "$2014$ 3 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo3\r\n$4\r\nbar3\r\n";
 
 static size_t position = 0;
-static size_t test_mbuf_chunk_size;
 
 static unsigned char aes_key[AES_KEYLEN];
 
@@ -50,7 +50,7 @@ static struct option long_options[] = {
     { NULL,             0,                  NULL,    0  }
 };
 
-static char short_options[] = "hVtDgv:o:c:s:i:a:p:m:M";
+static char short_options[] = "hVtDgv:o:c:s:i:a:p";
 
 
 static void
@@ -113,7 +113,6 @@ test_set_default_options(struct instance *nci)
 
     nci->hostname[DN_MAXHOSTNAMELEN - 1] = '\0';
 
-    nci->mbuf_chunk_size = TEST_MBUF_SIZE;
 }
 
 static rstatus_t
@@ -157,26 +156,6 @@ test_get_options(int argc, char **argv, struct instance *nci)
             nci->conf_filename = optarg;
             break;
 
-        case 'm':
-            value = dn_atoi(optarg, strlen(optarg));
-            if (value <= 0) {
-                log_stderr("test: option -m requires a non-zero number");
-                return DN_ERROR;
-            }
-
-            nci->mbuf_chunk_size = (size_t)value;
-            break;
-
-        case 'M':
-            value = dn_atoi(optarg, strlen(optarg));
-            if (value <= 0) {
-                log_stderr("test: option -M requires a non-zero number");
-                return DN_ERROR;
-            }
-
-            nci->alloc_msgs_max = (size_t)value;
-            break;
-
         case '?':
             switch (optopt) {
             case 'o':
@@ -186,8 +165,6 @@ test_get_options(int argc, char **argv, struct instance *nci)
                            optopt);
                 break;
 
-            case 'm':
-            case 'M':
             case 'v':
             case 's':
             case 'i':
@@ -542,6 +519,40 @@ aes_msg_test2(struct node *server)
 */
 
 static void
+test_core_ctx_create(struct instance *nci)
+{
+    struct context *ctx;
+
+    srand((unsigned) time(NULL));
+
+    ctx = dn_alloc(sizeof(*ctx));
+    if (ctx == NULL) {
+        loga("Failed to create context!!!");
+    }
+    nci->ctx = ctx;
+    ctx->instance = nci;
+    ctx->cf = NULL;
+    ctx->stats = NULL;
+    ctx->evb = NULL;
+    ctx->dyn_state = INIT;
+}
+
+/**
+ * This is very primitive
+ */
+static void
+test_server_pool(struct instance *nci)
+{
+    struct context *ctx = nci->ctx;
+    struct server_pool *sp = &ctx->pool;
+	sp->mbuf_size = TEST_MBUF_SIZE;
+	sp->alloc_msgs_max = TEST_ALLOC_MSGS_MAX;
+
+    mbuf_init(sp->mbuf_size);
+    msg_init(sp->alloc_msgs_max);
+}
+
+static void
 init_test(int argc, char **argv)
 {
     rstatus_t status;
@@ -558,15 +569,12 @@ init_test(int argc, char **argv)
 
     test_pre_run(&nci);
 
-    core_start(&nci);
-    test_mbuf_chunk_size = nci.mbuf_chunk_size;
+    test_core_ctx_create(&nci);
     position = 0;
     conn_init();
-    struct context *ctx = nci.ctx;
-    struct server_pool *sp = &ctx->pool;
 
-    mbuf_init(sp->mbuf_size);
-    msg_init(sp->alloc_msgs_max);
+    test_server_pool(&nci);
+
 
     crypto_init_for_test();
 }

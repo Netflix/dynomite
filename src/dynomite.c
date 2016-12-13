@@ -240,14 +240,11 @@ dn_show_usage(void)
         "  -c, --conf-file=S            : set configuration file (default: %s)" CRLF
         "  -p, --pid-file=S             : set pid file (default: %s)" CRLF
         "  -m, --mbuf-size=N            : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -M, --max-msgs=N             : set max number of messages to allocate (default: %d - deprecated)" CRLF
-        "  -x, --admin-operation=N      : set size of admin operation (default: %d - deprecated)" CRLF
         "",
         DN_LOG_DEFAULT, DN_LOG_MIN, DN_LOG_MAX,
         DN_LOG_PATH != NULL ? DN_LOG_PATH : "stderr",
         DN_CONF_PATH,
         DN_PID_FILE != NULL ? DN_PID_FILE : "off",
-        DN_MBUF_SIZE, DN_ALLOC_MSGS,
         0);
 }
 
@@ -395,7 +392,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             break;
 
         case 'm': // deprecated argument
-            loga("-m or --mbuf-size command line arguments has been deprecated. Use YAML");
+            loga("-m or --mbuf-size command line arguments has been deprecated. Use configuration file.");
         	value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
                 log_stderr("dynomite: option -m requires a non-zero number");
@@ -417,7 +414,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             break;
 
         case 'M': // deprecated argument
-            loga("-M or max-msgs command line argument has been deprecated. Use YAML");
+            loga("-M or max-msgs command line argument has been deprecated. Use configuration file.");
             value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
                 log_stderr("dynomite: option -M requires a non-zero number");
