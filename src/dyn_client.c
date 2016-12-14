@@ -413,12 +413,12 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 
 static void
 req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
-                  err_t err)
+                  err_t error_code, err_t dyn_error_code)
 {
     if (log_loggable(LOG_INFO)) {
        log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
                  "c %d failed: %s", req->id, req->mlen, req->type, conn->sd,
-                 strerror(err));
+                 strerror(error_code));
     }
 
     if (!req->expect_datastore_reply) {
@@ -432,7 +432,8 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
     struct msg *rsp = msg_get(conn, false, __FUNCTION__);
     rsp->peer = req;
     rsp->is_error = 1;
-    rsp->error_code = err;
+    rsp->error_code = error_code;
+    rsp->dyn_error_code = dyn_error_code;
 
     rstatus_t status = conn_handle_response(conn, req->id, rsp);
     IGNORE_RET_VAL(status);
@@ -565,7 +566,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
     s_conn = get_datastore_conn(ctx, c_conn->owner);
     log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
-        req_forward_error(ctx, c_conn, req, errno);
+        req_forward_error(ctx, c_conn, req, errno, STORAGE_CONNECTION_REFUSE);
         return;
     }
     ASSERT(s_conn->type == CONN_SERVER);
@@ -581,31 +582,31 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
             status = conn_event_add_out(s_conn);
 
             if (status != DN_OK) {
-                req_forward_error(ctx, c_conn, req, errno);
+                req_forward_error(ctx, c_conn, req, errno, DYNOMITE_UNKNOWN_ERROR);
                 s_conn->err = errno;
                 return;
             }
         }
     } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
         log_debug(LOG_INFO, "Node is in STANDBY state. Drop write/read requests");
-        req_forward_error(ctx, c_conn, req, errno);
+        req_forward_error(ctx, c_conn, req, errno, DYNOMITE_INVALID_STATE);
         return;
     } else if (ctx->dyn_state == WRITES_ONLY && req->is_read) {
         //no reads from peers/clients but allow writes from peers/clients
         log_debug(LOG_INFO, "Node is in WRITES_ONLY state. Drop read requests");
-        req_forward_error(ctx, c_conn, req, errno);
+        req_forward_error(ctx, c_conn, req, errno, DYNOMITE_INVALID_STATE);
         return;
     } else if (ctx->dyn_state == RESUMING) {
         log_debug(LOG_INFO, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
         if (req->is_read) {
-            req_forward_error(ctx, c_conn, req, errno);
+            req_forward_error(ctx, c_conn, req, errno, DYNOMITE_INVALID_STATE);
             return;
         }
 
         status = conn_event_add_out(s_conn);
 
         if (status != DN_OK) {
-            req_forward_error(ctx, c_conn, req, errno);
+            req_forward_error(ctx, c_conn, req, errno, DYNOMITE_UNKNOWN_ERROR);
             s_conn->err = errno;
             return;
         }
@@ -642,7 +643,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *re
     struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
     if (p_conn == NULL) {
         c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, req, c_conn->err);
+        req_forward_error(ctx, c_conn, req, c_conn->err, PEER_HOST_DOWN);
         return;
     }
 
@@ -979,6 +980,9 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
                rsp->parent_id);
     req->awaiting_rsps = 0;
     rsp->peer = req;
+    req->is_error = rsp->is_error;
+    req->error_code = rsp->error_code;
+    req->dyn_error_code = rsp->dyn_error_code;
     req->selected_rsp = rsp;
     log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
              rsp->id, rsp->parent_id);

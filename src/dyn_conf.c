@@ -441,7 +441,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
     /* sp->continuum = NULL; */
-    sp->nlive_server = 0;
     sp->next_rebuild = 0ULL;
 
     sp->name = cp->name;
