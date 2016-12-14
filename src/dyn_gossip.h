@@ -67,7 +67,6 @@ struct gossip_node_pool {
     struct context     *ctx;                 /* owner context */
     seeds_provider_t   seeds_provider;       /* seeds provider */
     struct array       datacenters;          /* gossip datacenters */
-    uint32_t           nlive_server;         /* # live server */
     int64_t            last_run;             /* last time run in usec */
     int                g_interval;           /* gossip interval */
     dict               *dict_dc;

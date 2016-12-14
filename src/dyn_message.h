@@ -210,13 +210,14 @@ typedef enum msg_type {
 
 
 typedef enum dyn_error {
-    UNKNOWN_ERROR,
+    DYNOMITE_UNKNOWN_ERROR,
+    DYNOMITE_INVALID_STATE,
     PEER_CONNECTION_REFUSE,
     PEER_HOST_DOWN,
     PEER_HOST_NOT_CONNECTED,
     STORAGE_CONNECTION_REFUSE,
     BAD_FORMAT,
-    NO_QUORUM_ACHIEVED,
+    DYNOMITE_NO_QUORUM_ACHIEVED,
 } dyn_error_t;
 
 static inline char *
@@ -224,7 +225,9 @@ dn_strerror(dyn_error_t err)
 {
     switch(err)
     {
-        case NO_QUORUM_ACHIEVED:
+        case DYNOMITE_INVALID_STATE:
+            return "Dynomite's current state does not allow this request";
+        case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
         case PEER_HOST_DOWN:
             return "Peer Node is down";
@@ -240,7 +243,8 @@ dyn_error_source(dyn_error_t err)
 {
     switch(err)
     {
-        case NO_QUORUM_ACHIEVED:
+        case DYNOMITE_INVALID_STATE:
+        case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Dynomite:";
         case PEER_CONNECTION_REFUSE:
         case PEER_HOST_DOWN:

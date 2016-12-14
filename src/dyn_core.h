@@ -284,7 +284,6 @@ struct server_pool {
 
     struct datastore   *datastore;           /* underlying datastore */
     struct array       datacenters;          /* racks info  */
-    uint32_t           nlive_server;         /* # live server */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
 
     struct string      name;                 /* pool name (ref in conf_pool) */

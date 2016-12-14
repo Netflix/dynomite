@@ -434,28 +434,22 @@ server_ok(struct context *ctx, struct conn *conn)
 }
 
 static rstatus_t
-server_pool_update(struct server_pool *pool)
+datastore_check_autoeject(struct datastore *datastore)
 {
+    struct server_pool *pool = datastore->owner;
 	if (!pool->auto_eject_hosts) {
 		return DN_OK;
 	}
 
-	if (pool->next_rebuild == 0ULL) {
-		return DN_OK;
-	}
-
-	usec_t now = dn_usec_now();
-	if (now == 0) {
+	msec_t now_ms = dn_msec_now();
+	if (now_ms == 0) {
 		return DN_ERROR;
 	}
 
-	if (now <= pool->next_rebuild) {
-		if (pool->nlive_server == 0) {
-			errno = ECONNREFUSED;
-			return DN_ERROR;
-		}
-		return DN_OK;
-	}
+    if (now_ms <= datastore->next_retry_ms) {
+        errno = ECONNREFUSED;
+        return DN_ERROR;
+    }
 
 	return DN_OK;
 }
@@ -464,16 +458,12 @@ struct conn *
 get_datastore_conn(struct context *ctx, struct server_pool *pool)
 {
 	rstatus_t status;
-	struct datastore *datastore;
+	struct datastore *datastore = pool->datastore;
 	struct conn *conn;
 
-	status = server_pool_update(pool);
+    ASSERT(datastore);
+	status = datastore_check_autoeject(datastore);
 	if (status != DN_OK) {
-		return NULL;
-	}
-
-	datastore = pool->datastore;
-	if (datastore == NULL) {
 		return NULL;
 	}
 
@@ -535,7 +525,6 @@ server_pool_deinit(struct server_pool *sp)
     ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
 
     server_deinit(&sp->datastore);
-    sp->nlive_server = 0;
     log_debug(LOG_DEBUG, "deinit pool '%.*s'", sp->name.len, sp->name.data);
 }
 

@@ -141,8 +141,8 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         log_info("none of the responses match, returning error");
         struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
         rsp->is_error = 1;
-        rsp->error_code = NO_QUORUM_ACHIEVED;
-        rsp->dyn_error_code = NO_QUORUM_ACHIEVED;
+        rsp->error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
+        rsp->dyn_error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
         ASSERT(rspmgr->err_rsp == NULL);
         rspmgr->err_rsp = rsp;
         rspmgr->error_responses++;
