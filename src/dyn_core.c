@@ -31,6 +31,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
 #include "event/dyn_event.h"
+#include "dyn_task.h"
 
 static rstatus_t
 core_init_last(struct context *ctx)
@@ -46,10 +47,6 @@ core_gossip_pool_init(struct context *ctx)
     //init ring msg queue
     CBUF_Init(C2G_InQ);
     CBUF_Init(C2G_OutQ);
-
-    //init stats msg queue
-    CBUF_Init(C2S_InQ);
-    CBUF_Init(C2S_OutQ);
 
     THROW_STATUS(gossip_pool_init(ctx));
     THROW_STATUS(core_init_last(ctx));
@@ -276,6 +273,7 @@ core_start(struct instance *nci)
 {
 
     conn_init();
+    task_mgr_init();
 
     rstatus_t status = core_ctx_create(nci);
     if (status != DN_OK) {
@@ -463,8 +461,6 @@ core_timeout(struct context *ctx)
 	}
 }
 
-
-
 rstatus_t
 core_core(void *arg, uint32_t events)
 {
@@ -610,12 +606,14 @@ core_loop(struct context *ctx)
 
 	core_process_messages();
 
-	nsd = event_wait(ctx->evb, ctx->timeout);
-	if (nsd < 0) {
-		return nsd;
-	}
+    core_timeout(ctx);
+    execute_expired_tasks(0);
+    ctx->timeout = MIN(ctx->timeout, time_to_next_task());
+    nsd = event_wait(ctx->evb, ctx->timeout);
+    if (nsd < 0) {
+        return nsd;
+    }
 
-	core_timeout(ctx);
     // go through all the ready queue and send each of them
     struct server_pool *sp = &ctx->pool;
     struct conn *conn, *nconn;

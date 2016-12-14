@@ -185,8 +185,8 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     log_debug(LOG_VERB, "transform to server '%.*s'",
@@ -240,8 +240,8 @@ conf_seed_each_transform(void *elem, void *data)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     s->processed = 0;

@@ -204,8 +204,6 @@ static void
 server_failure(struct context *ctx, struct datastore *server)
 {
 	struct server_pool *pool = server->owner;
-	msec_t now, next;
-
 	if (!pool->auto_eject_hosts) {
 		return;
 	}
@@ -220,24 +218,26 @@ server_failure(struct context *ctx, struct datastore *server)
 		return;
 	}
 
-	now = dn_msec_now();
-	if (now == 0) {
+	msec_t now_ms, next_ms;
+	now_ms = dn_msec_now();
+	if (now_ms == 0) {
 		return;
 	}
 
-	stats_server_set_ts(ctx, server_ejected_at, now);
+	stats_server_set_ts(ctx, server_ejected_at, now_ms);
 
-	next = now + pool->server_retry_timeout_ms;
+	next_ms = now_ms + pool->server_retry_timeout_ms;
 
 	log_info("update pool '%.*s' to delete server '%.*s' "
 			"for next %"PRIu32" secs", pool->name.len,
 			pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
-			pool->server_retry_timeout_ms/1000/1000);
+			pool->server_retry_timeout_ms/1000);
 
 	stats_pool_incr(ctx, server_ejects);
 
 	server->failure_count = 0;
-	server->next_retry_us = next;
+	server->next_retry_ms = next_ms;
+    // Schedule a reconnect task to call datastore_preconnect
 }
 
 static void
@@ -429,8 +429,8 @@ server_ok(struct context *ctx, struct conn *conn)
                 server->failure_count);
     }
     server->failure_count = 0;
-    server->next_retry_us = 0ULL;
-    server->reconnect_backoff_sec = 1LL;
+    server->next_retry_ms = 0ULL;
+    server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 }
 
 static rstatus_t

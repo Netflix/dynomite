@@ -16,6 +16,7 @@
 #include "dyn_core.h"
 #include "dyn_conf.h"
 #include "dyn_signal.h"
+#include "dyn_dnode_peer.h"
 
 #define TEST_CONF_PATH                 "conf/dynomite.yml"
 
@@ -232,8 +233,8 @@ init_peer(struct node *s)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     s->processed = 0;

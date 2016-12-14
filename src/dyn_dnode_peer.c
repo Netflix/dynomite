@@ -12,10 +12,12 @@
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_node_snitch.h"
+#include "dyn_task.h"
 #include "dyn_token.h"
 #include "dyn_vnode.h"
 
 static rstatus_t dnode_peer_pool_update(struct server_pool *pool);
+static void dnode_peer_connect_task(void *p);
 
 bool
 is_same_dc(struct server_pool *sp, struct node *peer_node)
@@ -58,6 +60,12 @@ dnode_peer_unref(struct conn *conn)
 
     peer = conn->owner;
     conn->owner = NULL;
+
+    /* FIXME: This is a wrong place to schedule a reconnection since this unref has no
+     * context around why the disconnection happened. Ideally this task should be
+     * scheduled by a higher layer which monitors the overall cluster health and
+     * individual connections */
+    schedule_task_1(dnode_peer_connect_task, peer, peer->reconnect_backoff_sec * 1000);
 
     ASSERT(peer->ns_conn_q != 0);
     peer->ns_conn_q--;
@@ -162,8 +170,8 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     self->ns_conn_q = 0;
     TAILQ_INIT(&self->s_conn_q);
 
-    self->next_retry_us = 0ULL;
-    self->reconnect_backoff_sec = 1LL;
+    self->next_retry_ms = 0ULL;
+    self->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     self->failure_count = 0;
     self->is_seed = 1;
     self->processed = 0;
@@ -413,7 +421,6 @@ static void
 dnode_peer_failure(struct context *ctx, struct node *server)
 {
     struct server_pool *pool = server->owner;
-    msec_t now;
     rstatus_t status;
 
     server->failure_count++;
@@ -426,16 +433,12 @@ dnode_peer_failure(struct context *ctx, struct node *server)
         return;
     }
 
-	if (server->failure_count < pool->server_failure_limit) {
-		return;
-	}
-
-    now = dn_usec_now();
-    if (now < 0) {
+    msec_t now_ms = dn_msec_now();
+    if (now_ms < 0) {
         return;
     }
 
-    stats_pool_set_ts(ctx, peer_ejected_at, (int64_t)now);
+    stats_pool_set_ts(ctx, peer_ejected_at, (int64_t)now_ms);
 
     log_notice("dyn: update peer pool '%.*s' for peer '%.*s' "
                "for next %"PRIu32" secs", pool->name.len,
@@ -443,9 +446,10 @@ dnode_peer_failure(struct context *ctx, struct node *server)
                WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS/1000);
 
     stats_pool_incr(ctx, peer_ejects);
+    if (server->reconnect_backoff_sec < MIN_WAIT_BEFORE_RECONNECT_IN_SECS)
+        server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 
-    //if (server->failure_count == 3)
-    server->next_retry_us = now + (server->reconnect_backoff_sec * 1000 * 1000);
+    server->next_retry_ms = now_ms + (server->reconnect_backoff_sec * 1000);
     server->reconnect_backoff_sec =
         (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
                                                 MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
@@ -502,9 +506,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     struct node *peer = conn->owner;
 
-    log_debug(LOG_WARN, "dyn: dnode_peer_close on peer '%.*s'", peer->endpoint.pname.len,
-            peer->endpoint.pname.data);
-
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     dnode_peer_close_stats(ctx, conn);
@@ -544,8 +545,10 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
-    log_warn("close %s %d Dropped %u outqueue & %u inqueue requests",
-             conn_get_type_string(conn), conn->sd, out_counter, in_counter);
+    log_warn("close %s %d '%.*s' Dropped %u outqueue & %u inqueue requests",
+             conn_get_type_string(conn), conn->sd, peer->endpoint.pname.len,
+            peer->endpoint.pname.data, out_counter, in_counter);
+
     struct msg *rsp = conn->rmsg;
     if (rsp != NULL) {
         conn->rmsg = NULL;
@@ -574,8 +577,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     conn_put(conn);
 }
 
-
-
 static rstatus_t
 dnode_peer_each_preconnect(void *elem, void *data)
 {
@@ -603,6 +604,13 @@ dnode_peer_each_preconnect(void *elem, void *data)
     }
 
     return DN_OK;
+}
+
+static void
+dnode_peer_connect_task(void *p)
+{
+    rstatus_t s = dnode_peer_each_preconnect(p, NULL);
+    IGNORE_RET_VAL(s);
 }
 
 static rstatus_t
@@ -835,8 +843,8 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->ns_conn_q = 0;
     TAILQ_INIT(&s->s_conn_q);
 
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
     s->is_seed = node->is_seed;
 
@@ -1000,7 +1008,7 @@ dnode_peer_replace(struct server_pool *sp, struct gossip_node *node)
 void
 dnode_peer_connected(struct context *ctx, struct conn *conn)
 {
-    struct node *server = conn->owner;
+    struct node *peer = conn->owner;
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
     ASSERT(conn->connecting && !conn->connected);
@@ -1009,11 +1017,10 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
 
     conn->connecting = 0;
     conn->connected = 1;
+    peer->state = NORMAL;
 
-        if (log_loggable(LOG_INFO)) {
-       log_debug(LOG_INFO, "dyn: peer connected on sd %d to server '%.*s'", conn->sd,
-              server->endpoint.pname.len, server->endpoint.pname.data);
-        }
+    log_notice("connected to %s '%.*s' from sd %u", conn_get_type_string(conn),
+               peer->endpoint.pname.len, peer->endpoint.pname.data, conn->sd);
 }
 
 static void
@@ -1028,8 +1035,8 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
             " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
             server->failure_count);
     server->failure_count = 0;
-    server->next_retry_us = 0ULL;
-    server->reconnect_backoff_sec =  1LL;
+    server->next_retry_ms = 0ULL;
+    server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 }
 
 static rstatus_t
@@ -1174,17 +1181,17 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
 {
     // This peer is marked as down. lets check if it is time to connect
     if (peer->state == DOWN) {
-        usec_t now = dn_usec_now();
-        static usec_t next_log = 0; // Log every 1 sec
-        if (peer->next_retry_us && (now > peer->next_retry_us)) {
+        msec_t now_ms = dn_msec_now();
+        static msec_t next_log_ms = 0; // Log every 1 sec
+        if (peer->next_retry_ms && (now_ms > peer->next_retry_ms)) {
             peer->state = NORMAL;
-            peer->next_retry_us = 0;
+            peer->next_retry_ms = 0;
             peer->failure_count = 0;
         } else {
-            if (now > next_log) {
+            if (now_ms > next_log_ms) {
                 log_warn("Detecting peer '%.*s' is set with state Down",
                          peer->endpoint.pname.len, peer->endpoint.pname.data);
-                next_log = now + 1000 * 1000;
+                next_log_ms = now_ms + 1000;
             }
             return NULL;
         }
@@ -1712,13 +1719,13 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     ASSERT(req->is_request);
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
-    int64_t delay = 0;
+    usec_t delay_us = 0;
     if (req->request_inqueue_enqueue_time_us) {
-        delay = dn_usec_now() - req->request_inqueue_enqueue_time_us;
+        delay_us = dn_usec_now() - req->request_inqueue_enqueue_time_us;
         if (conn->same_dc)
-            histo_add(&ctx->stats->cross_zone_queue_wait_time_histo, delay);
+            histo_add(&ctx->stats->cross_zone_queue_wait_time_histo, delay_us);
         else
-            histo_add(&ctx->stats->cross_region_queue_wait_time_histo, delay);
+            histo_add(&ctx->stats->cross_region_queue_wait_time_histo, delay_us);
     }
     TAILQ_REMOVE(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, req->id, req->parent_id);
