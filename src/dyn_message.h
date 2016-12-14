@@ -217,7 +217,7 @@ typedef enum dyn_error {
     PEER_HOST_NOT_CONNECTED,
     STORAGE_CONNECTION_REFUSE,
     BAD_FORMAT,
-    NO_QUORUM_ACHIEVED,
+    DYNOMITE_NO_QUORUM_ACHIEVED,
 } dyn_error_t;
 
 static inline char *
@@ -227,7 +227,7 @@ dn_strerror(dyn_error_t err)
     {
         case DYNOMITE_INVALID_STATE:
             return "Dynomite's current state does not allow this request";
-        case NO_QUORUM_ACHIEVED:
+        case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
         case PEER_HOST_DOWN:
             return "Peer Node is down";
@@ -244,7 +244,7 @@ dyn_error_source(dyn_error_t err)
     switch(err)
     {
         case DYNOMITE_INVALID_STATE:
-        case NO_QUORUM_ACHIEVED:
+        case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Dynomite:";
         case PEER_CONNECTION_REFUSE:
         case PEER_HOST_DOWN:
