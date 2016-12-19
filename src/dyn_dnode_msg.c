@@ -35,12 +35,12 @@ dyn_parse_core(struct msg *r)
    uint8_t ch = ' ';
    uint64_t num = 0;
 
-   dyn_state = r->dyn_state;
+   dyn_state = r->dyn_parse_state;
    if (log_loggable(LOG_DEBUG)) {
-      log_debug(LOG_DEBUG, "dyn_state:  %d", r->dyn_state);
+      log_debug(LOG_DEBUG, "dyn_parse_state:  %d", r->dyn_parse_state);
    }
 
-   if (r->dyn_state == DYN_DONE || r->dyn_state == DYN_POST_DONE)
+   if (r->dyn_parse_state == DYN_DONE || r->dyn_parse_state == DYN_POST_DONE)
        return true;
 
    b = STAILQ_LAST(&r->mhdr, mbuf, next);
@@ -322,7 +322,7 @@ dyn_parse_core(struct msg *r)
          }
          r->pos = p;
          dmsg->payload = p;
-         r->dyn_state = DYN_DONE;
+         r->dyn_parse_state = DYN_DONE;
          b->pos = p;
          goto done;
          break;
@@ -341,7 +341,7 @@ dyn_parse_core(struct msg *r)
    split:
    //this is an attempt recovery when we got a bad message
    //we try to look for the start the next good one and throw away the bad part
-   if (r->dyn_state == DYN_START) {
+   if (r->dyn_parse_state == DYN_START) {
       r->result = MSG_PARSE_AGAIN;
        if (b->last == b->end) {
           struct mbuf *nbuf = mbuf_get();
@@ -388,7 +388,7 @@ dyn_parse_core(struct msg *r)
        if (log_loggable(LOG_DEBUG)) {
            log_debug(LOG_DEBUG, "Forward to reading the new block of data");
        }
-       r->dyn_state = DYN_START;
+       r->dyn_parse_state = DYN_START;
        r->result = MSG_PARSE_AGAIN;
        token = NULL;
        return false;
@@ -397,17 +397,17 @@ dyn_parse_core(struct msg *r)
    if (log_loggable(LOG_VVERB)) {
       log_debug(LOG_VVERB, "in split");
    }
-   r->dyn_state = DYN_START;
+   r->dyn_parse_state = DYN_START;
    r->pos = token;
    r->result = MSG_PARSE_REPAIR;
    if (log_loggable(LOG_VVERB)) {
       log_hexdump(LOG_VVERB, b->pos, mbuf_length(b), "split and inspecting req %"PRIu64" "
             "res %d type %d state %d", r->id, r->result, r->type,
-            r->dyn_state);
+            r->dyn_parse_state);
 
       log_hexdump(LOG_VVERB, b->start, b->last - b->start, "split and inspecting full req %"PRIu64" "
             "res %d type %d state %d", r->id, r->result, r->type,
-            r->dyn_state);
+            r->dyn_parse_state);
    }
    return false;
 
@@ -419,10 +419,10 @@ dyn_parse_core(struct msg *r)
       log_debug(LOG_VVERB, "at done with p at %d", p);
       log_hexdump(LOG_VVERB, r->pos, b->last - r->pos, "done and inspecting req %"PRIu64" "
             "res %d type %d state %d", r->id, r->result, r->type,
-            r->dyn_state);
+            r->dyn_parse_state);
       log_hexdump(LOG_VVERB, b->start, b->last - b->start, "inspecting req %"PRIu64" "
             "res %d type %d state %d", r->id, r->result, r->type,
-            r->dyn_state);
+            r->dyn_parse_state);
    }
 
    return true;
@@ -441,7 +441,7 @@ dyn_parse_core(struct msg *r)
             "res %d type %d state %d", r->id, r->result, r->type,
             dyn_state);
    }
-   r->dyn_state = dyn_state;
+   r->dyn_parse_state = dyn_state;
 
    return false;
 }
@@ -467,14 +467,14 @@ dyn_parse_req(struct msg *r)
 				dmsg->type != DMSG_REQ_FORWARD && dmsg->type != GOSSIP_SYN) {
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
-			r->dyn_state = DYN_DONE;
+			r->dyn_parse_state = DYN_DONE;
 			return;
 		}
 
-		if (r->dyn_state == DYN_DONE && dmsg->bit_field == 1) {
+		if (r->dyn_parse_state == DYN_DONE && dmsg->bit_field == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
 			r->owner->dnode_crypto_state = 1;
-			r->dyn_state = DYN_POST_DONE;
+			r->dyn_parse_state = DYN_POST_DONE;
 			r->result = MSG_PARSE_REPAIR;
 
 			if (dmsg->mlen > 1) {
@@ -511,7 +511,7 @@ dyn_parse_req(struct msg *r)
 			dmsg->plen -= (uint32_t)(b->last - b->pos);
 
 			return;
-		} else if (r->dyn_state == DYN_POST_DONE) {
+		} else if (r->dyn_parse_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
 				data_store_parse_req(r);
@@ -564,14 +564,14 @@ void dyn_parse_rsp(struct msg *r)
 			log_debug(LOG_DEBUG, "Resp parser: I got a dnode msg of type %d", dmsg->type);
 			r->state = 0;
 			r->result = MSG_PARSE_OK;
-			r->dyn_state = DYN_DONE;
+			r->dyn_parse_state = DYN_DONE;
 			return;
 		}
 
-		if (r->dyn_state == DYN_DONE && dmsg->bit_field == 1) {
+		if (r->dyn_parse_state == DYN_DONE && dmsg->bit_field == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
 			r->owner->dnode_crypto_state = 1;
-			r->dyn_state = DYN_POST_DONE;
+			r->dyn_parse_state = DYN_POST_DONE;
 			r->result = MSG_PARSE_REPAIR;
 
 			if (dmsg->mlen > 1) {
@@ -608,7 +608,7 @@ void dyn_parse_rsp(struct msg *r)
 			dmsg->plen -= (uint32_t)(b->last - b->pos);
 			return;
 
-		} else if (r->dyn_state == DYN_POST_DONE) {
+		} else if (r->dyn_parse_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
 				data_store_parse_rsp(r);

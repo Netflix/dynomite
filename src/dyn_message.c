@@ -353,7 +353,7 @@ done:
 
     //dynomite
     msg->is_read = 1;
-    msg->dyn_state = 0;
+    msg->dyn_parse_state = 0;
     msg->dmsg = NULL;
     msg->msg_routing = ROUTING_NORMAL;
     msg->dyn_error_code = 0;
@@ -929,7 +929,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     ssize_t n;
 
     int expected_fill =
-        ((msg->dyn_state == DYN_DONE || msg->dyn_state == DYN_POST_DONE) &&
+        ((msg->dyn_parse_state == DYN_DONE || msg->dyn_parse_state == DYN_POST_DONE) &&
          msg->dmsg->bit_field == 1) ? msg->dmsg->plen : -1;  //used in encryption case only
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);

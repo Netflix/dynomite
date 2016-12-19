@@ -71,7 +71,6 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
 #define CONF_DEFAULT_SERVER_FAILURE_LIMIT    3
-#define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
 
 #define CONF_DEFAULT_SEEDS                   5
@@ -181,10 +180,7 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->endpoint.family = cs->info.family;
     s->endpoint.addrlen = cs->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cs->info.addr;
-
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
-
+    s->conn = NULL;
     s->next_retry_ms = 0ULL;
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
@@ -236,10 +232,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->endpoint.family = cseed->info.family;
     s->endpoint.addrlen = cseed->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
-
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
-
+    s->conn = NULL;
     s->next_retry_ms = 0ULL;
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
@@ -289,7 +282,6 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->data_store = CONF_UNSET_NUM;
     cp->preconnect = CONF_UNSET_NUM;
     cp->auto_eject_hosts = CONF_UNSET_NUM;
-    cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
     cp->stats_interval = CONF_UNSET_NUM;
@@ -467,7 +459,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     sp->client_connections = (uint32_t)cp->client_connections;
 
-    sp->server_connections = (uint32_t)cp->server_connections;
     sp->server_retry_timeout_ms = cp->server_retry_timeout_ms;
     sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
     sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
@@ -560,8 +551,6 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  data_store: %d (%s)", g_data_store, temp_log);
     log_debug(LOG_VVERB, "  preconnect: %d", cp->preconnect);
     log_debug(LOG_VVERB, "  auto_eject_hosts: %d", cp->auto_eject_hosts);
-    log_debug(LOG_VVERB, "  server_connections: %d",
-            cp->server_connections);
     log_debug(LOG_VVERB, "  server_retry_timeout: %d (msec)",
             cp->server_retry_timeout_ms);
     log_debug(LOG_VVERB, "  server_failure_limit: %d",
@@ -1261,9 +1250,10 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 }
 
 static char *
-conf_set_distribution(struct conf *cf, struct command *cmd, void *conf)
+conf_set_deprecated(struct conf *cf, struct command *cmd, void *conf)
 {
-    log_warn("Field \"distribution\" in the conf file is deprecated");
+    log_warn("******** Field \"%.*s\" in the conf file is DEPRECATED *********",
+             cmd->name.len, cmd->name.data);
     return CONF_OK;
 }
 
@@ -1308,8 +1298,8 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, hash_tag) },
 
     { string("distribution"),
-      conf_set_distribution,
-      offsetof(struct conf_pool, distribution) },
+      conf_set_deprecated,
+      offsetof(struct conf_pool, deprecated) },
 
     { string("timeout"),
       conf_set_num,
@@ -1336,8 +1326,8 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, auto_eject_hosts) },
 
     { string("server_connections"),
-      conf_set_num,
-      offsetof(struct conf_pool, server_connections) },
+      conf_set_deprecated,
+      offsetof(struct conf_pool, deprecated) },
 
     { string("server_retry_timeout"),
       conf_set_num,
@@ -2137,13 +2127,6 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->auto_eject_hosts == CONF_UNSET_NUM) {
         cp->auto_eject_hosts = CONF_DEFAULT_AUTO_EJECT_HOSTS;
-    }
-
-    if (cp->server_connections == CONF_UNSET_NUM) {
-        cp->server_connections = CONF_DEFAULT_SERVER_CONNECTIONS;
-    } else if (cp->server_connections == 0) {
-        log_error("conf: directive \"server_connections:\" cannot be 0");
-        return DN_ERROR;
     }
 
     if (cp->server_retry_timeout_ms == CONF_UNSET_NUM) {
