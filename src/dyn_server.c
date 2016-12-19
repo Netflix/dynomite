@@ -36,8 +36,8 @@ server_ref(struct conn *conn, void *owner)
 	struct datastore *server = owner;
 
     ASSERT(conn->type == CONN_SERVER);
-	ASSERT(conn->owner == NULL);
-	ASSERT(server->conn == NULL);
+    ASSERT(conn->owner == NULL);
+    ASSERT(server->conn == NULL);
 
 	conn->family = server->endpoint.family;
 	conn->addrlen = server->endpoint.addrlen;
@@ -119,7 +119,7 @@ server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
-    ASSERT(pdatastore->conn == NULL);
+    ASSERT((*pdatastore)->conn == NULL);
 }
 
 static struct conn *

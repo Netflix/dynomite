@@ -888,8 +888,8 @@ dnode_peer_replace(void *rmsg)
 
 
     if (s != NULL) {
-        log_debug(LOG_NOTICE, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
-        log_debug(LOG_NOTICE, "Replace with address '%.*s'", node->name.len, node->name.data);
+        log_notice("Found an old node to replace '%.*s'", s->name.len, s->name.data);
+        log_notice("Replace with address '%.*s'", node->name.len, node->name.data);
 
         string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
