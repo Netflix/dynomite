@@ -81,14 +81,13 @@ struct conf_pool {
     struct conf_listen listen;                /* listen: */
     hash_type_t        hash;                  /* hash: */
     struct string      hash_tag;              /* hash_tag: */
-    void               *distribution;          /* Deprecated: distribution */
+    void               *deprecated;          /* Deprecated: distribution, server_connections */
     msec_t             timeout;               /* timeout: */
     int                backlog;               /* backlog: */
     int                client_connections;    /* client_connections: */
     int                data_store;            /* data_store: */
     int                preconnect;            /* preconnect: */
     int                auto_eject_hosts;      /* auto_eject_hosts: */
-    int                server_connections;    /* server_connections: */
     msec_t             server_retry_timeout_ms;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
     struct conf_server *conf_datastore;       /* This is the underlying datastore */

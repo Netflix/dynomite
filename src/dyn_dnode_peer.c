@@ -38,8 +38,8 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->addr = peer->endpoint.addr;
     string_duplicate(&conn->pname, &peer->endpoint.pname);
 
-    peer->ns_conn_q++;
-    TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
+    ASSERT(peer->conn == NULL);
+    peer->conn = conn;
 
     conn->owner = owner;
 
@@ -67,14 +67,11 @@ dnode_peer_unref(struct conn *conn)
      * individual connections */
     schedule_task_1(dnode_peer_connect_task, peer, peer->reconnect_backoff_sec * 1000);
 
-    ASSERT(peer->ns_conn_q != 0);
-    peer->ns_conn_q--;
-    TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
+    ASSERT(peer->conn);
+    peer->conn = NULL;
 
-    if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
-               peer->endpoint.pname.len, peer->endpoint.pname.data);
-    }
+    log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
+              peer->endpoint.pname.len, peer->endpoint.pname.data);
 }
 
 msec_t
@@ -166,9 +163,7 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     self->endpoint.family = pool->dnode_proxy_endpoint.family;
     self->endpoint.addrlen = pool->dnode_proxy_endpoint.addrlen;
     self->endpoint.addr = pool->dnode_proxy_endpoint.addr;
-
-    self->ns_conn_q = 0;
-    TAILQ_INIT(&self->s_conn_q);
+    self->conn = NULL;
 
     self->next_retry_ms = 0ULL;
     self->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
@@ -194,7 +189,7 @@ dnode_peer_deinit(struct array *nodes)
 
         s = array_pop(nodes);
         IGNORE_RET_VAL(s);
-        ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
+        ASSERT(s->conn == NULL);
     }
     array_deinit(nodes);
 }
@@ -344,7 +339,7 @@ dnode_peer_conn(struct node *peer)
 
     pool = peer->owner;
 
-    if (peer->ns_conn_q < 1) {
+    if (peer->conn == NULL) {
         conn = conn_get_peer(peer, false);
         if (is_conn_secured(pool, peer)) {
             conn->dnode_secured = 1;
@@ -356,17 +351,7 @@ dnode_peer_conn(struct node *peer)
         return conn;
     }
 
-    /*
-     * Pick a peer connection from the head of the queue and insert
-     * it back into the tail of queue to maintain the lru order
-     */
-    conn = TAILQ_FIRST(&peer->s_conn_q);
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
-    TAILQ_REMOVE(&peer->s_conn_q, conn, conn_tqe);
-    TAILQ_INSERT_TAIL(&peer->s_conn_q, conn, conn_tqe);
-
-    return conn;
+    return peer->conn;
 }
 
 static void
@@ -616,20 +601,12 @@ dnode_peer_connect_task(void *p)
 static rstatus_t
 dnode_peer_each_disconnect(void *elem, void *data)
 {
-    struct node *server;
+    struct node *peer = elem;
     struct server_pool *pool;
 
-    server = elem;
-    pool = server->owner;
-
-    //TODOs: fixe me not to use s_conn_q to distinguish server pool and peer pool
-    while (!TAILQ_EMPTY(&server->s_conn_q)) {
-        struct conn *conn;
-
-        ASSERT(server->ns_conn_q > 0);
-
-        conn = TAILQ_FIRST(&server->s_conn_q);
-        conn_close(pool->ctx, conn);
+    pool = peer->owner;
+    if (peer->conn) {
+        conn_close(pool->ctx, peer->conn);
     }
 
     return DN_OK;
@@ -793,14 +770,9 @@ dnode_peer_relink_conn_owner(struct server_pool *sp)
     nelem = array_n(peers);
     for (i = 0; i < nelem; i++) {
         struct node *peer = (struct node *) array_get(peers, i);
-        struct conn *conn, *nconn;
-        for (conn = TAILQ_FIRST(&peer->s_conn_q); conn != NULL;
-                conn = nconn) {
-            nconn = TAILQ_NEXT(conn, conn_tqe);
-            conn->owner = peer; //re-link to the owner in case of an resize/allocation
-        }
+        if (peer->conn)
+            peer->conn->owner = peer;
     }
-
 }
 
 
@@ -840,8 +812,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->endpoint.family = info->family;
     s->endpoint.addrlen = info->addrlen;
     s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
+    s->conn = NULL;
 
     s->next_retry_ms = 0ULL;
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
@@ -917,8 +888,8 @@ dnode_peer_replace(void *rmsg)
 
 
     if (s != NULL) {
-        log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
-        log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
+        log_debug(LOG_NOTICE, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
+        log_debug(LOG_NOTICE, "Replace with address '%.*s'", node->name.len, node->name.data);
 
         string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);

@@ -84,7 +84,6 @@
     ACTION( server_eof,                   STATS_COUNTER,           "# eof on server connections")                              \
     ACTION( server_err,                   STATS_COUNTER,           "# errors on server connections")                           \
     ACTION( server_timedout,              STATS_COUNTER,           "# timeouts on server connections")                         \
-    ACTION( server_connections,           STATS_GAUGE,             "# active server connections")                              \
     ACTION( server_ejected_at,            STATS_TIMESTAMP,         "timestamp when server was ejected in usec since epoch")    \
     ACTION( server_dropped_requests,      STATS_COUNTER,           "# server dropped requests")                                \
     ACTION( server_timedout_requests,     STATS_COUNTER,           "# server timedout requests")                               \
