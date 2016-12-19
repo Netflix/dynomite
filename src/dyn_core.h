@@ -132,12 +132,12 @@ typedef enum dyn_state {
 	WRITES_ONLY = 2,
 	RESUMING    = 3,
 	NORMAL      = 4,
-	SUSPENDING  = 5,
-	LEAVING     = 6,
+	//SUSPENDING  = 5,
+	//LEAVING     = 6,
 	JOINING     = 7,
 	DOWN        = 8,
-	REMOVED     = 9,
-	EXITING     = 10,
+	//REMOVED     = 9,
+	//EXITING     = 10,
 	RESET       = 11,
 	UNKNOWN     = 12
 } dyn_state_t;
@@ -151,12 +151,12 @@ get_state(dyn_state_t s) {
 		case WRITES_ONLY: return "WRITES_ONLY";
 		case RESUMING: return "RESUMING";
 		case NORMAL: return "NORMAL";
-		case SUSPENDING: return "SUSPENDING";
-		case LEAVING: return "LEAVING";
+		//case SUSPENDING: return "SUSPENDING";
+		//case LEAVING: return "LEAVING";
 		case JOINING: return "JOINING";
 		case DOWN: return "DOWN";
-		case REMOVED: return "REMOVED";
-		case EXITING: return "EXITING";
+		//case REMOVED: return "REMOVED";
+		//case EXITING: return "EXITING";
 		case RESET: return "RESET";
 		case UNKNOWN: return "Unknown";
 	}
@@ -230,8 +230,7 @@ struct datastore {
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    uint32_t           ns_conn_q;     /* # server connection */
-    struct conn_tqh    s_conn_q;      /* server connection q */
+    struct conn        *conn;         /* the only server connection */
 
     msec_t             next_retry_ms; /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */
@@ -247,8 +246,7 @@ struct node {
     struct endpoint    endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    uint32_t           ns_conn_q;     /* # server connection */
-    struct conn_tqh    s_conn_q;      /* server connection q */
+    struct conn        *conn;         /* the only peer connection */
 
     msec_t             next_retry_ms;    /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */
@@ -294,7 +292,6 @@ struct server_pool {
     msec_t             timeout;              /* timeout in msec */
     int                backlog;              /* listen backlog */
     uint32_t           client_connections;   /* maximum # client connection */
-    uint32_t           server_connections;   /* maximum # server connection */
     msec_t             server_retry_timeout_ms; /* server retry timeout in msec */
     uint32_t           server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */

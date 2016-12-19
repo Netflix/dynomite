@@ -36,15 +36,14 @@ server_ref(struct conn *conn, void *owner)
 	struct datastore *server = owner;
 
     ASSERT(conn->type == CONN_SERVER);
-	ASSERT(conn->owner == NULL);
+    ASSERT(conn->owner == NULL);
+    ASSERT(server->conn == NULL);
 
 	conn->family = server->endpoint.family;
 	conn->addrlen = server->endpoint.addrlen;
 	conn->addr = server->endpoint.addr;
     string_duplicate(&conn->pname, &server->endpoint.pname);
-
-	server->ns_conn_q++;
-	TAILQ_INSERT_TAIL(&server->s_conn_q, conn, conn_tqe);
+    server->conn = conn;
 
 	conn->owner = owner;
 
@@ -64,9 +63,8 @@ server_unref(struct conn *conn)
 	server = conn->owner;
 	conn->owner = NULL;
 
-	ASSERT(server->ns_conn_q != 0);
-	server->ns_conn_q--;
-	TAILQ_REMOVE(&server->s_conn_q, conn, conn_tqe);
+    ASSERT(server->conn);
+    server->conn = NULL;
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -121,42 +119,16 @@ server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
-
-    struct datastore *s = *pdatastore;
-    IGNORE_RET_VAL(s);
-    ASSERT(TAILQ_EMPTY(&s->s_conn_q) && s->ns_conn_q == 0);
+    ASSERT((*pdatastore)->conn == NULL);
 }
 
 static struct conn *
 server_conn(struct datastore *datastore)
 {
-	struct server_pool *pool;
-	struct conn *conn;
-
-	pool = datastore->owner;
-
-	/*
-	 * FIXME: handle multiple server connections per server and do load
-	 * balancing on it. Support multiple algorithms for
-	 * 'server_connections:' > 0 key
-	 */
-
-	if (datastore->ns_conn_q < pool->server_connections) {
-		return conn_get(datastore, false);
-	}
-	ASSERT(datastore->ns_conn_q == pool->server_connections);
-
-	/*
-	 * Pick a server connection from the head of the queue and insert
-	 * it back into the tail of queue to maintain the lru order
-	 */
-	conn = TAILQ_FIRST(&datastore->s_conn_q);
-	ASSERT(conn->type == CONN_SERVER);
-
-	TAILQ_REMOVE(&datastore->s_conn_q, conn, conn_tqe);
-	TAILQ_INSERT_TAIL(&datastore->s_conn_q, conn, conn_tqe);
-
-	return conn;
+    if (!datastore->conn) {
+        return conn_get(datastore, false);
+    }
+    return datastore->conn;
 }
 
 static rstatus_t
@@ -188,12 +160,8 @@ datastore_disconnect(struct datastore *datastore)
 {
 	struct server_pool *pool = datastore->owner;
 
-	while (!TAILQ_EMPTY(&datastore->s_conn_q)) {
-		struct conn *conn;
-
-		ASSERT(datastore->ns_conn_q > 0);
-
-		conn = TAILQ_FIRST(&datastore->s_conn_q);
+    struct conn *conn = datastore->conn;
+    if (conn) {
 		conn_close(pool->ctx, conn);
 	}
 
@@ -237,17 +205,12 @@ server_failure(struct context *ctx, struct datastore *server)
 
 	server->failure_count = 0;
 	server->next_retry_ms = next_ms;
-    // Schedule a reconnect task to call datastore_preconnect
 }
 
 static void
 server_close_stats(struct context *ctx, struct datastore *server, err_t err,
 		unsigned eof, unsigned connected)
 {
-	if (connected) {
-		stats_server_decr(ctx, server_connections);
-	}
-
 	if (eof) {
 		stats_server_incr(ctx, server_eof);
 		return;
@@ -404,15 +367,11 @@ server_connected(struct context *ctx, struct conn *conn)
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connecting && !conn->connected);
 
-	stats_server_incr(ctx, server_connections);
-
 	conn->connecting = 0;
 	conn->connected = 1;
 
-        if (log_loggable(LOG_INFO)) {
-	   log_debug(LOG_INFO, "connected on s %d to server '%.*s'", conn->sd,
-		   	server->endpoint.pname.len, server->endpoint.pname.data);
-        }
+    log_notice("connected to %s '%.*s' from sd %u", conn_get_type_string(conn),
+               server->endpoint.pname.len, server->endpoint.pname.data, conn->sd);
 }
 
 static void

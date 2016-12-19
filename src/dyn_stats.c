@@ -1419,6 +1419,7 @@ stats_create(uint16_t stats_port, struct string pname, int stats_interval,
 
     st->port = stats_port;
     st->interval = stats_interval;
+    string_init(&st->addr);
     if (string_duplicate(&st->addr,&stats_ip) != DN_OK) {
     	goto error;
     }
