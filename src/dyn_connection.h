@@ -134,7 +134,6 @@ struct conn {
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
     uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
-    uint32_t           non_bytes_recv;        /* #times or epoll triggers we receive no bytes */
     //uint32_t           non_bytes_send;        /* #times or epoll triggers that we are not able to send any bytes */
     consistency_t      read_consistency;
     consistency_t      write_consistency;

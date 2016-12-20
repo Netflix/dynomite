@@ -494,6 +494,7 @@ core_core(void *arg, uint32_t events)
 					core_close(ctx, conn);
 					return DN_ERROR;
 				}
+				core_close(ctx, conn);
 				return DN_OK;
 			}
 
