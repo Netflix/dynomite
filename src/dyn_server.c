@@ -665,15 +665,6 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
     if (conn->eof) {
         rsp = conn->rmsg;
 
-        if (conn->dyn_mode) {
-            if (conn->non_bytes_recv > MAX_CONN_ALLOWABLE_NON_RECV) {
-                conn->err = EPIPE;
-                return NULL;
-            }
-            conn->eof = 0;
-            return rsp;
-        }
-
         /* server sent eof before sending the entire request */
         if (rsp != NULL) {
             conn->rmsg = NULL;

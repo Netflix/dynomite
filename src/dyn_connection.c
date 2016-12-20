@@ -220,7 +220,6 @@ _conn_get(void)
     conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
     conn->attempted_reconnect = 0;
-    conn->non_bytes_recv = 0;
     //conn->non_bytes_send = 0;
     conn_set_read_consistency(conn, g_read_consistency);
     conn_set_write_consistency(conn, g_write_consistency);
@@ -677,14 +676,12 @@ conn_recv_data(struct conn *conn, void *buf, size_t size)
                 conn->recv_ready = 0;
             }
             conn->recv_bytes += (size_t)n;
-            conn->non_bytes_recv = 0;
             return n;
         }
 
         if (n == 0) {
             conn->recv_ready = 0;
             conn->eof = 1;
-            conn->non_bytes_recv++;
             log_debug(LOG_NOTICE, "recv on sd %d eof rb %zu sb %zu", conn->sd,
                       conn->recv_bytes, conn->send_bytes);
             return n;
