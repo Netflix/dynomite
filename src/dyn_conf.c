@@ -213,7 +213,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->owner = NULL;
     s->endpoint.pname = cseed->pname;
 
-    s->state = NORMAL;//assume peers are normal initially
+    s->state = DOWN;//assume peers are down initially
 
     uint8_t *p = cseed->name.data + cseed->name.len - 1;
     uint8_t *start = cseed->name.data;

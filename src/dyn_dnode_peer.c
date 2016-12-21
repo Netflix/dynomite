@@ -60,6 +60,8 @@ dnode_peer_unref(struct conn *conn)
 
     peer = conn->owner;
     conn->owner = NULL;
+    // Mark the peer as down
+    peer->state = DOWN;
 
     /* FIXME: This is a wrong place to schedule a reconnection since this unref has no
      * context around why the disconnection happened. Ideally this task should be
@@ -439,8 +441,6 @@ dnode_peer_failure(struct context *ctx, struct node *server)
         (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
                                                 MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
                                                 2 * server->reconnect_backoff_sec;
-    // Mark the peer as down
-    server->state = DOWN;
     status = dnode_peer_pool_update(pool);
     if (status != DN_OK) {
         log_error("dyn: updating peer pool '%.*s' failed: %s",

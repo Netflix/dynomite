@@ -33,11 +33,54 @@
 #include "event/dyn_event.h"
 #include "dyn_task.h"
 
+static void
+core_print_peer_status(void *arg1)
+{
+    struct context *ctx = arg1;
+    struct server_pool *sp = &ctx->pool;
+    // iterate over all peers
+    uint32_t dc_cnt = array_n(&sp->datacenters);
+    uint32_t dc_index;
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        if (!dc)
+            log_panic("DC is null. Topology not inited proerly");
+        uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
+        uint8_t rack_index;
+        for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+            struct rack *rack = array_get(&dc->racks, rack_index);
+            uint8_t i = 0;
+            for (i = 0; i< rack->ncontinuum; i++) {
+                struct continuum *c = &rack->continuum[i];
+                uint32_t peer_index = c->index;
+                struct node *peer = array_get(&sp->peers, peer_index);
+                if (!peer)
+                    log_panic("peer is null. Topology not inited proerly");
+
+                log_notice("%u)%p %.*s\t%.*s\t%.*s\t%s", peer_index, peer,dc->name->len, dc->name->data,
+                           rack->name->len, rack->name->data, peer->endpoint.pname.len,
+                           peer->endpoint.pname.data, get_state(peer->state));
+            }
+        }
+    }
+}
+
+void
+core_set_local_state(struct context *ctx, dyn_state_t state)
+{
+    struct server_pool *sp = &ctx->pool;
+    struct node *peer = array_get(&sp->peers, 0);
+    ctx->dyn_state = state;
+    peer->state = state;
+}
+
 static rstatus_t
 core_init_last(struct context *ctx)
 {
     core_debug(ctx);
     preselect_remote_rack_for_replication(ctx);
+    // Print the network health once after 30 secs
+    schedule_task_1(core_print_peer_status, ctx, 30000);
     return DN_OK;
 }
 
@@ -540,7 +583,7 @@ core_debug(struct context *ctx)
         log_debug(LOG_VERB, "\tPeer name          : '%.*s'", peer->name);
         log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", peer->endpoint.pname);
 
-        log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", peer->state);
+        log_debug(LOG_VERB, "\tPeer state         : %s", get_state(peer->state));
         log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", peer->endpoint.port);
         log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", peer->is_local);
         log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", peer->failure_count);
