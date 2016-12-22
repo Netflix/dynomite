@@ -1210,7 +1210,7 @@ stats_send_rsp(struct stats *st)
                         "/state/<get_state|writes_only|normal|%s>\n\n", "resuming");
         return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_NORMAL) {
-        st->ctx->dyn_state = NORMAL;
+        core_set_local_state(st->ctx, NORMAL);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_CL_DESCRIBE) {
         if (stats_make_cl_desc_rsp(st) != DN_OK)
@@ -1218,13 +1218,13 @@ stats_send_rsp(struct stats *st)
         else
             return stats_http_rsp(sd, st->clus_desc_buf.data, st->clus_desc_buf.len);
     } else if (cmd == CMD_STANDBY) {
-        st->ctx->dyn_state = STANDBY;
+        core_set_local_state(st->ctx, STANDBY);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_WRITES_ONLY) {
-        st->ctx->dyn_state = WRITES_ONLY;
+        core_set_local_state(st->ctx, WRITES_ONLY);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_RESUMING) {
-        st->ctx->dyn_state = RESUMING;
+        core_set_local_state(st->ctx, RESUMING);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_GET_STATE) {
         char rsp[1024];

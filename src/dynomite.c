@@ -582,7 +582,7 @@ dn_run(struct instance *nci)
 
     struct server_pool *sp = &ctx->pool;
     if (!sp->enable_gossip)
-    	ctx->dyn_state = NORMAL;
+        core_set_local_state(ctx, NORMAL);
 
     /* run rabbit run */
     for (;;) {
