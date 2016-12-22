@@ -452,8 +452,9 @@ void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg);
 
 
-void remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
-		                struct rack *rack, uint8_t *key, uint32_t keylen);
+rstatus_t remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
+		                     struct rack *rack, uint8_t *key, uint32_t keylen,
+                             dyn_error_t *dyn_error_code);
 void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
 void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
 		                struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen);

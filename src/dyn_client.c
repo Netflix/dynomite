@@ -651,9 +651,10 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *re
     local_req_forward(ctx, c_conn, req, key, keylen);
 }
 
-void
+rstatus_t
 remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req, 
-                   struct rack *rack, uint8_t *key, uint32_t keylen)
+                   struct rack *rack, uint8_t *key, uint32_t keylen,
+                   dyn_error_t *dyn_error_code)
 {
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
@@ -664,7 +665,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
         log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
                   req->id, req->parent_id);
         local_req_forward(ctx, c_conn, req, key, keylen);
-        return;
+        return DN_OK;
     }
 
     /* enqueue message (request) into client outq, if response is expected */
@@ -686,14 +687,14 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
         // No response for DC_ONE & swallow
         if ((req->consistency == DC_ONE) && (req->swallow)) {
             msg_put(req);
-            return;
+            return DN_OK;
         }
         // No response for remote dc
         struct server_pool *pool = c_conn->owner;
         bool same_dc = is_same_dc(pool, peer)? 1 : 0;
         if (!same_dc) {
             msg_put(req);
-            return;
+            return DN_OK;
         }
         // All other cases return a response
         struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
@@ -711,12 +712,13 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
                              rsp);
         if (req->swallow)
             msg_put(req);
-        return;
+        return DN_OK;
     }
 
     log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
             req->id, req->parent_id, p_conn);
     dnode_peer_req_forward(ctx, c_conn, p_conn, req, rack, key, keylen);
+    return DN_OK;
 }
 
 static void
@@ -762,7 +764,9 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
         }
         log_debug(LOG_VERB, "c_conn: %p forwarding (%d:%d)",
                 c_conn, rack_msg->id, rack_msg->parent_id);
-        remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+        dyn_error_t dyn_error_code = 0;
+        rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen, &dyn_error_code);
+        IGNORE_RET_VAL(s);
     }
 }
 
@@ -826,7 +830,9 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
         log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
                 dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
     }
-    remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+    dyn_error_t dyn_error_code = 0;
+    rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen, &dyn_error_code);
+    IGNORE_RET_VAL(s);
 }
 
 static void
@@ -844,7 +850,9 @@ req_forward_local_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
         req->rsp_handler = msg_get_rsp_handler(req);
         struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack,
                                                         &pool->dc);
-        remote_req_forward(ctx, c_conn, req, rack, key, keylen);
+        dyn_error_t dyn_error_code = 0;
+        rstatus_t s = remote_req_forward(ctx, c_conn, req, rack, key, keylen, &dyn_error_code);
+        IGNORE_RET_VAL(s);
     }
 
 }
@@ -911,11 +919,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
         return;
     }
 
-    if (req->is_read) {
-        req->consistency = conn_get_read_consistency(c_conn);
-    } else {
-        req->consistency = conn_get_write_consistency(c_conn);
-    }
+    req->consistency = req->is_read ? conn_get_read_consistency(c_conn) :
+                                      conn_get_write_consistency(c_conn);
 
     /* forward the request */
     uint32_t dc_cnt = array_n(&pool->datacenters);

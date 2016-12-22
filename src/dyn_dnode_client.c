@@ -195,7 +195,6 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 {
     // Forward the response to the caller which is client connection.
     rstatus_t status = DN_OK;
-    struct context *ctx = conn_to_ctx(conn);
 
     ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
     // Fetch the original request
@@ -327,8 +326,9 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
                log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s' dc '%.*s' ",
                            dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data, rack->dc->len, rack->dc->data);
             }
-
-            remote_req_forward(ctx, conn, rack_msg, rack, key, keylen);
+            dyn_error_t dyn_error_code = 0;
+            rstatus_t s = remote_req_forward(ctx, conn, rack_msg, rack, key, keylen, &dyn_error_code);
+            IGNORE_RET_VAL(s);
         }
     }
 }
