@@ -110,11 +110,6 @@ static rstatus_t load_private_rsa_key_by_file(const struct string *pem_key_file)
 static rstatus_t
 load_private_rsa_key(struct server_pool *sp)
 {
-    if (sp == NULL || string_empty(&sp->pem_key_file)) {
-        log_error("Could NOT read RSA pem key file due to bad context or configuration");
-        return DN_ERROR;
-    }
-
     THROW_STATUS(load_private_rsa_key_by_file(&sp->pem_key_file));
     return DN_OK;
 }
@@ -161,6 +156,16 @@ crypto_init(struct server_pool *sp)
 {
     //init AES
     THROW_STATUS(aes_init());
+    if (sp == NULL) {
+    	log_error("Bad context or configuration");
+    	return DN_ERROR;
+    }
+
+    if (string_empty(&sp->pem_key_file)) {
+        loga("Encryption is not set - PEM key file not loaded");
+    	return DN_OK;
+    }
+
     //init RSA
     THROW_STATUS(load_private_rsa_key(sp));
     return DN_OK;
