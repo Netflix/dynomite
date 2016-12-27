@@ -1150,9 +1150,8 @@ dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
 struct conn *
 dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
 {
-    // This peer is marked as down. lets check if it is time to connect
     if (peer->state == DOWN) {
-        msec_t now_ms = dn_msec_now();
+        /*msec_t now_ms = dn_msec_now();
         static msec_t next_log_ms = 0; // Log every 1 sec
         if (peer->next_retry_ms && (now_ms > peer->next_retry_ms)) {
             peer->state = NORMAL;
@@ -1165,7 +1164,8 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
                 next_log_ms = now_ms + 1000;
             }
             return NULL;
-        }
+        }*/
+        return NULL;
     }
 
     /* pick a connection to a given peer */

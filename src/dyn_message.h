@@ -210,6 +210,7 @@ typedef enum msg_type {
 
 
 typedef enum dyn_error {
+    DYNOMITE_OK,
     DYNOMITE_UNKNOWN_ERROR,
     DYNOMITE_INVALID_STATE,
     PEER_CONNECTION_REFUSE,
@@ -452,12 +453,23 @@ void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg);
 
 
+void
+req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
+                  err_t error_code, err_t dyn_error_code);
 rstatus_t remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
 		                     struct rack *rack, uint8_t *key, uint32_t keylen,
                              dyn_error_t *dyn_error_code);
-void local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, uint8_t *key, uint32_t keylen);
-void dnode_peer_req_forward(struct context *ctx, struct conn *c_conn, struct conn *p_conn,
-		                struct msg *msg, struct rack *rack, uint8_t *key, uint32_t keylen);
+void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
+                                 struct msg *req, struct mbuf *orig_mbuf,
+                                 uint8_t *key, uint32_t keylen,
+                                 struct datacenter *dc);
+rstatus_t local_req_forward(struct context *ctx, struct conn *c_conn,
+                            struct msg *msg, uint8_t *key, uint32_t keylen,
+                            dyn_error_t *dyn_error_code);
+rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
+                                 struct conn *p_conn, struct msg *msg,
+                                 struct rack *rack, uint8_t *key,
+                                 uint32_t keylen, dyn_error_t *dyn_error_code);
 
 //void peer_gossip_forward(struct context *ctx, struct conn *conn, struct string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *data);

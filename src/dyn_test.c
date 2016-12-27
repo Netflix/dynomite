@@ -36,9 +36,6 @@ static char *data = "$2014$ 1 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo1\r
 
 static size_t position = 0;
 
-static unsigned char aes_key[AES_KEYLEN];
-
-
 static struct option long_options[] = {
     { "help",           no_argument,        NULL,   'h' },
     { "version",        no_argument,        NULL,   'V' },
@@ -363,14 +360,16 @@ rsa_test(void)
         msg = generate_aes_key();
 
         log_debug(LOG_VERB, "i = %d", i);
-        log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
+        SCOPED_CHARPTR(encoded_aes_key) = base64_encode(msg, AES_KEYLEN);
+        log_debug(LOG_VERB, "AES key           : %s \n", encoded_aes_key);
 
 
         dyn_rsa_encrypt(msg, encrypted_buf);
 
         dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
 
-        log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
+        SCOPED_CHARPTR(encoded_decrypted_buf) = base64_encode(decrypted_buf, AES_KEYLEN);
+        log_debug(LOG_VERB, "Decrypted message : %s \n", encoded_decrypted_buf);
     }
 
     return DN_OK;
@@ -378,13 +377,13 @@ rsa_test(void)
 
 static void gen_random(unsigned char *s, const int len)
 {
-    static const char data[] =
+    static const unsigned char possible_data[] =
         "0123456789"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz\r\n";
     int i;
     for (i = 0; i < len; ++i) {
-        s[i] = data[rand() % (sizeof(data) - 1)];
+        s[i] = possible_data[rand() % (sizeof(possible_data) - 1)];
     }
 
     s[len] = 0;
@@ -397,7 +396,7 @@ aes_test(void)
     unsigned char msg[MAX_MSG_LEN+1];
     loga("=======================AES======================");
     unsigned char* aes_key = generate_aes_key();
-    char *aes_key_print = base64_encode(aes_key, strlen((char*)aes_key));
+    SCOPED_CHARPTR(aes_key_print) = base64_encode(aes_key, strlen((char*)aes_key));
     loga("aesKey is '%s'", aes_key_print);
 
     size_t i=0;

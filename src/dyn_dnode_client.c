@@ -7,6 +7,7 @@
 #include "dyn_server.h"
 #include "dyn_dnode_client.h"
 #include "dyn_dict_msg_id.h"
+#include "dyn_response_mgr.h"
 
 static void
 dnode_client_ref(struct conn *conn, void *owner)
@@ -208,8 +209,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     // dnode client has no extra logic of coalescing etc like the client/coordinator.
     // Hence all work for this request is done at this time
     ASSERT_LOG(!req->selected_rsp, "req %lu:%lu has selected_rsp set", req->id, req->parent_id);
-    req->selected_rsp = rsp;
-    rsp->peer = req;
+    status = msg_handle_response(req, rsp);
 
     // Remove the message from the hash table. 
     dictDelete(conn->outstanding_msgs_dict, &reqid);
@@ -259,9 +259,6 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
     uint8_t *key;
     uint32_t keylen;
 
-    if (log_loggable(LOG_DEBUG)) {
-       log_debug(LOG_DEBUG, "dnode_req_forward entering ");
-    }
     log_debug(LOG_DEBUG, "DNODE REQ RECEIVED %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->sd, req->dmsg->id);
 
@@ -293,13 +290,28 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
         keylen = (uint32_t)(req->key_end - req->key_start);
     }
 
+
+
+    // TODO: Why not just call req_forward_local_dc???
+
     ASSERT(req->dmsg != NULL);
+    /* enqueue message (request) into client outq, if response is expected
+     * and its not marked for swallow */
+    if (req->expect_datastore_reply  && !req->swallow) {
+        conn_enqueue_outq(ctx, conn, req);
+        req->rsp_handler = msg_local_one_rsp_handler;
+    }
     if (req->dmsg->type == DMSG_REQ) {
-       local_req_forward(ctx, conn, req, key, keylen);
+        dyn_error_t dyn_error_code = DN_OK;
+        rstatus_t s = local_req_forward(ctx, conn, req, key, keylen, &dyn_error_code);
+        if (s != DN_OK) {
+            req_forward_error(ctx, conn, req, s, dyn_error_code);
+        }
     } else if (req->dmsg->type == DMSG_REQ_FORWARD) {
         struct mbuf *orig_mbuf = STAILQ_FIRST(&req->mhdr);
         struct datacenter *dc = server_get_dc(pool, &pool->dc);
-        uint32_t rack_cnt = array_n(&dc->racks);
+        req_forward_all_local_racks(ctx, conn, req, orig_mbuf, key, keylen, dc);
+        /*uint32_t rack_cnt = array_n(&dc->racks);
         uint32_t rack_index;
         for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
             struct rack *rack = array_get(&dc->racks, rack_index);
@@ -329,7 +341,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
             dyn_error_t dyn_error_code = 0;
             rstatus_t s = remote_req_forward(ctx, conn, rack_msg, rack, key, keylen, &dyn_error_code);
             IGNORE_RET_VAL(s);
-        }
+        }*/
     }
 }
 

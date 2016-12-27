@@ -25,7 +25,6 @@ static unsigned char aes_decrypted_buf[34];
 
 static rstatus_t dmsg_to_gossip(struct ring_msg *rmsg);
 
-
 static bool 
 dyn_parse_core(struct msg *r)
 {
@@ -481,6 +480,9 @@ dyn_parse_req(struct msg *r)
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
 				strncpy((char*)r->owner->aes_key, (char*)aes_decrypted_buf, strlen((char*)aes_decrypted_buf));
+				SCOPED_CHARPTR(encoded_aes_key) = base64_encode(r->owner->aes_key, AES_KEYLEN);
+				if (encoded_aes_key)
+				    loga("AES decryption key: %s\n", (char*)encoded_aes_key);
 			}
 
 			if (dmsg->plen + b->pos <= b->last) {

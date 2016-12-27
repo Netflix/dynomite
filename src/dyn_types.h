@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdlib.h>
 typedef uint64_t msgid_t;
 typedef uint64_t msec_t;
 typedef uint64_t usec_t;
@@ -28,5 +29,15 @@ struct stats;
 struct entropy_conn;
 struct instance;
 struct event_base;
+struct datacenter;
 struct rack;
 struct dyn_ring;
+
+static void
+cleanup_charptr(char **ptr) {
+    if (*ptr)
+        free(*ptr);
+}
+
+#define SCOPED_CHARPTR(var) \
+    char * var __attribute__ ((__cleanup__(cleanup_charptr))) 
