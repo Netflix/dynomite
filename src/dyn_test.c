@@ -376,73 +376,72 @@ rsa_test(void)
     return DN_OK;
 }
 
+static void gen_random(unsigned char *s, const int len)
+{
+    static const char data[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz\r\n";
+    int i;
+    for (i = 0; i < len; ++i) {
+        s[i] = data[rand() % (sizeof(data) - 1)];
+    }
 
+    s[len] = 0;
+}
+
+#define MAX_MSG_LEN 512
 static rstatus_t
 aes_test(void)
 {
-    log_debug(LOG_VERB, "aesKey is %s\n",
-              base64_encode(aes_key, strlen((char*)aes_key)));
-
-    const char *msg0 = "01234567890123";
-    const char *msg1 = "0123456789012345678901234567890123456789012345";
-    const char *msg2 = "01234567890123456789012345678901234567890123456789012345678901";
-    const char *msg3 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567";
-    const char *msg4 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
-    const char *msg5 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
-
-    const char *msgs[6];
-
-    msgs[0] = msg0;
-    msgs[1] = msg1;
-    msgs[2] = msg2;
-    msgs[3] = msg3;
-    msgs[4] = msg4;
-    msgs[5] = msg5;
-
-    unsigned char *enc_msg = NULL;
-    char *dec_msg          = NULL;
-    size_t enc_msg_len;
-
+    unsigned char msg[MAX_MSG_LEN+1];
     loga("=======================AES======================");
-    int i=0;
-    int count = 6;
-    for(;i<count;i++) {
-        const char *msg = msgs[i];
-        log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
+    unsigned char* aes_key = generate_aes_key();
+    char *aes_key_print = base64_encode(aes_key, strlen((char*)aes_key));
+    loga("aesKey is '%s'", aes_key_print);
 
-        size_t expected_output_len = 16*((strlen(msg)/16) + 1);
-        //loga("expected_output_len  = %lu", expected_output_len);
+    size_t i=0;
+    size_t count = 10000000;
+    loga("Running %lu encryption/decryption messages", count);
+    for(;i<count;i++) {
+        gen_random(msg, rand() % MAX_MSG_LEN);
+        unsigned int msg_len = strlen(msg) + 1; // Also encrypt the \0 at the end
+
         // Encrypt the message with AES
-        rstatus_t ret = DN_OK;
-        ret = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key);
+        unsigned char *enc_msg = NULL;
+        rstatus_t ret = aes_encrypt((const unsigned char*)msg, msg_len, &enc_msg,
+                                    aes_key);
         if (ret == DN_ERROR) {
-            log_debug(LOG_VERB, "AES encryption failed\n");
+            log_panic("msg:'%s'\nencryption failed aes_key '%s'\n",
+                      msg, aes_key_print);
             return ret;
         }
-        enc_msg_len = (size_t)ret;/* if success, aes_encrypt returns len */
+        size_t enc_msg_len = (size_t)ret;/* if success, aes_encrypt returns len */
 
-        loga("enc_msg_len length %lu: ", enc_msg_len);
+        size_t expected_output_len = 16*(msg_len/16 + 1);
         if (enc_msg_len != expected_output_len) {
+            log_panic("msg:'%s'\nexpected encrypted len: %lu encrypted len %lu\n\n",
+                      msg, expected_output_len, enc_msg_len);
             return DN_ERROR;
         }
-        // Print the encrypted message as a base64 string
-        char *b64_string = base64_encode((unsigned char*)enc_msg, enc_msg_len);
-        log_debug(LOG_VERB, "AES Encrypted message (base64): %s\n", b64_string);
 
         // Decrypt the message
-
+        char *dec_msg = NULL;
         ret = aes_decrypt((unsigned char*)enc_msg, enc_msg_len, (unsigned char**) &dec_msg, aes_key);
-        if(ret == DN_ERROR) {
-            log_debug(LOG_VERB, "AES decryption failed\n");
-            return ret;
-        }
+        ASSERT_LOG(ret != DN_ERROR,"msg '%s'\nencrypted msg:'%.*s'\ndecryption failed aes_key %s",
+                   msg, enc_msg_len, enc_msg, aes_key_print);
 
-        log_debug(LOG_VERB, "%lu bytes decrypted\n", ret);
-        log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
+        if (strcmp(msg, dec_msg) != 0) {
+            loga_hexdump(msg, strlen(msg), "Original Message:");
+            loga_hexdump(dec_msg, strlen(dec_msg), "Decrypted Message:");
+            log_panic("encryption/Decryption mismatch");
+        }
 
         free(enc_msg);
         free(dec_msg);
-        free(b64_string);
+        if ((i+1)%1000000 == 0) {
+            loga("Completed Running %lu messages", i+1);
+        }
     }
     return DN_OK;
 }
@@ -584,7 +583,8 @@ main(int argc, char **argv)
     //rstatus_t status;
     init_test(argc, argv);
 
-    struct node *peer = malloc(sizeof(struct datastore));
+    struct node *peer = malloc(sizeof(struct node));
+    memset(peer, 0, sizeof(struct node));
     init_peer(peer);
 
     struct conn *conn = conn_get_peer(peer, false);
