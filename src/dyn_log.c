@@ -174,6 +174,8 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     errno = errno_save;
 
     if (panic) {
+        fflush(l->fd);
+        fclose(l->fd);
         abort();
     }
 }
