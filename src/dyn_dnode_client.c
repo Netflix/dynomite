@@ -37,25 +37,51 @@ dnode_client_ref(struct conn *conn, void *owner)
 }
 
 static void
-dnode_client_unref(struct conn *conn)
+dnode_client_unref_internal_try_put(struct conn *conn)
 {
+    ASSERT(conn->waiting_to_unref);
+    unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
+    if (msgs != 0) {
+        log_warn("conn %s %p Waiting for %lu outstanding messages",
+                 conn_get_type_string(conn), conn, msgs);
+        return;
+    }
     struct server_pool *pool;
-
-    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
     ASSERT(conn->owner != NULL);
-
     conn_event_del_conn(conn);
     pool = conn->owner;
     conn->owner = NULL;
     dictRelease(conn->outstanding_msgs_dict);
     conn->outstanding_msgs_dict = NULL;
+    conn->waiting_to_unref = 0;
+    log_warn("unref conn %s %p owner %p from pool '%.*s'",
+             conn_get_type_string(conn), conn, pool,
+             pool->name.len, pool->name.data);
+    conn_put(conn);
+}
 
+static void
+dnode_client_unref_and_try_put(struct conn *conn)
+{
+
+    ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
+
+    struct server_pool *pool;
+    pool = conn->owner;
+    ASSERT(conn->owner != NULL);
     ASSERT(pool->dn_conn_q != 0);
     pool->dn_conn_q--;
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
-
+    conn->waiting_to_unref = 1;
+    dnode_client_unref_internal_try_put(conn);
     log_debug(LOG_VVERB, "dyn: unref conn %p owner %p from pool '%.*s'", conn,
               pool, pool->name.len, pool->name.data);
+}
+
+static void
+dnode_client_unref(struct conn *conn)
+{
+    dnode_client_unref_and_try_put(conn);
 }
 
 static bool
@@ -126,7 +152,6 @@ dnode_client_close(struct context *ctx, struct conn *conn)
 
     if (conn->sd < 0) {
         conn_unref(conn);
-        conn_put(conn);
         return;
     }
 
@@ -156,7 +181,7 @@ dnode_client_close(struct context *ctx, struct conn *conn)
         /* dequeue the message (request) from client outq */
         conn_dequeue_outq(ctx, conn, req);
 
-        if (req->done) {
+        if (req->done || req->selected_rsp) {
             if (log_loggable(LOG_INFO)) {
                log_debug(LOG_INFO, "dyn: close c %d discarding %s req %"PRIu64" len "
                          "%"PRIu32" type %d", conn->sd,
@@ -169,7 +194,6 @@ dnode_client_close(struct context *ctx, struct conn *conn)
             req->swallow = 1;
 
             ASSERT(req->is_request);
-            ASSERT(req->selected_rsp == NULL);
 
             if (log_loggable(LOG_INFO)) {
                log_debug(LOG_INFO, "dyn: close c %d schedule swallow of req %"PRIu64" "
@@ -180,15 +204,13 @@ dnode_client_close(struct context *ctx, struct conn *conn)
     }
     ASSERT(TAILQ_EMPTY(&conn->omsg_q));
 
-    conn_unref(conn);
 
     status = close(conn->sd);
     if (status < 0) {
         log_error("dyn: close c %d failed, ignored: %s", conn->sd, strerror(errno));
     }
     conn->sd = -1;
-
-    conn_put(conn);
+    conn_unref(conn);
 }
 
 static rstatus_t
@@ -210,6 +232,13 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     // Hence all work for this request is done at this time
     ASSERT_LOG(!req->selected_rsp, "req %lu:%lu has selected_rsp set", req->id, req->parent_id);
     status = msg_handle_response(req, rsp);
+    if (conn->waiting_to_unref) {
+        dictDelete(conn->outstanding_msgs_dict, &reqid);
+        log_info("Putting req %d", req->id);
+        req_put(req);
+        dnode_client_unref_internal_try_put(conn);
+        return DN_OK;
+    }
 
     // Remove the message from the hash table. 
     dictDelete(conn->outstanding_msgs_dict, &reqid);

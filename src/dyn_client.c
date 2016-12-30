@@ -87,7 +87,8 @@ client_unref_internal_try_put(struct conn *conn)
     ASSERT(conn->waiting_to_unref);
     unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
     if (msgs != 0) {
-        log_warn("conn %p Waiting for %lu outstanding messages", conn, msgs);
+        log_warn("conn %s %d Waiting for %lu outstanding messages",
+                 conn_get_type_string(conn), conn->sd, msgs);
         return;
     }
     struct server_pool *pool;
@@ -96,6 +97,7 @@ client_unref_internal_try_put(struct conn *conn)
     pool = conn->owner;
     conn->owner = NULL;
     dictRelease(conn->outstanding_msgs_dict);
+    conn->outstanding_msgs_dict = NULL;
     conn->waiting_to_unref = 0;
     log_warn("unref conn %p owner %p from pool '%.*s'", conn,
              pool, pool->name.len, pool->name.data);
@@ -215,11 +217,12 @@ client_close(struct context *ctx, struct conn *conn)
         /* dequeue the message (request) from client outq */
         conn_dequeue_outq(ctx, conn, req);
 
-        if (req->done) {
+        if (req->done || req->selected_rsp) {
             log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
                       "%"PRIu32" type %d", conn->sd,
                       req->is_error ? "error": "completed", req->id, req->mlen,
                       req->type);
+            dictDelete(conn->outstanding_msgs_dict, &req->id);
             req_put(req);
         } else {
             req->swallow = 1;
