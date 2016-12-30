@@ -782,8 +782,10 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
                      rack_msg->parent_id, rack->name->len, rack->name->data);
 
             s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen, &dyn_error_code);
-            if ((s != DN_OK) && (req->consistency != DC_ONE)) {
-                req_forward_error(ctx, c_conn, req, s, dyn_error_code);
+            if (s != DN_OK) {
+                if (req->consistency != DC_ONE) {
+                    req_forward_error(ctx, c_conn, rack_msg, s, dyn_error_code);
+                }
                 req_put(rack_msg);
                 continue;
             }
