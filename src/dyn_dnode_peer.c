@@ -1151,20 +1151,6 @@ struct conn *
 dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
 {
     if (peer->state == DOWN) {
-        /*msec_t now_ms = dn_msec_now();
-        static msec_t next_log_ms = 0; // Log every 1 sec
-        if (peer->next_retry_ms && (now_ms > peer->next_retry_ms)) {
-            peer->state = NORMAL;
-            peer->next_retry_ms = 0;
-            peer->failure_count = 0;
-        } else {
-            if (now_ms > next_log_ms) {
-                log_warn("Detecting peer '%.*s' is set with state Down",
-                         peer->endpoint.pname.len, peer->endpoint.pname.data);
-                next_log_ms = now_ms + 1000;
-            }
-            return NULL;
-        }*/
         return NULL;
     }
 

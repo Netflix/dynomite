@@ -319,10 +319,6 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
         keylen = (uint32_t)(req->key_end - req->key_start);
     }
 
-
-
-    // TODO: Why not just call req_forward_local_dc???
-
     ASSERT(req->dmsg != NULL);
     /* enqueue message (request) into client outq, if response is expected
      * and its not marked for swallow */
@@ -331,46 +327,18 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
         req->rsp_handler = msg_local_one_rsp_handler;
     }
     if (req->dmsg->type == DMSG_REQ) {
+        // This is a request received from a peer rack in the same DC, just forward
+        // it to the local datastore
         dyn_error_t dyn_error_code = DN_OK;
         rstatus_t s = local_req_forward(ctx, conn, req, key, keylen, &dyn_error_code);
         if (s != DN_OK) {
             req_forward_error(ctx, conn, req, s, dyn_error_code);
         }
     } else if (req->dmsg->type == DMSG_REQ_FORWARD) {
+        // This is a request received from a remote DC. Forward it to all local racks
         struct mbuf *orig_mbuf = STAILQ_FIRST(&req->mhdr);
         struct datacenter *dc = server_get_dc(pool, &pool->dc);
         req_forward_all_local_racks(ctx, conn, req, orig_mbuf, key, keylen, dc);
-        /*uint32_t rack_cnt = array_n(&dc->racks);
-        uint32_t rack_index;
-        for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
-            struct rack *rack = array_get(&dc->racks, rack_index);
-            //log_debug(LOG_DEBUG, "forwarding to rack  '%.*s'",
-            //            rack->name->len, rack->name->data);
-            struct msg *rack_msg;
-            if (string_compare(rack->name, &pool->rack) == 0 ) {
-                rack_msg = req;
-            } else {
-                rack_msg = msg_get(conn, req->is_request, __FUNCTION__);
-                if (rack_msg == NULL) {
-                    log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
-                    continue;
-                }
-
-                if (msg_clone(req, orig_mbuf, rack_msg) != DN_OK) {
-                    msg_put(rack_msg);
-                    continue;
-                }
-                rack_msg->swallow = true;
-            }
-
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "forwarding request from conn '%s' to rack '%.*s' dc '%.*s' ",
-                           dn_unresolve_peer_desc(conn->sd), rack->name->len, rack->name->data, rack->dc->len, rack->dc->data);
-            }
-            dyn_error_t dyn_error_code = 0;
-            rstatus_t s = remote_req_forward(ctx, conn, rack_msg, rack, key, keylen, &dyn_error_code);
-            IGNORE_RET_VAL(s);
-        }*/
     }
 }
 

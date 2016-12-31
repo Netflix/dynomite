@@ -213,6 +213,7 @@ typedef enum dyn_error {
     DYNOMITE_OK,
     DYNOMITE_UNKNOWN_ERROR,
     DYNOMITE_INVALID_STATE,
+    DYNOMITE_INVALID_ADMIN_REQ,
     PEER_CONNECTION_REFUSE,
     PEER_HOST_DOWN,
     PEER_HOST_NOT_CONNECTED,
@@ -228,6 +229,8 @@ dn_strerror(dyn_error_t err)
     {
         case DYNOMITE_INVALID_STATE:
             return "Dynomite's current state does not allow this request";
+        case DYNOMITE_INVALID_ADMIN_REQ:
+            return "Invalid request in Dynomite's admin mode";
         case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
         case PEER_HOST_DOWN:
@@ -244,6 +247,7 @@ dyn_error_source(dyn_error_t err)
 {
     switch(err)
     {
+        case DYNOMITE_INVALID_ADMIN_REQ:
         case DYNOMITE_INVALID_STATE:
         case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Dynomite:";
