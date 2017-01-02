@@ -106,8 +106,8 @@ dnode_init(struct context *ctx)
     	log_datastore = "memcache";
     }
 
-    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'"
-              " with %"PRIu32" servers", p->sd, pool->dnode_proxy_endpoint.pname.len,
+    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'",
+              p->sd, pool->dnode_proxy_endpoint.pname.len,
               pool->dnode_proxy_endpoint.pname.data,
 			  log_datastore,
               pool->name.len, pool->name.data );

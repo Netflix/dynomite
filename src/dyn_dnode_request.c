@@ -51,10 +51,11 @@ dnode_peer_req_forward_stats(struct context *ctx, struct node *server, struct ms
 
 
 /* Forward a client request over to a peer */
-void
+rstatus_t
 dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                        struct conn *p_conn, struct msg *req,
-                       struct rack *rack, uint8_t *key, uint32_t keylen)
+                       struct rack *rack, uint8_t *key, uint32_t keylen,
+                       dyn_error_t *dyn_error_code)
 {
 
     struct node *server = p_conn->owner;
@@ -73,16 +74,16 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     /* enqueue the message (request) into peer inq */
     status = conn_event_add_out(p_conn);
     if (status != DN_OK) {
-        dnode_req_forward_error(ctx, p_conn, req);
+        *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
         p_conn->err = errno;
-        return;
+        return DN_ERROR;
     }
 
     struct mbuf *header_buf = mbuf_get();
     if (header_buf == NULL) {
         loga("Unable to obtain an mbuf for dnode msg's header!");
-        req_put(req);
-        return;
+        *dyn_error_code = DYNOMITE_OK;
+        return DN_ENOMEM;
     }
 
     struct server_pool *pool = c_conn->owner;
@@ -95,7 +96,9 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     if (p_conn->dnode_secured) {
         //Encrypting and adding header for a request
         if (log_loggable(LOG_VVERB)) {
-           log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
+            SCOPED_CHARPTR(encoded_aes_key) = base64_encode(p_conn->aes_key, AES_KEYLEN);
+            if (encoded_aes_key)
+                log_debug(LOG_VVERB, "AES encryption key: %s\n", encoded_aes_key);
         }
 
         //write dnode header
@@ -104,19 +107,15 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
             if (status == DN_ERROR) {
                 loga("OOM to obtain an mbuf for encryption!");
                 mbuf_put(header_buf);
-                req_put(req);
-                return;
+                *dyn_error_code = DN_ENOMEM;
+                return status;
             }
 
-            if (log_loggable(LOG_VVERB)) {
-               log_debug(LOG_VERB, "#encrypted bytes : %d", status);
-            }
+            log_debug(LOG_VVERB, "#encrypted bytes : %d", status);
 
             dmsg_write(header_buf, req->id, msg_type, p_conn, msg_length(req));
         } else {
-            if (log_loggable(LOG_VVERB)) {
-               log_debug(LOG_VERB, "no encryption on the msg payload");
-            }
+            log_debug(LOG_VVERB, "no encryption on the msg payload");
             dmsg_write(header_buf, req->id, msg_type, p_conn, msg_length(req));
         }
 
@@ -136,12 +135,10 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 
     dnode_peer_req_forward_stats(ctx, p_conn->owner, req);
 
-    if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-                   " type %d with key '%.*s'", c_conn->sd, p_conn->sd, req->id,
-                   req->mlen, req->type, keylen, key);
-    }
-
+    log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, req->id,
+              req->mlen, req->type, keylen, key);
+    return DN_OK;
 }
 
 
@@ -213,8 +210,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     if (conn->dnode_secured) {
         if (log_loggable(LOG_VERB)) {
-           log_debug(LOG_VERB, "Assemble a secured msg to send");
-           log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+            log_debug(LOG_VERB, "Assemble a secured msg to send");
+            SCOPED_CHARPTR(encoded_aes_key) = base64_encode(conn->aes_key, AES_KEYLEN);
+            if (encoded_aes_key)
+                log_debug(LOG_VERB, "AES encryption key: %s\n", encoded_aes_key);
         }
 
         if (ENCRYPTION) {

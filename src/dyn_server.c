@@ -178,9 +178,9 @@ server_failure(struct context *ctx, struct datastore *server)
 
 	server->failure_count++;
 
-	log_debug(LOG_VERB, "server '%.*s' failure count %"PRIu32" limit %"PRIu32,
-			server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count,
-			pool->server_failure_limit);
+	log_warn("server '%.*s' failure count %"PRIu32" limit %"PRIu32,
+			 server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count,
+			 pool->server_failure_limit);
 
 	if (server->failure_count < pool->server_failure_limit) {
 		return;
@@ -740,8 +740,7 @@ server_rsp_filter(struct context *ctx, struct conn *conn, struct msg *rsp)
          return true;
     }
 
-    ASSERT(req->selected_rsp == NULL);
-    ASSERT(req->is_request && !req->done);
+    ASSERT(req->is_request);
 
     if (req->swallow) {
         conn_dequeue_outq(ctx, conn, req);
@@ -786,8 +785,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
 
     /* dequeue peer message (request) from server */
     req = TAILQ_FIRST(&s_conn->omsg_q);
-    ASSERT(req != NULL && req->selected_rsp == NULL);
-    ASSERT(req->is_request && !req->done);
+    ASSERT(req->is_request);
     if (req->request_send_time) {
         struct stats *st = ctx->stats;
         uint64_t delay = dn_usec_now() - req->request_send_time;

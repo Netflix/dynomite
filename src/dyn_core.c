@@ -57,7 +57,7 @@ core_print_peer_status(void *arg1)
                 if (!peer)
                     log_panic("peer is null. Topology not inited proerly");
 
-                log_notice("%u)%p %.*s\t%.*s\t%.*s\t%s", peer_index, peer,dc->name->len, dc->name->data,
+                log_notice("%u)%p %.*s %.*s %.*s %s", peer_index, peer,dc->name->len, dc->name->data,
                            rack->name->len, rack->name->data, peer->endpoint.pname.len,
                            peer->endpoint.pname.data, get_state(peer->state));
             }
@@ -511,7 +511,7 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-    log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
+    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
               conn_get_type_string(conn), conn->sd);
 
 	conn->events = events;
@@ -664,6 +664,7 @@ core_loop(struct context *ctx)
     TAILQ_FOREACH_SAFE(conn, &sp->ready_conn_q, ready_tqe, nconn) {
 		rstatus_t status = core_send(ctx, conn);
         if (status == DN_OK) {
+            log_debug(LOG_VVERB, "Flushing writes on %s %d", conn_get_type_string(conn), conn->sd);
             conn_event_del_out(conn);
         } else {
             TAILQ_REMOVE(&sp->ready_conn_q, conn, ready_tqe);

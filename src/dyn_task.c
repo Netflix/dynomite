@@ -11,6 +11,10 @@
  * task_mgr_init()
  * schedule_task()
  * execute_expired_tasks()
+ *
+ * The time complexity for insert/delete in the red black tree is O(log N), where
+ * N is the number of elements in the tree.
+ *
  */
 
 
