@@ -871,8 +871,6 @@ static void
 req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
 {
     struct server_pool *pool = c_conn->owner;
-    uint8_t *key;
-    uint32_t keylen;
     dyn_error_t dyn_error_code = DYNOMITE_OK;
     rstatus_t s = DN_OK;
 
@@ -884,27 +882,9 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
     } else
         stats_pool_incr(ctx, client_write_requests);
 
-    key = NULL;
-    keylen = 0;
+    uint32_t keylen = 0;
+    uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
 
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
-        uint8_t *tag_start, *tag_end;
-
-        tag_start = dn_strchr(req->key_start, req->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, req->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
-
-    if (keylen == 0) {
-        key = req->key_start;
-        keylen = (uint32_t)(req->key_end - req->key_start);
-    }
     log_debug(LOG_DEBUG, "conn %p received message %d:%d key '%.*s' adding to dict", c_conn,
               req->id, req->parent_id, keylen, key);
     // add the message to the dict
