@@ -525,7 +525,10 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
         dnode_peer_ack_err(ctx, conn, req);
         in_counter++;
 
-        stats_pool_incr(ctx, peer_dropped_requests);
+        if (conn->same_dc)
+            stats_pool_incr(ctx, peer_dropped_requests);
+        else
+            stats_pool_incr(ctx, remote_peer_dropped_requests);
     }
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
