@@ -671,6 +671,31 @@ msg_empty(struct msg *msg)
     return msg->mlen == 0 ? true : (msg->dyn_error_code == BAD_FORMAT? true : false);
 }
 
+uint8_t *
+msg_get_key(struct msg *req, const struct string *hash_tag, uint32_t *keylen)
+{
+    uint8_t *key = NULL;
+    *keylen = 0;
+    if (!string_empty(hash_tag)) {
+        uint8_t *tag_start, *tag_end;
+
+        tag_start = dn_strchr(req->key_start, req->key_end, hash_tag->data[0]);
+        if (tag_start != NULL) {
+            tag_end = dn_strchr(tag_start + 1, req->key_end, hash_tag->data[1]);
+            if (tag_end != NULL) {
+                key = tag_start + 1;
+                *keylen = (uint32_t)(tag_end - key);
+            }
+        }
+    }
+
+    if (*keylen == 0) {
+        key = req->key_start;
+        *keylen = (uint32_t)(req->key_end - req->key_start);
+    }
+    return key;
+}
+
 uint32_t
 msg_payload_crc32(struct msg *rsp)
 {

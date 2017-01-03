@@ -285,8 +285,6 @@ static void
 dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
 {
     struct server_pool *pool;
-    uint8_t *key;
-    uint32_t keylen;
 
     log_debug(LOG_DEBUG, "DNODE REQ RECEIVED %s %d dmsg->id %u",
               conn_get_type_string(conn), conn->sd, req->dmsg->id);
@@ -294,30 +292,12 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
     ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
 
     pool = conn->owner;
-    key = NULL;
-    keylen = 0;
 
     log_debug(LOG_DEBUG, "conn %p adding message %d:%d", conn, req->id, req->parent_id);
     dictAdd(conn->outstanding_msgs_dict, &req->id, req);
 
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
-        uint8_t *tag_start, *tag_end;
-
-        tag_start = dn_strchr(req->key_start, req->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, req->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
-
-    if (keylen == 0) {
-        key = req->key_start;
-        keylen = (uint32_t)(req->key_end - req->key_start);
-    }
+    uint32_t keylen = 0;
+    uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
 
     ASSERT(req->dmsg != NULL);
     /* enqueue message (request) into client outq, if response is expected
