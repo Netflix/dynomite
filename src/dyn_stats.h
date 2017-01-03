@@ -50,9 +50,11 @@
     ACTION( dnode_client_out_queue,       STATS_GAUGE,        "# dnode client requests in outgoing queue")                \
     ACTION( dnode_client_out_queue_bytes, STATS_GAUGE,        "current dnode client request bytes in outgoing queue")     \
     /* peer behavior */                                                                                                   \
-    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# local dc peer dropped requests")                                  \
-    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# local dc peer timedout requests")                                 \
-    ACTION( remote_peer_timedout_requests,STATS_COUNTER,      "# remote dc peer timedout requests")                                 \
+    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# local dc peer dropped requests")                         \
+    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# local dc peer timedout requests")                        \
+    ACTION( remote_peer_dropped_requests, STATS_COUNTER,      "# remote dc peer dropped requests")                        \
+    ACTION( remote_peer_timedout_requests,STATS_COUNTER,      "# remote dc peer timedout requests")                       \
+    ACTION( remote_peer_failover_requests,STATS_COUNTER,      "# remote dc peer failover requests")                       \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
     ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
     ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on local dc peer connections")                           \

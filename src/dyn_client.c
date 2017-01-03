@@ -782,7 +782,7 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
                       struct mbuf *orig_mbuf, uint8_t *key, uint32_t keylen,
                       struct datacenter *dc)
 {
-    uint32_t rack_cnt = array_n(&dc->racks);
+    const uint32_t rack_cnt = array_n(&dc->racks);
     if (rack_cnt == 0)
         return;
 
@@ -801,15 +801,47 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
              req->id, req->parent_id, rack_msg->id, rack_msg->parent_id);
     rack_msg->swallow = true;
 
-    log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
+    log_debug(LOG_DEBUG, "forwarding request from conn '%s' on rack '%.*s'",
               dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
 
     dyn_error_t dyn_error_code = 0;
     rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
                                      &dyn_error_code);
-    if (s != DN_OK) {
+    if (s == DN_OK) {
+        return;
+    }
+    req_put(rack_msg);
+    // Start over with another rack.
+    uint8_t rack_index;
+    for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+        rack = array_get(&dc->racks, rack_index);
+
+        if (rack == dc->preselected_rack_for_replication)
+            continue;
+        rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
+        if (rack_msg == NULL) {
+            log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+            return;
+        }
+
+        msg_clone(req, orig_mbuf, rack_msg);
+        log_info("req (%d:%d) clone to remote dc rack req (%d:%d)",
+                req->id, req->parent_id, rack_msg->id, rack_msg->parent_id);
+        rack_msg->swallow = true;
+
+        log_debug(LOG_DEBUG, "forwarding request from conn '%s' on rack '%.*s'",
+                  dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+
+        dyn_error_code = DYNOMITE_OK;
+        s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
+                               &dyn_error_code);
+        if (s == DN_OK) {
+            stats_pool_incr(ctx, remote_peer_failover_requests);
+            return;
+        }
         req_put(rack_msg);
     }
+    stats_pool_incr(ctx, remote_peer_dropped_requests);
 }
 
 static void
