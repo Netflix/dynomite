@@ -8,7 +8,7 @@
   
   
   <link rel="shortcut icon" href="../img/favicon.ico">
-  <title> Sidebar - Dynomite</title>
+  <title>2.4 Membership protocols - Dynomite</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
   <link rel="stylesheet" href="../css/theme.css" type="text/css" />
@@ -17,9 +17,9 @@
   
   <script>
     // Current page data
-    var mkdocs_page_name = " Sidebar";
-    var mkdocs_page_input_path = "_Sidebar.md";
-    var mkdocs_page_url = "/_Sidebar/";
+    var mkdocs_page_name = "2.4 Membership protocols";
+    var mkdocs_page_input_path = "2.4 Membership-protocols.md";
+    var mkdocs_page_url = "/2.4 Membership-protocols/";
   </script>
   
   <script src="../js/jquery-2.1.1.min.js"></script>
@@ -89,8 +89,18 @@
 <li>
           
             <li>
-    <li class="toctree-l1 ">
-        <a class="" href="../2.4 Membership-protocols/">2.4 Membership protocols</a>
+    <li class="toctree-l1 current">
+        <a class="current" href="./">2.4 Membership protocols</a>
+        
+            <ul>
+            
+                <li class="toctree-l3"><a href="#1-centralized-membership-system">1-Centralized membership system</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#2-gossip">2-Gossip</a></li>
+                
+            
+            </ul>
         
     </li>
 <li>
@@ -201,12 +211,8 @@
 <li>
           
             <li>
-    <li class="toctree-l1 current">
-        <a class="current" href="./"> Sidebar</a>
-        
-            <ul>
-            
-            </ul>
+    <li class="toctree-l1 ">
+        <a class="" href="../_Sidebar/"> Sidebar</a>
         
     </li>
 <li>
@@ -233,7 +239,7 @@
     
       
     
-    <li> Sidebar</li>
+    <li>2.4 Membership protocols</li>
     <li class="wy-breadcrumbs-aside">
       
     </li>
@@ -243,27 +249,15 @@
           <div role="main">
             <div class="section">
               
-                <ul>
-<li>[[Home]]  </li>
-<li>[[Architecture]]</li>
-<li>[[Topology]]  </li>
-<li>[[Replication]] </li>
-<li>[[Consistency]]</li>
-<li>[[Membership protocols]]</li>
-<li>[[Warm up]]</li>
-<li>[[Performance]]</li>
-<li>[[Basic benchmarking]]</li>
-<li>[[Dynomite with Redis on AWS - Benchmarks]]</li>
-<li><a href="../Getting+Started">Getting Started</a></li>
-<li><a href="../Getting+Started#setup-and-installation">Setup and Installation</a> </li>
-<li>[[Configuration]] </li>
-<li>[[Debugging]]</li>
-<li>[[REST]]</li>
-<li>[[Dynomite Ecosystem]]</li>
-<li>[[How to contribute]]</li>
-<li>[[Videos and Presentations]]</li>
-<li>[[FAQ]]   </li>
-</ul>
+                <p>Dynomite supports 2 methods to maintain a node's membership status:</p>
+<h2 id="1-centralized-membership-system">1-Centralized membership system</h2>
+<p>Each dynomite node will periodically reach out to a local service (a proxy to the centralized service) to obtain the cluster members.  For more information, please look at this code:
+   https://github.com/Netflix/dynomite/blob/master/src/seedsprovider/dyn_florida.c#L13</p>
+<p>You can also check the <a href="https://github.com/Netflix/dynomite-manager/wiki/Token-Management">token management</a> section by Dynomite-manager.</p>
+<h2 id="2-gossip">2-Gossip</h2>
+<p>Gossip is disabled by default and can be turned on by providing "-g" flag on the command line.
+  Each node maintains a data structure on the rest of the cluster topology and periodically pick a random node to spread out its data.  Note that in using this you still need to provide a seed list for each node.
+  https://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf</p>
               
             </div>
           </div>
@@ -271,8 +265,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="../2.5 Warm-up/" class="btn btn-neutral float-right" title="2.5 Warm up">Next <span class="icon icon-circle-arrow-right"></span></a>
       
-        <a href="../7.0 FAQ/" class="btn btn-neutral" title="7.0 FAQ"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+        <a href="../2.3 Consistency/" class="btn btn-neutral" title="2.3 Consistency"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -298,8 +294,10 @@
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../7.0 FAQ/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../2.3 Consistency/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
+      
+        <span style="margin-left: 15px"><a href="../2.5 Warm-up/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>

@@ -8,7 +8,7 @@
   
   
   <link rel="shortcut icon" href="../img/favicon.ico">
-  <title> Sidebar - Dynomite</title>
+  <title>3.1 Basic benchmarking - Dynomite</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
   <link rel="stylesheet" href="../css/theme.css" type="text/css" />
@@ -17,9 +17,9 @@
   
   <script>
     // Current page data
-    var mkdocs_page_name = " Sidebar";
-    var mkdocs_page_input_path = "_Sidebar.md";
-    var mkdocs_page_url = "/_Sidebar/";
+    var mkdocs_page_name = "3.1 Basic benchmarking";
+    var mkdocs_page_input_path = "3.1 Basic-benchmarking.md";
+    var mkdocs_page_url = "/3.1 Basic-benchmarking/";
   </script>
   
   <script src="../js/jquery-2.1.1.min.js"></script>
@@ -124,8 +124,24 @@
 <li>
           
             <li>
-    <li class="toctree-l1 ">
-        <a class="" href="../3.1 Basic-benchmarking/">3.1 Basic benchmarking</a>
+    <li class="toctree-l1 current">
+        <a class="current" href="./">3.1 Basic benchmarking</a>
+        
+            <ul>
+            
+                <li class="toctree-l3"><a href="#stage-1-6-node-cluster">Stage 1 -   6 node cluster</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#stage-2-12-node-cluster">Stage 2 -   12 node cluster</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#stage-3-24-node-cluster">Stage 3 -   24 node cluster</a></li>
+                
+            
+                <li class="toctree-l3"><a href="#replication-delay">Replication Delay</a></li>
+                
+            
+            </ul>
         
     </li>
 <li>
@@ -201,12 +217,8 @@
 <li>
           
             <li>
-    <li class="toctree-l1 current">
-        <a class="current" href="./"> Sidebar</a>
-        
-            <ul>
-            
-            </ul>
+    <li class="toctree-l1 ">
+        <a class="" href="../_Sidebar/"> Sidebar</a>
         
     </li>
 <li>
@@ -233,7 +245,7 @@
     
       
     
-    <li> Sidebar</li>
+    <li>3.1 Basic benchmarking</li>
     <li class="wy-breadcrumbs-aside">
       
     </li>
@@ -243,27 +255,43 @@
           <div role="main">
             <div class="section">
               
-                <ul>
-<li>[[Home]]  </li>
-<li>[[Architecture]]</li>
-<li>[[Topology]]  </li>
-<li>[[Replication]] </li>
-<li>[[Consistency]]</li>
-<li>[[Membership protocols]]</li>
-<li>[[Warm up]]</li>
-<li>[[Performance]]</li>
-<li>[[Basic benchmarking]]</li>
-<li>[[Dynomite with Redis on AWS - Benchmarks]]</li>
-<li><a href="../Getting+Started">Getting Started</a></li>
-<li><a href="../Getting+Started#setup-and-installation">Setup and Installation</a> </li>
-<li>[[Configuration]] </li>
-<li>[[Debugging]]</li>
-<li>[[REST]]</li>
-<li>[[Dynomite Ecosystem]]</li>
-<li>[[How to contribute]]</li>
-<li>[[Videos and Presentations]]</li>
-<li>[[FAQ]]   </li>
-</ul>
+                <p>Details
+<em> Server instance type was r3.xlarge. These instances are well suited for Dynomite workloads - i.e good balance between memory and network
+</em> Replication factor was set to 3. We did this by deploying Dynomite in 3 zones in us-east-1 and each zone had the same no of servers and hence the same no of tokens. 
+<em> Client fleet used instance type as m2.2xls which is also typical for an application here at Netflix. 
+</em> Demo application used a simple workload of just key value pairs for read and writes i.e the Redis GET and SET api. 
+<em> Payload size was chosen to be 1K 
+</em> We maintained an 80% - 20% ratio between reads and writes which is also typical of many use cases here at Netflix.</p>
+<h4 id="stage-1-6-node-cluster">Stage 1 -   6 node cluster</h4>
+<p>We setup a Dynomite cluster of 6 nodes (i.e 2 per zone). 
+We observed throughput of about 80k per second across the client fleet:
+[[/images/linear_scale/linear_scale_6_rps.png|align=center]]</p>
+<p>while keeping the avg latency ~1 ms:
+[[/images/linear_scale/linear_scale_6_p50.png|align=center]]</p>
+<p>and 99 percentile latency in the single digit ms range:
+[[/images/linear_scale/linear_scale_6_p99.png|align=center]] </p>
+<h4 id="stage-2-12-node-cluster">Stage 2 -   12 node cluster</h4>
+<p>We then doubled the size of the Dynomite cluster from 6 nodes to 12 nodes. 
+We also simultaneously doubled our client fleet to add more load on the cluster. </p>
+<p>As expected client fleet throughput went up by 100%
+[[/images/linear_scale/linear_scale_12_rps.png|align=center]]</p>
+<p>while still keeping avg and 99 percentile latencies in check
+[[/images/linear_scale/linear_scale_12_p50.png|align=center]]
+[[/images/linear_scale/linear_scale_12_p99.png|align=center]] </p>
+<h4 id="stage-3-24-node-cluster">Stage 3 -   24 node cluster</h4>
+<p>We then went for one more double for the server and client fleet and throughput went up by 100% once again,
+while latencies remained the same. 
+[[/images/linear_scale/linear_scale_24_rps.png|align=center]]
+[[/images/linear_scale/linear_scale_24_p50.png|align=center]]
+[[/images/linear_scale/linear_scale_24_p99.png|align=center]] </p>
+<h2 id="replication-delay">Replication Delay</h2>
+<p>In our initial tests, we measured the time it took for a key/value pair to become available on another region replica by writing 1k key/value pairs to Dynomite in one region, then polling the other region randomly for 20 keys.  The value for each key in this case is just timestamp when the write action started.  The client in the other region then reads back those timestamps and compute the durations.  We repeated this same experiment several times and took the average.  From this we could derive a rough idea of the speed of the replication.  </p>
+<p>We expect this latency to remain more or less constant as we add code path optimization as well as enhancements in the replication strategy itself (optimizations will improve speed, features will potentially add latency).  </p>
+<p>Result:   </p>
+<blockquote>
+<p>For 5 iterations of this experiment, the average duration for replications was around 85ms.
+(note that the duration numbers are measured at the client layers so the real numbers should be smaller).  </p>
+</blockquote>
               
             </div>
           </div>
@@ -271,8 +299,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="../3.2 Dynomite-with-Redis-on-AWS---Benchmarks/" class="btn btn-neutral float-right" title="3.2 Dynomite with Redis on AWS   Benchmarks">Next <span class="icon icon-circle-arrow-right"></span></a>
       
-        <a href="../7.0 FAQ/" class="btn btn-neutral" title="7.0 FAQ"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+        <a href="../3.0 Performance/" class="btn btn-neutral" title="3.0 Performance"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -298,8 +328,10 @@
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../7.0 FAQ/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../3.0 Performance/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
+      
+        <span style="margin-left: 15px"><a href="../3.2 Dynomite-with-Redis-on-AWS---Benchmarks/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>

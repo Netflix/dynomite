@@ -8,7 +8,7 @@
   
   
   <link rel="shortcut icon" href="../img/favicon.ico">
-  <title> Sidebar - Dynomite</title>
+  <title>2.6 Token Management - Dynomite</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
   <link rel="stylesheet" href="../css/theme.css" type="text/css" />
@@ -17,9 +17,9 @@
   
   <script>
     // Current page data
-    var mkdocs_page_name = " Sidebar";
-    var mkdocs_page_input_path = "_Sidebar.md";
-    var mkdocs_page_url = "/_Sidebar/";
+    var mkdocs_page_name = "2.6 Token Management";
+    var mkdocs_page_input_path = "2.6 Token-Management.md";
+    var mkdocs_page_url = "/2.6 Token-Management/";
   </script>
   
   <script src="../js/jquery-2.1.1.min.js"></script>
@@ -103,8 +103,12 @@
 <li>
           
             <li>
-    <li class="toctree-l1 ">
-        <a class="" href="../2.6 Token-Management/">2.6 Token Management</a>
+    <li class="toctree-l1 current">
+        <a class="current" href="./">2.6 Token Management</a>
+        
+            <ul>
+            
+            </ul>
         
     </li>
 <li>
@@ -201,12 +205,8 @@
 <li>
           
             <li>
-    <li class="toctree-l1 current">
-        <a class="current" href="./"> Sidebar</a>
-        
-            <ul>
-            
-            </ul>
+    <li class="toctree-l1 ">
+        <a class="" href="../_Sidebar/"> Sidebar</a>
         
     </li>
 <li>
@@ -233,7 +233,7 @@
     
       
     
-    <li> Sidebar</li>
+    <li>2.6 Token Management</li>
     <li class="wy-breadcrumbs-aside">
       
     </li>
@@ -243,27 +243,9 @@
           <div role="main">
             <div class="section">
               
-                <ul>
-<li>[[Home]]  </li>
-<li>[[Architecture]]</li>
-<li>[[Topology]]  </li>
-<li>[[Replication]] </li>
-<li>[[Consistency]]</li>
-<li>[[Membership protocols]]</li>
-<li>[[Warm up]]</li>
-<li>[[Performance]]</li>
-<li>[[Basic benchmarking]]</li>
-<li>[[Dynomite with Redis on AWS - Benchmarks]]</li>
-<li><a href="../Getting+Started">Getting Started</a></li>
-<li><a href="../Getting+Started#setup-and-installation">Setup and Installation</a> </li>
-<li>[[Configuration]] </li>
-<li>[[Debugging]]</li>
-<li>[[REST]]</li>
-<li>[[Dynomite Ecosystem]]</li>
-<li>[[How to contribute]]</li>
-<li>[[Videos and Presentations]]</li>
-<li>[[FAQ]]   </li>
-</ul>
+                <p>Dynomite is based on the Dynamo protocol where nodes serve keys that belong inside a token range. Differently from Cassandra, each Rack contains the full ring. Hence in RF=3 configuration the full ring is deployed in 3 Racks, whereas in RF=2 the full ring is deployed in 2 racks.</p>
+<p>To create tokens you can use this script to generate <a href="https://github.com/Netflix/dynomite/blob/dev/scripts/dynomite/generate_yamls.py">YAMLS</a></p>
+<p>Exemplar Configuration YAML files can be found in the <a href="https://github.com/Netflix/dynomite/tree/dev/conf">conf directory</a></p>
               
             </div>
           </div>
@@ -271,8 +253,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="../2.7 Use-Cases/" class="btn btn-neutral float-right" title="2.7 Use Cases">Next <span class="icon icon-circle-arrow-right"></span></a>
       
-        <a href="../7.0 FAQ/" class="btn btn-neutral" title="7.0 FAQ"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+        <a href="../2.5 Warm-up/" class="btn btn-neutral" title="2.5 Warm up"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -298,8 +282,10 @@
     <span class="rst-current-version" data-toggle="rst-current-version">
       
       
-        <span><a href="../7.0 FAQ/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../2.5 Warm-up/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
+      
+        <span style="margin-left: 15px"><a href="../2.7 Use-Cases/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>

@@ -4,175 +4,175 @@
     
     <url>
      <loc>/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Architecture/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/1.0 Home/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Basic-benchmarking/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.0 Architecture/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Configuration/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.1 Topology/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Consistency/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.2 Replication/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Debugging/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.3 Consistency/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Dynomite-Ecosystem/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.4 Membership-protocols/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Dynomite-with-Redis-on-AWS---Benchmarks/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.5 Warm-up/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/FAQ/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.6 Token-Management/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Getting-Started/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/2.7 Use-Cases/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Home/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/3.0 Performance/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/How-to-contribute/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/3.1 Basic-benchmarking/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Membership-protocols/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/3.2 Dynomite-with-Redis-on-AWS---Benchmarks/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Overview/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/4.0 Getting-Started/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Performance/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/4.1 Setup and Installation/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/REST/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/4.2 Configuration/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Replication/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/4.3 Debugging/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Token-Management/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/4.4 REST/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Topology/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/4.5 Dynomite-Ecosystem/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Use-Cases/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/5.0 How-to-contribute/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Videos-and-Presentations/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/6.0 Videos-and-Presentations/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
 
     
     <url>
-     <loc>/Warm-up/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <loc>/7.0 FAQ/</loc>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
@@ -180,7 +180,7 @@
     
     <url>
      <loc>/_Sidebar/</loc>
-     <lastmod>2016-12-13</lastmod>
+     <lastmod>2017-01-04</lastmod>
      <changefreq>daily</changefreq>
     </url>
     
