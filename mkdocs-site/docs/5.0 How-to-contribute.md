@@ -1,0 +1,1 @@
+Please see [CONTRIBUTING](https://github.com/Netflix/dynomite/blob/dev/CONTRIBUTING.md).

@@ -1,0 +1,1 @@
+For more information about the warm up, please see [Dynomite-manager's Cold Bootstraping](https://github.com/Netflix/dynomite-manager/wiki/Cold-Bootstraping).
