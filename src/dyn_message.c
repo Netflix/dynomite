@@ -162,6 +162,20 @@ static struct string msg_type_strings[] = {
 };
 #undef DEFINE_ACTION
 
+int
+print_req(FILE *stream, struct msg *req)
+{
+    struct string *req_type = msg_type_string(req->type);
+    return fprintf(stream, "<req %p %lu:%lu %.*s>", req, req->id, req->parent_id,
+                   req_type->len, req_type->data);
+}
+
+int
+print_rsp(FILE *stream, struct msg *rsp)
+{
+    return fprintf(stream, "<rsp %p:%lu:%lu>", rsp, rsp->id, rsp->parent_id);
+}
+
 void
 set_datastore_ops(void)
 {
@@ -266,7 +280,7 @@ msg_tmo_delete(struct msg *req)
 static size_t alloc_msg_count = 0;
 
 static struct msg *
-_msg_get(struct conn *conn, const char *const caller)
+_msg_get(struct conn *conn, bool request, const char *const caller)
 {
     struct msg *msg;
 
@@ -303,6 +317,7 @@ _msg_get(struct conn *conn, const char *const caller)
 
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
+    msg->object_type = request ? OBJ_REQ : OBJ_RSP;
     msg->id = ++msg_id;
     msg->parent_id = 0;
     msg->peer = NULL;
@@ -384,7 +399,7 @@ msg_get(struct conn *conn, bool request, const char * const caller)
 {
     struct msg *msg;
 
-    msg = _msg_get(conn, caller);
+    msg = _msg_get(conn, request, caller);
     if (msg == NULL) {
         return NULL;
     }
@@ -484,7 +499,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source = dyn_error_source(dyn_err);
 
-    rsp = _msg_get(conn, __FUNCTION__);
+    rsp = _msg_get(conn, false, __FUNCTION__);
     if (rsp == NULL) {
         return NULL;
     }
@@ -519,7 +534,7 @@ msg_get_rsp_integer(struct conn *conn)
     struct mbuf *mbuf;
     int n;
 
-    rsp = _msg_get(conn, __FUNCTION__);
+    rsp = _msg_get(conn, false, __FUNCTION__);
     if (rsp == NULL) {
         return NULL;
     }

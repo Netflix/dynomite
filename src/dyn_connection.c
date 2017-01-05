@@ -174,6 +174,7 @@ _conn_get(void)
         memset(conn, 0, sizeof(*conn));
     }
 
+    conn->object_type = OBJ_CONN;
     conn->owner = NULL;
 
     conn->sd = -1;
@@ -229,6 +230,13 @@ _conn_get(void)
     strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
 
     return conn;
+}
+
+int
+print_conn(FILE *stream, struct conn *conn)
+{
+    return fprintf(stream, "<conn %p %s %d>",
+                   conn, conn_get_type_string(conn), conn->sd);
 }
 
 inline void
@@ -440,7 +448,7 @@ conn_put(struct conn *conn)
     ASSERT(conn->sd < 0);
     ASSERT(conn->owner == NULL);
 
-    log_debug(LOG_VVERB, "put conn %p", conn);
+    log_debug(LOG_VVERB, "putting %M", conn);
 
     nfree_connq++;
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
@@ -647,7 +655,7 @@ conn_connect(struct context *ctx, struct conn *conn)
 
     ASSERT(!conn->connecting);
     conn->connected = 1;
-    log_debug(LOG_WARN, "connected on s %d to '%.*s'", conn->sd,
+    log_debug(LOG_WARN, "%M connected to '%.*s'", conn,
             conn->pname.len, conn->pname.data);
 
     return DN_OK;
@@ -669,7 +677,7 @@ conn_recv_data(struct conn *conn, void *buf, size_t size)
     for (;;) {
         n = dn_read(conn->sd, buf, size);
 
-        log_debug(LOG_VERB, "recv on sd %d %zd of %zu", conn->sd, n, size);
+        log_debug(LOG_VERB, "%M recv %zd of %zu", conn, n, size);
 
         if (n > 0) {
             if (n < (ssize_t) size) {
@@ -682,22 +690,22 @@ conn_recv_data(struct conn *conn, void *buf, size_t size)
         if (n == 0) {
             conn->recv_ready = 0;
             conn->eof = 1;
-            log_debug(LOG_NOTICE, "recv on sd %d eof rb %zu sb %zu", conn->sd,
+            log_debug(LOG_NOTICE, "%M recv eof rb %zu sb %zu", conn,
                       conn->recv_bytes, conn->send_bytes);
             return n;
         }
 
         if (errno == EINTR) {
-            log_debug(LOG_VERB, "recv on sd %d not ready - eintr", conn->sd);
+            log_debug(LOG_VERB, "%M recv not ready - eintr", conn);
             continue;
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn->recv_ready = 0;
-            log_debug(LOG_VERB, "recv on sd %d not ready - eagain", conn->sd);
+            log_debug(LOG_VERB, "%M recv not ready - eagain", conn);
             return DN_EAGAIN;
         } else {
             conn->recv_ready = 0;
             conn->err = errno;
-            log_error("recv on sd %d failed: %s", conn->sd, strerror(errno));
+            log_error("%M recv failed: %s", conn, strerror(errno));
             return DN_ERROR;
         }
     }

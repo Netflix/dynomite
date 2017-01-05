@@ -884,9 +884,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
     uint32_t keylen = 0;
     uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
 
-    struct string *type = msg_type_string(req->type);
-    log_debug(LOG_DEBUG, "conn %p received message %d:%d %.*s key '%.*s' adding to dict", c_conn,
-              req->id, req->parent_id, type->len, type->data, keylen, key);
+    log_debug(LOG_DEBUG, "%M received %M key '%.*s' adding to dict", c_conn,
+              req, keylen, key);
     // add the message to the dict
     dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
