@@ -222,7 +222,6 @@ client_close(struct context *ctx, struct conn *conn)
                       "%"PRIu32" type %d", conn->sd,
                       req->is_error ? "error": "completed", req->id, req->mlen,
                       req->type);
-            dictDelete(conn->outstanding_msgs_dict, &req->id);
             req_put(req);
         } else {
             req->swallow = 1;
@@ -272,7 +271,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             return DN_OK;
         // all responses received
         dictDelete(conn->outstanding_msgs_dict, &reqid);
-        log_info("Putting req %d", req->id);
+        log_info("Putting req %lu:%lu", req->id, req->parent_id);
         req_put(req);
         client_unref_internal_try_put(conn);
         return DN_OK;
@@ -284,7 +283,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             // is closed and we are just waiting to drain off the messages.
             if (req->rsp_sent) {
                 dictDelete(conn->outstanding_msgs_dict, &reqid);
-                log_info("Putting req %d", req->id);
+                log_info("Putting req %lu:%lu", req->id, req->parent_id);
                 req_put(req);
             }
         }
@@ -1007,7 +1006,8 @@ msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 static rstatus_t
 swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
-    log_info("req %d swallowing response %d", req->id, rsp->id);
+    log_info("req %d swallowing response %d awaiting %d",
+             req->id, rsp->id, req->awaiting_rsps);
     ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
                req->id, req->parent_id, rsp->id);
     // drop this response.

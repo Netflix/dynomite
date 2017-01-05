@@ -1829,7 +1829,7 @@ error:
     r->state = state;
     errno = EINVAL;
 
-    log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
+    log_hexdump(LOG_WARN, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
                 "res %d type %d state %d", r->id, r->result, r->type,
                 r->state);
 
