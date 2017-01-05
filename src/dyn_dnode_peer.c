@@ -1279,7 +1279,6 @@ dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *rsp)
         rsp_put(rsp);
         return true;
     }
-    ASSERT(req->selected_rsp == NULL);
     ASSERT(req->is_request && !req->done);
 
     return false;
@@ -1347,8 +1346,8 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
               conn_get_type_string(peer_conn),
               peer_conn->sd, rsp->dmsg->id,
               req->id, req->parent_id, rsp->id, rsp->parent_id);
-    ASSERT(req != NULL && req->selected_rsp == NULL);
-    ASSERT(req->is_request && !req->done);
+    ASSERT(req != NULL);
+    ASSERT(req->is_request);
 
     if (log_loggable(LOG_VVERB)) {
         loga("Dumping content for response:   ");
@@ -1459,7 +1458,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
                   conn_get_type_string(peer_conn),
                  peer_conn->sd, rsp->dmsg->id,
                  req->id, req->parent_id, rsp->id, rsp->parent_id);
-        ASSERT(req != NULL && req->selected_rsp == NULL);
+        ASSERT(req != NULL);
         ASSERT(req->is_request && !req->done);
 
         if (log_loggable(LOG_VVERB)) {

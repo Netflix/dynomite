@@ -1168,9 +1168,14 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         TAILQ_REMOVE(&send_msgq, msg, m_tqe);
 
         if (nsent == 0) {
-            if (msg->mlen == 0) {
+            // Commenting this if check since its failiing for commands like:
+            // mset k1 v1 k2 v2 k3 v3 k4 v4 k5 v5....
+            // In such cases some of the fragmented responses can have mlen = 0
+            // and we wont call done on those messages and they just land up
+            // dangling in the outqueue of the connection.
+            //if (msg->mlen == 0) {
                 conn_send_done(ctx, conn, msg);
-            }
+            //}
             continue;
         }
 
