@@ -155,6 +155,13 @@ func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 
+#define DEFINE_ACTION(_name) string(#_name),
+static struct string msg_type_strings[] = {
+    MSG_TYPE_CODEC( DEFINE_ACTION )
+    null_string
+};
+#undef DEFINE_ACTION
+
 void
 set_datastore_ops(void)
 {
@@ -663,6 +670,12 @@ msg_deinit(void)
         msg_free(msg);
     }
     ASSERT(nfree_msgq == 0);
+}
+
+struct string *
+msg_type_string(msg_type_t type)
+{
+    return &msg_type_strings[type];
 }
 
 bool

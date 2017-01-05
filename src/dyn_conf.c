@@ -2170,18 +2170,18 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     else {
     	/* Validating mbuf_size correctness */
         if (cp->mbuf_size <= 0) {
-           log_stderr(LOG_INFO,"mbuf_size: requires a positive number");
+           log_stderr("mbuf_size: requires a positive number");
     	   return DN_ERROR;
     	}
 
     	if (cp->mbuf_size < CONF_DEFAULT_MBUF_MIN_SIZE || cp->mbuf_size > CONF_DEFAULT_MBUF_MAX_SIZE) {
-    	   log_stderr(LOG_INFO,"mbuf_size: mbuf chunk size must be between %zu and"
+    	   log_stderr("mbuf_size: mbuf chunk size must be between %zu and"
     	              " %zu bytes", CONF_DEFAULT_MBUF_MIN_SIZE, CONF_DEFAULT_MBUF_MAX_SIZE);
     	   return DN_ERROR;
     	}
 
     	if ((cp->mbuf_size / 16) * 16 != cp->mbuf_size) {
-    	   log_stderr(LOG_INFO,"mbuf_size: mbuf size must be a multiple of 16");
+    	   log_stderr("mbuf_size: mbuf size must be a multiple of 16");
     	   return DN_ERROR;
     	}
     }
@@ -2196,12 +2196,12 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
     else {
         if (cp->alloc_msgs_max <= 0) {
-            log_stderr(LOG_INFO,"dynomite: option -M requires a non-zero number");
+            log_stderr("dynomite: option -M requires a non-zero number");
             return DN_ERROR;
         }
 
         if (cp->alloc_msgs_max < CONF_DEFAULT_MIN_ALLOC_MSGS || cp->alloc_msgs_max > CONF_DEFAULT_MAX_ALLOC_MSGS) {
-            log_stderr(LOG_INFO,"max_msgs: max allocated messages buffer must be between %zu and"
+            log_stderr("max_msgs: max allocated messages buffer must be between %zu and"
                        " %zu messages", CONF_DEFAULT_MIN_ALLOC_MSGS, CONF_DEFAULT_MAX_ALLOC_MSGS);
             return DN_ERROR;
         }
