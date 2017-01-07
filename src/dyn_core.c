@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <printf.h>
 
 #include "dyn_core.h"
 #include "dyn_conf.h"
@@ -283,7 +284,6 @@ core_ctx_create(struct instance *nci)
     ctx->max_timeout = cp->stats_interval;
     ctx->timeout = ctx->max_timeout;
 
-
     rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
         server_pool_deinit(&ctx->pool);
@@ -314,7 +314,6 @@ core_ctx_destroy(struct context *ctx)
 rstatus_t
 core_start(struct instance *nci)
 {
-
     conn_init();
     task_mgr_init();
 
@@ -348,6 +347,49 @@ core_start(struct instance *nci)
     }
 
     return status;
+}
+
+static int
+print_obj_arginfo(const struct printf_info *info, size_t n,
+                  int *argtypes)
+{
+      /* We always take exactly one argument and this is a pointer to the
+       *      structure.. */
+    if (n > 0)
+        argtypes[0] = PA_POINTER;
+    return 1;
+}
+
+static int
+print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
+{
+    const object_type_t *obj_type;
+    const struct msg *msg;
+    const struct conn *conn;
+    int len;
+
+    obj_type = *((const object_type_t **) (args[0]));
+
+    switch (*obj_type) {
+        case OBJ_REQ:
+            msg = *((const struct msg **) (args[0]));
+            return print_req(stream, msg);
+        case OBJ_RSP:
+            msg = *((const struct msg **) (args[0]));
+            return print_rsp(stream, msg);
+        case OBJ_CONN:
+            conn = *((const struct conn **) (args[0]));
+            return print_conn(stream, conn);
+        default:
+            return fprintf(stream, "<unknown %p>", obj_type);
+    }
+}
+
+int
+core_register_printf_function(void)
+{
+    register_printf_function('M', print_obj, print_obj_arginfo);
+    return 0;
 }
 
 /**

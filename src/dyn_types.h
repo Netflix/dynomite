@@ -41,3 +41,9 @@ cleanup_charptr(char **ptr) {
 
 #define SCOPED_CHARPTR(var) \
     char * var __attribute__ ((__cleanup__(cleanup_charptr))) 
+
+typedef enum {
+    OBJ_REQ,
+    OBJ_RSP,
+    OBJ_CONN
+}object_type_t;
