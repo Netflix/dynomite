@@ -77,7 +77,7 @@ client_ref(struct conn *conn, void *owner)
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->waiting_to_unref = 0;
 
-    log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
+    log_debug(LOG_VVERB, "ref %M owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
 
@@ -87,8 +87,7 @@ client_unref_internal_try_put(struct conn *conn)
     ASSERT(conn->waiting_to_unref);
     unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
     if (msgs != 0) {
-        log_warn("conn %s %d Waiting for %lu outstanding messages",
-                 conn_get_type_string(conn), conn->sd, msgs);
+        log_warn("%M Waiting for %lu outstanding messages", conn, msgs);
         return;
     }
     struct server_pool *pool;
@@ -99,7 +98,7 @@ client_unref_internal_try_put(struct conn *conn)
     dictRelease(conn->outstanding_msgs_dict);
     conn->outstanding_msgs_dict = NULL;
     conn->waiting_to_unref = 0;
-    log_warn("unref conn %p owner %p from pool '%.*s'", conn,
+    log_warn("unref %M owner %p from pool '%.*s'", conn,
              pool, pool->name.len, pool->name.data);
     conn_put(conn);
 }
@@ -133,21 +132,21 @@ client_active(struct conn *conn)
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "%M is active", conn);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "%M is active", conn);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "%M is active", conn);
         return true;
     }
 
-    log_debug(LOG_VVERB, "c %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "%M is inactive", conn);
 
     return false;
 }
@@ -201,9 +200,8 @@ client_close(struct context *ctx, struct conn *conn)
         ASSERT(req->selected_rsp == NULL);
         ASSERT(req->is_request && !req->done);
 
-        log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
-                  "%"PRIu32" type %d", conn->sd, req->id, req->mlen,
-                  req->type);
+        log_info("close %M discarding pending req %M len %"PRIu32,
+                 conn, req, req->mlen);
 
         req_put(req);
     }
@@ -218,10 +216,8 @@ client_close(struct context *ctx, struct conn *conn)
         conn_dequeue_outq(ctx, conn, req);
 
         if (req->done || req->selected_rsp) {
-            log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
-                      "%"PRIu32" type %d", conn->sd,
-                      req->is_error ? "error": "completed", req->id, req->mlen,
-                      req->type);
+            log_info("close %M discarding %s req %M len %"PRIu32, conn,
+                      req->is_error ? "error": "completed", req, req->mlen);
             req_put(req);
         } else {
             req->swallow = 1;
@@ -229,9 +225,8 @@ client_close(struct context *ctx, struct conn *conn)
             ASSERT(req->is_request);
             ASSERT(req->selected_rsp == NULL);
 
-            log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
-                      "len %"PRIu32" type %d", conn->sd, req->id, req->mlen,
-                      req->type);
+            log_info("close %M schedule swallow of req %M len %"PRIu32, conn,
+                     req, req->mlen);
         }
 
         stats_pool_incr(ctx, client_dropped_requests);
@@ -240,7 +235,7 @@ client_close(struct context *ctx, struct conn *conn)
 
     status = close(conn->sd);
     if (status < 0) {
-        log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("close %M failed, ignored: %s", conn, strerror(errno));
     }
     conn->sd = -1;
     client_unref(conn);
@@ -554,7 +549,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
                   uint8_t *key, uint32_t keylen, dyn_error_t *dyn_error_code)
 {
     rstatus_t status;
-    struct conn *s_conn;
+    struct conn * s_conn;
 
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
@@ -989,27 +984,23 @@ rstatus_t
 msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
     ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one.\
-               req: %d:%d prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
-               req->selected_rsp->id, req->selected_rsp->parent_id, rsp->id,
-               rsp->parent_id);
+               %M prev %M new rsp %M", req, req->selected_rsp, rsp);
     req->awaiting_rsps = 0;
     rsp->peer = req;
     req->is_error = rsp->is_error;
     req->error_code = rsp->error_code;
     req->dyn_error_code = rsp->dyn_error_code;
     req->selected_rsp = rsp;
-    log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
-             rsp->id, rsp->parent_id);
+    log_info("%M selected_rsp %M", req, rsp);
     return DN_OK;
 }
 
 static rstatus_t
 swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
-    log_info("req %d swallowing response %d awaiting %d",
-             req->id, rsp->id, req->awaiting_rsps);
-    ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
-               req->id, req->parent_id, rsp->id);
+    log_info("%M swallowing response %M awaiting %d", req, rsp,
+             req->awaiting_rsps);
+    ASSERT_LOG(req->awaiting_rsps, "%M has no awaiting rsps, received %M", req, rsp);
     // drop this response.
     rsp_put(rsp);
     msg_decr_awaiting_rsps(req);

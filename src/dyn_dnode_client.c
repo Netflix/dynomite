@@ -54,9 +54,8 @@ dnode_client_unref_internal_try_put(struct conn *conn)
     dictRelease(conn->outstanding_msgs_dict);
     conn->outstanding_msgs_dict = NULL;
     conn->waiting_to_unref = 0;
-    log_warn("unref conn %s %p owner %p from pool '%.*s'",
-             conn_get_type_string(conn), conn, pool,
-             pool->name.len, pool->name.data);
+    log_warn("unref %M owner %p from pool '%.*s'",
+             conn, pool, pool->name.len, pool->name.data);
     conn_put(conn);
 }
 
@@ -234,7 +233,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     status = msg_handle_response(req, rsp);
     if (conn->waiting_to_unref) {
         dictDelete(conn->outstanding_msgs_dict, &reqid);
-        log_info("Putting req %d", req->id);
+        log_info("Putting %M", req);
         req_put(req);
         dnode_client_unref_internal_try_put(conn);
         return DN_OK;

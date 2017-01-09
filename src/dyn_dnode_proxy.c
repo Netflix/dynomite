@@ -213,9 +213,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         return status;
     }
 
-    log_notice("dyn: accepted %s %d on %s %d from '%s'",
-               conn_get_type_string(c), c->sd, conn_get_type_string(p), p->sd,
-               dn_unresolve_peer_desc(c->sd));
+    log_notice("accepted %M on %M from '%s'", c, p, dn_unresolve_peer_desc(c->sd));
 
     return DN_OK;
 }

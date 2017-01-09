@@ -369,6 +369,9 @@ print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
     int len;
 
     obj_type = *((const object_type_t **) (args[0]));
+    if (obj_type == NULL) {
+        return fprintf(stream, "<NULL>");
+    }
 
     switch (*obj_type) {
         case OBJ_REQ:
@@ -522,8 +525,7 @@ core_timeout(struct context *ctx)
 			return;
 		}
 
-        log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", req->id,
-                 conn_get_type_string(conn), conn->sd, req->tmo_rbe.timeout);
+        log_warn("%M on %M timedout, timeout was %d", req, conn, req->tmo_rbe.timeout);
 
 		msg_tmo_delete(req);
 

@@ -235,8 +235,8 @@ _conn_get(void)
 int
 print_conn(FILE *stream, struct conn *conn)
 {
-    return fprintf(stream, "<conn %p %s %d>",
-                   conn, conn_get_type_string(conn), conn->sd);
+    return fprintf(stream, "<%s %p %d>",
+                   conn_get_type_string(conn), conn, conn->sd);
 }
 
 inline void
