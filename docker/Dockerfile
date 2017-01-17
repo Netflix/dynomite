@@ -36,12 +36,13 @@ RUN apt-get update && apt-get install -y \
 	redis-server \
 	tcl8.5
 
-# Get Redis Running
-RUN service redis-server start
-
 # Clone the Dynomite Git
 RUN git clone https://github.com/Netflix/dynomite.git
 RUN echo 'Git repo has been cloned in your Docker VM'
+
+RUN echo 'copy file'
+COPY scripts/startup.sh dynomite/startup.sh
+RUN echo 'done copying file'
 
 # Move to working directory
 WORKDIR dynomite/
@@ -72,15 +73,13 @@ RUN echo 'Exposing client port for Dynomite 8102'
 EXPOSE 8102
 
 # Default port to execute the entrypoint (Dynomite)
-CMD ["--port 8102"]
+#CMD ["--port 8102"]
 
 # Setting overcommit for Redis to be able to do BGSAVE/BGREWRITEAOF
 RUN sysctl vm.overcommit_memory=1
 
-# Setting the dynomite as the dockerized entry-point application
-RUN echo 'Starting Dynomite'
-ENTRYPOINT ["src/dynomite", "--conf-file=conf/redis_single.yml", "-v11"]
 
-CMD ["run"]
+# Set the entry-point to be the startup script
+ENTRYPOINT ["/dynomite/startup.sh"]
 
-
+#CMD ["run"]
