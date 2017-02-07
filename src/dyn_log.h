@@ -23,6 +23,8 @@
 #ifndef _DYN_LOG_H_
 #define _DYN_LOG_H_
 
+#include<printf.h>
+
 struct logger {
     char *name;  /* log file name */
     int  level;  /* log level */
@@ -126,5 +128,6 @@ int log_loggable(int level);
 void _log(const char *file, int line, int panic, const char *fmt, ...);
 void _log_stderr(const char *fmt, ...);
 void _log_hexdump(const char *file, int line, char *data, int datalen, const char *fmt, ...);
+int log_register_custom_specifier(int spec, printf_function, printf_arginfo_function);
 
 #endif

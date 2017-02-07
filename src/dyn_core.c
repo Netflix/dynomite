@@ -366,7 +366,6 @@ print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
     const object_type_t *obj_type;
     const struct msg *msg;
     const struct conn *conn;
-    int len;
 
     obj_type = *((const object_type_t **) (args[0]));
     if (obj_type == NULL) {
@@ -391,8 +390,7 @@ print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
 int
 core_register_printf_function(void)
 {
-    register_printf_function('M', print_obj, print_obj_arginfo);
-    return 0;
+    return log_register_custom_specifier('M', print_obj, print_obj_arginfo);
 }
 
 /**
