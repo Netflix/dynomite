@@ -166,14 +166,14 @@ int
 print_req(FILE *stream, struct msg *req)
 {
     struct string *req_type = msg_type_string(req->type);
-    return fprintf(stream, "<req %p %lu:%lu %.*s>", req, req->id, req->parent_id,
+    return fprintf(stream, "<REQ %p %lu:%lu %.*s>", req, req->id, req->parent_id,
                    req_type->len, req_type->data);
 }
 
 int
 print_rsp(FILE *stream, struct msg *rsp)
 {
-    return fprintf(stream, "<rsp %p:%lu:%lu>", rsp, rsp->id, rsp->parent_id);
+    return fprintf(stream, "<RSP %p %lu:%lu>", rsp, rsp->id, rsp->parent_id);
 }
 
 void

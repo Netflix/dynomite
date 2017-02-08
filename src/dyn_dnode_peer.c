@@ -1299,9 +1299,8 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
     req->done = 1;
     log_debug(LOG_VERB, "conn %p swallow %p", peer_conn, req);
     if (rsp) {
-        log_debug(LOG_INFO, "dyn: swallow rsp %"PRIu64" len %"PRIu32" of req "
-                  "%"PRIu64" on s %d", rsp->id, rsp->mlen, req->id,
-                  peer_conn->sd);
+        log_debug(LOG_INFO, "%M %M SWALLOW %M len %"PRIu32,
+                  peer_conn, req, rsp, rsp->mlen);
         rsp_put(rsp);
     }
     req_put(req);
@@ -1349,22 +1348,17 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
     ASSERT(req->is_request);
 
     if (log_loggable(LOG_VVERB)) {
-        loga("Dumping content for response:   ");
+        loga("%M Dumping content:", rsp);
         msg_dump(rsp);
 
-        loga("rsp id %d", rsp->id);
-
-        loga("Dumping content for request:");
+        loga("%M Dumping content:", req);
         msg_dump(req);
-
-        loga("req id %d", req->id);
     }
 
     conn_dequeue_outq(ctx, peer_conn, req);
     req->done = 1;
 
-    log_info("c_conn:%p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
-             rsp->id, rsp->parent_id);
+    log_info("%M %M RECEIVED %M", c_conn, req, rsp);
 
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
                (c_conn->type == CONN_DNODE_PEER_CLIENT),

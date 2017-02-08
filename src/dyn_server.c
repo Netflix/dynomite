@@ -793,8 +793,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     conn_dequeue_outq(ctx, s_conn, req);
 
     c_conn = req->owner;
-    log_info("c_conn %p %d:%d <-> %d:%d", c_conn, req->id, req->parent_id,
-               rsp->id, rsp->parent_id);
+    log_info("%M %M RECEIVED %M", c_conn, req, rsp);
     
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
