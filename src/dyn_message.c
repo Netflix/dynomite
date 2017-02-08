@@ -983,7 +983,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     int expected_fill =
         ((msg->dyn_parse_state == DYN_DONE || msg->dyn_parse_state == DYN_POST_DONE) &&
-         msg->dmsg->bit_field == 1) ? msg->dmsg->plen : -1;  //used in encryption case only
+         msg->dmsg->flags & 0x1) ? msg->dmsg->plen : -1;  //used in encryption case only
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
     if (mbuf == NULL || mbuf_full(mbuf) ||

@@ -370,8 +370,7 @@ server_connected(struct context *ctx, struct conn *conn)
 	conn->connecting = 0;
 	conn->connected = 1;
 
-    log_notice("connected to %s '%.*s' from sd %u", conn_get_type_string(conn),
-               server->endpoint.pname.len, server->endpoint.pname.data, conn->sd);
+    log_notice("%M connected ", conn);
 }
 
 static void

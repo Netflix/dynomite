@@ -35,9 +35,7 @@ dyn_parse_core(struct msg *r)
    uint64_t num = 0;
 
    dyn_state = r->dyn_parse_state;
-   if (log_loggable(LOG_DEBUG)) {
-      log_debug(LOG_DEBUG, "dyn_parse_state:  %d", r->dyn_parse_state);
-   }
+   log_debug(LOG_VVERB, "dyn_parse_state:  %d", r->dyn_parse_state);
 
    if (r->dyn_parse_state == DYN_DONE || r->dyn_parse_state == DYN_POST_DONE)
        return true;
@@ -61,9 +59,7 @@ dyn_parse_core(struct msg *r)
       ch = *p;
       switch (dyn_state) {
       case DYN_START:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_START");
-         }
+         log_debug(LOG_VVERB, "DYN_START");
          if (ch != ' ' && ch != '$') {
             break;
          }
@@ -100,9 +96,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_MAGIC_STRING:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_MAGIC_STRING");
-         }
+         log_debug(LOG_VVERB, "DYN_MAGIC_STRING");
          if (ch == ' ') {
             dyn_state = DYN_MSG_ID;
             num = 0;
@@ -118,16 +112,11 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_MSG_ID:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_MSG_ID");
-            log_debug(LOG_DEBUG, "num = %d", num);
-         }
+         log_debug(LOG_VVERB, "DYN_MSG_ID num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "MSG ID : %d", num);
-            }
+            log_debug(LOG_VERB, "MSG ID : %d", num);
             dmsg->id = num;
             dyn_state = DYN_TYPE_ID;
             num = 0;
@@ -142,15 +131,11 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_TYPE_ID:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_TYPE_ID: num = %d", num);
-         }
+         log_debug(LOG_VVERB, "DYN_TYPE_ID: num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "Type Id: %d", num);
-            }
+            log_debug(LOG_VERB, "Type Id: %d", num);
             dmsg->type = num;
             dyn_state = DYN_BIT_FIELD;
             num = 0;
@@ -165,16 +150,12 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_BIT_FIELD:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_BIT_FIELD, num = %d", num);
-         }
+         log_debug(LOG_VVERB, "DYN_FLAGS_FIELD, num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "DYN_BIT_FIELD : %d", num);
-            }
-            dmsg->bit_field = num & 0xF;
+            log_debug(LOG_VERB, "DYN_FLAGS_FIELD: %d", num);
+            dmsg->flags = num & 0xF;
             dyn_state = DYN_VERSION;
             num = 0;
          } else {
@@ -188,15 +169,11 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_VERSION:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_VERSION: num = %d", num);
-         }
+         log_debug(LOG_VVERB, "DYN_VERSION: num = %d", num);
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "VERSION : %d", num);
-            }
+            log_debug(LOG_VERB, "VERSION : %d", num);
             dmsg->version = num;
             dyn_state = DYN_SAME_DC;
             num = 0;
@@ -213,9 +190,7 @@ dyn_parse_core(struct msg *r)
       case DYN_SAME_DC:
       	if (isdigit(ch)) {
       		dmsg->same_dc = (uint8_t)(ch - '0');
-      		if (log_loggable(LOG_DEBUG)) {
-           	   log_debug(LOG_DEBUG, "DYN_SAME_DC %d", dmsg->same_dc);
-      		}
+            log_debug(LOG_VERB, "DYN_SAME_DC %d", dmsg->same_dc);
       	} else if (ch == ' ' && isdigit(*(p-1))) {
       		dyn_state = DYN_DATA_LEN;
       		num = 0;
@@ -230,17 +205,13 @@ dyn_parse_core(struct msg *r)
       	break;
 
       case DYN_DATA_LEN:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_DATA_LEN: num = %d", num);
-         }
+         log_debug(LOG_VVERB, "DYN_DATA_LEN: num = %d", num);
          if (ch == '*') {
             break;
          } else if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == ' ' && isdigit(*(p-1)))  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "Data len: %d", num);
-            }
+            log_debug(LOG_VERB, "Data len: %d", num);
             dmsg->mlen = (uint32_t)num;
             dyn_state = DYN_DATA;
             num = 0;
@@ -254,9 +225,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_DATA:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_DATA");
-         }
+         log_debug(LOG_VVERB, "DYN_DATA");
          if (p + dmsg->mlen < b->last) {
             dmsg->data = p;
             p += dmsg->mlen - 1;
@@ -269,9 +238,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_SPACES_BEFORE_PAYLOAD_LEN:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
-         }
+         log_debug(LOG_VVERB, "DYN_SPACES_BEFORE_PAYLOAD_LEN");
          if (ch == ' ') {
             break;
          } else if (ch == '*') {
@@ -286,9 +253,7 @@ dyn_parse_core(struct msg *r)
          if (isdigit(ch))  {
             num = num*10 + (uint64_t)(ch - '0');
          } else if (ch == CR)  {
-            if (log_loggable(LOG_DEBUG)) {
-               log_debug(LOG_DEBUG, "Payload len: %d", num);
-            }
+            log_debug(LOG_VERB, "Payload len: %d", num);
             dmsg->plen = (uint32_t)num;
             num = 0;
             dyn_state = DYN_CRLF_BEFORE_DONE;
@@ -301,9 +266,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_CRLF_BEFORE_DONE:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_CRLF_BEFORE_DONE");
-         }
+         log_debug(LOG_VVERB, "DYN_CRLF_BEFORE_DONE");
          if (*p == LF) {
             dyn_state = DYN_DONE;
          } else {
@@ -316,9 +279,7 @@ dyn_parse_core(struct msg *r)
          break;
 
       case DYN_DONE:
-         if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "DYN_DONE");
-         }
+         log_debug(LOG_VVERB, "DYN_DONE");
          r->pos = p;
          dmsg->payload = p;
          r->dyn_parse_state = DYN_DONE;
@@ -334,9 +295,7 @@ dyn_parse_core(struct msg *r)
 
    }
 
-   if (log_loggable(LOG_DEBUG)) {
-      log_debug(LOG_DEBUG, "Not fully parsed yet!!!!!!");
-   }
+   log_debug(LOG_DEBUG, "Not fully parsed yet!!!!!!");
    split:
    //this is an attempt recovery when we got a bad message
    //we try to look for the start the next good one and throw away the bad part
@@ -376,17 +335,13 @@ dyn_parse_core(struct msg *r)
    }
 
    if (mbuf_length(b) == 0 || b->last == b->end) {
-      if (log_loggable(LOG_DEBUG)) {
-          log_debug(LOG_DEBUG, "Would this case ever happen?");
-      }
+      log_debug(LOG_DEBUG, "Would this case ever happen?");
       r->result = MSG_PARSE_AGAIN;
       return false;
    }
 
    if (r->pos == b->last) {
-       if (log_loggable(LOG_DEBUG)) {
-           log_debug(LOG_DEBUG, "Forward to reading the new block of data");
-       }
+       log_debug(LOG_DEBUG, "Forward to reading the new block of data");
        r->dyn_parse_state = DYN_START;
        r->result = MSG_PARSE_AGAIN;
        token = NULL;
@@ -410,9 +365,13 @@ dyn_parse_core(struct msg *r)
    }
    return false;
 
-   done:
+done:
    r->pos = p;
    dmsg->source_address = r->owner->addr;
+   log_debug(LOG_DEBUG, "MSG ID: %d, type: %d, secured %d, version %d, "\
+                        "same_dc %d, datalen %u, payload len: %u", dmsg->id,
+                        dmsg->type, dmsg->flags & 0x1, dmsg->version, dmsg->same_dc,
+                        dmsg->mlen, dmsg->plen);
 
    if (log_loggable(LOG_VVERB)) {
       log_debug(LOG_VVERB, "at done with p at %d", p);
@@ -426,7 +385,7 @@ dyn_parse_core(struct msg *r)
 
    return true;
 
-   error:
+error:
    log_debug(LOG_ERR, "at error for state %d and c %c", dyn_state, *p);
    r->result = MSG_PARSE_ERROR;
    r->pos = p;
@@ -470,7 +429,7 @@ dyn_parse_req(struct msg *r)
 			return;
 		}
 
-		if (r->dyn_parse_state == DYN_DONE && dmsg->bit_field == 1) {
+		if (r->dyn_parse_state == DYN_DONE && dmsg->flags == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
 			r->owner->dnode_crypto_state = 1;
 			r->dyn_parse_state = DYN_POST_DONE;
@@ -570,7 +529,7 @@ void dyn_parse_rsp(struct msg *r)
 			return;
 		}
 
-		if (r->dyn_parse_state == DYN_DONE && dmsg->bit_field == 1) {
+		if (r->dyn_parse_state == DYN_DONE && dmsg->flags == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
 			r->owner->dnode_crypto_state = 1;
 			r->dyn_parse_state = DYN_POST_DONE;
@@ -658,8 +617,8 @@ dmsg_put(struct dmsg *dmsg)
 void
 dmsg_dump(struct dmsg *dmsg)
 {
-    log_debug(LOG_VVVERB, "dmsg dump: id %"PRIu64" version %d  bit_field %d type %d len %"PRIu32"  plen %"PRIu32" ",
-                 dmsg->id, dmsg->version, dmsg->bit_field, dmsg->type, dmsg->mlen, dmsg->plen);
+    log_debug(LOG_VVVERB, "dmsg dump: id %"PRIu64" version %d  flags %d type %d len %"PRIu32"  plen %"PRIu32" ",
+                 dmsg->id, dmsg->version, dmsg->flags , dmsg->type, dmsg->mlen, dmsg->plen);
 }
 
 
@@ -728,7 +687,7 @@ done:
     dmsg->id = 0;
     dmsg->source_address = NULL;
     dmsg->owner = NULL;
-    dmsg->bit_field = 0;
+    dmsg->flags = 0;
     dmsg->same_dc = 1;
  
     return dmsg;
@@ -750,11 +709,12 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     //bit field
     mbuf_write_char(mbuf, ' ');
     //encryption bit
+    uint8_t flags = 0;
+    
     if (conn->dnode_secured) {
-       mbuf_write_uint8(mbuf, 1);
-    } else {
-       mbuf_write_uint8(mbuf, 0);
+        flags |= 0x1;
     }
+    mbuf_write_uint8(mbuf, flags);
 
     //version
     mbuf_write_char(mbuf, ' ');

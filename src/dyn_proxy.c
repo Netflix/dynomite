@@ -118,11 +118,8 @@ proxy_init(struct context *ctx)
     	log_datastore = "memcache";
     }
 
-    log_debug(LOG_NOTICE, "p %d listening on '%.*s' in %s pool '%.*s'",
-              p->sd, pool->proxy_endpoint.pname.len,
-              pool->proxy_endpoint.pname.data,
-			  log_datastore,
-              pool->name.len, pool->name.data);
+    log_debug(LOG_NOTICE, "%M inited in %s %M",
+              p, log_datastore, pool);
 
     return DN_OK;
 }
@@ -155,8 +152,7 @@ proxy_accept(struct context *ctx, struct conn *p)
         sd = accept(p->sd, NULL, NULL);
         if (sd < 0) {
             if (errno == EINTR) {
-                log_warn("accept on %s %d not ready - eintr",
-                         conn_get_type_string(p), p->sd);
+                log_warn("accept on %M not ready - eintr", p);
                 continue;
             }
 
@@ -170,8 +166,8 @@ proxy_accept(struct context *ctx, struct conn *p)
              * it back in when some existing connection gets closed
              */
 
-            log_error("accept on %s %d failed: %s",
-                      conn_get_type_string(p), p->sd, strerror(errno));
+            log_error("accept on %M failed: %s",
+                      p, strerror(errno));
             return DN_ERROR;
         }
 
@@ -189,13 +185,14 @@ proxy_accept(struct context *ctx, struct conn *p)
         return DN_ENOMEM;
     }
     c->sd = sd;
+    string_copy_c(&c->pname, dn_unresolve_peer_desc(c->sd));
 
     stats_pool_incr(ctx, client_connections);
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("set nonblock on %s %d from p %d failed: %s",
-                  conn_get_type_string(c), c->sd, p->sd, strerror(errno));
+        log_error("set nonblock on %M from %M failed: %s",
+                  c, p, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -203,21 +200,19 @@ proxy_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("set tcpnodelay on %s %d from %s %d failed, ignored: %s",
-                     conn_get_type_string(c), c->sd, conn_get_type_string(p),
-                     p->sd, strerror(errno));
+            log_warn("set tcpnodelay on %M from %s failed, ignored: %s",
+                     c, p, strerror(errno));
         }
     }
 
     status = conn_event_add_conn(c);
     if (status < 0) {
-        log_error("event add conn from %s %d failed: %s",conn_get_type_string(p),
-                  p->sd, strerror(errno));
+        log_error("event add conn from %M failed: %s", p, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
-    log_notice("accepted %M on %M from '%s'", c, p, dn_unresolve_peer_desc(c->sd));
+    log_notice("%M accepted %M", p, c);
 
     return DN_OK;
 }

@@ -273,6 +273,7 @@ struct node {
  * information such as dc, rack, node token and runtime environment.
  */
 struct server_pool {
+    object_type_t        object_type;
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 

@@ -90,16 +90,13 @@ client_unref_internal_try_put(struct conn *conn)
         log_warn("%M Waiting for %lu outstanding messages", conn, msgs);
         return;
     }
-    struct server_pool *pool;
     ASSERT(conn->owner != NULL);
     conn_event_del_conn(conn);
-    pool = conn->owner;
+    log_warn("unref %M owner %M", conn, conn->owner);
     conn->owner = NULL;
     dictRelease(conn->outstanding_msgs_dict);
     conn->outstanding_msgs_dict = NULL;
     conn->waiting_to_unref = 0;
-    log_warn("unref %M owner %p from pool '%.*s'", conn,
-             pool, pool->name.len, pool->name.data);
     conn_put(conn);
 }
 

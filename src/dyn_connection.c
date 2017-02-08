@@ -235,6 +235,25 @@ _conn_get(void)
 int
 print_conn(FILE *stream, struct conn *conn)
 {
+    if ((conn->type == CONN_DNODE_PEER_PROXY) ||
+        (conn->type == CONN_PROXY)) {
+        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+    if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
+        (conn->type == CONN_CLIENT)) {
+        return fprintf(stream, "<%s %p %d from '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+    if ((conn->type == CONN_DNODE_PEER_SERVER) ||
+        (conn->type == CONN_SERVER)) {
+        return fprintf(stream, "<%s %p %d to '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+
     return fprintf(stream, "<%s %p %d>",
                    conn_get_type_string(conn), conn, conn->sd);
 }
@@ -600,8 +619,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         status = DN_ERROR;
         goto error;
     }
-    log_warn("connecting to %s '%.*s' from sd %d", conn_get_type_string(conn),
-             conn->pname.len, conn->pname.data, conn->sd);
+    log_warn("%M connecting.....", conn);
 
     status = dn_set_nonblocking(conn->sd);
     if (status != DN_OK) {

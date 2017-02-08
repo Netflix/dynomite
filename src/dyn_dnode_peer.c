@@ -993,8 +993,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
     conn->connected = 1;
     peer->state = NORMAL;
 
-    log_notice("connected to %s '%.*s' from sd %u", conn_get_type_string(conn),
-               peer->endpoint.pname.len, peer->endpoint.pname.data, conn->sd);
+    log_notice("%M connected", conn);
 }
 
 static void

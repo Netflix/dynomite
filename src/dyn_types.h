@@ -45,5 +45,6 @@ cleanup_charptr(char **ptr) {
 typedef enum {
     OBJ_REQ,
     OBJ_RSP,
-    OBJ_CONN
+    OBJ_CONN,
+    OBJ_POOL
 }object_type_t;

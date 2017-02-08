@@ -350,6 +350,12 @@ core_start(struct instance *nci)
 }
 
 static int
+print_server_pool(FILE *stream, struct server_pool *sp)
+{
+    return fprintf(stream, "<POOL %p '%.*s'>", sp, sp->name.len, sp->name.data);
+}
+
+static int
 print_obj_arginfo(const struct printf_info *info, size_t n,
                   int *argtypes)
 {
@@ -366,6 +372,7 @@ print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
     const object_type_t *obj_type;
     const struct msg *msg;
     const struct conn *conn;
+    const struct server_pool *sp;
 
     obj_type = *((const object_type_t **) (args[0]));
     if (obj_type == NULL) {
@@ -382,6 +389,9 @@ print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
         case OBJ_CONN:
             conn = *((const struct conn **) (args[0]));
             return print_conn(stream, conn);
+        case OBJ_POOL:
+            sp = *((const struct server_pool **) (args[0]));
+            return print_server_pool(stream, sp);
         default:
             return fprintf(stream, "<unknown %p>", obj_type);
     }
@@ -446,9 +456,9 @@ core_close_log(struct conn *conn)
 	} else {
 		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
 	}
-	log_debug(LOG_NOTICE, "close %s %d '%s' on event %04"PRIX32" eof %d done "
-			  "%d rb %zu sb %zu%c %s", conn_get_type_string(conn), conn->sd,
-              addrstr, conn->events, conn->eof, conn->done, conn->recv_bytes,
+	log_debug(LOG_NOTICE, "close %M on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", conn, 
+              conn->events, conn->eof, conn->done, conn->recv_bytes,
               conn->send_bytes,
               conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
