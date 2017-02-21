@@ -188,7 +188,7 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
 #else
     len += dn_scnprintf(buf + len, size - len,
 #endif
-                    "[%.*s.%03d] %s:%d",
+                    "[%.*s.%03d] %s:%d ",
                     strlen(buffer), buffer, (int64_t)curTime.tv_usec / 1000,
                     file, line);
 
