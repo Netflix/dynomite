@@ -25,6 +25,7 @@
 #ifdef DN_HAVE_EPOLL
 
 #include <sys/epoll.h>
+#include <dyn_event.h>
 
 struct event_base *
 event_base_create(int nevent, event_cb_t cb)
@@ -79,7 +80,7 @@ event_base_destroy(struct event_base *evb)
         return;
     }
 
-    ASSERT(evb->ep > 0);
+    ASSERT(evb->ep >= 0);
 
     dn_free(evb->event);
 
@@ -99,7 +100,7 @@ event_add_in(struct event_base *evb, struct conn *c)
     struct epoll_event event;
     int ep = evb->ep;
 
-    ASSERT(ep > 0);
+    ASSERT(ep >= 0);
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
 
@@ -134,7 +135,7 @@ event_add_out(struct event_base *evb, struct conn *c)
     struct epoll_event event;
     int ep = evb->ep;
 
-    ASSERT(ep > 0);
+    ASSERT(ep >= 0);
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
     ASSERT(c->recv_active);
@@ -165,7 +166,7 @@ event_del_out(struct event_base *evb, struct conn *c)
     struct epoll_event event;
     int ep = evb->ep;
 
-    ASSERT(ep > 0);
+    ASSERT(ep >= 0);
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
     ASSERT(c->recv_active);
@@ -196,7 +197,7 @@ event_add_conn(struct event_base *evb, struct conn *c)
     struct epoll_event event;
     int ep = evb->ep;
 
-    ASSERT(ep > 0);
+    ASSERT(ep >= 0);
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
 
@@ -222,7 +223,7 @@ event_del_conn(struct event_base *evb, struct conn *c)
     int status;
     int ep = evb->ep;
 
-    ASSERT(ep > 0);
+    ASSERT(ep >= 0);
     ASSERT(c != NULL);
     ASSERT(c->sd > 0);
 
@@ -246,7 +247,7 @@ event_wait(struct event_base *evb, int timeout)
     struct epoll_event *event = evb->event;
     int nevent = evb->nevent;
 
-    ASSERT(ep > 0);
+    ASSERT(ep >= 0);
     ASSERT(event != NULL);
     ASSERT(nevent > 0);
 

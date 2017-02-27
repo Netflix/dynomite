@@ -803,7 +803,7 @@ gossip_loop(void *arg)
             gn_pool.ctx->dyn_state = NORMAL;
         }
 
-        if (!sp->ctx->enable_gossip) {
+        if (!sp->enable_gossip) {
             //gossip_debug();
             continue;  //no gossiping
         }
@@ -987,8 +987,6 @@ gossip_destroy(struct server_pool *sp)
     return DN_OK;
 }
 
-
-long long dictFingerprint(dict *d);
 void gossip_debug(void)
 {
     uint32_t i, nelem;

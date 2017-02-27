@@ -40,6 +40,7 @@ dnode_unref(struct conn *conn)
     ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->owner != NULL);
 
+    conn_event_del_conn(conn);
     pool = conn->owner;
     conn->owner = NULL;
 
@@ -105,11 +106,8 @@ dnode_init(struct context *ctx)
     	log_datastore = "memcache";
     }
 
-    log_debug(LOG_NOTICE, "dyn: p %d listening on '%.*s' in %s pool '%.*s'"
-              " with %"PRIu32" servers", p->sd, pool->dnode_proxy_endpoint.pname.len,
-              pool->dnode_proxy_endpoint.pname.data,
-			  log_datastore,
-              pool->name.len, pool->name.data );
+    log_debug(LOG_NOTICE, "%M inited in %s %M",
+              p, log_datastore, pool);
     return DN_OK;
 }
 
@@ -169,7 +167,7 @@ dnode_accept(struct context *ctx, struct conn *p)
     char clntName[INET_ADDRSTRLEN];
 
     if(inet_ntop(AF_INET, &client_address.sin_addr.s_addr, clntName, sizeof(clntName))!=NULL){
-       loga("Accepting client connection from %s%c%d on sd %d",clntName,'/',ntohs(client_address.sin_port), sd);
+       loga("Accepting client connection from %s:%d on sd %d",clntName, ntohs(client_address.sin_port), sd);
     } else {
        loga("Unable to get client's address for accept on sd %d\n", sd);
     }
@@ -185,6 +183,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         return DN_ENOMEM;
     }
     c->sd = sd;
+    string_copy_c(&c->pname, dn_unresolve_peer_desc(c->sd));
 
     stats_pool_incr(ctx, dnode_client_connections);
 
@@ -204,7 +203,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         }
     }
 
-    status = event_add_conn(ctx->evb, c);
+    status = conn_event_add_conn(c);
     if (status < 0) {
         log_error("dyn: event add conn from %s %d failed: %s",
                   conn_get_type_string(p), p->sd, strerror(errno));
@@ -212,9 +211,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         return status;
     }
 
-    log_notice("dyn: accepted %s %d on %s %d from '%s'",
-               conn_get_type_string(c), c->sd, conn_get_type_string(p), p->sd,
-               dn_unresolve_peer_desc(c->sd));
+    log_notice("accepted %M on %M", c, p);
 
     return DN_OK;
 }

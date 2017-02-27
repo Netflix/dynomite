@@ -85,27 +85,9 @@ typedef int err_t;     /* error type */
 
 #define IGNORE_RET_VAL(x) x;
 
-struct array;
-struct string;
-struct context;
-struct conn;
-struct conn_tqh;
-struct msg;
-struct msg_tqh;
-struct server;
-struct server_pool;
-struct mbuf;
-struct mhdr;
-struct conf;
-struct stats;
-struct entropy_conn;
-struct instance;
-struct event_base;
-struct rack;
-struct dyn_ring;
-
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <string.h>
@@ -140,7 +122,6 @@ struct dyn_ring;
 
 
 #include "entropy/dyn_entropy.h"
-#include "event/dyn_event.h"
 
 #define ENCRYPTION 1
 
@@ -152,15 +133,36 @@ typedef enum dyn_state {
 	WRITES_ONLY = 2,
 	RESUMING    = 3,
 	NORMAL      = 4,
-	SUSPENDING  = 5,
-	LEAVING     = 6,
+	//SUSPENDING  = 5,
+	//LEAVING     = 6,
 	JOINING     = 7,
 	DOWN        = 8,
-	REMOVED     = 9,
-	EXITING     = 10,
+	//REMOVED     = 9,
+	//EXITING     = 10,
 	RESET       = 11,
 	UNKNOWN     = 12
 } dyn_state_t;
+
+static inline char*
+get_state(dyn_state_t s) {
+	switch(s)
+	{
+		case INIT: return "INIT";
+		case STANDBY: return "STANDBY";
+		case WRITES_ONLY: return "WRITES_ONLY";
+		case RESUMING: return "RESUMING";
+		case NORMAL: return "NORMAL";
+		//case SUSPENDING: return "SUSPENDING";
+		//case LEAVING: return "LEAVING";
+		case JOINING: return "JOINING";
+		case DOWN: return "DOWN";
+		//case REMOVED: return "REMOVED";
+		//case EXITING: return "EXITING";
+		case RESET: return "RESET";
+		case UNKNOWN: return "Unknown";
+	}
+	return "INVALID STATE";
+}
 
 typedef enum data_store {
 	DATA_REDIS        = 0, /* Data store is Redis */
@@ -181,14 +183,11 @@ struct instance {
     int             log_level;                   /* log level */
     char            *log_filename;               /* log filename */
     char            *conf_filename;              /* configuration filename */
-    uint16_t        stats_port;                  /* stats monitoring port */
-    int             stats_interval;              /* stats aggregation interval */
-    char            *stats_addr;                 /* stats monitoring addr */
     char            hostname[DN_MAXHOSTNAMELEN]; /* hostname */
-    uint16_t        entropy_port;                  /* send reconciliation port */
-    char            *entropy_addr;                 /* send reconciliation addr */
+    uint16_t        entropy_port;                /* send reconciliation port */
+    char            *entropy_addr;               /* send reconciliation addr */
     size_t          mbuf_chunk_size;             /* mbuf chunk size */
-    size_t			alloc_msgs_max;			 /* allocated messages buffer size */
+    size_t          alloc_msgs_max;              /* allocated messages buffer size */
     pid_t           pid;                         /* process id */
     char            *pid_filename;               /* pid filename */
     unsigned        pidfile:1;                   /* pid file created? */
@@ -232,10 +231,9 @@ struct datastore {
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    uint32_t           ns_conn_q;     /* # server connection */
-    struct conn_tqh    s_conn_q;      /* server connection q */
+    struct conn        *conn;         /* the only server connection */
 
-    usec_t             next_retry_us; /* next retry time in usec */
+    msec_t             next_retry_ms; /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 };
@@ -246,13 +244,12 @@ struct datastore {
 struct node {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
-    struct endpoint     endpoint;
+    struct endpoint    endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    uint32_t           ns_conn_q;     /* # server connection */
-    struct conn_tqh    s_conn_q;      /* server connection q */
+    struct conn        *conn;         /* the only peer connection */
 
-    usec_t             next_retry_us;    /* next retry time in usec */
+    msec_t             next_retry_ms;    /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 
@@ -276,28 +273,27 @@ struct node {
  * information such as dc, rack, node token and runtime environment.
  */
 struct server_pool {
+    object_type_t        object_type;
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
     struct conn        *p_conn;              /* proxy connection (listener) */
     uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
+    struct conn_tqh    ready_conn_q;         /* ready connection q */
 
-    struct datastore   *datastore;               /* underlying datastore */
-    struct array       datacenters;                /* racks info  */
-    uint32_t           nlive_server;         /* # live server */
+    struct datastore   *datastore;           /* underlying datastore */
+    struct array       datacenters;          /* racks info  */
     uint64_t           next_rebuild;         /* next distribution rebuild time in usec */
 
     struct string      name;                 /* pool name (ref in conf_pool) */
     struct endpoint    proxy_endpoint;
-    int                dist_type;            /* distribution type (dist_type_t) */
     int                key_hash_type;        /* key hash type (hash_type_t) */
     hash_t             key_hash;             /* key hasher */
     struct string      hash_tag;             /* key hash tag (ref in conf_pool) */
     msec_t             timeout;              /* timeout in msec */
     int                backlog;              /* listen backlog */
     uint32_t           client_connections;   /* maximum # client connection */
-    uint32_t           server_connections;   /* maximum # server connection */
     msec_t             server_retry_timeout_ms; /* server retry timeout in msec */
     uint32_t           server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
@@ -324,7 +320,12 @@ struct server_pool {
     secure_server_option_t secure_server_option;
     struct string      pem_key_file;
     struct string      recon_key_file;       /* file with Key encryption in reconciliation */
-	struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
+    struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
+    struct endpoint    stats_endpoint;       /* stats_listen: socket info for stats */
+    int                stats_interval;       /* stats aggregation interval */
+    bool               enable_gossip;        /* enable/disable gossip */
+    size_t             mbuf_size;            /* mbuf chunk size */
+    size_t             alloc_msgs_max;       /* allocated messages buffer size */
 };
 
 /** \struct context
@@ -346,16 +347,17 @@ struct context {
     int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
-    unsigned           enable_gossip:1;   /* enable/disable gossip */
     unsigned           admin_opt;   /* admin mode */
 };
 
 
 
+int core_register_printf_function(void);
 rstatus_t core_start(struct instance *nci);
 void core_stop(struct context *ctx);
 rstatus_t core_core(void *arg, uint32_t events);
 rstatus_t core_loop(struct context *ctx);
 void core_debug(struct context *ctx);
+void core_set_local_state(struct context *ctx, dyn_state_t state);
 
 #endif

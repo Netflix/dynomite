@@ -6,11 +6,10 @@ from dyno_cluster import DynoCluster
 
 class DynoNode(Node):
     def __init__(self, host="localhost", ip="127.0.0.1", port=8102,
-                 dnode_port=8101, stats_port=22222, data_store_port=22122):
+                 dnode_port=8101, data_store_port=22122):
         super(DynoNode, self).__init__(host, ip, port)
         self.name="Dyno" + self.name
         self.conf_file = None
-        self.stats_port = stats_port
         self.dnode_port = dnode_port
         self.data_store_node = RedisNode(host, ip, data_store_port)
 

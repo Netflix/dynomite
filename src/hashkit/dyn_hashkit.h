@@ -43,25 +43,11 @@
     ACTION( HASH_JENKINS,       jenkins       ) \
     ACTION( HASH_MURMUR3,       murmur3       ) \
 
-#define DIST_CODEC(ACTION)                      \
-    ACTION( DIST_KETAMA,        ketama        ) \
-    ACTION( DIST_MODULA,        modula        ) \
-    ACTION( DIST_RANDOM,        random        ) \
-    ACTION( DIST_VNODE,         vnode         ) \
-    ACTION( DIST_SINGLE,        single        ) \
-
 #define DEFINE_ACTION(_hash, _name) _hash,
 typedef enum hash_type {
     HASH_CODEC( DEFINE_ACTION )
     HASH_SENTINEL
 } hash_type_t;
-#undef DEFINE_ACTION
-
-#define DEFINE_ACTION(_dist, _name) _dist,
-typedef enum dist_type {
-    DIST_CODEC( DEFINE_ACTION )
-    DIST_SENTINEL
-} dist_type_t;
 #undef DEFINE_ACTION
 
 rstatus_t hash_one_at_a_time(const char *key, size_t key_length, struct dyn_token *token);
@@ -81,16 +67,5 @@ uint32_t crc32_sz(const char *buf, size_t length, uint32_t in_crc32);
 
 rstatus_t hash_murmur(const char *key, size_t length, struct dyn_token *token);
 rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *token);
-
-rstatus_t vnode_update(struct server_pool *pool);
-uint32_t vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum, struct dyn_token *token);
-
-
-rstatus_t ketama_update(struct server_pool *pool);
-uint32_t ketama_dispatch(struct continuum *continuum, uint32_t ncontinuum, uint32_t hash);
-rstatus_t modula_update(struct server_pool *pool);
-uint32_t modula_dispatch(struct continuum *continuum, uint32_t ncontinuum, uint32_t hash);
-rstatus_t random_update(struct server_pool *pool);
-uint32_t random_dispatch(struct continuum *continuum, uint32_t ncontinuum, uint32_t hash);
 
 #endif

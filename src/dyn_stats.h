@@ -50,9 +50,11 @@
     ACTION( dnode_client_out_queue,       STATS_GAUGE,        "# dnode client requests in outgoing queue")                \
     ACTION( dnode_client_out_queue_bytes, STATS_GAUGE,        "current dnode client request bytes in outgoing queue")     \
     /* peer behavior */                                                                                                   \
-    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# local dc peer dropped requests")                                  \
-    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# local dc peer timedout requests")                                 \
-    ACTION( remote_peer_timedout_requests,STATS_COUNTER,      "# remote dc peer timedout requests")                                 \
+    ACTION( peer_dropped_requests,        STATS_COUNTER,      "# local dc peer dropped requests")                         \
+    ACTION( peer_timedout_requests,       STATS_COUNTER,      "# local dc peer timedout requests")                        \
+    ACTION( remote_peer_dropped_requests, STATS_COUNTER,      "# remote dc peer dropped requests")                        \
+    ACTION( remote_peer_timedout_requests,STATS_COUNTER,      "# remote dc peer timedout requests")                       \
+    ACTION( remote_peer_failover_requests,STATS_COUNTER,      "# remote dc peer failover requests")                       \
     ACTION( peer_eof,                     STATS_COUNTER,      "# eof on peer connections")                                \
     ACTION( peer_err,                     STATS_COUNTER,      "# errors on peer connections")                             \
     ACTION( peer_timedout,                STATS_COUNTER,      "# timeouts on local dc peer connections")                           \
@@ -84,7 +86,6 @@
     ACTION( server_eof,                   STATS_COUNTER,           "# eof on server connections")                              \
     ACTION( server_err,                   STATS_COUNTER,           "# errors on server connections")                           \
     ACTION( server_timedout,              STATS_COUNTER,           "# timeouts on server connections")                         \
-    ACTION( server_connections,           STATS_GAUGE,             "# active server connections")                              \
     ACTION( server_ejected_at,            STATS_TIMESTAMP,         "timestamp when server was ejected in usec since epoch")    \
     ACTION( server_dropped_requests,      STATS_COUNTER,           "# server dropped requests")                                \
     ACTION( server_timedout_requests,     STATS_COUNTER,           "# server timedout requests")                               \
@@ -119,9 +120,6 @@
 	ACTION( redis_req_sortedsets,		  STATS_COUNTER,	  "# Redis sortedsets")										  \
 	ACTION( redis_req_other,			  STATS_COUNTER,	  "# Redis other")											  \
 
-#define STATS_ADDR      "0.0.0.0"
-#define STATS_PORT      22222
-#define STATS_INTERVAL  (30 * 1000) /* in msec */
 
 typedef enum stats_type {
     STATS_INVALID,
@@ -155,6 +153,7 @@ typedef enum {
     CMD_GET_CONSISTENCY,
     CMD_GET_TIMEOUT_FACTOR,
     CMD_SET_TIMEOUT_FACTOR,
+    CMD_GET_STATE,
 } stats_cmd_t;
 
 struct stats_metric {
@@ -423,8 +422,9 @@ uint64_t _stats_server_get_ts(struct context *ctx, stats_server_field_t fidx);
 void _stats_server_set_val(struct context *ctx, stats_server_field_t fidx, int64_t val);
 int64_t _stats_server_get_val(struct context *ctx, stats_server_field_t fidx);
 
-struct stats *stats_create(uint16_t stats_port, char *stats_ip, int stats_interval, char *source,
-		                   struct server_pool *sp, struct context *ctx);
+struct stats * stats_create(uint16_t stats_port, struct string pname, int stats_interval,
+             char *source, struct server_pool *sp, struct context *ctx);
+
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
 

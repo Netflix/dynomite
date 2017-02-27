@@ -155,6 +155,27 @@ func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 
+#define DEFINE_ACTION(_name) string(#_name),
+static struct string msg_type_strings[] = {
+    MSG_TYPE_CODEC( DEFINE_ACTION )
+    null_string
+};
+#undef DEFINE_ACTION
+
+int
+print_req(FILE *stream, struct msg *req)
+{
+    struct string *req_type = msg_type_string(req->type);
+    return fprintf(stream, "<REQ %p %lu:%lu %.*s>", req, req->id, req->parent_id,
+                   req_type->len, req_type->data);
+}
+
+int
+print_rsp(FILE *stream, struct msg *rsp)
+{
+    return fprintf(stream, "<RSP %p %lu:%lu>", rsp, rsp->id, rsp->parent_id);
+}
+
 void
 set_datastore_ops(void)
 {
@@ -185,13 +206,13 @@ msg_cant_handle_response(struct msg *req, struct msg *rsp)
 static struct msg *
 msg_from_rbe(struct rbnode *node)
 {
-    struct msg *msg;
+    struct msg *req;
     int offset;
 
     offset = offsetof(struct msg, tmo_rbe);
-    msg = (struct msg *)((char *)node - offset);
+    req = (struct msg *)((char *)node - offset);
 
-    return msg;
+    return req;
 }
 
 struct msg *
@@ -208,21 +229,21 @@ msg_tmo_min(void)
 }
 
 void
-msg_tmo_insert(struct msg *msg, struct conn *conn)
+msg_tmo_insert(struct msg *req, struct conn *conn)
 {
     struct rbnode *node;
     msec_t timeout;
 
-    //ASSERT(msg->request);
-    ASSERT(!msg->quit && msg->expect_datastore_reply);
+    //ASSERT(req->is_request);
+    ASSERT(!req->quit && req->expect_datastore_reply);
 
-    timeout = conn->dyn_mode? dnode_peer_timeout(msg, conn) : server_timeout(conn);
+    timeout = conn->dyn_mode? dnode_peer_timeout(req, conn) : server_timeout(conn);
     if (timeout <= 0) {
         return;
     }
     timeout = timeout * g_timeout_factor;
 
-    node = &msg->tmo_rbe;
+    node = &req->tmo_rbe;
     node->timeout = timeout;
     node->key = dn_msec_now() + timeout;
     node->data = conn;
@@ -230,17 +251,17 @@ msg_tmo_insert(struct msg *msg, struct conn *conn)
     rbtree_insert(&tmo_rbt, node);
 
     if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "insert msg %"PRIu64" into tmo rbt with expiry of "
-              "%d msec", msg->id, timeout);
+       log_debug(LOG_VERB, "insert req %"PRIu64" into tmo rbt with expiry of "
+              "%d msec", req->id, timeout);
     }
 }
 
 void
-msg_tmo_delete(struct msg *msg)
+msg_tmo_delete(struct msg *req)
 {
     struct rbnode *node;
 
-    node = &msg->tmo_rbe;
+    node = &req->tmo_rbe;
 
     /* already deleted */
 
@@ -251,7 +272,7 @@ msg_tmo_delete(struct msg *msg)
     rbtree_delete(&tmo_rbt, node);
 
     if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "delete msg %"PRIu64" from tmo rbt", msg->id);
+       log_debug(LOG_VERB, "delete req %"PRIu64" from tmo rbt", req->id);
     }
 }
 
@@ -259,7 +280,7 @@ msg_tmo_delete(struct msg *msg)
 static size_t alloc_msg_count = 0;
 
 static struct msg *
-_msg_get(struct conn *conn, const char *const caller)
+_msg_get(struct conn *conn, bool request, const char *const caller)
 {
     struct msg *msg;
 
@@ -296,6 +317,7 @@ _msg_get(struct conn *conn, const char *const caller)
 
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
+    msg->object_type = request ? OBJ_REQ : OBJ_RSP;
     msg->id = ++msg_id;
     msg->parent_id = 0;
     msg->peer = NULL;
@@ -337,10 +359,10 @@ done:
     msg->rlen = 0;
     msg->integer = 0;
 
-    msg->err = 0;
-    msg->error = 0;
-    msg->ferror = 0;
-    msg->request = 0;
+    msg->error_code = 0;
+    msg->is_error = 0;
+    msg->is_ferror = 0;
+    msg->is_request = 0;
     msg->quit = 0;
     msg->expect_datastore_reply = 1;
     msg->done = 0;
@@ -353,10 +375,10 @@ done:
 
     //dynomite
     msg->is_read = 1;
-    msg->dyn_state = 0;
+    msg->dyn_parse_state = 0;
     msg->dmsg = NULL;
     msg->msg_routing = ROUTING_NORMAL;
-    msg->dyn_error = 0;
+    msg->dyn_error_code = 0;
     msg->rsp_handler = msg_cant_handle_response;
     msg->consistency = DC_ONE;
     return msg;
@@ -377,13 +399,13 @@ msg_get(struct conn *conn, bool request, const char * const caller)
 {
     struct msg *msg;
 
-    msg = _msg_get(conn, caller);
+    msg = _msg_get(conn, request, caller);
     if (msg == NULL) {
         return NULL;
     }
 
     msg->owner = conn;
-    msg->request = request ? 1 : 0;
+    msg->is_request = request ? 1 : 0;
 
     if (g_data_store == DATA_REDIS) {
         if (request) {
@@ -420,7 +442,7 @@ msg_get(struct conn *conn, bool request, const char * const caller)
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "get msg %p id %"PRIu64" request %d owner sd %d",
-              msg, msg->id, msg->request, conn->sd);
+              msg, msg->id, msg->is_request, conn->sd);
     }
 
     return msg;
@@ -431,7 +453,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 {
     target->parent_id = src->id;
     target->owner = src->owner;
-    target->request = src->request;
+    target->is_request = src->is_request;
 
     target->parser = src->parser;
     target->expect_datastore_reply = src->expect_datastore_reply;
@@ -470,73 +492,73 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 struct msg *
 msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
 {
-    struct msg *msg;
+    struct msg *rsp;
     struct mbuf *mbuf;
     int n;
     char *errstr = err ? dn_strerror(err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source = dyn_error_source(dyn_err);
 
-    msg = _msg_get(conn, __FUNCTION__);
-    if (msg == NULL) {
+    rsp = _msg_get(conn, false, __FUNCTION__);
+    if (rsp == NULL) {
         return NULL;
     }
 
-    msg->state = 0;
-    msg->type = MSG_RSP_MC_SERVER_ERROR;
+    rsp->state = 0;
+    rsp->type = MSG_RSP_MC_SERVER_ERROR;
 
     mbuf = mbuf_get();
     if (mbuf == NULL) {
-        msg_put(msg);
+        msg_put(rsp);
         return NULL;
     }
-    mbuf_insert(&msg->mhdr, mbuf);
+    mbuf_insert(&rsp->mhdr, mbuf);
 
     n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s %s"CRLF, protstr, source, errstr);
     mbuf->last += n;
-    msg->mlen = (uint32_t)n;
+    rsp->mlen = (uint32_t)n;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" error '%s'",
-              msg, msg->id, msg->mlen, errstr);
+       log_debug(LOG_VVERB, "get rsp %p id %"PRIu64" len %"PRIu32" err %d error '%s'",
+                 rsp, rsp->id, rsp->mlen, err, errstr);
     }
 
-    return msg;
+    return rsp;
 }
 
 
 struct msg *
 msg_get_rsp_integer(struct conn *conn)
 {
-    struct msg *msg;
+    struct msg *rsp;
     struct mbuf *mbuf;
     int n;
 
-    msg = _msg_get(conn, __FUNCTION__);
-    if (msg == NULL) {
+    rsp = _msg_get(conn, false, __FUNCTION__);
+    if (rsp == NULL) {
         return NULL;
     }
 
-    msg->state = 0;
-    msg->type = MSG_RSP_REDIS_INTEGER;
+    rsp->state = 0;
+    rsp->type = MSG_RSP_REDIS_INTEGER;
 
     mbuf = mbuf_get();
     if (mbuf == NULL) {
-        msg_put(msg);
+        msg_put(rsp);
         return NULL;
     }
-    mbuf_insert(&msg->mhdr, mbuf);
+    mbuf_insert(&rsp->mhdr, mbuf);
 
     n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":0\r\n");
     mbuf->last += n;
-    msg->mlen = (uint32_t)n;
+    rsp->mlen = (uint32_t)n;
 
     if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "get msg %p id %"PRIu64" len %"PRIu32" ",
-              msg, msg->id, msg->mlen);
+       log_debug(LOG_VVERB, "get rsp %p id %"PRIu64" len %"PRIu32" ",
+              rsp, rsp->id, rsp->mlen);
     }
 
-    return msg;
+    return rsp;
 }
 
 static void
@@ -558,7 +580,7 @@ msg_put(struct msg *msg)
    	    return;
     }
 
-    if (msg->request && msg->awaiting_rsps != 0) {
+    if (msg->is_request && msg->awaiting_rsps != 0) {
         log_error("Not freeing req %d, awaiting_rsps = %u",
                   msg->id, msg->awaiting_rsps);
         return;
@@ -619,8 +641,8 @@ msg_dump(struct msg *msg)
     }
 
     loga("msg dump id %"PRIu64" request %d len %"PRIu32" type %d done %d "
-         "error %d (err %d)", msg->id, msg->request, msg->mlen, msg->type,
-         msg->done, msg->error, msg->err);
+         "error %d (err %d)", msg->id, msg->is_request, msg->mlen, msg->type,
+         msg->done, msg->is_error, msg->error_code);
 
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
         uint8_t *p, *q;
@@ -637,16 +659,16 @@ msg_dump(struct msg *msg)
 
 /**
  * Initialize the message queue.
- * @param[in] nci Dynomite instance.
+ * @param[in] alloc_msgs_max Dynomite instance.
  */
 void
-msg_init(struct instance *nci)
+msg_init(size_t msgs_max)
 {
     log_debug(LOG_DEBUG, "msg size %d", sizeof(struct msg));
     msg_id = 0;
     frag_id = 0;
     nfree_msgq = 0;
-    alloc_msgs_max = nci->alloc_msgs_max;
+    alloc_msgs_max = msgs_max;
     TAILQ_INIT(&free_msgq);
     rbtree_init(&tmo_rbt, &tmo_rbs);
 }
@@ -665,16 +687,47 @@ msg_deinit(void)
     ASSERT(nfree_msgq == 0);
 }
 
+struct string *
+msg_type_string(msg_type_t type)
+{
+    return &msg_type_strings[type];
+}
+
 bool
 msg_empty(struct msg *msg)
 {
-    return msg->mlen == 0 ? true : (msg->dyn_error == BAD_FORMAT? true : false);
+    return msg->mlen == 0 ? true : (msg->dyn_error_code == BAD_FORMAT? true : false);
+}
+
+uint8_t *
+msg_get_key(struct msg *req, const struct string *hash_tag, uint32_t *keylen)
+{
+    uint8_t *key = NULL;
+    *keylen = 0;
+    if (!string_empty(hash_tag)) {
+        uint8_t *tag_start, *tag_end;
+
+        tag_start = dn_strchr(req->key_start, req->key_end, hash_tag->data[0]);
+        if (tag_start != NULL) {
+            tag_end = dn_strchr(tag_start + 1, req->key_end, hash_tag->data[1]);
+            if (tag_end != NULL) {
+                key = tag_start + 1;
+                *keylen = (uint32_t)(tag_end - key);
+            }
+        }
+    }
+
+    if (*keylen == 0) {
+        key = req->key_start;
+        *keylen = (uint32_t)(req->key_end - req->key_start);
+    }
+    return key;
 }
 
 uint32_t
-msg_payload_crc32(struct msg *msg)
+msg_payload_crc32(struct msg *rsp)
 {
-    ASSERT(msg != NULL);
+    ASSERT(rsp != NULL);
     // take a continous buffer crc
     uint32_t crc = 0;
     struct mbuf *mbuf;
@@ -682,16 +735,16 @@ msg_payload_crc32(struct msg *msg)
        payload offset. which is somewhere in the mbufs. Skip the mbufs till we
        find the start of the payload. If there is no dyno header, we start from
        the beginning of the first mbuf */
-    bool start_found = msg->dmsg ? false : true;
+    bool start_found = rsp->dmsg ? false : true;
 
-    STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
+    STAILQ_FOREACH(mbuf, &rsp->mhdr, next) {
         uint8_t *start = mbuf->start;
         uint8_t *end = mbuf->last;
         if (!start_found) {
             // if payload start is within this mbuf
-            if ((mbuf->start <= msg->dmsg->payload) &&
-                (msg->dmsg->payload < mbuf->last)) {
-                start = msg->dmsg->payload;
+            if ((mbuf->start <= rsp->dmsg->payload) &&
+                (rsp->dmsg->payload < mbuf->last)) {
+                start = rsp->dmsg->payload;
                 start_found = true;
             } else {
                 // else skip this mbuf
@@ -731,7 +784,7 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_ENOMEM;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -757,7 +810,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
 
     ASSERT((conn->type == CONN_CLIENT) ||
            (conn->type == CONN_DNODE_PEER_CLIENT));
-    ASSERT(msg->request);
+    ASSERT(msg->is_request);
 
     nbuf = mbuf_split(&msg->mhdr, msg->pos, g_pre_splitcopy, msg);
     if (nbuf == NULL) {
@@ -770,7 +823,7 @@ msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
         return status;
     }
 
-    nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
+    nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
     if (nmsg == NULL) {
         mbuf_put(nbuf);
         return DN_ENOMEM;
@@ -929,8 +982,8 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     ssize_t n;
 
     int expected_fill =
-        ((msg->dyn_state == DYN_DONE || msg->dyn_state == DYN_POST_DONE) &&
-         msg->dmsg->bit_field == 1) ? msg->dmsg->plen : -1;  //used in encryption case only
+        ((msg->dyn_parse_state == DYN_DONE || msg->dyn_parse_state == DYN_POST_DONE) &&
+         msg->dmsg->flags & 0x1) ? msg->dmsg->plen : -1;  //used in encryption case only
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
     if (mbuf == NULL || mbuf_full(mbuf) ||
@@ -1012,7 +1065,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
             } else { //clean up the mess and recover it
                 mbuf_insert(&msg->mhdr, nbuf);
                 msg->pos = nbuf->last;
-                msg->dyn_error = BAD_FORMAT;
+                msg->dyn_error_code = BAD_FORMAT;
             }
         }
 
@@ -1074,7 +1127,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     struct array sendv;                  /* send iovec */
     size_t nsend, nsent;                 /* bytes to send; bytes sent */
     size_t limit;                        /* bytes to send limit */
-    ssize_t n;                           /* bytes sent by sendv */
+    ssize_t n = 0;                       /* bytes sent by sendv */
 
     if (log_loggable(LOG_VVERB)) {
        loga("About to dump out the content of msg");
@@ -1130,11 +1183,10 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
         }
     }
 
-    ASSERT(!TAILQ_EMPTY(&send_msgq) && nsend != 0);
-
     conn->smsg = NULL;
 
-    n = conn_sendv_data(conn, &sendv, nsend);
+    if (nsend != 0)
+        n = conn_sendv_data(conn, &sendv, nsend);
 
     nsent = n > 0 ? (size_t)n : 0;
 
@@ -1193,7 +1245,7 @@ msg_send(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg;
 
-    ASSERT(conn->send_active);
+    ASSERT_LOG(conn->send_active, "%M is not active", conn);
 
     conn->send_ready = 1;
     do {
@@ -1211,7 +1263,7 @@ msg_send(struct context *ctx, struct conn *conn)
         if (conn->omsg_count > MAX_CONN_QUEUE_SIZE) {
             conn->send_ready = 0;
             conn->err = ENOTRECOVERABLE;
-            loga("Setting ENOTRECOVERABLE happens here!");
+            log_error("%M Setting ENOTRECOVERABLE happens here!", conn);
         }
 
     } while (conn->send_ready);

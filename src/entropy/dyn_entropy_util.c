@@ -136,7 +136,7 @@ entropy_crypto_deinit()
  * Function: entropy_decrypt
  * --------------------
  *  Decrypt the input data using the key and the Initialization Vector (IV).
- *  Uses AES_256_CBC
+ *  Uses AES_128_CBC
  *
  *  returns: the length of the ciphertext if it has ended successfully,
  *  or the DN_ERROR status.
@@ -156,7 +156,7 @@ entropy_decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *pl
   if(!(ctx = EVP_CIPHER_CTX_new()))
 	  goto error;
 
-  /* Initialize the decryption operation with 256 bit AES */
+  /* Initialize the decryption operation with 128 bit AES */
   if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, theKey, theIv))
      goto error;
 

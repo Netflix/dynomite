@@ -1113,7 +1113,7 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 }
 
                 if (strncmp(reqline[1], "/state", 6) == 0) {
-                    log_debug(LOG_VERB, "Setting state - URL Parameters : %s", reqline[1]);
+                    log_debug(LOG_VERB, "Setting/Getting state - URL Parameters : %s", reqline[1]);
                     char* state = reqline[1] + 7;
                     log_debug(LOG_VERB, "cmd : %s", state);
                     if (strcmp(state, "standby") == 0) {
@@ -1127,6 +1127,9 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                         return;
                     } else if (strcmp(state, "resuming") == 0) {
                         st_cmd->cmd = CMD_RESUMING;
+                        return;
+                    } else if (strcmp(state, "get_state") == 0) {
+                        st_cmd->cmd = CMD_GET_STATE;
                         return;
                     }
                 }
@@ -1204,10 +1207,10 @@ stats_send_rsp(struct stats *st)
                         "/writes_only\n/loglevelup\n/logleveldown\n/historeset\n"\
                         "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum>\n"\
                         "/get_timeout_factor\n/set_timeout_factor/<1-10>\n/peer/<up|down|reset>\n"\
-                        "/state/<writes_only|normal|%s>\n\n", "resuming");
+                        "/state/<get_state|writes_only|normal|%s>\n\n", "resuming");
         return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_NORMAL) {
-        st->ctx->dyn_state = NORMAL;
+        core_set_local_state(st->ctx, NORMAL);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_CL_DESCRIBE) {
         if (stats_make_cl_desc_rsp(st) != DN_OK)
@@ -1215,14 +1218,18 @@ stats_send_rsp(struct stats *st)
         else
             return stats_http_rsp(sd, st->clus_desc_buf.data, st->clus_desc_buf.len);
     } else if (cmd == CMD_STANDBY) {
-        st->ctx->dyn_state = STANDBY;
+        core_set_local_state(st->ctx, STANDBY);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_WRITES_ONLY) {
-        st->ctx->dyn_state = WRITES_ONLY;
+        core_set_local_state(st->ctx, WRITES_ONLY);
         return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_RESUMING) {
-        st->ctx->dyn_state = RESUMING;
+        core_set_local_state(st->ctx, RESUMING);
         return stats_http_rsp(sd, ok.data, ok.len);
+    } else if (cmd == CMD_GET_STATE) {
+        char rsp[1024];
+        dn_sprintf(rsp, "State: %s\n", get_state(st->ctx->dyn_state));
+        return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_LOG_LEVEL_UP) {
         log_level_up();
         return stats_http_rsp(sd, ok.data, ok.len);
@@ -1395,11 +1402,15 @@ stats_stop_aggregator(struct stats *st)
 }
 
 struct stats *
-stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
+stats_create(uint16_t stats_port, struct string pname, int stats_interval,
              char *source, struct server_pool *sp, struct context *ctx)
 {
     rstatus_t status;
     struct stats *st;
+
+    struct string stats_ip;
+    get_host_from_pname(&stats_ip, &pname);
+
 
     st = dn_alloc(sizeof(*st));
     if (st == NULL) {
@@ -1408,7 +1419,10 @@ stats_create(uint16_t stats_port, char *stats_ip, int stats_interval,
 
     st->port = stats_port;
     st->interval = stats_interval;
-    string_set_raw(&st->addr, stats_ip);
+    string_init(&st->addr);
+    if (string_duplicate(&st->addr,&stats_ip) != DN_OK) {
+    	goto error;
+    }
 
     st->start_ts = (int64_t)time(NULL);
 

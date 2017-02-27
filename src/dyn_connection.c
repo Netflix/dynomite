@@ -29,6 +29,7 @@
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
+#include "event/dyn_event.h"
 
 #include "proto/dyn_proto.h"
 
@@ -173,6 +174,7 @@ _conn_get(void)
         memset(conn, 0, sizeof(*conn));
     }
 
+    conn->object_type = OBJ_CONN;
     conn->owner = NULL;
 
     conn->sd = -1;
@@ -219,7 +221,6 @@ _conn_get(void)
     conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
     conn->attempted_reconnect = 0;
-    conn->non_bytes_recv = 0;
     //conn->non_bytes_send = 0;
     conn_set_read_consistency(conn, g_read_consistency);
     conn_set_write_consistency(conn, g_write_consistency);
@@ -229,6 +230,32 @@ _conn_get(void)
     strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
 
     return conn;
+}
+
+int
+print_conn(FILE *stream, struct conn *conn)
+{
+    if ((conn->type == CONN_DNODE_PEER_PROXY) ||
+        (conn->type == CONN_PROXY)) {
+        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+    if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
+        (conn->type == CONN_CLIENT)) {
+        return fprintf(stream, "<%s %p %d from '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+    if ((conn->type == CONN_DNODE_PEER_SERVER) ||
+        (conn->type == CONN_SERVER)) {
+        return fprintf(stream, "<%s %p %d to '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+
+    return fprintf(stream, "<%s %p %d>",
+                   conn_get_type_string(conn), conn, conn->sd);
 }
 
 inline void
@@ -261,6 +288,62 @@ struct conn *
 test_conn_get(void)
 {
    return _conn_get();
+}
+
+static void
+add_to_ready_q(struct context *ctx, struct conn *conn)
+{
+    // This check is required to check if the connection is already
+    // on the ready queue
+    if (conn->ready_tqe.tqe_prev == NULL) {
+        struct server_pool *pool = &ctx->pool;
+        TAILQ_INSERT_TAIL(&pool->ready_conn_q, conn, ready_tqe);
+    }
+}
+
+static void
+remove_from_ready_q(struct context *ctx, struct conn *conn)
+{
+    // This check is required to check if the connection is already
+    // on the ready queue
+    if (conn->ready_tqe.tqe_prev != NULL) {
+        struct server_pool *pool = &ctx->pool;
+        TAILQ_REMOVE(&pool->ready_conn_q, conn, ready_tqe);
+    }
+}
+
+rstatus_t
+conn_event_del_conn(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    remove_from_ready_q(ctx, conn);
+    if (conn->sd != -1)
+        return event_del_conn(ctx->evb, conn);
+    return DN_OK;
+}
+
+rstatus_t
+conn_event_add_out(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    add_to_ready_q(ctx, conn);
+    return event_add_out(ctx->evb, conn);
+}
+
+rstatus_t
+conn_event_add_conn(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    add_to_ready_q(ctx, conn);
+    return event_add_conn(ctx->evb, conn);
+}
+
+rstatus_t
+conn_event_del_out(struct conn *conn)
+{
+    struct context *ctx = conn_to_ctx(conn);
+    remove_from_ready_q(ctx, conn);
+    return event_del_out(ctx->evb, conn);
 }
 
 struct conn *
@@ -384,7 +467,7 @@ conn_put(struct conn *conn)
     ASSERT(conn->sd < 0);
     ASSERT(conn->owner == NULL);
 
-    log_debug(LOG_VVERB, "put conn %p", conn);
+    log_debug(LOG_VVERB, "putting %M", conn);
 
     nfree_connq++;
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
@@ -490,7 +573,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = event_add_conn(ctx->evb, p);
+    status = conn_event_add_conn(p);
     if (status < 0) {
         log_error("event add conn p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -498,7 +581,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = event_del_out(ctx->evb, p);
+    status = conn_event_del_out(p);
     if (status < 0) {
         log_error("event del out p %d on addr '%.*s' failed: %s",
                   p->sd, p->pname.len, p->pname.data,
@@ -513,12 +596,16 @@ rstatus_t
 conn_connect(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-    if ((conn->type == CONN_DNODE_PEER_SERVER)  &&
-        (ctx->admin_opt > 0))
+
+    // Outgoing connection to another Dynomite node and admin mode is disabled
+    if ((conn->type == CONN_DNODE_PEER_SERVER) && (ctx->admin_opt > 0))
         return DN_OK;
 
+    // Only continue if the connection type is:
+    // 1. CONN_DNODE_PEER_SERVER: Outbound connection to another Dynomite node
+    // 2. CONN_SERVER: Outbound connection to backend datastore (Redis, ARDB)
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
-           (conn->type == CONN_SERVER));
+            (conn->type == CONN_SERVER));
 
     if (conn->sd > 0) {
         /* already connected on peer connection */
@@ -532,9 +619,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         status = DN_ERROR;
         goto error;
     }
-    log_debug(LOG_WARN, "connecting to '%.*s' on p %d", conn->pname.len,
-            conn->pname.data, conn->sd);
-
+    log_warn("%M connecting.....", conn);
 
     status = dn_set_nonblocking(conn->sd);
     if (status != DN_OK) {
@@ -550,7 +635,6 @@ conn_connect(struct context *ctx, struct conn *conn)
                 strerror(errno));
         // Continue since this is not catastrophic
     }
-    
 
     if (conn->pname.data[0] != '/') {
         status = dn_set_tcpnodelay(conn->sd);
@@ -561,7 +645,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         }
     }
 
-    status = event_add_conn(ctx->evb, conn);
+    status = conn_event_add_conn(conn);
     if (status != DN_OK) {
         log_error("event add conn s %d for '%.*s' failed: %s",
                 conn->sd, conn->pname.len, conn->pname.data,
@@ -587,12 +671,10 @@ conn_connect(struct context *ctx, struct conn *conn)
         goto error;
     }
 
-
     ASSERT(!conn->connecting);
     conn->connected = 1;
-    log_debug(LOG_WARN, "connected on s %d to '%.*s'", conn->sd,
+    log_debug(LOG_WARN, "%M connected to '%.*s'", conn,
             conn->pname.len, conn->pname.data);
-
 
     return DN_OK;
 
@@ -613,37 +695,35 @@ conn_recv_data(struct conn *conn, void *buf, size_t size)
     for (;;) {
         n = dn_read(conn->sd, buf, size);
 
-        log_debug(LOG_VERB, "recv on sd %d %zd of %zu", conn->sd, n, size);
+        log_debug(LOG_VERB, "%M recv %zd of %zu", conn, n, size);
 
         if (n > 0) {
             if (n < (ssize_t) size) {
                 conn->recv_ready = 0;
             }
             conn->recv_bytes += (size_t)n;
-            conn->non_bytes_recv = 0;
             return n;
         }
 
         if (n == 0) {
             conn->recv_ready = 0;
             conn->eof = 1;
-            conn->non_bytes_recv++;
-            log_debug(LOG_NOTICE, "recv on sd %d eof rb %zu sb %zu", conn->sd,
+            log_debug(LOG_NOTICE, "%M recv eof rb %zu sb %zu", conn,
                       conn->recv_bytes, conn->send_bytes);
             return n;
         }
 
         if (errno == EINTR) {
-            log_debug(LOG_VERB, "recv on sd %d not ready - eintr", conn->sd);
+            log_debug(LOG_VERB, "%M recv not ready - eintr", conn);
             continue;
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn->recv_ready = 0;
-            log_debug(LOG_VERB, "recv on sd %d not ready - eagain", conn->sd);
+            log_debug(LOG_VERB, "%M recv not ready - eagain", conn);
             return DN_EAGAIN;
         } else {
             conn->recv_ready = 0;
             conn->err = errno;
-            log_error("recv on sd %d failed: %s", conn->sd, strerror(errno));
+            log_error("%M recv failed: %s", conn, strerror(errno));
             return DN_ERROR;
         }
     }

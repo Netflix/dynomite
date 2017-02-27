@@ -27,7 +27,7 @@
 static uint64_t bucket_offsets[BUCKET_SIZE];
 
 
-rstatus_t histo_init(struct histogram *histo)
+rstatus_t histo_init(volatile struct histogram *histo)
 {
 	if (histo == NULL) {
 		return DN_ERROR;
@@ -61,7 +61,7 @@ rstatus_t histo_init(struct histogram *histo)
 }
 
 
-rstatus_t histo_reset(struct histogram *histo)
+rstatus_t histo_reset(volatile struct histogram *histo)
 {
 	if (histo == NULL) {
 		return DN_ERROR;
@@ -97,7 +97,7 @@ static uint64_t count(struct histogram *histo)
 	return sum;
 }
 
-void histo_add(struct histogram *histo, uint64_t val)
+void histo_add(volatile struct histogram *histo, uint64_t val)
 {
 	if (histo == NULL) {
 		return;
@@ -239,7 +239,7 @@ uint64_t histo_max(struct histogram *histo)
 }
 */
 
-void histo_compute(struct histogram *histo)
+void histo_compute(volatile struct histogram *histo)
 {
 	if (histo == NULL) {
 		return;

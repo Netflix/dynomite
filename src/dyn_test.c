@@ -16,47 +16,39 @@
 #include "dyn_core.h"
 #include "dyn_conf.h"
 #include "dyn_signal.h"
+#include "dyn_dnode_peer.h"
 
-#define TEST_CONF_PATH        "conf/dynomite.yml"
+#define TEST_CONF_PATH                 "conf/dynomite.yml"
 
-#define TEST_LOG_DEFAULT       LOG_PVERB
-#define TEST_LOG_PATH          NULL
-#define TEST_MBUF_SIZE         512
-#define TEST_ALLOCS_MSGS	   200000
+#define TEST_LOG_DEFAULT               LOG_PVERB
+#define TEST_LOG_PATH                  NULL
 
+#define TEST_MBUF_SIZE                 16384
+#define TEST_ALLOC_MSGS_MAX            300000
 
 static int show_help;
 static int test_conf;
+
 
 static char *data = "$2014$ 1 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo1\r\n$4\r\nbar1\r\n"
                     "$2014$ 2 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo2\r\n$413\r\nbar01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567892222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222\r\n"
                     "$2014$ 3 3 0 1 1 *1 d *0\r\n*3\r\n$3\r\nset\r\n$4\r\nfoo3\r\n$4\r\nbar3\r\n";
 
 static size_t position = 0;
-static size_t test_mbuf_chunk_size;
-
-static unsigned char aes_key[AES_KEYLEN];
-
 
 static struct option long_options[] = {
     { "help",           no_argument,        NULL,   'h' },
     { "version",        no_argument,        NULL,   'V' },
     { "test-conf",      no_argument,        NULL,   't' },
     { "describe-stats", no_argument,        NULL,   'D' },
-    { "gossip",         no_argument,        NULL,   'g' },
     { "verbose",        required_argument,  NULL,   'v' },
     { "output",         required_argument,  NULL,   'o' },
     { "conf-file",      required_argument,  NULL,   'c' },
-    { "stats-port",     required_argument,  NULL,   's' },
-    { "stats-interval", required_argument,  NULL,   'i' },
-    { "stats-addr",     required_argument,  NULL,   'a' },
     { "pid-file",       required_argument,  NULL,   'p' },
-    { "mbuf-size",      required_argument,  NULL,   'm' },
-    { "max_msgs",       required_argument,  NULL,   'M' },
     { NULL,             0,                  NULL,    0  }
 };
 
-static char short_options[] = "hVtDgv:o:c:s:i:a:p:m:M";
+static char short_options[] = "hVtDgv:o:c:s:i:a:p";
 
 
 static void
@@ -75,14 +67,10 @@ dn_show_usage(void)
         "  -v, --verbosity=N      : set logging level (default: %d, min: %d, max: %d)" CRLF
         "  -o, --output=S         : set logging file (default: %s)" CRLF
         "  -c, --conf-file=S      : set configuration file (default: %s)" CRLF
-        "  -m, --mbuf-size=N      : set size of mbuf chunk in bytes (default: %d bytes)" CRLF
-        "  -M, --max-msgs=N       : set max number of messages to allocate (default: %d)" CRLF
         "",
         TEST_LOG_DEFAULT, TEST_LOG_DEFAULT, TEST_LOG_DEFAULT,
         TEST_LOG_PATH != NULL ? TEST_LOG_PATH : "stderr",
-        TEST_CONF_PATH,
-        TEST_MBUF_SIZE,
-		TEST_ALLOCS_MSGS);
+        TEST_CONF_PATH);
 }
 
 
@@ -123,7 +111,6 @@ test_set_default_options(struct instance *nci)
 
     nci->hostname[DN_MAXHOSTNAMELEN - 1] = '\0';
 
-    nci->mbuf_chunk_size = TEST_MBUF_SIZE;
 }
 
 static rstatus_t
@@ -167,26 +154,6 @@ test_get_options(int argc, char **argv, struct instance *nci)
             nci->conf_filename = optarg;
             break;
 
-        case 'm':
-            value = dn_atoi(optarg, strlen(optarg));
-            if (value <= 0) {
-                log_stderr("test: option -m requires a non-zero number");
-                return DN_ERROR;
-            }
-
-            nci->mbuf_chunk_size = (size_t)value;
-            break;
-
-        case 'M':
-            value = dn_atoi(optarg, strlen(optarg));
-            if (value <= 0) {
-                log_stderr("test: option -M requires a non-zero number");
-                return DN_ERROR;
-            }
-
-            nci->alloc_msgs_max = (size_t)value;
-            break;
-
         case '?':
             switch (optopt) {
             case 'o':
@@ -196,8 +163,6 @@ test_get_options(int argc, char **argv, struct instance *nci)
                            optopt);
                 break;
 
-            case 'm':
-            case 'M':
             case 'v':
             case 's':
             case 'i':
@@ -261,12 +226,10 @@ init_peer(struct node *s)
     s->endpoint.addrlen = info->addrlen;
     s->endpoint.addr = (struct sockaddr *)&info->addr;
 
+    s->conn = NULL;
 
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
-
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     s->processed = 0;
@@ -338,7 +301,7 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
                 log_debug(LOG_VVERB, "Parsing MSG_PARSE_OK - more data but can't split!");
             }
 
-            nmsg = msg_get(msg->owner, msg->request, __FUNCTION__);
+            nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
             mbuf_insert(&nmsg->mhdr, nbuf);
             nmsg->pos = nbuf->pos;
 
@@ -397,88 +360,87 @@ rsa_test(void)
         msg = generate_aes_key();
 
         log_debug(LOG_VERB, "i = %d", i);
-        log_debug(LOG_VERB, "AES key           : %s \n", base64_encode(msg, AES_KEYLEN));
+        SCOPED_CHARPTR(encoded_aes_key) = base64_encode(msg, AES_KEYLEN);
+        log_debug(LOG_VERB, "AES key           : %s \n", encoded_aes_key);
 
 
         dyn_rsa_encrypt(msg, encrypted_buf);
 
         dyn_rsa_decrypt(encrypted_buf, decrypted_buf);
 
-        log_debug(LOG_VERB, "Decrypted message : %s \n", base64_encode(decrypted_buf, AES_KEYLEN));
+        SCOPED_CHARPTR(encoded_decrypted_buf) = base64_encode(decrypted_buf, AES_KEYLEN);
+        log_debug(LOG_VERB, "Decrypted message : %s \n", encoded_decrypted_buf);
     }
 
     return DN_OK;
 }
 
+static void gen_random(unsigned char *s, const int len)
+{
+    static const unsigned char possible_data[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz\r\n";
+    int i;
+    for (i = 0; i < len; ++i) {
+        s[i] = possible_data[rand() % (sizeof(possible_data) - 1)];
+    }
 
+    s[len] = 0;
+}
+
+#define MAX_MSG_LEN 512
 static rstatus_t
 aes_test(void)
 {
-    log_debug(LOG_VERB, "aesKey is %s\n",
-              base64_encode(aes_key, strlen((char*)aes_key)));
-
-    const char *msg0 = "01234567890123";
-    const char *msg1 = "0123456789012345678901234567890123456789012345";
-    const char *msg2 = "01234567890123456789012345678901234567890123456789012345678901";
-    const char *msg3 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567";
-    const char *msg4 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
-    const char *msg5 = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345601234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
-
-    const char *msgs[6];
-
-    msgs[0] = msg0;
-    msgs[1] = msg1;
-    msgs[2] = msg2;
-    msgs[3] = msg3;
-    msgs[4] = msg4;
-    msgs[5] = msg5;
-
-    unsigned char *enc_msg = NULL;
-    char *dec_msg          = NULL;
-    size_t enc_msg_len;
-    int dec_msg_len;
-
+    unsigned char msg[MAX_MSG_LEN+1];
     loga("=======================AES======================");
-    int i=0;
-    int count = 6;
-    for(;i<count;i++) {
-        const char *msg = msgs[i];
-        log_debug(LOG_VERB, "Message to AES encrypt: %s \n", msg);
+    unsigned char* aes_key = generate_aes_key();
+    SCOPED_CHARPTR(aes_key_print) = base64_encode(aes_key, strlen((char*)aes_key));
+    loga("aesKey is '%s'", aes_key_print);
 
-        size_t expected_output_len = 16*((strlen(msg)/16) + 1);
-        //loga("expected_output_len  = %lu", expected_output_len);
+    size_t i=0;
+    size_t count = 10000000;
+    loga("Running %lu encryption/decryption messages", count);
+    for(;i<count;i++) {
+        gen_random(msg, rand() % MAX_MSG_LEN);
+        unsigned int msg_len = strlen(msg) + 1; // Also encrypt the \0 at the end
+
         // Encrypt the message with AES
-        rstatus_t ret = DN_OK;
-        ret = aes_encrypt((const unsigned char*)msg, strlen(msg)+1, &enc_msg, aes_key);
+        unsigned char *enc_msg = NULL;
+        rstatus_t ret = aes_encrypt((const unsigned char*)msg, msg_len, &enc_msg,
+                                    aes_key);
         if (ret == DN_ERROR) {
-            log_debug(LOG_VERB, "AES encryption failed\n");
+            log_panic("msg:'%s'\nencryption failed aes_key '%s'\n",
+                      msg, aes_key_print);
             return ret;
         }
-        enc_msg_len = (size_t)ret;/* if success, aes_encrypt returns len */
+        size_t enc_msg_len = (size_t)ret;/* if success, aes_encrypt returns len */
 
-        loga("enc_msg_len length %lu: ", enc_msg_len);
+        size_t expected_output_len = 16*(msg_len/16 + 1);
         if (enc_msg_len != expected_output_len) {
+            log_panic("msg:'%s'\nexpected encrypted len: %lu encrypted len %lu\n\n",
+                      msg, expected_output_len, enc_msg_len);
             return DN_ERROR;
         }
-        // Print the encrypted message as a base64 string
-        char *b64_string = base64_encode((unsigned char*)enc_msg, enc_msg_len);
-        log_debug(LOG_VERB, "AES Encrypted message (base64): %s\n", b64_string);
 
         // Decrypt the message
-
+        char *dec_msg = NULL;
         ret = aes_decrypt((unsigned char*)enc_msg, enc_msg_len, (unsigned char**) &dec_msg, aes_key);
-        if(ret == DN_ERROR) {
-            log_debug(LOG_VERB, "AES decryption failed\n");
-            return ret;
-        }
-        dec_msg_len = ret; /* if success aes_decrypt returns len */
+        ASSERT_LOG(ret != DN_ERROR,"msg '%s'\nencrypted msg:'%.*s'\ndecryption failed aes_key %s",
+                   msg, enc_msg_len, enc_msg, aes_key_print);
 
-        log_debug(LOG_VERB, "%lu bytes decrypted\n", dec_msg_len);
-        log_debug(LOG_VERB, "AES Decrypted message: %s\n", dec_msg);
+        if (strcmp(msg, dec_msg) != 0) {
+            loga_hexdump(msg, strlen(msg), "Original Message:");
+            loga_hexdump(dec_msg, strlen(dec_msg), "Decrypted Message:");
+            log_panic("encryption/Decryption mismatch");
+        }
 
         free(enc_msg);
         free(dec_msg);
-        free(b64_string);
+        if ((i+1)%1000000 == 0) {
+            loga("Completed Running %lu messages", i+1);
+        }
     }
     return DN_OK;
 }
@@ -554,10 +516,45 @@ aes_msg_test2(struct node *server)
 */
 
 static void
+test_core_ctx_create(struct instance *nci)
+{
+    struct context *ctx;
+
+    srand((unsigned) time(NULL));
+
+    ctx = dn_alloc(sizeof(*ctx));
+    if (ctx == NULL) {
+        loga("Failed to create context!!!");
+    }
+    nci->ctx = ctx;
+    ctx->instance = nci;
+    ctx->cf = NULL;
+    ctx->stats = NULL;
+    ctx->evb = NULL;
+    ctx->dyn_state = INIT;
+}
+
+/**
+ * This is very primitive
+ */
+static void
+test_server_pool(struct instance *nci)
+{
+    struct context *ctx = nci->ctx;
+    struct server_pool *sp = &ctx->pool;
+	sp->mbuf_size = TEST_MBUF_SIZE;
+	sp->alloc_msgs_max = TEST_ALLOC_MSGS_MAX;
+
+    mbuf_init(sp->mbuf_size);
+    msg_init(sp->alloc_msgs_max);
+}
+
+static void
 init_test(int argc, char **argv)
 {
     rstatus_t status;
     struct instance nci;
+
 
     test_set_default_options(&nci);
 
@@ -569,11 +566,12 @@ init_test(int argc, char **argv)
 
     test_pre_run(&nci);
 
-    test_mbuf_chunk_size = nci.mbuf_chunk_size;
+    test_core_ctx_create(&nci);
     position = 0;
-    mbuf_init(&nci);
-    msg_init(&nci);
     conn_init();
+
+    test_server_pool(&nci);
+
 
     crypto_init_for_test();
 }
@@ -584,7 +582,8 @@ main(int argc, char **argv)
     //rstatus_t status;
     init_test(argc, argv);
 
-    struct node *peer = malloc(sizeof(struct datastore));
+    struct node *peer = malloc(sizeof(struct node));
+    memset(peer, 0, sizeof(struct node));
     init_peer(peer);
 
     struct conn *conn = conn_get_peer(peer, false);

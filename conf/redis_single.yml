@@ -1,8 +1,9 @@
 dyn_o_mite:
-  dyn_listen: 127.0.0.1:8101
+  dyn_listen: 0.0.0.0:8101
   data_store: 0
-  listen: 127.0.0.1:8102
-  dyn_seed_provider: simple_provider 
+  listen: 0.0.0.0:8102
+  dyn_seed_provider: simple_provider
   servers:
   - 127.0.0.1:22122:1
   tokens: 437425602
+  stats_listen: 0.0.0.0:22222

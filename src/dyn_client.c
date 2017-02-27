@@ -49,7 +49,6 @@
 #include "dyn_dict_msg_id.h"
 
 static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
 
 
@@ -78,7 +77,7 @@ client_ref(struct conn *conn, void *owner)
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->waiting_to_unref = 0;
 
-    log_debug(LOG_VVERB, "ref conn %p owner %p into pool '%.*s'", conn, pool,
+    log_debug(LOG_VVERB, "%M ref owner %p into pool '%.*s'", conn, pool,
               pool->name.len, pool->name.data);
 }
 
@@ -88,17 +87,16 @@ client_unref_internal_try_put(struct conn *conn)
     ASSERT(conn->waiting_to_unref);
     unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
     if (msgs != 0) {
-        log_warn("conn %p Waiting for %lu outstanding messages", conn, msgs);
+        log_warn("%M Waiting for %lu outstanding messages", conn, msgs);
         return;
     }
-    struct server_pool *pool;
     ASSERT(conn->owner != NULL);
-    pool = conn->owner;
+    conn_event_del_conn(conn);
+    log_warn("%M unref owner %M", conn, conn->owner);
     conn->owner = NULL;
     dictRelease(conn->outstanding_msgs_dict);
+    conn->outstanding_msgs_dict = NULL;
     conn->waiting_to_unref = 0;
-    log_warn("unref conn %p owner %p from pool '%.*s'", conn,
-             pool, pool->name.len, pool->name.data);
     conn_put(conn);
 }
 
@@ -131,21 +129,21 @@ client_active(struct conn *conn)
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "%M is active", conn);
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "%M is active", conn);
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "c %d is active", conn->sd);
+        log_debug(LOG_VVERB, "%M is active", conn);
         return true;
     }
 
-    log_debug(LOG_VVERB, "c %d is inactive", conn->sd);
+    log_debug(LOG_VVERB, "%M is inactive", conn);
 
     return false;
 }
@@ -181,7 +179,7 @@ static void
 client_close(struct context *ctx, struct conn *conn)
 {
     rstatus_t status;
-    struct msg *msg, *nmsg; /* current and next message */
+    struct msg *req, *nreq; /* current and next message */
 
     ASSERT(conn->type == CONN_CLIENT);
 
@@ -192,44 +190,40 @@ client_close(struct context *ctx, struct conn *conn)
         return;
     }
 
-    msg = conn->rmsg;
-    if (msg != NULL) {
+    req = conn->rmsg;
+    if (req != NULL) {
         conn->rmsg = NULL;
 
-        ASSERT(msg->peer == NULL);
-        ASSERT(msg->request && !msg->done);
+        ASSERT(req->selected_rsp == NULL);
+        ASSERT(req->is_request && !req->done);
 
-        log_debug(LOG_INFO, "close c %d discarding pending req %"PRIu64" len "
-                  "%"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
-                  msg->type);
+        log_info("%M close, discarding pending %M len %"PRIu32,
+                 conn, req, req->mlen);
 
-        req_put(msg);
+        req_put(req);
     }
 
     ASSERT(conn->smsg == NULL);
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
-    for (msg = TAILQ_FIRST(&conn->omsg_q); msg != NULL; msg = nmsg) {
-        nmsg = TAILQ_NEXT(msg, c_tqe);
+    for (req = TAILQ_FIRST(&conn->omsg_q); req != NULL; req = nreq) {
+        nreq = TAILQ_NEXT(req, c_tqe);
 
         /* dequeue the message (request) from client outq */
-        conn_dequeue_outq(ctx, conn, msg);
+        conn_dequeue_outq(ctx, conn, req);
 
-        if (msg->done) {
-            log_debug(LOG_INFO, "close c %d discarding %s req %"PRIu64" len "
-                      "%"PRIu32" type %d", conn->sd,
-                      msg->error ? "error": "completed", msg->id, msg->mlen,
-                      msg->type);
-            req_put(msg);
+        if (req->done || req->selected_rsp) {
+            log_info("%M close, discarding %s %M len %"PRIu32, conn,
+                      req->is_error ? "error": "completed", req, req->mlen);
+            req_put(req);
         } else {
-            msg->swallow = 1;
+            req->swallow = 1;
 
-            ASSERT(msg->request);
-            ASSERT(msg->peer == NULL);
+            ASSERT(req->is_request);
+            ASSERT(req->selected_rsp == NULL);
 
-            log_debug(LOG_INFO, "close c %d schedule swallow of req %"PRIu64" "
-                      "len %"PRIu32" type %d", conn->sd, msg->id, msg->mlen,
-                      msg->type);
+            log_info("%M close, schedule swallow of %M len %"PRIu32, conn,
+                     req, req->mlen);
         }
 
         stats_pool_incr(ctx, client_dropped_requests);
@@ -238,7 +232,7 @@ client_close(struct context *ctx, struct conn *conn)
 
     status = close(conn->sd);
     if (status < 0) {
-        log_error("close c %d failed, ignored: %s", conn->sd, strerror(errno));
+        log_error("close %M failed, ignored: %s", conn, strerror(errno));
     }
     conn->sd = -1;
     client_unref(conn);
@@ -252,9 +246,6 @@ client_close(struct context *ctx, struct conn *conn)
 static rstatus_t
 client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 {
-    ASSERT_LOG(!rsp->peer, "response %lu:%lu has peer set",
-               rsp->id, rsp->parent_id);
-
     // now the handler owns the response.
     ASSERT(conn->type == CONN_CLIENT);
     // Fetch the original request
@@ -272,7 +263,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             return DN_OK;
         // all responses received
         dictDelete(conn->outstanding_msgs_dict, &reqid);
-        log_info("Putting req %d", req->id);
+        log_info("%M Putting %M", conn, req);
         req_put(req);
         client_unref_internal_try_put(conn);
         return DN_OK;
@@ -284,15 +275,14 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             // is closed and we are just waiting to drain off the messages.
             if (req->rsp_sent) {
                 dictDelete(conn->outstanding_msgs_dict, &reqid);
-                log_info("Putting req %d", req->id);
+                log_info("%M Putting %M", conn, req);
                 req_put(req);
             }
         }
     } else if (status == DN_OK) {
         g_pre_coalesce(req->selected_rsp);
         if (req_done(conn, req)) {
-            struct context *ctx = conn_to_ctx(conn);
-            status = event_add_out(ctx->evb, conn);
+            status = conn_event_add_out(conn);
             if (status != DN_OK) {
                 conn->err = errno;
             }
@@ -304,13 +294,13 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
 struct msg *
 req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 {
-    struct msg *msg;
+    struct msg *req;
 
     ASSERT((conn->type == CONN_DNODE_PEER_CLIENT) ||
            (conn->type = CONN_CLIENT));
 
     if (conn->eof) {
-        msg = conn->rmsg;
+        req = conn->rmsg;
 
         //if (conn->dyn_mode) {
         //    if (conn->non_bytes_recv > MAX_CONN_ALLOWABLE_NON_RECV) {
@@ -318,20 +308,20 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
         //        return NULL;
         //    }
         //    conn->eof = 0;
-        //    return msg;
+        //    return req;
         //}
 
         /* client sent eof before sending the entire request */
-        if (msg != NULL) {
+        if (req != NULL) {
             conn->rmsg = NULL;
 
-            ASSERT(msg->peer == NULL);
-            ASSERT(msg->request && !msg->done);
+            ASSERT(req->selected_rsp == NULL);
+            ASSERT(req->is_request && !req->done);
 
-            log_error("eof c %d discarding incomplete req %"PRIu64" len "
-                      "%"PRIu32"", conn->sd, msg->id, msg->mlen);
+            log_error("%M EOF discarding incomplete %M %"PRIu32"", conn, req,
+                      req->mlen);
 
-            req_put(msg);
+            req_put(req);
         }
 
         /*
@@ -343,40 +333,39 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          */
         if (!conn_active(conn)) {
             conn->done = 1;
-            log_debug(LOG_INFO, "c %d is done", conn->sd);
+            log_debug(LOG_INFO, "%M DONE", conn);
         }
 
         return NULL;
     }
 
-    msg = conn->rmsg;
-    if (msg != NULL) {
-        ASSERT(msg->request);
-        return msg;
+    req = conn->rmsg;
+    if (req != NULL) {
+        ASSERT(req->is_request);
+        return req;
     }
 
     if (!alloc) {
         return NULL;
     }
 
-    msg = req_get(conn);
-    if (msg != NULL) {
-        conn->rmsg = msg;
+    req = req_get(conn);
+    if (req != NULL) {
+        conn->rmsg = req;
     }
 
-    return msg;
+    return req;
 }
 
 static bool
-req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
+req_filter(struct context *ctx, struct conn *conn, struct msg *req)
 {
     ASSERT(conn->type == CONN_CLIENT);
 
-    if (msg_empty(msg)) {
+    if (msg_empty(req)) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "filter empty req %"PRIu64" from c %d", msg->id,
-                  conn->sd);
-        req_put(msg);
+        log_debug(LOG_VERB, "%M filter empty %M", conn, req);
+        req_put(req);
         return true;
     }
 
@@ -384,13 +373,12 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
      * Handle "quit\r\n", which is the protocol way of doing a
      * passive close
      */
-    if (msg->quit) {
+    if (req->quit) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_INFO, "filter quit req %"PRIu64" from c %d", msg->id,
-                  conn->sd);
+        log_debug(LOG_VERB, "%M filter quit %M", conn, req);
         conn->eof = 1;
         conn->recv_ready = 0;
-        req_put(msg);
+        req_put(req);
         return true;
     }
 
@@ -402,30 +390,27 @@ send_rsp_integer(struct context *ctx, struct conn *c_conn, struct msg *req)
 {
     //do nothing
     struct msg *rsp = msg_get_rsp_integer(c_conn);
-    if (req->expect_datastore_reply)
-        conn_enqueue_outq(ctx, c_conn, req);
-    req->peer = rsp;
+    req->selected_rsp = rsp;
     rsp->peer = req;
     req->selected_rsp = rsp;
 
     req->done = 1;
     //req->pre_coalesce(req);
-    rstatus_t status = event_add_out(ctx->evb, c_conn);
+    rstatus_t status = conn_event_add_out(c_conn);
     IGNORE_RET_VAL(status);
 }
 
-static void
-req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
-                  err_t err)
+/* Expects req to be in the conn's outq already */
+void
+req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
+                  err_t error_code, err_t dyn_error_code)
 {
-    if (log_loggable(LOG_INFO)) {
-       log_debug(LOG_INFO, "forward req %"PRIu64" len %"PRIu32" type %d from "
-                 "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
-                 strerror(err));
-    }
+    log_info("%M FORWARD FAILEED %M len %"PRIu32": %s", conn, req, req->mlen,
+             strerror(error_code));
 
-    if (!msg->expect_datastore_reply) {
-        req_put(msg);
+    // Nothing to do if request is not expecting a reply.
+    // The higher layer will take care of freeing the request
+    if (!req->expect_datastore_reply) {
         return;
     }
 
@@ -433,19 +418,26 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg,
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
     struct msg *rsp = msg_get(conn, false, __FUNCTION__);
-    rsp->peer = msg;
-    rsp->error = 1;
-    rsp->err = err;
+    rsp->type = MSG_RSP_REDIS_ERROR;
+    rsp->peer = req;
+    rsp->is_error = 1;
+    rsp->error_code = error_code;
+    rsp->dyn_error_code = dyn_error_code;
+    //TODO: Check if this is required in response
+    rsp->dmsg = dmsg_get();
+    rsp->dmsg->id =  req->id;
 
-    rstatus_t status = conn_handle_response(conn, msg->id, rsp);
+    rstatus_t status =
+        conn_handle_response(conn, req->parent_id ? req->parent_id : req->id,
+                             rsp);
     IGNORE_RET_VAL(status);
 }
 
 static void
-req_redis_stats(struct context *ctx, struct msg *msg)
+req_redis_stats(struct context *ctx, struct msg *req)
 {
 
-    switch (msg->type) {
+    switch (req->type) {
 
     case MSG_REQ_REDIS_GET:
          stats_server_incr(ctx, redis_req_get);
@@ -533,271 +525,244 @@ req_redis_stats(struct context *ctx, struct msg *msg)
 }
 
 static void
-req_forward_stats(struct context *ctx, struct msg *msg)
+req_forward_stats(struct context *ctx, struct msg *req)
 {
-    ASSERT(msg->request);
+    ASSERT(req->is_request);
 
-    if (msg->is_read) {
+    if (req->is_read) {
        stats_server_incr(ctx, read_requests);
-       stats_server_incr_by(ctx, read_request_bytes, msg->mlen);
+       stats_server_incr_by(ctx, read_request_bytes, req->mlen);
     } else {
        stats_server_incr(ctx, write_requests);
-       stats_server_incr_by(ctx, write_request_bytes, msg->mlen);
+       stats_server_incr_by(ctx, write_request_bytes, req->mlen);
     }
 }
 
-void
-local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
-                  uint8_t *key, uint32_t keylen)
+rstatus_t
+local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
+                  uint8_t *key, uint32_t keylen, dyn_error_t *dyn_error_code)
 {
     rstatus_t status;
-    struct conn *s_conn;
-
-    if (log_loggable(LOG_VVERB)) {
-       loga("local_req_forward entering ............");
-    }
+    struct conn * s_conn;
 
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
-
-    /* enqueue message (request) into client outq, if response is expected */
-    if (msg->expect_datastore_reply) {
-        conn_enqueue_outq(ctx, c_conn, msg);
-    }
 
     s_conn = get_datastore_conn(ctx, c_conn->owner);
     log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
-        req_forward_error(ctx, c_conn, msg, errno);
-        return;
+        *dyn_error_code = STORAGE_CONNECTION_REFUSE;
+        return errno;
     }
     ASSERT(s_conn->type == CONN_SERVER);
 
-    if (log_loggable(LOG_DEBUG)) {
-       log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to storage conn '%s'",
-                    dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(s_conn->sd));
-    }
+    log_debug(LOG_DEBUG, "%M FORWARD %M to storage conn %M", c_conn, req, s_conn);
 
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */
         if (TAILQ_EMPTY(&s_conn->imsg_q)) {
-            status = event_add_out(ctx->evb, s_conn);
+            status = conn_event_add_out(s_conn);
 
             if (status != DN_OK) {
-                req_forward_error(ctx, c_conn, msg, errno);
+                *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
                 s_conn->err = errno;
-                return;
+                return DN_ERROR;
             }
         }
     } else if (ctx->dyn_state == STANDBY) {  //no reads/writes from peers/clients
         log_debug(LOG_INFO, "Node is in STANDBY state. Drop write/read requests");
-        req_forward_error(ctx, c_conn, msg, errno);
-        return;
-    } else if (ctx->dyn_state == WRITES_ONLY && msg->is_read) {
+        *dyn_error_code = DYNOMITE_INVALID_STATE;
+        return DN_ERROR;
+    } else if (ctx->dyn_state == WRITES_ONLY && req->is_read) {
         //no reads from peers/clients but allow writes from peers/clients
         log_debug(LOG_INFO, "Node is in WRITES_ONLY state. Drop read requests");
-        req_forward_error(ctx, c_conn, msg, errno);
-        return;
+        *dyn_error_code = DYNOMITE_INVALID_STATE;
+        return DN_ERROR;
     } else if (ctx->dyn_state == RESUMING) {
         log_debug(LOG_INFO, "Node is in RESUMING state. Still drop read requests and flush out all the queued writes");
-        if (msg->is_read) {
-            req_forward_error(ctx, c_conn, msg, errno);
-            return;
+        if (req->is_read) {
+            *dyn_error_code = DYNOMITE_INVALID_STATE;
+            return DN_ERROR;
         }
 
-        status = event_add_out(ctx->evb, s_conn);
+        status = conn_event_add_out(s_conn);
 
         if (status != DN_OK) {
-            req_forward_error(ctx, c_conn, msg, errno);
+            *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
             s_conn->err = errno;
-            return;
+            return DN_ERROR;
         }
     }
 
-    conn_enqueue_inq(ctx, s_conn, msg);
-    req_forward_stats(ctx, msg);
+    conn_enqueue_inq(ctx, s_conn, req);
+    req_forward_stats(ctx, req);
     if(g_data_store == DATA_REDIS){
-        req_redis_stats(ctx, msg);
+        req_redis_stats(ctx, req);
     }
 
 
-    if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "local forward from c %d to s %d req %"PRIu64" len %"PRIu32
-                " type %d with key '%.*s'", c_conn->sd, s_conn->sd, msg->id,
-                msg->mlen, msg->type, keylen, key);
-    }
+    log_debug(LOG_VERB, "%M local forward %M to %M len %"PRIu32" key '%.*s'",
+              c_conn, req, s_conn, req->mlen, keylen, key);
+    *dyn_error_code = 0;
+    return DN_OK;
 }
 
 
-static void
-admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg,
-                        struct rack *rack, uint8_t *key, uint32_t keylen)
+static rstatus_t
+admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
+                        struct rack *rack, uint8_t *key, uint32_t keylen,
+                        dyn_error_t *dyn_error_code)
 {
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key, keylen, msg->msg_routing);
+    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key, keylen, req->msg_routing);
     if (!peer->is_local) {
-        send_rsp_integer(ctx, c_conn, msg);
-        return;
+        *dyn_error_code = DYNOMITE_INVALID_ADMIN_REQ;
+        return DN_ERROR;
     }
 
-    struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
-    if (p_conn == NULL) {
-        c_conn->err = EHOSTDOWN;
-        req_forward_error(ctx, c_conn, msg, c_conn->err);
-        return;
-    }
-
-    log_debug(LOG_NOTICE, "Need to delete [%.*s] ", keylen, key);
-    local_req_forward(ctx, c_conn, msg, key, keylen);
+    log_debug(LOG_NOTICE, "%M Need to delete [%.*s] ", c_conn, keylen, key);
+    return local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
 }
 
-void
-remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg, 
-                   struct rack *rack, uint8_t *key, uint32_t keylen)
+/* On Success, the request is placed in the other connection's inq. Otherwise
+ * it is the caller's responsibility to take care of freeing it.
+ */
+rstatus_t
+remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req, 
+                   struct rack *rack, uint8_t *key, uint32_t keylen,
+                   dyn_error_t *dyn_error_code)
 {
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     struct node * peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
-                                                keylen, msg->msg_routing);
+                                                keylen, req->msg_routing);
     if (peer->is_local) {
-        log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d is local", c_conn,
-                  msg->id, msg->parent_id);
-        local_req_forward(ctx, c_conn, msg, key, keylen);
-        return;
+        return local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
     }
 
-    /* enqueue message (request) into client outq, if response is expected */
-    if (msg->expect_datastore_reply  && !msg->swallow) {
-        conn_enqueue_outq(ctx, c_conn, msg);
+    if (peer->state == DOWN) {
+        *dyn_error_code = PEER_HOST_DOWN;
+        return DN_ERROR;
     }
+
     // now get a peer connection
     struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
-    if ((p_conn == NULL) || (p_conn->connecting)) {
-        if (p_conn) {
-            usec_t now = dn_usec_now();
-            static usec_t next_log = 0; // Log every 1 sec
-            if (now > next_log) {
-                log_warn("still connecting to peer '%.*s'......",
-                         peer->endpoint.pname.len, peer->endpoint.pname.data);
-                next_log = now + 1000 * 1000;
-            }
-        }
-        // No response for DC_ONE & swallow
-        if ((msg->consistency == DC_ONE) && (msg->swallow)) {
-            msg_put(msg);
-            return;
-        }
-        // No response for remote dc
-        struct server_pool *pool = c_conn->owner;
-        bool same_dc = is_same_dc(pool, peer)? 1 : 0;
-        if (!same_dc) {
-            msg_put(msg);
-            return;
-        }
-        // All other cases return a response
-        struct msg *rsp = msg_get(c_conn, false, __FUNCTION__);
-        msg->done = 1;
-        rsp->error = msg->error = 1;
-        rsp->err = msg->err = (p_conn ? PEER_HOST_NOT_CONNECTED : PEER_HOST_DOWN);
-        rsp->dyn_error = msg->dyn_error = (p_conn ? PEER_HOST_NOT_CONNECTED:
-                                                    PEER_HOST_DOWN);
-        rsp->dmsg = dmsg_get();
-        rsp->peer = msg;
-        rsp->dmsg->id =  msg->id;
-        log_info("%lu:%lu <-> %lu:%lu Short circuit....", msg->id, msg->parent_id, rsp->id, rsp->parent_id);
-        conn_handle_response(c_conn, msg->parent_id ? msg->parent_id : msg->id,
-                             rsp);
-        if (msg->swallow)
-            msg_put(msg);
-        return;
+    if (!p_conn) {
+        // No active connection. return error
+        *dyn_error_code = PEER_HOST_NOT_CONNECTED;
+        return DN_ERROR;
     }
 
     log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
-            msg->id, msg->parent_id, p_conn);
-    dnode_peer_req_forward(ctx, c_conn, p_conn, msg, rack, key, keylen);
+            req->id, req->parent_id, p_conn);
+    return dnode_peer_req_forward(ctx, c_conn, p_conn, req, rack, key, keylen, dyn_error_code);
 }
 
-static void
+void
 req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
-                            struct msg *msg, struct mbuf *orig_mbuf,
+                            struct msg *req, struct mbuf *orig_mbuf,
                             uint8_t *key, uint32_t keylen, struct datacenter *dc)
 {
-    //log_debug(LOG_DEBUG, "dc name  '%.*s'",
-    //            dc->name->len, dc->name->data);
     uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
     uint8_t rack_index;
-    msg->rsp_handler = msg_get_rsp_handler(msg);
-    init_response_mgr(&msg->rspmgr, msg, msg->is_read, rack_cnt, c_conn);
-    log_info("msg %d:%d same DC racks:%d expect replies %d",
-             msg->id, msg->parent_id, rack_cnt, msg->rspmgr.max_responses);
+    init_response_mgr(&req->rspmgr, req, req->is_read, rack_cnt, c_conn);
+    log_info("%M %M same DC racks:%d expect replies %d", c_conn, req,
+             rack_cnt, req->rspmgr.max_responses);
     for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+
         struct rack *rack = array_get(&dc->racks, rack_index);
-        //log_debug(LOG_DEBUG, "rack name '%.*s'",
-        //            rack->name->len, rack->name->data);
-        struct msg *rack_msg;
-        // clone message even for local node
         struct server_pool *pool = c_conn->owner;
+        dyn_error_t dyn_error_code = 0;
+        rstatus_t s = DN_OK;
+
         if (string_compare(rack->name, &pool->rack) == 0 ) {
-            rack_msg = msg;
+
+            // Local Rack
+            s = remote_req_forward(ctx, c_conn, req, rack, key,
+                                   keylen, &dyn_error_code);
+            if (s != DN_OK) {
+                req_forward_error(ctx, c_conn, req, s, dyn_error_code);
+            }
+
         } else {
-            rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
+            // Remote Rack
+            struct msg *rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
             if (rack_msg == NULL) {
-                log_debug(LOG_VERB, "whelp, looks like yer screwed "
-                        "now, buddy. no inter-rack messages for "
-                        "you!");
+                log_error("whelp, looks like yer screwed "
+                          "now, buddy. no inter-rack messages for you!");
+                if (req->consistency != DC_ONE) {
+                    // expecting a reply to form a quorum
+                    req_forward_error(ctx, c_conn, req, DN_ENOMEM, DYNOMITE_UNKNOWN_ERROR);
+                }
                 continue;
             }
 
-            msg_clone(msg, orig_mbuf, rack_msg);
-            log_info("msg (%d:%d) clone to rack msg (%d:%d)",
-                     msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
+            msg_clone(req, orig_mbuf, rack_msg);
             rack_msg->swallow = true;
-        }
 
-        if (log_loggable(LOG_DEBUG)) {
-            log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-                    dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+            log_debug(LOG_DEBUG, "%M forwarding cloned %M to same dc rack '%.*s'",
+                      c_conn, rack_msg, rack->name->len, rack->name->data);
+
+            s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen, &dyn_error_code);
+            if (s != DN_OK) {
+                if (req->consistency != DC_ONE) {
+                    // expecting a reply to form a quorum
+                    req_forward_error(ctx, c_conn, rack_msg, s, dyn_error_code);
+                }
+                req_put(rack_msg);
+                continue;
+            }
         }
-        log_debug(LOG_VERB, "c_conn: %p forwarding (%d:%d)",
-                c_conn, rack_msg->id, rack_msg->parent_id);
-        remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
     }
 }
 
 static bool
-request_send_to_all_dcs(struct msg *msg)
+request_send_to_all_dcs(struct msg *req)
 {
-    if (!msg->is_read)
-        return true;
-    return false;
-}
-
-static bool
-request_send_to_all_local_racks(struct msg *msg)
-{
-    if (!msg->is_read)
-        return true;
-
-    /* There is a routing override set by the parser on this message. Do not
-     * propagate it to other racks irrespective of the consistency setting */
-    if (msg->msg_routing != ROUTING_NORMAL)
+    // There is a routing override
+    if (req->msg_routing != ROUTING_NORMAL)
         return false;
 
-    if ((msg->consistency == DC_QUORUM) ||
-        (msg->consistency == DC_SAFE_QUORUM))
+    // Reads are not propagated
+    if (req->is_read)
+        return false;
+
+    return true;
+}
+
+/**
+ * Determine if a request should be forwarded to all replicas within the local
+ * DC.
+ * @param[in] req Message.
+ * @return bool True if message should be forwarded to all local replicas, else false
+ */
+static bool
+request_send_to_all_local_racks(struct msg *req)
+{
+    /* There is a routing override set by the parser on this message. Do not
+     * propagate it to other racks irrespective of the consistency setting */
+    if (req->msg_routing != ROUTING_NORMAL)
+        return false;
+
+    // A write should go to all racks
+    if (!req->is_read)
+        return true;
+
+    if ((req->consistency == DC_QUORUM) ||
+        (req->consistency == DC_SAFE_QUORUM))
         return true;
     return false;
 }
 
 static void
-req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
+req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
                       struct mbuf *orig_mbuf, uint8_t *key, uint32_t keylen,
                       struct datacenter *dc)
 {
-    uint32_t rack_cnt = array_n(&dc->racks);
+    const uint32_t rack_cnt = array_n(&dc->racks);
     if (rack_cnt == 0)
         return;
 
@@ -805,112 +770,140 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
     if (rack == NULL)
         rack = array_get(&dc->racks, 0);
 
-    struct msg *rack_msg = msg_get(c_conn, msg->request, __FUNCTION__);
+    struct msg *rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
     if (rack_msg == NULL) {
         log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
-        msg_put(rack_msg);
         return;
     }
 
-    msg_clone(msg, orig_mbuf, rack_msg);
-    log_info("msg (%d:%d) clone to remote rack msg (%d:%d)",
-            msg->id, msg->parent_id, rack_msg->id, rack_msg->parent_id);
+    msg_clone(req, orig_mbuf, rack_msg);
+    log_info("%M %M clone to remote dc %M", c_conn, req, rack_msg);
     rack_msg->swallow = true;
 
-    if (log_loggable(LOG_DEBUG)) {
-        log_debug(LOG_DEBUG, "forwarding request to conn '%s' on rack '%.*s'",
-                dn_unresolve_peer_desc(c_conn->sd), rack->name->len, rack->name->data);
+    log_debug(LOG_DEBUG, "%M forwarding %M on remote dc rack '%.*s'",
+              c_conn, rack_msg, rack->name->len, rack->name->data);
+
+    dyn_error_t dyn_error_code = 0;
+    rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
+                                     &dyn_error_code);
+    if (s == DN_OK) {
+        return;
     }
-    remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen);
+    req_put(rack_msg);
+    // Start over with another rack.
+    uint8_t rack_index;
+    for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+        rack = array_get(&dc->racks, rack_index);
+
+        if (rack == dc->preselected_rack_for_replication)
+            continue;
+        rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
+        if (rack_msg == NULL) {
+            log_debug(LOG_VERB, "whelp, looks like yer screwed now, buddy. no inter-rack messages for you!");
+            return;
+        }
+
+        msg_clone(req, orig_mbuf, rack_msg);
+        rack_msg->swallow = true;
+
+        log_debug(LOG_DEBUG, "%M forwarding cloned %M to remote dc rack '%.*s'",
+                  c_conn, rack_msg, rack->name->len, rack->name->data);
+
+        dyn_error_code = DYNOMITE_OK;
+        s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
+                               &dyn_error_code);
+        if (s == DN_OK) {
+            stats_pool_incr(ctx, remote_peer_failover_requests);
+            return;
+        }
+        req_put(rack_msg);
+    }
+    stats_pool_incr(ctx, remote_peer_dropped_requests);
 }
 
 static void
-req_forward_local_dc(struct context *ctx, struct conn *c_conn, struct msg *msg,
+req_forward_local_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
                      struct mbuf *orig_mbuf, uint8_t *key, uint32_t keylen,
                      struct datacenter *dc)
 {
     struct server_pool *pool = c_conn->owner;
-    if (request_send_to_all_local_racks(msg)) {
+    req->rsp_handler = msg_get_rsp_handler(req);
+    if (request_send_to_all_local_racks(req)) {
         // send request to all local racks
-        req_forward_all_local_racks(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
+        req_forward_all_local_racks(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
     } else {
         // send request to only local token owner
-        ASSERT(msg->is_read);
-        msg->rsp_handler = msg_get_rsp_handler(msg);
         struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack,
                                                         &pool->dc);
-        remote_req_forward(ctx, c_conn, msg, rack, key, keylen);
+        dyn_error_t dyn_error_code = 0;
+        rstatus_t s = remote_req_forward(ctx, c_conn, req, rack, key, keylen,
+                                         &dyn_error_code);
+        if (s != DN_OK) {
+            req_forward_error(ctx, c_conn, req, s, dyn_error_code);
+        }
     }
-
 }
 
 static void
-req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
+req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
 {
     struct server_pool *pool = c_conn->owner;
-    uint8_t *key;
-    uint32_t keylen;
+    dyn_error_t dyn_error_code = DYNOMITE_OK;
+    rstatus_t s = DN_OK;
 
     ASSERT(c_conn->type == CONN_CLIENT);
 
-    if (msg->is_read) {
-        if (msg->type != MSG_REQ_REDIS_PING)
+    if (req->is_read) {
+        if (req->type != MSG_REQ_REDIS_PING)
             stats_pool_incr(ctx, client_read_requests);
     } else
         stats_pool_incr(ctx, client_write_requests);
 
-    key = NULL;
-    keylen = 0;
+    uint32_t keylen = 0;
+    uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
 
+    log_debug(LOG_DEBUG, "%M received %M key '%.*s' adding to dict", c_conn,
+              req, keylen, key);
     // add the message to the dict
-    log_debug(LOG_DEBUG, "conn %p adding message %d:%d", c_conn, msg->id, msg->parent_id);
-    dictAdd(c_conn->outstanding_msgs_dict, &msg->id, msg);
+    dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
-    if (!string_empty(&pool->hash_tag)) {
-        struct string *tag = &pool->hash_tag;
-        uint8_t *tag_start, *tag_end;
-
-        tag_start = dn_strchr(msg->key_start, msg->key_end, tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, msg->key_end, tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
-
-    if (keylen == 0) {
-        key = msg->key_start;
-        keylen = (uint32_t)(msg->key_end - msg->key_start);
-    }
 
     // need to capture the initial mbuf location as once we add in the dynomite
-    // headers (as mbufs to the src msg), that will bork the request sent to
+    // headers (as mbufs to the src req), that will bork the request sent to
     // secondary racks
-    struct mbuf *orig_mbuf = STAILQ_FIRST(&msg->mhdr);
+    struct mbuf *orig_mbuf = STAILQ_FIRST(&req->mhdr);
+
+    /* enqueue message (request) into client outq, if response is expected */
+    if (req->expect_datastore_reply) {
+        conn_enqueue_outq(ctx, c_conn, req);
+    }
 
     if (ctx->admin_opt == 1) {
-        if (msg->type == MSG_REQ_REDIS_DEL || msg->type == MSG_REQ_MC_DELETE) {
-          struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
-          admin_local_req_forward(ctx, c_conn, msg, rack, key, keylen);
-          return;
+        if (req->type == MSG_REQ_REDIS_DEL || req->type == MSG_REQ_MC_DELETE) {
+            struct rack * rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+            s = admin_local_req_forward(ctx, c_conn, req, rack, key,
+                                        keylen, &dyn_error_code);
+            if (s != DN_OK) {
+                req_forward_error(ctx, c_conn, req, s, dyn_error_code);
+            }
+            return;
         }
     }
 
-    if (msg->msg_routing == ROUTING_LOCAL_NODE_ONLY) {
+    if (req->msg_routing == ROUTING_LOCAL_NODE_ONLY) {
         // Strictly local host only
-        msg->consistency = DC_ONE;
-        msg->rsp_handler = msg_local_one_rsp_handler;
-        local_req_forward(ctx, c_conn, msg, key, keylen);
+        req->consistency = DC_ONE;
+        req->rsp_handler = msg_local_one_rsp_handler;
+
+        s = local_req_forward(ctx, c_conn, req, key, keylen, &dyn_error_code);
+        if (s != DN_OK) {
+            req_forward_error(ctx, c_conn, req, s, dyn_error_code);
+        }
         return;
     }
 
-    if (msg->is_read) {
-        msg->consistency = conn_get_read_consistency(c_conn);
-    } else {
-        msg->consistency = conn_get_write_consistency(c_conn);
-    }
+    req->consistency = req->is_read ? conn_get_read_consistency(c_conn) :
+                                      conn_get_write_consistency(c_conn);
 
     /* forward the request */
     uint32_t dc_cnt = array_n(&pool->datacenters);
@@ -925,9 +918,9 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
         }
 
         if (string_compare(dc->name, &pool->dc) == 0)
-            req_forward_local_dc(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
-        else if (request_send_to_all_dcs(msg)) {
-            req_forward_remote_dc(ctx, c_conn, msg, orig_mbuf, key, keylen, dc);
+            req_forward_local_dc(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
+        else if (request_send_to_all_dcs(req)) {
+            req_forward_remote_dc(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
         }
     }
 }
@@ -935,57 +928,62 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
 void
 req_recv_done(struct context *ctx, struct conn *conn,
-              struct msg *msg, struct msg *nmsg)
+              struct msg *req, struct msg *nreq)
 {
     ASSERT(conn->type == CONN_CLIENT);
-    ASSERT(msg->request);
-    ASSERT(msg->owner == conn);
-    ASSERT(conn->rmsg == msg);
-    ASSERT(nmsg == NULL || nmsg->request);
+    ASSERT(req->is_request);
+    ASSERT(req->owner == conn);
+    ASSERT(conn->rmsg == req);
+    ASSERT(nreq == NULL || nreq->is_request);
 
-    if (!msg->is_read)
-        stats_histo_add_payloadsize(ctx, msg->mlen);
+    if (!req->is_read)
+        stats_histo_add_payloadsize(ctx, req->mlen);
 
     /* enqueue next message (request), if any */
-    conn->rmsg = nmsg;
+    conn->rmsg = nreq;
 
-    if (req_filter(ctx, conn, msg)) {
+    if (req_filter(ctx, conn, req)) {
         return;
     }
 
-    msg->stime_in_microsec = dn_usec_now();
-    req_forward(ctx, conn, msg);
+    req->stime_in_microsec = dn_usec_now();
+    req_forward(ctx, conn, req);
 }
 
 static msg_response_handler_t 
 msg_get_rsp_handler(struct msg *req)
 {
-    if ((req->consistency == DC_ONE) ||
-        (req->msg_routing != ROUTING_NORMAL))
-        return msg_local_one_rsp_handler;
-    return msg_quorum_rsp_handler;
+    if (request_send_to_all_local_racks(req)) {
+        // Request is being braoadcasted
+        // Check if its quorum
+        if ((req->consistency == DC_QUORUM) ||
+            (req->consistency == DC_SAFE_QUORUM))
+            return msg_quorum_rsp_handler;
+    }
+    return msg_local_one_rsp_handler;
 }
 
-static rstatus_t
+rstatus_t
 msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
-    ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one. req: %d:%d \
-                prev rsp %d:%d new rsp %d:%d", req->id, req->parent_id,
-                req->peer->id, req->peer->parent_id, rsp->id, rsp->parent_id);
+    ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one.\
+               %M prev %M new rsp %M", req, req->selected_rsp, rsp);
     req->awaiting_rsps = 0;
     rsp->peer = req;
+    req->is_error = rsp->is_error;
+    req->error_code = rsp->error_code;
+    req->dyn_error_code = rsp->dyn_error_code;
     req->selected_rsp = rsp;
-    log_info("Req %lu:%lu selected_rsp %lu:%lu", req->id, req->parent_id,
-             rsp->id, rsp->parent_id);
+    log_info("%M SELECTED %M", req, rsp);
     return DN_OK;
 }
 
 static rstatus_t
 swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
-    log_info("req %d swallowing response %d", req->id, rsp->id);
-    ASSERT_LOG(req->awaiting_rsps, "Req %d:%d already has no awaiting rsps, rsp %d",
-               req->id, req->parent_id, rsp->id);
+    log_info("%M SWALLOW %M awaiting %d", req, rsp,
+             req->awaiting_rsps);
+    ASSERT_LOG(req->awaiting_rsps, "%M has no awaiting rsps, received %M", req, rsp);
     // drop this response.
     rsp_put(rsp);
     msg_decr_awaiting_rsps(req);
@@ -1006,38 +1004,38 @@ msg_quorum_rsp_handler(struct msg *req, struct msg *rsp)
     rspmgr_free_other_responses(&req->rspmgr, rsp);
     rsp->peer = req;
     req->selected_rsp = rsp;
-    req->err = rsp->err;
-    req->error = rsp->error;
-    req->dyn_error = rsp->dyn_error;
+    req->error_code = rsp->error_code;
+    req->is_error = rsp->is_error;
+    req->dyn_error_code = rsp->dyn_error_code;
     return DN_OK;
 }
 
 static void
-req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    ASSERT(msg->request);
+    ASSERT(req->is_request);
     ASSERT(conn->type == CONN_CLIENT);
 
     conn->omsg_count++;
     histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
-    TAILQ_INSERT_TAIL(&conn->omsg_q, msg, c_tqe);
-    log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, msg->id, msg->parent_id);
+    TAILQ_INSERT_TAIL(&conn->omsg_q, req, c_tqe);
+    log_debug(LOG_VERB, "%M enqueue outq %M", conn, req);
 }
 
 static void
-req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *msg)
+req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
-    ASSERT(msg->request);
+    ASSERT(req->is_request);
     ASSERT(conn->type == CONN_CLIENT);
 
-    if (msg->stime_in_microsec) {
-        usec_t latency = dn_usec_now() - msg->stime_in_microsec;
+    if (req->stime_in_microsec) {
+        usec_t latency = dn_usec_now() - req->stime_in_microsec;
         stats_histo_add_latency(ctx, latency);
     }
     conn->omsg_count--;
     histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
-    TAILQ_REMOVE(&conn->omsg_q, msg, c_tqe);
-    log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, msg);
+    TAILQ_REMOVE(&conn->omsg_q, req, c_tqe);
+    log_debug(LOG_VERB, "%M dequeue outq %M", conn, req);
 }
 
 struct conn_ops client_ops = {

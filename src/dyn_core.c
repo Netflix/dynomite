@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <printf.h>
 
 #include "dyn_core.h"
 #include "dyn_conf.h"
@@ -30,12 +31,57 @@
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_gossip.h"
+#include "event/dyn_event.h"
+#include "dyn_task.h"
+
+static void
+core_print_peer_status(void *arg1)
+{
+    struct context *ctx = arg1;
+    struct server_pool *sp = &ctx->pool;
+    // iterate over all peers
+    uint32_t dc_cnt = array_n(&sp->datacenters);
+    uint32_t dc_index;
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+        if (!dc)
+            log_panic("DC is null. Topology not inited proerly");
+        uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
+        uint8_t rack_index;
+        for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
+            struct rack *rack = array_get(&dc->racks, rack_index);
+            uint8_t i = 0;
+            for (i = 0; i< rack->ncontinuum; i++) {
+                struct continuum *c = &rack->continuum[i];
+                uint32_t peer_index = c->index;
+                struct node *peer = array_get(&sp->peers, peer_index);
+                if (!peer)
+                    log_panic("peer is null. Topology not inited proerly");
+
+                log_notice("%u)%p %.*s %.*s %.*s %s", peer_index, peer,dc->name->len, dc->name->data,
+                           rack->name->len, rack->name->data, peer->endpoint.pname.len,
+                           peer->endpoint.pname.data, get_state(peer->state));
+            }
+        }
+    }
+}
+
+void
+core_set_local_state(struct context *ctx, dyn_state_t state)
+{
+    struct server_pool *sp = &ctx->pool;
+    struct node *peer = array_get(&sp->peers, 0);
+    ctx->dyn_state = state;
+    peer->state = state;
+}
 
 static rstatus_t
 core_init_last(struct context *ctx)
 {
     core_debug(ctx);
     preselect_remote_rack_for_replication(ctx);
+    // Print the network health once after 30 secs
+    schedule_task_1(core_print_peer_status, ctx, 30000);
     return DN_OK;
 }
 
@@ -45,10 +91,6 @@ core_gossip_pool_init(struct context *ctx)
     //init ring msg queue
     CBUF_Init(C2G_InQ);
     CBUF_Init(C2G_OutQ);
-
-    //init stats msg queue
-    CBUF_Init(C2S_InQ);
-    CBUF_Init(C2S_OutQ);
 
     THROW_STATUS(gossip_pool_init(ctx));
     THROW_STATUS(core_init_last(ctx));
@@ -157,7 +199,9 @@ static rstatus_t
 core_stats_create(struct context *ctx)
 {
     struct instance *nci = ctx->instance;
-    ctx->stats = stats_create(nci->stats_port, nci->stats_addr, nci->stats_interval,
+    struct server_pool *sp = &ctx->pool;
+
+    ctx->stats = stats_create(sp->stats_endpoint.port, sp->stats_endpoint.pname, sp->stats_interval,
 			                  nci->hostname, &ctx->pool, ctx);
     if (ctx->stats == NULL) {
         log_error("Failed to create stats!!!");
@@ -173,7 +217,7 @@ core_stats_create(struct context *ctx)
 
 /**
  * Initialize crypto and create the Dynomite server performance statistics.
- * @param[in,out] ctx Context.
+ * @param[in,out] ctx Dynomite server context.
  * @return rstatus_t Return status code.
  */
 static rstatus_t
@@ -225,8 +269,6 @@ core_ctx_create(struct instance *nci)
     ctx->cf = NULL;
     ctx->stats = NULL;
     ctx->evb = NULL;
-    ctx->max_timeout = nci->stats_interval;
-    ctx->timeout = ctx->max_timeout;
     ctx->dyn_state = INIT;
 
     /* parse and create configuration */
@@ -237,6 +279,10 @@ core_ctx_create(struct instance *nci)
         dn_free(ctx);
         return DN_ERROR;
     }
+
+    struct conf_pool *cp = &ctx->cf->pool;
+    ctx->max_timeout = cp->stats_interval;
+    ctx->timeout = ctx->max_timeout;
 
     rstatus_t status = core_server_pool_init(ctx);
     if (status != DN_OK) {
@@ -268,19 +314,93 @@ core_ctx_destroy(struct context *ctx)
 rstatus_t
 core_start(struct instance *nci)
 {
-    mbuf_init(nci);
-    msg_init(nci);
     conn_init();
+    task_mgr_init();
 
     rstatus_t status = core_ctx_create(nci);
     if (status != DN_OK) {
         conn_deinit();
-        msg_deinit();
-        dmsg_deinit();
-        mbuf_deinit();
+    }
+
+    /**
+     * Providing mbuf_size and alloc_msgs through the command line
+     * has been deprecated. For backward compatibility
+     * we support both ways here: One through nci (command line)
+     * and one through the YAML file (server_pool).
+     */
+    struct context *ctx = nci->ctx;
+    struct server_pool *sp = &ctx->pool;
+
+    if(sp->mbuf_size == UNSET_NUM) {
+       loga("mbuf_size not in YAML: using deprecated way  %d", nci->mbuf_chunk_size);
+       mbuf_init(nci->mbuf_chunk_size);
+    } else {
+       loga("YAML provided mbuf_size: %d", sp->mbuf_size);
+       mbuf_init(sp->mbuf_size);
+    }
+    if(sp->alloc_msgs_max == UNSET_NUM) {
+       loga("max_msgs not in YAML: using deprecated way %d", nci->alloc_msgs_max);
+       msg_init(nci->alloc_msgs_max);
+    } else {
+       loga("YAML provided max_msgs: %d", sp->alloc_msgs_max);
+       msg_init(sp->alloc_msgs_max);
     }
 
     return status;
+}
+
+static int
+print_server_pool(FILE *stream, struct server_pool *sp)
+{
+    return fprintf(stream, "<POOL %p '%.*s'>", sp, sp->name.len, sp->name.data);
+}
+
+static int
+print_obj_arginfo(const struct printf_info *info, size_t n,
+                  int *argtypes)
+{
+      /* We always take exactly one argument and this is a pointer to the
+       *      structure.. */
+    if (n > 0)
+        argtypes[0] = PA_POINTER;
+    return 1;
+}
+
+static int
+print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
+{
+    const object_type_t *obj_type;
+    const struct msg *msg;
+    const struct conn *conn;
+    const struct server_pool *sp;
+
+    obj_type = *((const object_type_t **) (args[0]));
+    if (obj_type == NULL) {
+        return fprintf(stream, "<NULL>");
+    }
+
+    switch (*obj_type) {
+        case OBJ_REQ:
+            msg = *((const struct msg **) (args[0]));
+            return print_req(stream, msg);
+        case OBJ_RSP:
+            msg = *((const struct msg **) (args[0]));
+            return print_rsp(stream, msg);
+        case OBJ_CONN:
+            conn = *((const struct conn **) (args[0]));
+            return print_conn(stream, conn);
+        case OBJ_POOL:
+            sp = *((const struct server_pool **) (args[0]));
+            return print_server_pool(stream, sp);
+        default:
+            return fprintf(stream, "<unknown %p>", obj_type);
+    }
+}
+
+int
+core_register_printf_function(void)
+{
+    return log_register_custom_specifier('M', print_obj, print_obj_arginfo);
 }
 
 /**
@@ -336,9 +456,9 @@ core_close_log(struct conn *conn)
 	} else {
 		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
 	}
-	log_debug(LOG_NOTICE, "close %s %d '%s' on event %04"PRIX32" eof %d done "
-			  "%d rb %zu sb %zu%c %s", conn_get_type_string(conn), conn->sd,
-              addrstr, conn->events, conn->eof, conn->done, conn->recv_bytes,
+	log_debug(LOG_NOTICE, "close %M on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", conn, 
+              conn->events, conn->eof, conn->done, conn->recv_bytes,
               conn->send_bytes,
               conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
@@ -353,7 +473,7 @@ core_close(struct context *ctx, struct conn *conn)
 
     core_close_log(conn);
 
-	status = event_del_conn(ctx->evb, conn);
+	status = conn_event_del_conn(conn);
 	if (status < 0) {
 		log_warn("event del conn %d failed, ignored: %s",
 		          conn->sd, strerror(errno));
@@ -381,20 +501,20 @@ static void
 core_timeout(struct context *ctx)
 {
 	for (;;) {
-		struct msg *msg;
+		struct msg *req;
 		struct conn *conn;
 		msec_t now, then;
 
-		msg = msg_tmo_min();
-		if (msg == NULL) {
+		req = msg_tmo_min();
+		if (req == NULL) {
 			ctx->timeout = ctx->max_timeout;
 			return;
 		}
 
 		/* skip over req that are in-error or done */
 
-		if (msg->error || msg->done) {
-			msg_tmo_delete(msg);
+		if (req->is_error || req->done) {
+			msg_tmo_delete(req);
 			continue;
 		}
 
@@ -403,8 +523,8 @@ core_timeout(struct context *ctx)
 		 * out server
 		 */
 
-		conn = msg->tmo_rbe.data;
-		then = msg->tmo_rbe.key;
+		conn = req->tmo_rbe.data;
+		then = req->tmo_rbe.key;
 
 		now = dn_msec_now();
 		if (now < then) {
@@ -413,10 +533,9 @@ core_timeout(struct context *ctx)
 			return;
 		}
 
-        log_warn("req %"PRIu64" on %s %d timedout, timeout was %d", msg->id,
-                 conn_get_type_string(conn), conn->sd, msg->tmo_rbe.timeout);
+        log_warn("%M on %M timedout, timeout was %d", req, conn, req->tmo_rbe.timeout);
 
-		msg_tmo_delete(msg);
+		msg_tmo_delete(req);
 
 		if (conn->dyn_mode) {
 			if (conn->type == CONN_DNODE_PEER_SERVER) { //outgoing peer requests
@@ -437,8 +556,6 @@ core_timeout(struct context *ctx)
 	}
 }
 
-
-
 rstatus_t
 core_core(void *arg, uint32_t events)
 {
@@ -446,7 +563,7 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-    log_debug(LOG_VVVERB, "event %04"PRIX32" on %s %d", events,
+    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
               conn_get_type_string(conn), conn->sd);
 
 	conn->events = events;
@@ -472,6 +589,7 @@ core_core(void *arg, uint32_t events)
 					core_close(ctx, conn);
 					return DN_ERROR;
 				}
+				core_close(ctx, conn);
 				return DN_OK;
 			}
 
@@ -517,7 +635,7 @@ core_debug(struct context *ctx)
         log_debug(LOG_VERB, "\tPeer name          : '%.*s'", peer->name);
         log_debug(LOG_VERB, "\tPeer pname         : '%.*s'", peer->endpoint.pname);
 
-        log_debug(LOG_VERB, "\tPeer state         : %"PRIu32"", peer->state);
+        log_debug(LOG_VERB, "\tPeer state         : %s", get_state(peer->state));
         log_debug(LOG_VERB, "\tPeer port          : %"PRIu32"", peer->endpoint.port);
         log_debug(LOG_VERB, "\tPeer is_local      : %"PRIu32" ", peer->is_local);
         log_debug(LOG_VERB, "\tPeer failure_count : %"PRIu32" ", peer->failure_count);
@@ -558,11 +676,14 @@ core_process_messages(void)
 	// Continue to process messages while the circular buffer is not empty
 	while (!CBUF_IsEmpty(C2G_OutQ)) {
 		// Get an element from the beginning of the circular buffer
-		struct ring_msg *msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
-		if (msg != NULL && msg->cb != NULL) {
-			msg->cb(msg);
-			core_debug(msg->sp->ctx);
-			ring_msg_deinit(msg);
+		struct ring_msg *ring_msg = (struct ring_msg *) CBUF_Pop(C2G_OutQ);
+		if (ring_msg != NULL && ring_msg->cb != NULL) {
+			// CBUF_Push
+			// ./src/dyn_dnode_msg.c
+			// ./src/dyn_gossip.c
+			ring_msg->cb(ring_msg);
+			core_debug(ring_msg->sp->ctx);
+			ring_msg_deinit(ring_msg);
 		}
 	}
 
@@ -581,12 +702,26 @@ core_loop(struct context *ctx)
 
 	core_process_messages();
 
-	nsd = event_wait(ctx->evb, ctx->timeout);
-	if (nsd < 0) {
-		return nsd;
-	}
+    core_timeout(ctx);
+    execute_expired_tasks(0);
+    ctx->timeout = MIN(ctx->timeout, time_to_next_task());
+    nsd = event_wait(ctx->evb, ctx->timeout);
+    if (nsd < 0) {
+        return nsd;
+    }
 
-	core_timeout(ctx);
+    // go through all the ready queue and send each of them
+    struct server_pool *sp = &ctx->pool;
+    struct conn *conn, *nconn;
+    TAILQ_FOREACH_SAFE(conn, &sp->ready_conn_q, ready_tqe, nconn) {
+		rstatus_t status = core_send(ctx, conn);
+        if (status == DN_OK) {
+            log_debug(LOG_VVERB, "Flushing writes on %s %d", conn_get_type_string(conn), conn->sd);
+            conn_event_del_out(conn);
+        } else {
+            TAILQ_REMOVE(&sp->ready_conn_q, conn, ready_tqe);
+        }
+    }
 	stats_swap(ctx->stats);
 
 	return DN_OK;

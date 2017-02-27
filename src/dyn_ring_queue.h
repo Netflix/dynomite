@@ -14,9 +14,6 @@
 #define C2G_InQ_SIZE     256
 #define C2G_OutQ_SIZE    256
 
-#define C2S_InQ_SIZE     256
-#define C2S_OutQ_SIZE    256
-
 struct gossip_node;
 
 typedef rstatus_t (*callback_t)(void *msg);
@@ -29,16 +26,12 @@ volatile struct
      void*    m_entry[C2G_InQ_SIZE];
 } C2G_InQ;
 
-
-
 volatile struct
 {
      long     m_getIdx;
      long     m_putIdx;
      void*    m_entry[C2G_OutQ_SIZE];
 } C2G_OutQ;
-
-
 
 struct ring_msg {
 	callback_t           cb;
@@ -49,35 +42,6 @@ struct ring_msg {
 	struct server_pool   *sp;
 
 };
-
-
-
-volatile struct
-{
-     long     m_getIdx;
-     long     m_putIdx;
-     void*    m_entry[C2S_InQ_SIZE];
-} C2S_InQ;
-
-
-
-volatile struct
-{
-     long     m_getIdx;
-     long     m_putIdx;
-     void*    m_entry[C2S_OutQ_SIZE];
-} C2S_OutQ;
-
-
-struct stat_msg {
-	void*         cb;
-	void*         post_cb;
-	void*         data;
-	stats_cmd_t   cmd;
-};
-
-
-
 
 struct ring_msg *create_ring_msg(void);
 struct ring_msg *create_ring_msg_with_data(int capacity);

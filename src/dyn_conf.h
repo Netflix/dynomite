@@ -19,6 +19,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/**
+ * @file dyn_conf.h
+ * @brief Dynomite configuration (header).
+ *
+ * Set default configuration values, parse dynomite.yaml, and update the various
+ * configuration structs including connections and server pool.
+ */
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -38,6 +46,8 @@
 #define CONF_STR_DC_ONE                      "dc_one"
 #define CONF_STR_DC_QUORUM                   "dc_quorum"
 #define CONF_STR_DC_SAFE_QUORUM              "dc_safe_quorum"
+
+#define UNSET_NUM                            0
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -71,14 +81,13 @@ struct conf_pool {
     struct conf_listen listen;                /* listen: */
     hash_type_t        hash;                  /* hash: */
     struct string      hash_tag;              /* hash_tag: */
-    dist_type_t        distribution;          /* distribution: */
+    void               *deprecated;          /* Deprecated: distribution, server_connections */
     msec_t             timeout;               /* timeout: */
     int                backlog;               /* backlog: */
     int                client_connections;    /* client_connections: */
     int                data_store;            /* data_store: */
     int                preconnect;            /* preconnect: */
     int                auto_eject_hosts;      /* auto_eject_hosts: */
-    int                server_connections;    /* server_connections: */
     msec_t             server_retry_timeout_ms;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
     struct conf_server *conf_datastore;       /* This is the underlying datastore */
@@ -99,11 +108,19 @@ struct conf_pool {
     struct string      read_consistency;
     struct string      write_consistency;
     struct string      pem_key_file;
-    struct string      recon_key_file;       /* file with Key encryption in reconciliation */
-    struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
+    struct string      recon_key_file;        /* file with Key encryption in reconciliation */
+    struct string      recon_iv_file;         /* file with Initialization Vector encryption in reconciliation */
     struct string      dc;                    /* this node's dc */
-    struct string      env;                   /* aws, google, network, ... */
+    struct string      env;                   /* AWS, Google, network, ... */
     uint32_t           conn_msg_rate;         /* conn msg per sec */
+    bool               enable_gossip;         /* enable/disable gossip */
+    size_t             mbuf_size;             /* mbuf chunk size */
+    size_t             alloc_msgs_max;        /* allocated messages buffer size */
+
+    /* stats info */
+    int                stats_interval;        /* stats aggregation interval */
+    struct conf_listen stats_listen;          /* stats_listen: socket info for stats */
+
 };
 
 
@@ -111,7 +128,7 @@ struct conf {
     char          *fname;           /* file name (ref in argv[]) */
     FILE          *fh;              /* file handle */
     struct array  arg;              /* string[] (parsed {key, value} pairs) */
-    struct conf_pool pool;             /* conf_pool[] (parsed pools) */
+    struct conf_pool pool;          /* conf_pool[] (parsed pools) */
     uint32_t      depth;            /* parsed tree depth */
     yaml_parser_t parser;           /* yaml parser */
     yaml_event_t  event;            /* yaml event */

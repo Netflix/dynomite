@@ -13,27 +13,27 @@
 static uint64_t peer_msg_id = 0;
 
 static void
-dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
+dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *req)
 {
     rstatus_t status;
 
     ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
 
     log_debug(LOG_INFO, "dyn: forward req %"PRIu64" len %"PRIu32" type %d from "
-            "c %d failed: %s", msg->id, msg->mlen, msg->type, conn->sd,
+            "c %d failed: %s", req->id, req->mlen, req->type, conn->sd,
             strerror(errno));
 
-    msg->done = 1;
-    msg->error = 1;
-    msg->err = errno;
+    req->done = 1;
+    req->is_error = 1;
+    req->error_code = errno;
 
-    if (!msg->expect_datastore_reply || msg->swallow) {
-        req_put(msg);
+    if (!req->expect_datastore_reply || req->swallow) {
+        req_put(req);
         return;
     }
 
     if (req_done(conn, TAILQ_FIRST(&conn->omsg_q))) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             conn->err = errno;
         }
@@ -42,25 +42,25 @@ dnode_req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static void
-dnode_peer_req_forward_stats(struct context *ctx, struct node *server, struct msg *msg)
+dnode_peer_req_forward_stats(struct context *ctx, struct node *server, struct msg *req)
 {
-    ASSERT(msg->request);
+    ASSERT(req->is_request);
     stats_pool_incr(ctx, peer_requests);
-    stats_pool_incr_by(ctx, peer_request_bytes, msg->mlen);
+    stats_pool_incr_by(ctx, peer_request_bytes, req->mlen);
 }
 
 
 /* Forward a client request over to a peer */
-void
+rstatus_t
 dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
-                       struct conn *p_conn, struct msg *msg,
-                       struct rack *rack, uint8_t *key, uint32_t keylen)
+                       struct conn *p_conn, struct msg *req,
+                       struct rack *rack, uint8_t *key, uint32_t keylen,
+                       dyn_error_t *dyn_error_code)
 {
 
     struct node *server = p_conn->owner;
-    log_debug(LOG_DEBUG, "forwarding request from client conn '%s' to peer conn '%s' on rack '%.*s' dc '%.*s' ",
-              dn_unresolve_peer_desc(c_conn->sd), dn_unresolve_peer_desc(p_conn->sd),
-              rack->name->len, rack->name->data,
+    log_debug(LOG_DEBUG, "%M FORWARD %M to peer %M on rack '%.*s' dc '%.*s' ",
+              c_conn, req, p_conn, rack->name->len, rack->name->data,
               server->dc.len, server->dc.data);
 
     struct string *dc = rack->dc;
@@ -71,18 +71,18 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
     /* enqueue the message (request) into peer inq */
-    status = event_add_out(ctx->evb, p_conn);
+    status = conn_event_add_out(p_conn);
     if (status != DN_OK) {
-        dnode_req_forward_error(ctx, p_conn, msg);
+        *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
         p_conn->err = errno;
-        return;
+        return DN_ERROR;
     }
 
     struct mbuf *header_buf = mbuf_get();
     if (header_buf == NULL) {
         loga("Unable to obtain an mbuf for dnode msg's header!");
-        req_put(msg);
-        return;
+        *dyn_error_code = DYNOMITE_OK;
+        return DN_ENOMEM;
     }
 
     struct server_pool *pool = c_conn->owner;
@@ -95,53 +95,49 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
     if (p_conn->dnode_secured) {
         //Encrypting and adding header for a request
         if (log_loggable(LOG_VVERB)) {
-           log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(p_conn->aes_key, AES_KEYLEN));
+            SCOPED_CHARPTR(encoded_aes_key) = base64_encode(p_conn->aes_key, AES_KEYLEN);
+            if (encoded_aes_key)
+                log_debug(LOG_VVERB, "AES encryption key: %s\n", encoded_aes_key);
         }
 
         //write dnode header
         if (ENCRYPTION) {
-            status = dyn_aes_encrypt_msg(msg, p_conn->aes_key);
+            status = dyn_aes_encrypt_msg(req, p_conn->aes_key);
             if (status == DN_ERROR) {
                 loga("OOM to obtain an mbuf for encryption!");
                 mbuf_put(header_buf);
-                req_put(msg);
-                return;
+                *dyn_error_code = DN_ENOMEM;
+                return status;
             }
 
-            if (log_loggable(LOG_VVERB)) {
-               log_debug(LOG_VERB, "#encrypted bytes : %d", status);
-            }
+            log_debug(LOG_VVERB, "#encrypted bytes : %d", status);
 
-            dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
+            dmsg_write(header_buf, req->id, msg_type, p_conn, msg_length(req));
         } else {
-            if (log_loggable(LOG_VVERB)) {
-               log_debug(LOG_VERB, "no encryption on the msg payload");
-            }
-            dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
+            log_debug(LOG_VVERB, "no encryption on the msg payload");
+            dmsg_write(header_buf, req->id, msg_type, p_conn, msg_length(req));
         }
 
     } else {
         //write dnode header
-        dmsg_write(header_buf, msg->id, msg_type, p_conn, msg_length(msg));
+        dmsg_write(header_buf, req->id, msg_type, p_conn, msg_length(req));
     }
 
-    mbuf_insert_head(&msg->mhdr, header_buf);
+    mbuf_insert_head(&req->mhdr, header_buf);
 
     if (log_loggable(LOG_VVERB)) {
         log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
-        msg_dump(msg);
+        msg_dump(req);
     }
 
-    conn_enqueue_inq(ctx, p_conn, msg);
+    conn_enqueue_inq(ctx, p_conn, req);
 
-    dnode_peer_req_forward_stats(ctx, p_conn->owner, msg);
+    dnode_peer_req_forward_stats(ctx, p_conn->owner, req);
 
-    if (log_loggable(LOG_VVERB)) {
-       log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
-                   " type %d with key '%.*s'", c_conn->sd, p_conn->sd, msg->id,
-                   msg->mlen, msg->type, keylen, key);
-    }
-
+    log_debug(LOG_VVERB, "remote forward from c %d to s %d req %"PRIu64" len %"PRIu32
+              " type %d with key '%.*s'", c_conn->sd, p_conn->sd, req->id,
+              req->mlen, req->type, keylen, key);
+    return DN_OK;
 }
 
 
@@ -171,7 +167,7 @@ peer_gossip_forward1(struct context *ctx, struct conn *conn, bool redis, struct 
     mbuf_insert_head(&msg->mhdr, nbuf);
 
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg);
             conn->err = errno;
@@ -213,8 +209,10 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     if (conn->dnode_secured) {
         if (log_loggable(LOG_VERB)) {
-           log_debug(LOG_VERB, "Assemble a secured msg to send");
-           log_debug(LOG_VERB, "AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+            log_debug(LOG_VERB, "Assemble a secured msg to send");
+            SCOPED_CHARPTR(encoded_aes_key) = base64_encode(conn->aes_key, AES_KEYLEN);
+            if (encoded_aes_key)
+                log_debug(LOG_VERB, "AES encryption key: %s\n", encoded_aes_key);
         }
 
         if (ENCRYPTION) {
@@ -224,7 +222,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
                 return; //TODOs: need to clean up
             }
 
-            status = dyn_aes_encrypt(data_buf->pos, (int)mbuf_length(data_buf), encrypted_buf, conn->aes_key);
+            status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
             if (log_loggable(LOG_VERB)) {
                log_debug(LOG_VERB, "#encrypted bytes : %d", status);
             }
@@ -267,7 +265,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     /* enqueue the message (request) into peer inq */
     if (TAILQ_EMPTY(&conn->imsg_q)) {
-        status = event_add_out(ctx->evb, conn);
+        status = conn_event_add_out(conn);
         if (status != DN_OK) {
             dnode_req_forward_error(ctx, conn, msg);
             conn->err = errno;

@@ -43,6 +43,27 @@ def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     time.sleep(7);
     c.run_verify("exists", key)
 
+def run_multikey_test(c, max_keys=1000, max_payload=10):
+    #Set some
+    test_name="MULTIKEY"
+    print "Running %s tests" % test_name
+    for n in range(0, 100):
+        kv_pairs = {}
+        len = random.randint(1, 5)
+        for x in range(0, len):
+            key_id = random.randint(0, max_keys-1)
+            key = create_key(test_name, key_id)
+            value = string_generator(size=random.randint(1, max_payload))
+            kv_pairs[key] = value
+        c.run_verify("mset", kv_pairs)
+        keys = []
+        len = random.randint(1, 50)
+        for x in range(0, len):
+            key_id = random.randint(0, max_keys-1)
+            key = create_key(test_name, key_id)
+            keys.append(key)
+        c.run_verify("mget", keys)
+
 def run_hash_tests(c, max_keys=10, max_fields=1000):
     def create_key_field(keyid=None, fieldid=None):
         if keyid is None:
@@ -115,16 +136,11 @@ def main(args):
     # This is done by travis.sh. Please check that file and the corresponding
     # yml files for each dynomite instance there to get an idea of the topology.
     r = RedisNode(host="localhost", ip="127.0.0.1", port=1212)
-    d1 = DynoNode(host="127.0.0.1", ip="127.0.0.1", stats_port=22221,
-                  data_store_port=22121)
-    d2 = DynoNode(host="127.0.0.2", ip="127.0.0.2", stats_port=22222,
-                  data_store_port=22122)
-    d3 = DynoNode(host="127.0.0.3", ip="127.0.0.3", stats_port=22223,
-                  data_store_port=22123)
-    d4 = DynoNode(host="127.0.0.4", ip="127.0.0.4", stats_port=22224,
-                  data_store_port=22124)
-    d5 = DynoNode(host="127.0.0.5", ip="127.0.0.5", stats_port=22225,
-                  data_store_port=22125)
+    d1 = DynoNode(host="127.0.0.1", ip="127.0.0.1", data_store_port=22121)
+    d2 = DynoNode(host="127.0.0.2", ip="127.0.0.2", data_store_port=22122)
+    d3 = DynoNode(host="127.0.0.3", ip="127.0.0.3", data_store_port=22123)
+    d4 = DynoNode(host="127.0.0.4", ip="127.0.0.4", data_store_port=22124)
+    d5 = DynoNode(host="127.0.0.5", ip="127.0.0.5", data_store_port=22125)
     dyno_nodes = [d1,d2,d3,d4,d5]
     cluster = DynoCluster(dyno_nodes)
     r_c = r.get_connection()
@@ -134,6 +150,7 @@ def main(args):
         run_key_value_tests(c)
         run_key_value_tests(c, max_payload=16384*1024)
         run_hash_tests(c, max_keys=10, max_fields=100)
+        run_multikey_test(c)
         print "All test ran fine"
     except ResultMismatchError as r:
         print r;

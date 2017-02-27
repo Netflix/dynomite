@@ -4,7 +4,6 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
  * Copyright (C) 2011 Twitter, Inc.
@@ -22,6 +21,13 @@
  * limitations under the License.
  */
 
+/**
+ * @file dyn_conf.c
+ * @brief Dynomite configuration.
+ *
+ * Set default configuration values, parse dynomite.yaml, and update the various
+ * configuration structs including connections and server pool.
+ */
 #include "dyn_core.h"
 #include "dyn_conf.h"
 #include "dyn_server.h"
@@ -44,23 +50,16 @@ static hash_t hash_algos[] = {
 };
 #undef DEFINE_ACTION
 
-#define DEFINE_ACTION(_dist, _name) string(#_name),
-static struct string dist_strings[] = {
-    DIST_CODEC( DEFINE_ACTION )
-    null_string
-};
-#undef DEFINE_ACTION
-
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
 #define CONF_ROOT_DEPTH     1
 #define CONF_MAX_DEPTH      CONF_ROOT_DEPTH + 1
 #define CONF_DEFAULT_ARGS       3
-#define CONF_UNSET_NUM  0
+#define CONF_UNSET_BOOL false
+#define CONF_UNSET_NUM  UNSET_NUM
 #define CONF_UNSET_PTR  NULL
 #define CONF_DEFAULT_SERVERS    8
 #define CONF_UNSET_HASH (hash_type_t) -1
-#define CONF_UNSET_DIST (dist_type_t) -1
 
 #define CONF_DEFAULT_HASH                    HASH_MURMUR
 #define CONF_DEFAULT_DIST                    DIST_VNODE
@@ -72,7 +71,6 @@ static struct string dist_strings[] = {
 #define CONF_DEFAULT_AUTO_EJECT_HOSTS        true
 #define CONF_DEFAULT_SERVER_RETRY_TIMEOUT    10 * 1000      /* in msec */
 #define CONF_DEFAULT_SERVER_FAILURE_LIMIT    3
-#define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
 
 #define CONF_DEFAULT_SEEDS                   5
@@ -82,11 +80,18 @@ static struct string dist_strings[] = {
 #define CONF_DEFAULT_VNODE_TOKENS            1
 #define CONF_DEFAULT_GOS_INTERVAL            30000  //in millisec
 
+#define CONF_DEFAULT_MBUF_SIZE               MBUF_SIZE
+#define CONF_DEFAULT_MBUF_MIN_SIZE           MBUF_MIN_SIZE
+#define CONF_DEFAULT_MBUF_MAX_SIZE           MBUF_MAX_SIZE
+
+#define CONF_DEFAULT_ALLOC_MSGS			     ALLOC_MSGS
+#define CONF_DEFAULT_MIN_ALLOC_MSGS	         MIN_ALLOC_MSGS
+#define CONF_DEFAULT_MAX_ALLOC_MSGS	         MAX_ALLOC_MSGS
+
 #define CONF_STR_NONE                        "none"
 #define CONF_STR_DC                          "datacenter"
 #define CONF_STR_RACK                        "rack"
 #define CONF_STR_ALL                         "all"
-
 
 #define CONF_DEFAULT_RACK                    "localrack"
 #define CONF_DEFAULT_DC                      "localdc"
@@ -94,9 +99,13 @@ static struct string dist_strings[] = {
 
 #define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
-#define PEM_KEY_FILE      "conf/dynomite.pem"
-#define RECON_KEY_FILE    "conf/recon_key.pem"
-#define RECON_IV_FILE     "conf/recon_iv.pem"
+#define CONF_DEFAULT_STATS_PNAME             "0.0.0.0:22222" // default stats port
+#define CONF_DEFAULT_STATS_PORT              22222
+#define CONF_DEFAULT_STATS_INTERVAL_MS       (30 * 1000) /* in msec */
+
+#define PEM_KEY_FILE                         "conf/dynomite.pem"
+#define RECON_KEY_FILE                       "conf/recon_key.pem"
+#define RECON_IV_FILE                        "conf/recon_iv.pem"
 
 data_store_t g_data_store = CONF_DEFAULT_DATASTORE;
 struct command {
@@ -171,12 +180,9 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->endpoint.family = cs->info.family;
     s->endpoint.addrlen = cs->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cs->info.addr;
-
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
-
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->conn = NULL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     log_debug(LOG_VERB, "transform to server '%.*s'",
@@ -185,7 +191,12 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     return DN_OK;
 }
 
-// Copy seed struct conf_server to struct server
+/**
+ * Copy seed struct conf_server to struct server
+ * @param elem conf_server
+ * @param data server
+ * @return rstatus_t Return status code.
+ */
 rstatus_t
 conf_seed_each_transform(void *elem, void *data)
 {
@@ -202,11 +213,11 @@ conf_seed_each_transform(void *elem, void *data)
     s->owner = NULL;
     s->endpoint.pname = cseed->pname;
 
-    s->state = NORMAL;//assume peers are normal initially
+    s->state = DOWN;//assume peers are down initially
 
     uint8_t *p = cseed->name.data + cseed->name.len - 1;
     uint8_t *start = cseed->name.data;
-    string_copy(&s->name, start, dn_strrchr(p, start, ':') - start);
+    string_copy(&s->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
 
     s->rack = cseed->rack;
     s->dc = cseed->dc;
@@ -221,12 +232,9 @@ conf_seed_each_transform(void *elem, void *data)
     s->endpoint.family = cseed->info.family;
     s->endpoint.addrlen = cseed->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
-
-    s->ns_conn_q = 0;
-    TAILQ_INIT(&s->s_conn_q);
-
-    s->next_retry_us = 0ULL;
-    s->reconnect_backoff_sec = 1LL;
+    s->conn = NULL;
+    s->next_retry_ms = 0ULL;
+    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     s->processed = 0;
@@ -265,7 +273,6 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
 
     cp->hash = CONF_UNSET_HASH;
     string_init(&cp->hash_tag);
-    cp->distribution = CONF_UNSET_DIST;
 
     cp->timeout = CONF_UNSET_NUM;
     cp->backlog = CONF_UNSET_NUM;
@@ -275,9 +282,9 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->data_store = CONF_UNSET_NUM;
     cp->preconnect = CONF_UNSET_NUM;
     cp->auto_eject_hosts = CONF_UNSET_NUM;
-    cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->stats_interval = CONF_UNSET_NUM;
 
     //initialization for dynomite
     string_init(&cp->dyn_seed_provider);
@@ -289,11 +296,17 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->pem_key_file);
     string_init(&cp->recon_key_file);
     string_init(&cp->recon_iv_file);
+    string_init(&cp->stats_listen.pname);
+    string_init(&cp->stats_listen.name);
     string_init(&cp->dc);
     string_init(&cp->env);
     cp->dyn_listen.port = 0;
     memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
     cp->dyn_listen.valid = 0;
+
+    cp->stats_listen.port = 0;
+    memset(&cp->stats_listen.info, 0, sizeof(cp->stats_listen.info));
+    cp->stats_listen.valid = 0;
 
     cp->dyn_read_timeout = CONF_UNSET_NUM;
     cp->dyn_write_timeout = CONF_UNSET_NUM;
@@ -307,6 +320,9 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     array_null(&cp->dyn_seeds);
 
     cp->valid = 0;
+    cp->enable_gossip = CONF_UNSET_BOOL;
+    cp->mbuf_size = CONF_UNSET_NUM;
+    cp->alloc_msgs_max = CONF_UNSET_NUM;
 
     status = string_duplicate(&cp->name, name);
     if (status != DN_OK) {
@@ -361,6 +377,8 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->pem_key_file);
     string_deinit(&cp->recon_key_file);
     string_deinit(&cp->recon_iv_file);
+    string_deinit(&cp->stats_listen.pname);
+    string_deinit(&cp->stats_listen.name);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
 
@@ -390,6 +408,13 @@ get_secure_server_option(struct string option)
     return SECURE_OPTION_NONE;
 }
 
+/**
+ * Copy connection pool configuration parsed from dynomite.yaml into the server
+ * pool.
+ * @param[in,out] sp Server pool.
+ * @param cp
+ * @return
+ */
 rstatus_t
 conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 {
@@ -397,17 +422,17 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     ASSERT(cp->valid);
 
     memset(sp, 0, sizeof(struct server_pool));
-
+    sp->object_type = OBJ_POOL;
     sp->ctx = NULL;
     sp->p_conn = NULL;
     sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
+    TAILQ_INIT(&sp->ready_conn_q);
 
     array_null(&sp->datacenters);
     /* sp->ncontinuum = 0; */
     /* sp->nserver_continuum = 0; */
     /* sp->continuum = NULL; */
-    sp->nlive_server = 0;
     sp->next_rebuild = 0ULL;
 
     sp->name = cp->name;
@@ -420,7 +445,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     sp->key_hash_type = cp->hash;
     sp->key_hash = hash_algos[cp->hash];
-    sp->dist_type = cp->distribution;
     sp->hash_tag = cp->hash_tag;
 
     g_data_store = cp->data_store;
@@ -435,7 +459,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
 
     sp->client_connections = (uint32_t)cp->client_connections;
 
-    sp->server_connections = (uint32_t)cp->server_connections;
     sp->server_retry_timeout_ms = cp->server_retry_timeout_ms;
     sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
     sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
@@ -462,6 +485,17 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;
     sp->env = cp->env;
+    sp->enable_gossip = cp->enable_gossip;
+
+    /* dynomite stats init */
+    sp->stats_endpoint.pname = cp->stats_listen.pname;
+    sp->stats_endpoint.port = (uint16_t)cp->stats_listen.port;
+    sp->stats_endpoint.family = cp->stats_listen.info.family;
+    sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
+    sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
+    sp->stats_interval = cp->stats_interval;
+    sp->mbuf_size = cp->mbuf_size;
+    sp->alloc_msgs_max = cp->alloc_msgs_max;
 
     sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
     sp->pem_key_file = cp->pem_key_file;
@@ -505,7 +539,6 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  hash: %d", cp->hash);
     log_debug(LOG_VVERB, "  hash_tag: \"%.*s\"", cp->hash_tag.len,
             cp->hash_tag.data);
-    log_debug(LOG_VVERB, "  distribution: %d", cp->distribution);
     log_debug(LOG_VVERB, "  client_connections: %d",
             cp->client_connections);
     const char * temp_log = "unknown";
@@ -518,8 +551,6 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  data_store: %d (%s)", g_data_store, temp_log);
     log_debug(LOG_VVERB, "  preconnect: %d", cp->preconnect);
     log_debug(LOG_VVERB, "  auto_eject_hosts: %d", cp->auto_eject_hosts);
-    log_debug(LOG_VVERB, "  server_connections: %d",
-            cp->server_connections);
     log_debug(LOG_VVERB, "  server_retry_timeout: %d (msec)",
             cp->server_retry_timeout_ms);
     log_debug(LOG_VVERB, "  server_failure_limit: %d",
@@ -562,6 +593,15 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  write_consistency: \"%.*s\"",
             cp->write_consistency.len,
             cp->write_consistency.data);
+
+    log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
+    log_debug(LOG_VVERB, "  stats_listen: %.*s",
+            cp->stats_listen.pname.len, cp->stats_listen.pname.data);
+
+    log_debug(LOG_VVERB, "  enable_gossip: %s", cp->enable_gossip ? "true" : "false");
+
+    log_debug(LOG_VVERB, "  mbuf_size: %d", cp->mbuf_size);
+    log_debug(LOG_VVERB, "  max_msgs: %d", cp->alloc_msgs_max);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
 }
@@ -787,7 +827,7 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
     return CONF_OK;
 }
 
-/* Parses servers: from yaml */
+/* Parses server:port:data_store from yaml */
 static char *
 conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 {
@@ -1210,32 +1250,11 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 }
 
 static char *
-conf_set_distribution(struct conf *cf, struct command *cmd, void *conf)
+conf_set_deprecated(struct conf *cf, struct command *cmd, void *conf)
 {
-    uint8_t *p;
-    dist_type_t *dp;
-    struct string *value, *dist;
-
-    p = conf;
-    dp = (dist_type_t *)(p + cmd->offset);
-
-    if (*dp != CONF_UNSET_DIST) {
-        return "is a duplicate";
-    }
-
-    value = array_top(&cf->arg);
-
-    for (dist = dist_strings; dist->len != 0; dist++) {
-        if (string_compare(value, dist) != 0) {
-            continue;
-        }
-
-        *dp = dist - dist_strings;
-
-        return CONF_OK;
-    }
-
-    return "is not a valid distribution";
+    log_warn("******** Field \"%.*s\" in the conf file is DEPRECATED *********",
+             cmd->name.len, cmd->name.data);
+    return CONF_OK;
 }
 
 static char *
@@ -1279,8 +1298,8 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, hash_tag) },
 
     { string("distribution"),
-      conf_set_distribution,
-      offsetof(struct conf_pool, distribution) },
+      conf_set_deprecated,
+      offsetof(struct conf_pool, deprecated) },
 
     { string("timeout"),
       conf_set_num,
@@ -1307,8 +1326,8 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, auto_eject_hosts) },
 
     { string("server_connections"),
-      conf_set_num,
-      offsetof(struct conf_pool, server_connections) },
+      conf_set_deprecated,
+      offsetof(struct conf_pool, deprecated) },
 
     { string("server_retry_timeout"),
       conf_set_num,
@@ -1367,16 +1386,16 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, secure_server_option) },
 
     { string("pem_key_file"),
-        conf_set_string,
-        offsetof(struct conf_pool, pem_key_file) },
+      conf_set_string,
+      offsetof(struct conf_pool, pem_key_file) },
 
-	{ string("recon_key_file"),
-	    conf_set_string,
-	    offsetof(struct conf_pool, recon_key_file) },
+    { string("recon_key_file"),
+      conf_set_string,
+      offsetof(struct conf_pool, recon_key_file) },
 
 	{ string("recon_iv_file"),
-		conf_set_string,
-		offsetof(struct conf_pool, recon_iv_file) },
+	  conf_set_string,
+      offsetof(struct conf_pool, recon_iv_file) },
 
     { string("datacenter"),
       conf_set_string,
@@ -1397,6 +1416,26 @@ static struct command conf_commands[] = {
     { string("write_consistency"),
       conf_set_string,
       offsetof(struct conf_pool, write_consistency) },
+
+	{ string("stats_listen"),
+	  conf_set_listen,
+	  offsetof(struct conf_pool, stats_listen) },
+
+	{ string("stats_interval"),
+	  conf_set_string,
+	  offsetof(struct conf_pool, stats_interval) },
+
+    { string("enable_gossip"),
+      conf_set_bool,
+      offsetof(struct conf_pool, enable_gossip) },
+
+    { string("mbuf_size"),
+      conf_set_num,
+      offsetof(struct conf_pool, mbuf_size) },
+
+    { string("max_msgs"),
+      conf_set_num,
+      offsetof(struct conf_pool, alloc_msgs_max) },
 
     null_command
 };
@@ -2060,10 +2099,6 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     /* set default values for unset directives */
 
-    if (cp->distribution == CONF_UNSET_DIST) {
-        cp->distribution = CONF_DEFAULT_DIST;
-    }
-
     if (string_empty(&cp->dyn_seed_provider)) {
     	string_copy_c(&cp->dyn_seed_provider, (const uint8_t *)CONF_DEFAULT_SEED_PROVIDER);
     }
@@ -2092,13 +2127,6 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->auto_eject_hosts == CONF_UNSET_NUM) {
         cp->auto_eject_hosts = CONF_DEFAULT_AUTO_EJECT_HOSTS;
-    }
-
-    if (cp->server_connections == CONF_UNSET_NUM) {
-        cp->server_connections = CONF_DEFAULT_SERVER_CONNECTIONS;
-    } else if (cp->server_connections == 0) {
-        log_error("conf: directive \"server_connections:\" cannot be 0");
-        return DN_ERROR;
     }
 
     if (cp->server_retry_timeout_ms == CONF_UNSET_NUM) {
@@ -2132,6 +2160,53 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;
     }
 
+    if (cp->mbuf_size == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting mbuf_size to default value:%d", CONF_DEFAULT_MBUF_SIZE);
+    	/*
+    	 * After backward compatibility is supported, enable this
+    	 *     	cp->mbuf_size = CONF_DEFAULT_MBUF_SIZE;
+    	 */
+    }
+    else {
+    	/* Validating mbuf_size correctness */
+        if (cp->mbuf_size <= 0) {
+           log_stderr("mbuf_size: requires a positive number");
+    	   return DN_ERROR;
+    	}
+
+    	if (cp->mbuf_size < CONF_DEFAULT_MBUF_MIN_SIZE || cp->mbuf_size > CONF_DEFAULT_MBUF_MAX_SIZE) {
+    	   log_stderr("mbuf_size: mbuf chunk size must be between %zu and"
+    	              " %zu bytes", CONF_DEFAULT_MBUF_MIN_SIZE, CONF_DEFAULT_MBUF_MAX_SIZE);
+    	   return DN_ERROR;
+    	}
+
+    	if ((cp->mbuf_size / 16) * 16 != cp->mbuf_size) {
+    	   log_stderr("mbuf_size: mbuf size must be a multiple of 16");
+    	   return DN_ERROR;
+    	}
+    }
+
+    if (cp->alloc_msgs_max == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting max_msgs to default value:%d",CONF_DEFAULT_MAX_ALLOC_MSGS);
+    	/*
+    	 * After backward compatibility is supported, enable this
+    	 * cp->alloc_msgs_max = CONF_DEFAULT_MAX_ALLOC_MSGS;
+    	 */
+
+    }
+    else {
+        if (cp->alloc_msgs_max <= 0) {
+            log_stderr("dynomite: option -M requires a non-zero number");
+            return DN_ERROR;
+        }
+
+        if (cp->alloc_msgs_max < CONF_DEFAULT_MIN_ALLOC_MSGS || cp->alloc_msgs_max > CONF_DEFAULT_MAX_ALLOC_MSGS) {
+            log_stderr("max_msgs: max allocated messages buffer must be between %zu and"
+                       " %zu messages", CONF_DEFAULT_MIN_ALLOC_MSGS, CONF_DEFAULT_MAX_ALLOC_MSGS);
+            return DN_ERROR;
+        }
+    }
+
     if (string_empty(&cp->rack)) {
         string_copy_c(&cp->rack, (const uint8_t *)CONF_DEFAULT_RACK);
         log_debug(LOG_INFO, "setting rack to default value:%s", CONF_DEFAULT_RACK);
@@ -2161,6 +2236,19 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                       (const uint8_t *)CONF_STR_DC_ONE);
         log_debug(LOG_INFO, "setting write_consistency to default value:%s",
                 CONF_STR_DC_ONE);
+    }
+
+    if (cp->stats_interval == CONF_UNSET_NUM) {
+    	log_debug(LOG_INFO,"setting stats_interval to default value:%d",CONF_DEFAULT_STATS_INTERVAL_MS);
+        cp->stats_interval = CONF_DEFAULT_STATS_INTERVAL_MS;
+    }
+
+    if (!cp->stats_listen.valid) {
+        log_error("conf: directive \"stats_listen:\" is missing - using defaults %s",
+        		CONF_DEFAULT_STATS_PNAME, CONF_DEFAULT_STATS_PORT);
+        cp->stats_listen.port=CONF_DEFAULT_STATS_PORT;
+        string_copy_c(&cp->stats_listen.pname,
+                              (const uint8_t *)CONF_DEFAULT_STATS_PNAME);
     }
 
     if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&

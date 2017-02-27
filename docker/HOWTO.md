@@ -13,7 +13,6 @@ Creating a container running Dynomite and Redis instance inside. To set the name
 
 To list all containers
 
-    $ sudo docker ps -l
+    $ sudo docker ps
 
 Enjoy!
-

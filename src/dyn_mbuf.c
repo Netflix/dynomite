@@ -319,15 +319,15 @@ mbuf_split(struct mhdr *h, uint8_t *pos, func_mbuf_copy_t cb, void *cbarg)
 
 /**
  * Initialize memory buffers to store network packets/socket buffers.
- * @param[in,out] nci Dynomite instance.
+ * @param[in,out] mbuf_size
  */
 void
-mbuf_init(struct instance *nci)
+mbuf_init(size_t mbuf_size)
 {
     nfree_mbufq = 0;
     STAILQ_INIT(&free_mbufq);
 
-    mbuf_chunk_size = nci->mbuf_chunk_size + MBUF_ESIZE;
+    mbuf_chunk_size = mbuf_size + MBUF_ESIZE;
     mbuf_offset = mbuf_chunk_size - MBUF_HSIZE;
 
     log_debug(LOG_DEBUG, "mbuf hsize %d chunk size %zu offset %zu length %zu",

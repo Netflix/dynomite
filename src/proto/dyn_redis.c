@@ -26,8 +26,10 @@
 #include "../dyn_core.h"
 #include "dyn_proto.h"
 
-#define RSP_STRING(ACTION)                                                          \
-    ACTION( pong,             "+PONG\r\n"                                         ) \
+#define RSP_STRING(ACTION)                                   \
+    ACTION( ok,               "+OK\r\n"                     )
+
+    /*ACTION( pong,             "+PONG\r\n"                   ) \ */
 
 #define DEFINE_ACTION(_var, _str) static struct string rsp_##_var = string(_str);
     RSP_STRING( DEFINE_ACTION )
@@ -318,7 +320,7 @@ redis_argeval(struct msg *r)
  * Return true, if the redis response is an error response i.e. a simple
  * string whose first character is '-', otherwise return false.
  */
-static bool
+/*static bool
 redis_error(struct msg *r)
 {
     switch (r->type) {
@@ -343,7 +345,7 @@ redis_error(struct msg *r)
     }
 
     return false;
-}
+}*/
 
 /*
  * Reference: http://redis.io/topics/protocol
@@ -374,7 +376,7 @@ void
 redis_parse_req(struct msg *r)
 {
     struct mbuf *b;
-    uint8_t *p, *m;
+    uint8_t *p, *m = 0;
     uint8_t ch;
     enum {
         SW_START,
@@ -412,7 +414,7 @@ redis_parse_req(struct msg *r)
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    ASSERT(r->request);
+    ASSERT(r->is_request);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -1475,6 +1477,11 @@ redis_parse_req(struct msg *r)
                         goto done;
                     }
                     state = SW_ARGN_LEN;
+                 } else if (redis_argkvx(r)) {
+                     if (r->rnarg == 0) {
+                         goto done;
+                     }
+                     state = SW_FRAGMENT;
                 } else if (redis_argeval(r)) {
                     if (r->rnarg < 2) {
                     	log_error("Dynomite EVAL/EVALSHA requires at least 1 key");
@@ -1824,7 +1831,7 @@ error:
     r->state = state;
     errno = EINVAL;
 
-    log_hexdump(LOG_INFO, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
+    log_hexdump(LOG_WARN, b->pos, mbuf_length(b), "parsed bad req %"PRIu64" "
                 "res %d type %d state %d", r->id, r->result, r->type,
                 r->state);
 
@@ -1890,7 +1897,7 @@ redis_parse_rsp(struct msg *r)
     state = r->state;
     b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
-    ASSERT(!r->request);
+    ASSERT(!r->is_request);
     ASSERT(state >= SW_START && state < SW_SENTINEL);
     ASSERT(b != NULL);
     ASSERT(b->pos <= b->last);
@@ -2400,22 +2407,27 @@ error:
 void
 redis_pre_splitcopy(struct mbuf *mbuf, void *arg)
 {
-    struct msg *r = arg;
+    struct msg *req = arg;
     int n;
 
-    ASSERT(r->request);
-    ASSERT(r->narg > 1);
+    ASSERT(req->is_request);
+    ASSERT(req->narg > 1);
     ASSERT(mbuf_empty(mbuf));
 
-    switch (r->type) {
+    switch (req->type) {
     case MSG_REQ_REDIS_MGET:
         n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$4\r\nmget\r\n",
-                        r->narg - 1);
+                        req->narg - 1);
+        break;
+
+     case MSG_REQ_REDIS_MSET:
+        n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$4\r\nmset\r\n",
+                        req->narg - 2);
         break;
 
     case MSG_REQ_REDIS_DEL:
         n = dn_snprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n$3\r\ndel\r\n",
-                        r->narg - 1);
+                        req->narg - 1);
         break;
 
     default:
@@ -2431,14 +2443,18 @@ redis_pre_splitcopy(struct mbuf *mbuf, void *arg)
  * 'mget' or 'del' request and has already been split into two requests
  */
 rstatus_t
-redis_post_splitcopy(struct msg *r)
+redis_post_splitcopy(struct msg *req)
 {
     struct mbuf *hbuf, *nhbuf;         /* head mbuf and new head mbuf */
     struct string hstr = string("*2"); /* header string */
+    if (req->type == MSG_REQ_REDIS_MSET) {
+        string_set_text(&hstr, "*3");
+    }
 
-    ASSERT(r->request);
-    ASSERT(r->type == MSG_REQ_REDIS_MGET || r->type == MSG_REQ_REDIS_DEL);
-    ASSERT(!STAILQ_EMPTY(&r->mhdr));
+    ASSERT(req->is_request);
+    ASSERT(req->type == MSG_REQ_REDIS_MGET || req->type == MSG_REQ_REDIS_DEL ||
+           req->type == MSG_REQ_REDIS_MSET);
+    ASSERT(!STAILQ_EMPTY(&req->mhdr));
 
     nhbuf = mbuf_get();
     if (nhbuf == NULL) {
@@ -2449,21 +2465,21 @@ redis_post_splitcopy(struct msg *r)
      * Fix the head mbuf in the head (A) msg. The fix is straightforward
      * as we just need to skip over the narg token
      */
-    hbuf = STAILQ_FIRST(&r->mhdr);
-    ASSERT(hbuf->pos == r->narg_start);
-    ASSERT(hbuf->pos < r->narg_end && r->narg_end <= hbuf->last);
-    hbuf->pos = r->narg_end;
+    hbuf = STAILQ_FIRST(&req->mhdr);
+    ASSERT(hbuf->pos == req->narg_start);
+    ASSERT(hbuf->pos < req->narg_end && req->narg_end <= hbuf->last);
+    hbuf->pos = req->narg_end;
 
     /*
      * Add a new head mbuf in the head (A) msg that just contains '*2'
      * token
      */
-    STAILQ_INSERT_HEAD(&r->mhdr, nhbuf, next);
+    STAILQ_INSERT_HEAD(&req->mhdr, nhbuf, next);
     mbuf_copy(nhbuf, hstr.data, hstr.len);
 
     /* fix up the narg_start and narg_end */
-    r->narg_start = nhbuf->pos;
-    r->narg_end = nhbuf->last;
+    req->narg_start = nhbuf->pos;
+    req->narg_end = nhbuf->last;
 
     return DN_OK;
 }
@@ -2474,68 +2490,82 @@ redis_post_splitcopy(struct msg *r)
  * responses to the fragmented request vector hasn't been received
  */
 void
-redis_pre_coalesce(struct msg *r)
+redis_pre_coalesce(struct msg *rsp)
 {
-    struct msg *pr = r->peer; /* peer request */
+    struct msg *req = rsp->peer; /* peer request */
     struct mbuf *mbuf;
 
-    ASSERT(!r->request);
-    ASSERT(pr->request);
+    ASSERT(!rsp->is_request);
+    ASSERT(req->is_request);
 
-    if (pr->frag_id == 0) {
+    if (req->frag_id == 0) {
         /* do nothing, if not a response to a fragmented request */
         return;
     }
 
-    switch (r->type) {
+    switch (rsp->type) {
     case MSG_RSP_REDIS_INTEGER:
         /* only redis 'del' fragmented request sends back integer reply */
-        ASSERT(pr->type == MSG_REQ_REDIS_DEL);
+        ASSERT(req->type == MSG_REQ_REDIS_DEL);
 
-        mbuf = STAILQ_FIRST(&r->mhdr);
+        mbuf = STAILQ_FIRST(&rsp->mhdr);
         /*
          * Our response parser guarantees that the integer reply will be
          * completely encapsulated in a single mbuf and we should skip over
          * all the mbuf contents and discard it as the parser has already
          * parsed the integer reply and stored it in msg->integer
          */
-        ASSERT(mbuf == STAILQ_LAST(&r->mhdr, mbuf, next));
-        ASSERT(r->mlen == mbuf_length(mbuf));
+        ASSERT(mbuf == STAILQ_LAST(&rsp->mhdr, mbuf, next));
+        ASSERT(rsp->mlen == mbuf_length(mbuf));
 
-        r->mlen -= mbuf_length(mbuf);
+        rsp->mlen -= mbuf_length(mbuf);
         mbuf_rewind(mbuf);
 
         /* accumulate the integer value in frag_owner of peer request */
-        pr->frag_owner->integer += r->integer;
+        req->frag_owner->integer += rsp->integer;
         break;
 
     case MSG_RSP_REDIS_MULTIBULK:
         /* only redis 'mget' fragmented request sends back multi-bulk reply */
-        ASSERT(pr->type == MSG_REQ_REDIS_MGET);
+        ASSERT(req->type == MSG_REQ_REDIS_MGET);
 
-        mbuf = STAILQ_FIRST(&r->mhdr);
+        mbuf = STAILQ_FIRST(&rsp->mhdr);
         /*
          * Muti-bulk reply can span over multiple mbufs and in each reply
          * we should skip over the narg token. Our response parser
          * guarantees thaat the narg token and the immediately following
          * '\r\n' will exist in a contiguous region in the first mbuf
          */
-        ASSERT(r->narg_start == mbuf->pos);
-        ASSERT(r->narg_start < r->narg_end);
+        ASSERT(rsp->narg_start == mbuf->pos);
+        ASSERT(rsp->narg_start < rsp->narg_end);
 
-        r->narg_end += CRLF_LEN;
-        r->mlen -= (uint32_t)(r->narg_end - r->narg_start);
-        mbuf->pos = r->narg_end;
+        rsp->narg_end += CRLF_LEN;
+        rsp->mlen -= (uint32_t)(rsp->narg_end - rsp->narg_start);
+        mbuf->pos = rsp->narg_end;
 
-        if (pr->first_fragment) {
+        if (req->first_fragment) {
             mbuf = mbuf_get();
             if (mbuf == NULL) {
-                pr->error = 1;
-                pr->err = EINVAL;
+                req->is_error = 1;
+                req->error_code = EINVAL;
                 return;
             }
-            STAILQ_INSERT_HEAD(&r->mhdr, mbuf, next);
+            STAILQ_INSERT_HEAD(&rsp->mhdr, mbuf, next);
         }
+        break;
+
+    case MSG_RSP_REDIS_STATUS:
+        if (req->type == MSG_REQ_REDIS_MSET) {       /* MSET segments */
+            mbuf = STAILQ_FIRST(&rsp->mhdr);
+            rsp->mlen -= mbuf_length(mbuf);
+            mbuf_rewind(mbuf);
+        }
+        break;
+
+    case MSG_RSP_REDIS_ERROR:
+        req->is_error = rsp->is_error;
+        req->error_code = rsp->error_code;
+        req->dyn_error_code = rsp->dyn_error_code;
         break;
 
     default:
@@ -2544,11 +2574,12 @@ redis_pre_coalesce(struct msg *r)
          * MSG_RSP_REDIS_MULTIBULK. For an invalid response, we send out -ERR
          * with EINVAL errno
          */
-        mbuf = STAILQ_FIRST(&r->mhdr);
-        log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
-                    "with unknown type %d", r->type);
-        pr->error = 1;
-        pr->err = EINVAL;
+        mbuf = STAILQ_FIRST(&rsp->mhdr);
+        if (mbuf)
+            log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
+                        "with unknown type %d", rsp->type);
+        req->is_error = 1;
+        req->error_code = EINVAL;
         break;
     }
 }
@@ -2560,48 +2591,61 @@ redis_pre_coalesce(struct msg *r)
  * the fragmented request is consider to be done
  */
 void
-redis_post_coalesce(struct msg *r)
+redis_post_coalesce(struct msg *req)
 {
-    struct msg *pr = r->selected_rsp; /* peer response */
+    struct msg *rsp = req->selected_rsp; /* peer response */
     struct mbuf *mbuf;
     int n;
+    rstatus_t status = DN_OK;
 
-    ASSERT(r->request && r->first_fragment);
-    if (r->error || r->ferror) {
+    ASSERT(req->is_request && req->first_fragment);
+    if (req->is_error || req->is_ferror) {
         /* do nothing, if msg is in error */
         return;
     }
 
-    ASSERT(!pr->request);
+    ASSERT(!rsp->is_request);
 
-    switch (pr->type) {
+    switch (rsp->type) {
     case MSG_RSP_REDIS_INTEGER:
         /* only redis 'del' fragmented request sends back integer reply */
-        ASSERT(r->type == MSG_REQ_REDIS_DEL);
+        ASSERT(req->type == MSG_REQ_REDIS_DEL);
 
-        mbuf = STAILQ_FIRST(&pr->mhdr);
+        mbuf = STAILQ_FIRST(&rsp->mhdr);
 
-        ASSERT(pr->mlen == 0);
+        ASSERT(rsp->mlen == 0);
         ASSERT(mbuf_empty(mbuf));
 
-        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":%d\r\n", r->integer);
+        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":%d\r\n", req->integer);
         mbuf->last += n;
-        pr->mlen += (uint32_t)n;
+        rsp->mlen += (uint32_t)n;
         break;
 
     case MSG_RSP_REDIS_MULTIBULK:
         /* only redis 'mget' fragmented request sends back multi-bulk reply */
-        ASSERT(r->type == MSG_REQ_REDIS_MGET);
+        ASSERT(req->type == MSG_REQ_REDIS_MGET);
 
-        mbuf = STAILQ_FIRST(&pr->mhdr);
+        mbuf = STAILQ_FIRST(&rsp->mhdr);
         ASSERT(mbuf_empty(mbuf));
 
-        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", r->nfrag);
+        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", req->nfrag);
         mbuf->last += n;
-        pr->mlen += (uint32_t)n;
+        rsp->mlen += (uint32_t)n;
         break;
 
+    case MSG_RSP_REDIS_STATUS:
+        status = msg_append(rsp, rsp_ok.data, rsp_ok.len);
+        if (status != DN_OK) {
+            rsp->is_error = 1;        /* mark this msg as err */
+            rsp->error_code = errno;
+        }
+        break;
     default:
+        log_error("req %lu:%lu type %u has rsp %lu:%lu with invalid type %u",
+                  req->id, req->parent_id, req->type, rsp->id, rsp->parent_id, rsp->type);
+        if (log_loggable(LOG_INFO)) {
+            msg_dump(rsp);
+        }
         NOT_REACHED();
     }
 }
