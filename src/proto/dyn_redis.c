@@ -755,6 +755,7 @@ redis_parse_req(struct msg *r)
             case 5:
                 if (str5icmp(m, 'h', 'k', 'e', 'y', 's')) {
                     r->type = MSG_REQ_REDIS_HKEYS;
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     r->is_read = 1;
                     break;
                 }
@@ -1017,6 +1018,7 @@ redis_parse_req(struct msg *r)
 
                 if (str7icmp(m, 'h', 'g', 'e', 't', 'a', 'l', 'l')) {
                     r->type = MSG_REQ_REDIS_HGETALL;
+                    r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
                     r->is_read = 1;
                     break;
                 }
