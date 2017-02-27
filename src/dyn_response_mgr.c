@@ -143,7 +143,14 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         rsp->is_error = 1;
         rsp->error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
         rsp->dyn_error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
-        ASSERT(rspmgr->err_rsp == NULL);
+        // There is a case that when 1 out of three nodes are down, the
+        // response manager has 1 error response and 2 good responses.
+        // We reach here when the two responses differ and we want to return
+        // failed to achieve quorum. In this case, free the existing error
+        // response
+        if (rspmgr->err_rsp) {
+            rsp_put(rspmgr->err_rsp);
+        }
         rspmgr->err_rsp = rsp;
         rspmgr->error_responses++;
         return rsp;

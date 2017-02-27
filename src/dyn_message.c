@@ -1245,8 +1245,7 @@ msg_send(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg;
 
-    ASSERT_LOG(conn->send_active, "conn %p type:%s sd %d",
-               conn, conn_get_type_string(conn), conn->sd);
+    ASSERT_LOG(conn->send_active, "%M is not active", conn);
 
     conn->send_ready = 1;
     do {
@@ -1264,7 +1263,7 @@ msg_send(struct context *ctx, struct conn *conn)
         if (conn->omsg_count > MAX_CONN_QUEUE_SIZE) {
             conn->send_ready = 0;
             conn->err = ENOTRECOVERABLE;
-            loga("Setting ENOTRECOVERABLE happens here!");
+            log_error("%M Setting ENOTRECOVERABLE happens here!", conn);
         }
 
     } while (conn->send_ready);
