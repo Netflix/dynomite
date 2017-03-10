@@ -59,9 +59,9 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 {
 
     struct node *server = p_conn->owner;
-    log_debug(LOG_DEBUG, "%M FORWARD %M to peer %M on rack '%.*s' dc '%.*s' ",
-              c_conn, req, p_conn, rack->name->len, rack->name->data,
-              server->dc.len, server->dc.data);
+    log_info("%M FORWARD %M to peer %M on rack '%.*s' dc '%.*s' ",
+             c_conn, req, p_conn, rack->name->len, rack->name->data,
+             server->dc.len, server->dc.data);
 
     struct string *dc = rack->dc;
     rstatus_t status;

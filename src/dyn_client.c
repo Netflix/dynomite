@@ -656,8 +656,6 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
         return DN_ERROR;
     }
 
-    log_debug(LOG_VERB, "c_conn: %p forwarding %d:%d to p_conn %p", c_conn,
-            req->id, req->parent_id, p_conn);
     return dnode_peer_req_forward(ctx, c_conn, p_conn, req, rack, key, keylen, dyn_error_code);
 }
 
@@ -703,8 +701,8 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
             msg_clone(req, orig_mbuf, rack_msg);
             rack_msg->swallow = true;
 
-            log_debug(LOG_DEBUG, "%M forwarding cloned %M to same dc rack '%.*s'",
-                      c_conn, rack_msg, rack->name->len, rack->name->data);
+            log_info("%M forwarding cloned %M to same dc rack '%.*s'",
+                     c_conn, rack_msg, rack->name->len, rack->name->data);
 
             s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen, &dyn_error_code);
             if (s != DN_OK) {
@@ -777,11 +775,10 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
     }
 
     msg_clone(req, orig_mbuf, rack_msg);
-    log_info("%M %M clone to remote dc %M", c_conn, req, rack_msg);
     rack_msg->swallow = true;
 
-    log_debug(LOG_DEBUG, "%M forwarding %M on remote dc rack '%.*s'",
-              c_conn, rack_msg, rack->name->len, rack->name->data);
+    log_info("%M forwarding cloned %M on remote dc rack '%.*s'",
+             c_conn, rack_msg, rack->name->len, rack->name->data);
 
     dyn_error_t dyn_error_code = 0;
     rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
@@ -806,8 +803,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
         msg_clone(req, orig_mbuf, rack_msg);
         rack_msg->swallow = true;
 
-        log_debug(LOG_DEBUG, "%M forwarding cloned %M to remote dc rack '%.*s'",
-                  c_conn, rack_msg, rack->name->len, rack->name->data);
+        log_info("%M FAILOVER forwarding cloned %M to remote dc rack '%.*s'",
+                 c_conn, rack_msg, rack->name->len, rack->name->data);
 
         dyn_error_code = DYNOMITE_OK;
         s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
@@ -862,8 +859,7 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
     uint32_t keylen = 0;
     uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
 
-    log_debug(LOG_DEBUG, "%M received %M key '%.*s' adding to dict", c_conn,
-              req, keylen, key);
+    log_info(">>>>>>>>>>>>>>>>>>>>>>> %M RECEIVED %M key '%.*s'", c_conn, req, keylen, key);
     // add the message to the dict
     dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
