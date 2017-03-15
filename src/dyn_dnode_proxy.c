@@ -141,8 +141,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         sd = accept(p->sd, (struct sockaddr *)&client_address, &client_len);
         if (sd < 0) {
             if (errno == EINTR) {
-                log_warn("dyn: accept on %s %d not ready - eintr",
-                         conn_get_type_string(p), p->sd);
+                log_warn("accept on %M not ready - eintr", p);
                 continue;
             }
 
@@ -156,8 +155,7 @@ dnode_accept(struct context *ctx, struct conn *p)
              * it back in when some existing connection gets closed
              */
 
-            log_error("dyn: accept on %s %d failed: %s", conn_get_type_string(p),
-                      p->sd, strerror(errno));
+            log_error("accept on %M failed: %s", p, strerror(errno));
             return DN_ERROR;
         }
 
@@ -174,8 +172,8 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     c = conn_get_peer(p->owner, true);
     if (c == NULL) {
-        log_error("dyn: get conn client peer for PEER_CLIENT %d from %s %d failed: %s",
-                  sd, conn_get_type_string(p), p->sd, strerror(errno));
+        log_error("get conn for PEER_CLIENT %d from %M failed: %s", sd, p,
+                  strerror(errno));
         status = close(sd);
         if (status < 0) {
             log_error("dyn: close c %d failed, ignored: %s", sd, strerror(errno));
@@ -189,8 +187,7 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("dyn: set nonblock on s %d from peer socket %d failed: %s",
-                  c->sd, p->sd, strerror(errno));
+        log_error("%M Failed to set nonblock on %M: %s", p, c, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -198,20 +195,19 @@ dnode_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("dyn: set tcpnodelay on %d from peer socket %d failed, ignored: %s",
-                     c->sd, p->sd, strerror(errno));
+            log_warn("%M Failed to set tcpnodelay on %M: %s",
+                     p, strerror(errno));
         }
     }
 
     status = conn_event_add_conn(c);
     if (status < 0) {
-        log_error("dyn: event add conn from %s %d failed: %s",
-                  conn_get_type_string(p), p->sd, strerror(errno));
+        log_error("%M Failed to add %M to event loop: %s", p, c, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
-    log_notice("accepted %M on %M", c, p);
+    log_notice("%M accepted %M", p, c);
 
     return DN_OK;
 }
@@ -226,9 +222,9 @@ dnode_recv(struct context *ctx, struct conn *conn)
  
     conn->recv_ready = 1;
     do {
-        status = dnode_accept(ctx, conn);
-        if (status != DN_OK) {
-            return status;
+        if (dnode_accept(ctx, conn) != DN_OK) {
+            log_error("%M Failed to accept a connection. Continuing", conn);
+            continue;
         }
     } while (conn->recv_ready);
 
