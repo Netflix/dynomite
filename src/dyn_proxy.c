@@ -166,8 +166,7 @@ proxy_accept(struct context *ctx, struct conn *p)
              * it back in when some existing connection gets closed
              */
 
-            log_error("accept on %M failed: %s",
-                      p, strerror(errno));
+            log_error("accept on %M failed: %s", p, strerror(errno));
             return DN_ERROR;
         }
 
@@ -176,8 +175,8 @@ proxy_accept(struct context *ctx, struct conn *p)
 
     c = conn_get(p->owner, true);
     if (c == NULL) {
-        log_error("get conn for CLIENT %d from %s %d failed: %s", sd,
-                  conn_get_type_string(p), p->sd, strerror(errno));
+        log_error("get conn for CLIENT %d from %M failed: %s", sd, p,
+                  strerror(errno));
         status = close(sd);
         if (status < 0) {
             log_error("close c %d failed, ignored: %s", sd, strerror(errno));
@@ -191,8 +190,7 @@ proxy_accept(struct context *ctx, struct conn *p)
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("set nonblock on %M from %M failed: %s",
-                  c, p, strerror(errno));
+        log_error("%M Failed to set nonblock on %M: %s", p, c, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -200,14 +198,14 @@ proxy_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("set tcpnodelay on %M from %s failed, ignored: %s",
-                     c, p, strerror(errno));
+            log_warn("%M Failed to set tcpnodelay on %M: %s",
+                     p, strerror(errno));
         }
     }
 
     status = conn_event_add_conn(c);
     if (status < 0) {
-        log_error("event add conn from %M failed: %s", p, strerror(errno));
+        log_error("%M Failed to add %M to event loop: %s", p, c, strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -227,9 +225,9 @@ proxy_recv(struct context *ctx, struct conn *conn)
 
     conn->recv_ready = 1;
     do {
-        status = proxy_accept(ctx, conn);
-        if (status != DN_OK) {
-            return status;
+        if (proxy_accept(ctx, conn) != DN_OK) {
+            log_error("%M Failed to accept a connection. Continuing", conn);
+            continue;
         }
     } while (conn->recv_ready);
 
