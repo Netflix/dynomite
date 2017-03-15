@@ -425,8 +425,7 @@ core_recv(struct context *ctx, struct conn *conn)
 
 	status = conn_recv(ctx, conn);
 	if (status != DN_OK) {
-		log_info("recv on %s %d failed: %s", conn_get_type_string(conn),
-				 conn->sd, strerror(errno));
+		log_info("%M recv failed: %s", conn, strerror(errno));
 	}
 
 	return status;
@@ -439,8 +438,7 @@ core_send(struct context *ctx, struct conn *conn)
 
 	status = conn_send(ctx, conn);
 	if (status != DN_OK) {
-		log_info("send on %s %d failed: %s", conn_get_type_string(conn),
-				 conn->sd, strerror(errno));
+		log_info("%M send failed: %s", conn, strerror(errno));
 	}
 
 	return status;
