@@ -1,4 +1,7 @@
 
+![dynomite logo](images/dynomite-logo.png?raw=true =150x150)
+
+
 # Dynomite 
 
 [![Build Status](https://secure.travis-ci.org/Netflix/dynomite.png)](http://travis-ci.org/Netflix/dynomite)
@@ -6,7 +9,6 @@
 [![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/Netflix/dynomite/blob/dev/LICENSE)
 
 **Dynomite**, inspired by [Dynamo whitepaper](http://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf), is a thin, distributed dynamo layer for different storage engines and protocols. Currently these include [Redis](http://redis.io) and [Memcached](http://www.memcached.org/).  Dynomite supports multi-datacenter replication and is designed for high availability.
-<center>![dynomite logo](images/dynomite-logo.png?raw=true =150x150)</center>
 
 The ultimate goal with Dynomite is to be able to implement high availability and cross-datacenter replication on storage engines that do not inherently provide that functionality. The implementation is efficient, not complex (few moving parts), and highly performant.
 
