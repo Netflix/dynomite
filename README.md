@@ -1,5 +1,5 @@
 
-![dynomite logo](images/dynomite-logo.png?raw=true =150x150)
+![dynomite logo](images/dynomite-logo.png)
 
 
 # Dynomite 
