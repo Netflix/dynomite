@@ -652,7 +652,7 @@ core_loop(struct context *ctx)
     }
 
     // go through all the ready queue and send each of them
-    struct server_pool *sp = &ctx->pool;
+    /*struct server_pool *sp = &ctx->pool;
     struct conn *conn, *nconn;
     TAILQ_FOREACH_SAFE(conn, &sp->ready_conn_q, ready_tqe, nconn) {
 		rstatus_t status = core_send(ctx, conn);
@@ -662,7 +662,7 @@ core_loop(struct context *ctx)
         } else {
             TAILQ_REMOVE(&sp->ready_conn_q, conn, ready_tqe);
         }
-    }
+    }*/
 	stats_swap(ctx->stats);
 
 	return DN_OK;
