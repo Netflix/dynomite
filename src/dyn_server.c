@@ -251,8 +251,8 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     struct conn *c_conn = req->owner;
     // At other connections, these responses would be swallowed.
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
-               (c_conn->type == CONN_DNODE_PEER_CLIENT), "c_conn type %s",
-               conn_get_type_string(c_conn));
+               (c_conn->type == CONN_DNODE_PEER_CLIENT), "c_conn %M",
+               c_conn);
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
