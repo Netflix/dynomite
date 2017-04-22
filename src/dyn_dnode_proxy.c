@@ -9,6 +9,7 @@
 #include "dyn_core.h"
 #include "dyn_server.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_dnode_client.h"
 #include "dyn_dnode_proxy.h"
 
 static void
@@ -87,7 +88,7 @@ dnode_init(struct context *ctx)
 {
     rstatus_t status;
     struct server_pool *pool = &ctx->pool;
-    struct conn *p = conn_get_dnode(pool);
+    struct conn *p = conn_get(pool, init_dnode_proxy_conn);
     if (p == NULL) {
         return DN_ENOMEM;
     }
@@ -170,7 +171,7 @@ dnode_accept(struct context *ctx, struct conn *p)
        loga("Unable to get client's address for accept on sd %d\n", sd);
     }
 
-    c = conn_get_peer(p->owner, true);
+    c = conn_get(p->owner, init_dnode_client_conn);
     if (c == NULL) {
         log_error("get conn for PEER_CLIENT %d from %M failed: %s", sd, p,
                   strerror(errno));
@@ -252,6 +253,7 @@ struct conn_ops dnode_server_ops = {
 void
 init_dnode_proxy_conn(struct conn *conn)
 {
+    conn->dyn_mode = 1;
     conn->type = CONN_DNODE_PEER_PROXY;
     conn->ops = &dnode_server_ops;
 }

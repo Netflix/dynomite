@@ -94,28 +94,16 @@
  */
 
 #define DYN_KEEPALIVE_INTERVAL_S 15 /* seconds */
-static uint32_t nfree_connq;       /* # free conn q */
-static struct conn_tqh free_connq; /* free conn q */
+extern void _conn_deinit(void);
+extern void _conn_init(void);
+extern void _conn_put(struct conn *conn);
+extern inline char *_conn_get_type_string(struct conn *conn);
+extern void _add_to_ready_q(struct context *ctx, struct conn *conn);
+extern void _remove_from_ready_q(struct context *ctx, struct conn *conn);
+extern rstatus_t _conn_reuse(struct conn *p);
 
 consistency_t g_read_consistency = DEFAULT_READ_CONSISTENCY;
 consistency_t g_write_consistency = DEFAULT_WRITE_CONSISTENCY;
-
-inline char *
-conn_get_type_string(struct conn *conn)
-{
-    switch(conn->type) {
-        case CONN_UNSPECIFIED: return "UNSPEC";
-        case CONN_PROXY : return "PROXY";
-        case CONN_CLIENT: return "CLIENT";
-        case CONN_SERVER: return "SERVER";
-        case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
-        case CONN_DNODE_PEER_CLIENT: return conn->same_dc ?
-                                            "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
-        case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
-                                            "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
-    }
-    return "INVALID";
-}
 
 bool
 conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req)
@@ -155,107 +143,30 @@ conn_to_ctx(struct conn *conn)
     return pool ? pool->ctx : NULL;
 }
 
-static struct conn *
-_conn_get(void)
-{
-    struct conn *conn;
-
-    if (!TAILQ_EMPTY(&free_connq)) {
-        ASSERT(nfree_connq > 0);
-
-        conn = TAILQ_FIRST(&free_connq);
-        nfree_connq--;
-        TAILQ_REMOVE(&free_connq, conn, conn_tqe);
-    } else {
-        conn = dn_alloc(sizeof(*conn));
-        if (conn == NULL) {
-            return NULL;
-        }
-        memset(conn, 0, sizeof(*conn));
-    }
-
-    conn->object_type = OBJ_CONN;
-    conn->owner = NULL;
-
-    conn->sd = -1;
-    string_init(&conn->pname);
-    /* {family, addrlen, addr} are initialized in enqueue handler */
-
-    TAILQ_INIT(&conn->imsg_q);
-    conn->imsg_count = 0;
-
-    TAILQ_INIT(&conn->omsg_q);
-    conn->omsg_count = 0;
-
-    conn->rmsg = NULL;
-    conn->smsg = NULL;
-
-    /*
-     * Callbacks {recv, recv_next, recv_done}, {send, send_next, send_done},
-     * {close, active}, parse, {ref, unref}, {enqueue_inq, dequeue_inq} and
-     * {enqueue_outq, dequeue_outq} are initialized by the wrapper.
-     */
-
-    conn->send_bytes = 0;
-    conn->recv_bytes = 0;
-
-    conn->events = 0;
-    conn->err = 0;
-    conn->recv_active = 0;
-    conn->recv_ready = 0;
-    conn->send_active = 0;
-    conn->send_ready = 0;
-
-    conn->connecting = 0;
-    conn->connected = 0;
-    conn->eof = 0;
-    conn->done = 0;
-    conn->waiting_to_unref = 0;
-
-    /* for dynomite */
-    conn->dyn_mode = 0;
-    conn->dnode_secured = 0;
-    conn->dnode_crypto_state = 0;
-
-    conn->same_dc = 1;
-    conn->avail_tokens = msgs_per_sec();
-    conn->last_sent = 0;
-    conn->attempted_reconnect = 0;
-    //conn->non_bytes_send = 0;
-    conn_set_read_consistency(conn, g_read_consistency);
-    conn_set_write_consistency(conn, g_write_consistency);
-    conn->type = CONN_UNSPECIFIED;
-
-    unsigned char *aes_key = generate_aes_key();
-    strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
-
-    return conn;
-}
-
 int
 print_conn(FILE *stream, struct conn *conn)
 {
     if ((conn->type == CONN_DNODE_PEER_PROXY) ||
         (conn->type == CONN_PROXY)) {
         return fprintf(stream, "<%s %p %d listening on '%.*s'>",
-                   conn_get_type_string(conn), conn, conn->sd,
+                   _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
     }
     if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
         (conn->type == CONN_CLIENT)) {
         return fprintf(stream, "<%s %p %d from '%.*s'>",
-                   conn_get_type_string(conn), conn, conn->sd,
+                   _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
     }
     if ((conn->type == CONN_DNODE_PEER_SERVER) ||
         (conn->type == CONN_SERVER)) {
         return fprintf(stream, "<%s %p %d to '%.*s'>",
-                   conn_get_type_string(conn), conn, conn->sd,
+                   _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
     }
 
     return fprintf(stream, "<%s %p %d>",
-                   conn_get_type_string(conn), conn, conn->sd);
+                   _conn_get_type_string(conn), conn, conn->sd);
 }
 
 inline void
@@ -284,39 +195,11 @@ conn_get_write_consistency(struct conn *conn)
     return g_write_consistency;
 }
 
-struct conn *
-test_conn_get(void)
-{
-   return _conn_get();
-}
-
-static void
-add_to_ready_q(struct context *ctx, struct conn *conn)
-{
-    // This check is required to check if the connection is already
-    // on the ready queue
-    if (conn->ready_tqe.tqe_prev == NULL) {
-        struct server_pool *pool = &ctx->pool;
-        TAILQ_INSERT_TAIL(&pool->ready_conn_q, conn, ready_tqe);
-    }
-}
-
-static void
-remove_from_ready_q(struct context *ctx, struct conn *conn)
-{
-    // This check is required to check if the connection is already
-    // on the ready queue
-    if (conn->ready_tqe.tqe_prev != NULL) {
-        struct server_pool *pool = &ctx->pool;
-        TAILQ_REMOVE(&pool->ready_conn_q, conn, ready_tqe);
-    }
-}
-
 rstatus_t
 conn_event_del_conn(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
-    remove_from_ready_q(ctx, conn);
+    _remove_from_ready_q(ctx, conn);
     if (conn->sd != -1)
         return event_del_conn(ctx->evb, conn);
     return DN_OK;
@@ -326,7 +209,7 @@ rstatus_t
 conn_event_add_out(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
-    add_to_ready_q(ctx, conn);
+    _add_to_ready_q(ctx, conn);
     return event_add_out(ctx->evb, conn);
 }
 
@@ -334,7 +217,7 @@ rstatus_t
 conn_event_add_conn(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
-    add_to_ready_q(ctx, conn);
+    _add_to_ready_q(ctx, conn);
     return event_add_conn(ctx->evb, conn);
 }
 
@@ -342,46 +225,12 @@ rstatus_t
 conn_event_del_out(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
-    remove_from_ready_q(ctx, conn);
+    _remove_from_ready_q(ctx, conn);
     return event_del_out(ctx->evb, conn);
 }
 
 struct conn *
-conn_get_peer(void *owner, bool client)
-{
-    struct conn *conn;
-
-    conn = _conn_get();
-    if (conn == NULL) {
-        return NULL;
-    }
-
-    conn->dyn_mode = 1;
-
-    if (client) {
-        /* incoming peer connection to dnode server
-         * dyn client receives a request, possibly parsing it, and sends a
-         * response downstream.
-         */
-        init_dnode_client_conn(conn);
-    } else {
-        /*
-         * outgoing peer connection
-         * dyn server receives a response, possibly parsing it, and sends a
-         * request upstream.
-         */
-        init_dnode_peer_conn(conn);
-    }
-
-    conn_ref(conn, owner);
-
-    log_debug(LOG_VVERB, "get conn %p %s", conn, conn_get_type_string(conn));
-
-    return conn;
-}
-
-struct conn *
-conn_get(void *owner, bool client)
+conn_get(void *owner, func_conn_init_t func_conn_init)
 {
     struct conn *conn;
 
@@ -392,73 +241,13 @@ conn_get(void *owner, bool client)
 
     /* connection handles the data store messages (redis, memcached or other) */
 
-    conn->dyn_mode = 0;
-
-    if (client) {
-        /*
-         * client receives a request, possibly parsing it, and sends a
-         * response downstream.
-         */
-        init_client_conn(conn);
-    } else {
-        /*
-         * server receives a response, possibly parsing it, and sends a
-         * request upstream.
-         */
-        init_server_conn(conn);
-    }
-
+    func_conn_init(conn);
+    
     conn_ref(conn, owner);
 
-    log_debug(LOG_VVERB, "get conn %p %s", conn, conn_get_type_string(conn));
+    log_debug(LOG_VVERB, "get conn %p %s", conn, _conn_get_type_string(conn));
 
     return conn;
-}
-
-struct conn *
-conn_get_dnode(void *owner)
-{
-    struct conn *conn;
-
-    conn = _conn_get();
-    if (conn == NULL) {
-        return NULL;
-    }
-
-    conn->dyn_mode = 1;
-    init_dnode_proxy_conn(conn);
-    conn_ref(conn, owner);
-
-    log_debug(LOG_VVERB, "get conn %p %s", conn, conn_get_type_string(conn));
-
-    return conn;
-}
-
-struct conn *
-conn_get_proxy(void *owner)
-{
-    struct conn *conn;
-
-    conn = _conn_get();
-    if (conn == NULL) {
-        return NULL;
-    }
-
-
-    conn->dyn_mode = 0;
-    init_proxy_conn(conn);
-    conn_ref(conn, owner);
-
-    log_debug(LOG_VVERB, "get conn %p %s", conn, conn_get_type_string(conn));
-
-    return conn;
-}
-
-static void
-conn_free(struct conn *conn)
-{
-    log_debug(LOG_VVERB, "free conn %p", conn);
-    dn_free(conn);
 }
 
 void
@@ -466,67 +255,20 @@ conn_put(struct conn *conn)
 {
     ASSERT(conn->sd < 0);
     ASSERT(conn->owner == NULL);
-
     log_debug(LOG_VVERB, "putting %M", conn);
-
-    nfree_connq++;
-    TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
+    _conn_put(conn);
 }
 
-/**
- * Initialize connections.
- */
 void
 conn_init(void)
 {
-    log_debug(LOG_DEBUG, "conn size %d", sizeof(struct conn));
-    nfree_connq = 0;
-    TAILQ_INIT(&free_connq);
+    _conn_init();
 }
 
 void
 conn_deinit(void)
 {
-    struct conn *conn, *nconn; /* current and next connection */
-
-    for (conn = TAILQ_FIRST(&free_connq); conn != NULL;
-         conn = nconn, nfree_connq--) {
-        ASSERT(nfree_connq > 0);
-        nconn = TAILQ_NEXT(conn, conn_tqe);
-        conn_free(conn);
-    }
-    ASSERT(nfree_connq == 0);
-}
-
-static rstatus_t
-conn_reuse(struct conn *p)
-{
-    rstatus_t status;
-    struct sockaddr_un *un;
-
-    switch (p->family) {
-    case AF_INET:
-    case AF_INET6:
-        status = dn_set_reuseaddr(p->sd);
-        break;
-
-    case AF_UNIX:
-        /*
-         * bind() will fail if the pathname already exist. So, we call unlink()
-         * to delete the pathname, in case it already exists. If it does not
-         * exist, unlink() returns error, which we ignore
-         */
-        un = (struct sockaddr_un *) p->addr;
-        unlink(un->sun_path);
-        status = DN_OK;
-        break;
-
-    default:
-        NOT_REACHED();
-        status = DN_ERROR;
-    }
-
-    return status;
+    _conn_deinit();
 }
 
 rstatus_t
@@ -544,7 +286,7 @@ conn_listen(struct context *ctx, struct conn *p)
         return DN_ERROR;
     }
 
-    status = conn_reuse(p);
+    status = _conn_reuse(p);
     if (status < 0) {
         log_error("reuse of addr '%.*s' for listening on p %d failed: %s",
                   p->pname.len, p->pname.data, p->sd,
@@ -786,32 +528,3 @@ conn_sendv_data(struct conn *conn, struct array *sendv, size_t nsend)
 
     return DN_ERROR;
 }
-
-void
-conn_print(struct conn *conn)
-{
-	log_debug(LOG_VERB, "sd %d", conn->sd);
-	log_debug(LOG_VERB, "Type: %s", conn_get_type_string(conn));
-
-	log_debug(LOG_VERB, "dyn_mode %d", conn->dyn_mode);
-
-	log_debug(LOG_VERB, "dnode_crypto_state %d", conn->dnode_crypto_state);
-	log_debug(LOG_VERB, "dnode_secured %d", conn->dnode_secured);
-
-	log_debug(LOG_VERB, "connected %d", conn->connected);
-	log_debug(LOG_VERB, "done %d", conn->done);
-
-
-	log_debug(LOG_VERB, "send_active %d", conn->send_active);
-	log_debug(LOG_VERB, "send_bytes %d", conn->send_bytes);
-	log_debug(LOG_VERB, "send_ready %d", conn->send_ready);
-
-	log_debug(LOG_VERB, "recv_active %d", conn->recv_active);
-	log_debug(LOG_VERB, "recv_bytes %d", conn->recv_bytes);
-	log_debug(LOG_VERB, "recv_ready %d", conn->recv_ready);
-
-	log_debug(LOG_VERB, "events %d", conn->events);
-	log_debug(LOG_VERB, "eof %d", conn->eof);
-	log_debug(LOG_VERB, "err %d", conn->err);
-}
-

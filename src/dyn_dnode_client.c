@@ -544,6 +544,7 @@ struct conn_ops dnode_client_ops = {
 void
 init_dnode_client_conn(struct conn *conn)
 {
+    conn->dyn_mode = 1;
     conn->type = CONN_DNODE_PEER_CLIENT;
     conn->ops = &dnode_client_ops;
 }

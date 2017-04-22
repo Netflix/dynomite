@@ -37,7 +37,7 @@ dynomite_SOURCES =			                          \
         dyn_cbuf.h                                                \
         dyn_client.c dyn_client.h                                 \
         dyn_conf.c dyn_conf.h		                          \
-        dyn_connection.c dyn_connection.h                         \
+        dyn_connection_internal.c dyn_connection.c dyn_connection.h                         \
         dyn_core.c dyn_core.h                                     \
         dyn_crypto.c dyn_crypto.h                                 \
         dyn_dict_msg_id.h dyn_dict_msg_id.c                       \
@@ -83,7 +83,7 @@ dynomite_test_SOURCES =                                           \
         dyn_cbuf.h                                                \
         dyn_crypto.c dyn_crypto.h                                 \
         dyn_core.c dyn_core.h                                     \
-        dyn_connection.c dyn_connection.h                         \
+        dyn_connection_internal.c dyn_connection.c dyn_connection.h                         \
         dyn_client.c dyn_client.h                                 \
         dyn_dict_msg_id.h dyn_dict_msg_id.c                       \
         dyn_dnode_client.h dyn_dnode_client.c                     \

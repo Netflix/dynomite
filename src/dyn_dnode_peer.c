@@ -342,7 +342,7 @@ dnode_peer_conn(struct node *peer)
     pool = peer->owner;
 
     if (peer->conn == NULL) {
-        conn = conn_get_peer(peer, false);
+        conn = conn_get(peer, init_dnode_peer_conn);
         if (is_conn_secured(pool, peer)) {
             conn->dnode_secured = 1;
             conn->dnode_crypto_state = 0; //need to do a encryption handshake
@@ -1751,6 +1751,7 @@ struct conn_ops dnode_peer_ops = {
 void
 init_dnode_peer_conn(struct conn *conn)
 {
+    conn->dyn_mode = 1;
     conn->type = CONN_DNODE_PEER_SERVER;
     conn->ops = &dnode_peer_ops;
 }

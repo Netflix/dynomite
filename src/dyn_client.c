@@ -1055,6 +1055,7 @@ struct conn_ops client_ops = {
 void
 init_client_conn(struct conn *conn)
 {
+    conn->dyn_mode = 0;
     conn->type = CONN_CLIENT;
     conn->ops = &client_ops;
 }
