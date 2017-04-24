@@ -487,8 +487,7 @@ core_error(struct context *ctx, struct conn *conn)
 
 	status = dn_get_soerror(conn->sd);
 	if (status < 0) {
-	log_warn("get soerr on %s client %d failed, ignored: %s",
-             conn_get_type_string(conn), conn->sd, strerror(errno));
+	log_warn("get soerr on %M failed, ignored: %s", conn, strerror(errno));
 	}
 	conn->err = errno;
 
@@ -561,8 +560,7 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
-              conn_get_type_string(conn), conn->sd);
+    log_debug(LOG_VVERB, "event %04"PRIX32" on %M", events, conn);
 
 	conn->events = events;
 
@@ -714,7 +712,7 @@ core_loop(struct context *ctx)
     TAILQ_FOREACH_SAFE(conn, &sp->ready_conn_q, ready_tqe, nconn) {
 		rstatus_t status = core_send(ctx, conn);
         if (status == DN_OK) {
-            log_debug(LOG_VVERB, "Flushing writes on %s %d", conn_get_type_string(conn), conn->sd);
+            log_debug(LOG_VVERB, "Flushing writes on %M", conn);
             conn_event_del_out(conn);
         } else {
             TAILQ_REMOVE(&sp->ready_conn_q, conn, ready_tqe);
