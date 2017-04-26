@@ -26,6 +26,7 @@
 #include "dyn_server.h"
 #include "dyn_client.h"
 #include "dyn_proxy.h"
+#include "dyn_connection_internal.h"
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
@@ -53,6 +54,35 @@ _conn_get_type_string(struct conn *conn)
     return "INVALID";
 }
 
+static int
+_print_conn(FILE *stream, const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_CONN);
+    struct conn *conn = (struct conn *)obj;
+    if ((conn->type == CONN_DNODE_PEER_PROXY) ||
+        (conn->type == CONN_PROXY)) {
+        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
+                   _conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+    if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
+        (conn->type == CONN_CLIENT)) {
+        return fprintf(stream, "<%s %p %d from '%.*s'>",
+                   _conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+    if ((conn->type == CONN_DNODE_PEER_SERVER) ||
+        (conn->type == CONN_SERVER)) {
+        return fprintf(stream, "<%s %p %d to '%.*s'>",
+                   _conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+    }
+
+    return fprintf(stream, "<%s %p %d>",
+                   _conn_get_type_string(conn), conn, conn->sd);
+}
+
+
 struct conn *
 _conn_get(void)
 {
@@ -72,7 +102,10 @@ _conn_get(void)
         memset(conn, 0, sizeof(*conn));
     }
 
-    conn->object_type = OBJ_CONN;
+    conn->object = (object_t){
+        .type = OBJ_CONN,
+        .func_print = _print_conn
+    };
     conn->owner = NULL;
 
     conn->sd = -1;

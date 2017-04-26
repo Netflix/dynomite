@@ -26,6 +26,7 @@
 #include "dyn_server.h"
 #include "dyn_client.h"
 #include "dyn_proxy.h"
+#include "dyn_connection_internal.h"
 #include "dyn_dnode_proxy.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_dnode_client.h"
@@ -94,14 +95,6 @@
  */
 
 #define DYN_KEEPALIVE_INTERVAL_S 15 /* seconds */
-extern void _conn_deinit(void);
-extern void _conn_init(void);
-extern void _conn_put(struct conn *conn);
-extern inline char *_conn_get_type_string(struct conn *conn);
-extern void _add_to_ready_q(struct context *ctx, struct conn *conn);
-extern void _remove_from_ready_q(struct context *ctx, struct conn *conn);
-extern rstatus_t _conn_reuse(struct conn *p);
-
 consistency_t g_read_consistency = DEFAULT_READ_CONSISTENCY;
 consistency_t g_write_consistency = DEFAULT_WRITE_CONSISTENCY;
 
@@ -141,32 +134,6 @@ conn_to_ctx(struct conn *conn)
     }
 
     return pool ? pool->ctx : NULL;
-}
-
-int
-print_conn(FILE *stream, struct conn *conn)
-{
-    if ((conn->type == CONN_DNODE_PEER_PROXY) ||
-        (conn->type == CONN_PROXY)) {
-        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
-                   _conn_get_type_string(conn), conn, conn->sd,
-                   conn->pname.len, conn->pname.data);
-    }
-    if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
-        (conn->type == CONN_CLIENT)) {
-        return fprintf(stream, "<%s %p %d from '%.*s'>",
-                   _conn_get_type_string(conn), conn, conn->sd,
-                   conn->pname.len, conn->pname.data);
-    }
-    if ((conn->type == CONN_DNODE_PEER_SERVER) ||
-        (conn->type == CONN_SERVER)) {
-        return fprintf(stream, "<%s %p %d to '%.*s'>",
-                   _conn_get_type_string(conn), conn, conn->sd,
-                   conn->pname.len, conn->pname.data);
-    }
-
-    return fprintf(stream, "<%s %p %d>",
-                   _conn_get_type_string(conn), conn, conn->sd);
 }
 
 inline void

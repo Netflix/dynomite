@@ -162,17 +162,21 @@ static struct string msg_type_strings[] = {
 };
 #undef DEFINE_ACTION
 
-int
-print_req(FILE *stream, struct msg *req)
+static int
+print_req(FILE *stream, const struct object *obj)
 {
+    ASSERT(obj->type == OBJ_REQ);
+    struct msg *req = (struct msg *)obj;
     struct string *req_type = msg_type_string(req->type);
     return fprintf(stream, "<REQ %p %lu:%lu %.*s>", req, req->id, req->parent_id,
                    req_type->len, req_type->data);
 }
 
-int
-print_rsp(FILE *stream, struct msg *rsp)
+static int
+print_rsp(FILE *stream, const struct object *obj)
 {
+    ASSERT(obj->type == OBJ_REQ);
+    struct msg *rsp = (struct msg *)obj;
     return fprintf(stream, "<RSP %p %lu:%lu>", rsp, rsp->id, rsp->parent_id);
 }
 
@@ -317,7 +321,18 @@ _msg_get(struct conn *conn, bool request, const char *const caller)
 
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
-    msg->object_type = request ? OBJ_REQ : OBJ_RSP;
+    if (request) {
+        msg->object = (object_t) {
+            .type = OBJ_REQ,
+            .func_print = print_req
+        };
+    } else {
+        msg->object = (object_t) {
+            .type = OBJ_RSP,
+            .func_print = print_rsp
+        };
+    }
+
     msg->id = ++msg_id;
     msg->parent_id = 0;
     msg->peer = NULL;
