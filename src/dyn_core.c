@@ -33,6 +33,7 @@
 #include "dyn_gossip.h"
 #include "event/dyn_event.h"
 #include "dyn_task.h"
+uint32_t admin_opt = 0;
 
 static void
 core_print_peer_status(void *arg1)
@@ -270,6 +271,7 @@ core_ctx_create(struct instance *nci)
     ctx->stats = NULL;
     ctx->evb = NULL;
     ctx->dyn_state = INIT;
+    ctx->admin_opt = admin_opt;
 
     /* parse and create configuration */
     ctx->cf = conf_create(nci->conf_filename);
@@ -445,31 +447,17 @@ core_send(struct context *ctx, struct conn *conn)
 }
 
 static void
-core_close_log(struct conn *conn)
-{
-	char *addrstr;
-
-	if ((conn->type == CONN_CLIENT) || (conn->type == CONN_DNODE_PEER_CLIENT)) {
-		addrstr = dn_unresolve_peer_desc(conn->sd);
-	} else {
-		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
-	}
-	log_debug(LOG_NOTICE, "close %M on event %04"PRIX32" eof %d done "
-			  "%d rb %zu sb %zu%c %s", conn, 
-              conn->events, conn->eof, conn->done, conn->recv_bytes,
-              conn->send_bytes,
-              conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
-
-}
-
-static void
 core_close(struct context *ctx, struct conn *conn)
 {
 	rstatus_t status;
 
 	ASSERT(conn->sd > 0);
 
-    core_close_log(conn);
+	log_debug(LOG_NOTICE, "close %M on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", conn, 
+              conn->events, conn->eof, conn->done, conn->recv_bytes,
+              conn->send_bytes,
+              conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
 
 	status = conn_event_del_conn(conn);
 	if (status < 0) {

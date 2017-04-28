@@ -170,6 +170,7 @@ typedef enum data_store {
 } data_store_t;
 
 extern data_store_t g_data_store;
+extern uint32_t admin_opt;
 
 /** \struct instance
  * @brief An instance of the Dynomite server.
@@ -347,7 +348,7 @@ struct context {
     int                timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
-    unsigned           admin_opt;   /* admin mode */
+    uint32_t           admin_opt;   /* admin mode */
 };
 
 
