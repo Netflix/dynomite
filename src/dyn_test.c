@@ -445,12 +445,18 @@ aes_test(void)
     return DN_OK;
 }
 
+void
+init_peer_conn(struct conn *conn)
+{
+    conn->dyn_mode = 1;
+    conn->sd = 0;
+}
 /* Inspection test */
 static rstatus_t
 aes_msg_test(struct node *server)
 {
     //unsigned char* aes_key = generate_aes_key();
-    struct conn *conn = conn_get_peer(server, false);
+    struct conn *conn = conn_get(server, init_peer_conn);
     struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     struct mbuf *mbuf1 = mbuf_get();
@@ -586,7 +592,7 @@ main(int argc, char **argv)
     memset(peer, 0, sizeof(struct node));
     init_peer(peer);
 
-    struct conn *conn = conn_get_peer(peer, false);
+    struct conn *conn = conn_get(peer, init_peer_conn);
     struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     //test payload larger than mbuf_size

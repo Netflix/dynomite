@@ -126,7 +126,7 @@ static struct conn *
 server_conn(struct datastore *datastore)
 {
     if (!datastore->conn) {
-        return conn_get(datastore, false);
+        return conn_get(datastore, init_server_conn);
     }
     return datastore->conn;
 }
@@ -996,6 +996,7 @@ struct conn_ops server_ops = {
 void
 init_server_conn(struct conn *conn)
 {
+    conn->dyn_mode = 0;
     conn->type = CONN_SERVER;
     conn->ops = &server_ops;
 }

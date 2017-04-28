@@ -274,7 +274,7 @@ struct node {
  * information such as dc, rack, node token and runtime environment.
  */
 struct server_pool {
-    object_type_t        object_type;
+    object_t           object;
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
@@ -360,5 +360,6 @@ rstatus_t core_core(void *arg, uint32_t events);
 rstatus_t core_loop(struct context *ctx);
 void core_debug(struct context *ctx);
 void core_set_local_state(struct context *ctx, dyn_state_t state);
+int print_server_pool(FILE *stream, const struct object *obj);
 
 #endif

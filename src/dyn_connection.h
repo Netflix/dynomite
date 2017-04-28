@@ -91,7 +91,7 @@ typedef enum connection_type {
 } connection_type_t;
 
 struct conn {
-    object_type_t      object_type;
+    object_t           object;
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
     TAILQ_ENTRY(conn)  ready_tqe;     /* link in ready connection q */
     void               *owner;        /* connection owner - server_pool / server */
@@ -142,8 +142,6 @@ struct conn {
     connection_type_t  type;
 };
 
-char * conn_get_type_string(struct conn *conn);
-
 static inline rstatus_t
 conn_cant_handle_response(struct conn *conn, msgid_t reqid, struct msg *resp)
 {
@@ -189,17 +187,15 @@ conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
         (conn)->ops->dequeue_outq(ctx, conn, msg)
 TAILQ_HEAD(conn_tqh, conn);
 
-int print_conn(FILE *stream, struct conn *conn);
 void conn_set_write_consistency(struct conn *conn, consistency_t cons);
 consistency_t conn_get_write_consistency(struct conn *conn);
 void conn_set_read_consistency(struct conn *conn, consistency_t cons);
 consistency_t conn_get_read_consistency(struct conn *conn);
 struct context *conn_to_ctx(struct conn *conn);
 struct conn *test_conn_get(void);
-struct conn *conn_get(void *owner, bool client);
-struct conn *conn_get_proxy(void *owner);
-struct conn *conn_get_peer(void *owner, bool client);
-struct conn *conn_get_dnode(void *owner);
+
+typedef void (*func_conn_init_t)(struct conn *conn);
+struct conn *conn_get(void *owner, func_conn_init_t func_conn_init);
 void conn_put(struct conn *conn);
 rstatus_t conn_listen(struct context *ctx, struct conn *p);
 
@@ -216,7 +212,6 @@ ssize_t conn_recv_data(struct conn *conn, void *buf, size_t size);
 ssize_t conn_sendv_data(struct conn *conn, struct array *sendv, size_t nsend);
 void conn_init(void);
 void conn_deinit(void);
-void conn_print(struct conn *conn);
 
 bool conn_is_req_first_in_outqueue(struct conn *conn, struct msg *req);
 rstatus_t conn_event_add_conn(struct conn * conn);

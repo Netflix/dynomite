@@ -24,6 +24,7 @@
 
 #include "dyn_core.h"
 #include "dyn_server.h"
+#include "dyn_client.h"
 #include "dyn_proxy.h"
 
 static void
@@ -99,7 +100,7 @@ proxy_init(struct context *ctx)
     rstatus_t status;
     struct server_pool *pool = &ctx->pool;
 
-    struct conn *p = conn_get_proxy(pool);
+    struct conn *p = conn_get(pool, init_proxy_conn);
     if (!p) {
         return DN_ENOMEM;
     }
@@ -173,7 +174,7 @@ proxy_accept(struct context *ctx, struct conn *p)
         break;
     }
 
-    c = conn_get(p->owner, true);
+    c = conn_get(p->owner, init_client_conn);
     if (c == NULL) {
         log_error("get conn for CLIENT %d from %M failed: %s", sd, p,
                   strerror(errno));
@@ -256,6 +257,7 @@ struct conn_ops proxy_ops = {
 void
 init_proxy_conn(struct conn *conn)
 {
+    conn->dyn_mode = 0;
     conn->type = CONN_PROXY;
     conn->ops = &proxy_ops;
 }

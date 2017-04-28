@@ -422,7 +422,10 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     ASSERT(cp->valid);
 
     memset(sp, 0, sizeof(struct server_pool));
-    sp->object_type = OBJ_POOL;
+    sp->object = (object_t){
+        .type = OBJ_POOL,
+        .func_print = print_server_pool
+    };
     sp->ctx = NULL;
     sp->p_conn = NULL;
     sp->dn_conn_q = 0;

@@ -351,9 +351,11 @@ core_start(struct instance *nci)
     return status;
 }
 
-static int
-print_server_pool(FILE *stream, struct server_pool *sp)
+int
+print_server_pool(FILE *stream, const struct object *obj)
 {
+    ASSERT(obj->type == OBJ_POOL);
+    struct server_pool *sp = (struct server_pool *)obj;
     return fprintf(stream, "<POOL %p '%.*s'>", sp, sp->name.len, sp->name.data);
 }
 
@@ -371,31 +373,24 @@ print_obj_arginfo(const struct printf_info *info, size_t n,
 static int
 print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
 {
-    const object_type_t *obj_type;
+    const object_t *obj;
     const struct msg *msg;
     const struct conn *conn;
     const struct server_pool *sp;
 
-    obj_type = *((const object_type_t **) (args[0]));
-    if (obj_type == NULL) {
+    obj = *((const object_t **) (args[0]));
+    if (obj == NULL) {
         return fprintf(stream, "<NULL>");
     }
 
-    switch (*obj_type) {
+    switch (obj->type) {
         case OBJ_REQ:
-            msg = *((const struct msg **) (args[0]));
-            return print_req(stream, msg);
         case OBJ_RSP:
-            msg = *((const struct msg **) (args[0]));
-            return print_rsp(stream, msg);
         case OBJ_CONN:
-            conn = *((const struct conn **) (args[0]));
-            return print_conn(stream, conn);
         case OBJ_POOL:
-            sp = *((const struct server_pool **) (args[0]));
-            return print_server_pool(stream, sp);
+            return obj->func_print(stream, obj);
         default:
-            return fprintf(stream, "<unknown %p>", obj_type);
+            return fprintf(stream, "<unknown %p>", obj);
     }
 }
 
