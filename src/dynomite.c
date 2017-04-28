@@ -58,7 +58,6 @@
 static int show_help;
 static int show_version;
 static int test_conf;
-static int admin_opt = 0;
 static int daemonize;
 static int describe_stats;
 
@@ -434,10 +433,10 @@ dn_get_options(int argc, char **argv, struct instance *nci)
         case 'x':
             value = dn_atoi(optarg, strlen(optarg));
             if (value <= 0) {
-               log_stderr("dynomite: option -x requires a non-zero number");
+               log_stderr("dynomite: option -x requires a non-zero positive number");
                return DN_ERROR;
             }
-            admin_opt = value;
+            admin_opt = (uint32_t)value;
 
             break;
         case '?':
@@ -578,7 +577,6 @@ dn_run(struct instance *nci)
     THROW_STATUS(core_start(nci));
 
     struct context *ctx = nci->ctx;
-    ctx->admin_opt = (unsigned)admin_opt;
 
     struct server_pool *sp = &ctx->pool;
     if (!sp->enable_gossip)
