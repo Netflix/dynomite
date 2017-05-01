@@ -99,10 +99,7 @@ _conn_get(void)
         memset(conn, 0, sizeof(*conn));
     }
 
-    conn->object = (object_t){
-        .type = OBJ_CONN,
-        .func_print = _print_conn
-    };
+    init_object(&conn->object, OBJ_CONN, _print_conn);
     conn->owner = NULL;
 
     conn->sd = -1;

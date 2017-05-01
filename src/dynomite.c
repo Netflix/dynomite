@@ -613,7 +613,11 @@ main(int argc, char **argv)
 
     dn_coredump_init();
     dn_set_default_options(&nci);
-    core_register_printf_function();
+    status = log_register_custom_specifier('M', print_obj, print_obj_arginfo);
+    if (status != DN_OK) {
+        log_stderr("Failed to register custom format specifier");
+        exit(1);
+    }
 
     status = dn_get_options(argc, argv, &nci);
     if (status != DN_OK) {

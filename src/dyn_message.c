@@ -175,7 +175,7 @@ print_req(FILE *stream, const struct object *obj)
 static int
 print_rsp(FILE *stream, const struct object *obj)
 {
-    ASSERT(obj->type == OBJ_REQ);
+    ASSERT(obj->type == OBJ_RSP);
     struct msg *rsp = (struct msg *)obj;
     return fprintf(stream, "<RSP %p %lu:%lu>", rsp, rsp->id, rsp->parent_id);
 }
@@ -322,15 +322,9 @@ _msg_get(struct conn *conn, bool request, const char *const caller)
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
     if (request) {
-        msg->object = (object_t) {
-            .type = OBJ_REQ,
-            .func_print = print_req
-        };
+        init_object(&msg->object, OBJ_REQ, print_req);
     } else {
-        msg->object = (object_t) {
-            .type = OBJ_RSP,
-            .func_print = print_rsp
-        };
+        init_object(&msg->object, OBJ_RSP, print_rsp);
     }
 
     msg->id = ++msg_id;

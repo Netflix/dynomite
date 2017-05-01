@@ -22,7 +22,6 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <printf.h>
 
 #include "dyn_core.h"
 #include "dyn_conf.h"
@@ -357,47 +356,6 @@ print_server_pool(FILE *stream, const struct object *obj)
     ASSERT(obj->type == OBJ_POOL);
     struct server_pool *sp = (struct server_pool *)obj;
     return fprintf(stream, "<POOL %p '%.*s'>", sp, sp->name.len, sp->name.data);
-}
-
-static int
-print_obj_arginfo(const struct printf_info *info, size_t n,
-                  int *argtypes)
-{
-      /* We always take exactly one argument and this is a pointer to the
-       *      structure.. */
-    if (n > 0)
-        argtypes[0] = PA_POINTER;
-    return 1;
-}
-
-static int
-print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
-{
-    const object_t *obj;
-    const struct msg *msg;
-    const struct conn *conn;
-    const struct server_pool *sp;
-
-    obj = *((const object_t **) (args[0]));
-    if (obj == NULL) {
-        return fprintf(stream, "<NULL>");
-    }
-
-    switch (obj->type) {
-        case OBJ_REQ:
-        case OBJ_RSP:
-        case OBJ_CONN:
-        case OBJ_POOL:
-            return obj->func_print(stream, obj);
-        default:
-            return fprintf(stream, "<unknown %p>", obj);
-    }
-}
-
-int
-core_register_printf_function(void)
-{
-    return log_register_custom_specifier('M', print_obj, print_obj_arginfo);
 }
 
 /**
