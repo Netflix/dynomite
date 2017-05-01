@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <printf.h>
 typedef uint64_t msgid_t;
 typedef uint64_t msec_t;
 typedef uint64_t usec_t;
@@ -34,7 +34,7 @@ struct datacenter;
 struct rack;
 struct dyn_ring;
 
-extern void cleanup_charptr(const char **ptr);
+extern void cleanup_charptr(char **ptr);
 
 #define SCOPED_CHARPTR(var) \
     char * var __attribute__ ((__cleanup__(cleanup_charptr))) 
@@ -43,10 +43,19 @@ typedef enum {
     OBJ_REQ,
     OBJ_RSP,
     OBJ_CONN,
-    OBJ_POOL
+    OBJ_POOL,
+    OBJ_LAST
 }object_type_t;
 
+struct object;
+typedef int (*func_print_t)(FILE *stream, const struct object *obj);
 typedef struct object {
+    uint16_t    magic;
     object_type_t type;
-    int (*func_print)(FILE *stream, const struct object *obj);
+    func_print_t func_print;
 }object_t;
+
+void init_object(object_t *obj, object_type_t type, func_print_t func_print);
+
+int print_obj(FILE *stream, const struct printf_info *info, const void *const *args);
+int print_obj_arginfo(const struct printf_info *info, size_t n, int *argtypes);
