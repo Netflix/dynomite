@@ -17,19 +17,8 @@
  * limitations under the License.
  */
 
-#include <sys/uio.h>
-
-#include "dyn_core.h"
-#include "dyn_server.h"
-#include "dyn_client.h"
-#include "dyn_proxy.h"
 #include "dyn_connection_internal.h"
-#include "dyn_dnode_proxy.h"
-#include "dyn_dnode_peer.h"
-#include "dyn_dnode_client.h"
 #include "event/dyn_event.h"
-
-#include "proto/dyn_proto.h"
 
 static uint32_t nfree_connq;       /* # free conn q */
 static struct conn_tqh free_connq; /* free conn q */
