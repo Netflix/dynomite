@@ -103,10 +103,7 @@ struct conn {
     struct sockaddr    *addr;         /* socket address (ref in server or server_pool) */
 
     struct msg_tqh     imsg_q;        /* incoming request Q */
-    uint32_t           imsg_count;    /* counter for incoming request Q */
-
     struct msg_tqh     omsg_q;        /* outstanding request Q */
-    uint32_t           omsg_count;    /* counter for outstanding request Q */
 
     struct msg         *rmsg;         /* current message being rcvd */
     struct msg         *smsg;         /* current message being sent */

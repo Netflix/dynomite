@@ -26,7 +26,6 @@ dnode_client_ref(struct conn *conn, void *owner)
     conn->addrlen = 0;
     conn->addr = NULL;
 
-    pool->dn_conn_q++;
     TAILQ_INSERT_TAIL(&pool->c_conn_q, conn, conn_tqe);
 
     /* owner of the client connection is the server pool */
@@ -67,8 +66,7 @@ dnode_client_unref_and_try_put(struct conn *conn)
     struct server_pool *pool;
     pool = conn->owner;
     ASSERT(conn->owner != NULL);
-    ASSERT(pool->dn_conn_q != 0);
-    pool->dn_conn_q--;
+    ASSERT(TAILQ_COUNT(&pool->c_conn_q) != 0);
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
     conn->waiting_to_unref = 1;
     dnode_client_unref_internal_try_put(conn);
@@ -356,9 +354,7 @@ dnode_req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct ms
     log_debug(LOG_VERB, "conn %p enqueue outq %p", conn, req);
     TAILQ_INSERT_TAIL(&conn->omsg_q, req, c_tqe);
 
-    //use only the 1st pool
-    conn->omsg_count++;
-    histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
+    histo_add(&ctx->stats->dnode_client_out_queue, TAILQ_COUNT(&conn->omsg_q));
     stats_pool_incr(ctx, dnode_client_out_queue);
     stats_pool_incr_by(ctx, dnode_client_out_queue_bytes, req->mlen);
 }
@@ -372,9 +368,7 @@ dnode_req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct ms
     TAILQ_REMOVE(&conn->omsg_q, req, c_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %p", conn, req);
 
-    //use the 1st pool
-    conn->omsg_count--;
-    histo_add(&ctx->stats->dnode_client_out_queue, conn->omsg_count);
+    histo_add(&ctx->stats->dnode_client_out_queue, TAILQ_COUNT(&conn->omsg_q));
     stats_pool_decr(ctx, dnode_client_out_queue);
     stats_pool_decr_by(ctx, dnode_client_out_queue_bytes, req->mlen);
 }

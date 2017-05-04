@@ -14,7 +14,6 @@
 static uint8_t version = VERSION_10;
 
 static uint64_t dmsg_id;          /* message id counter */
-static uint32_t nfree_dmsgq;      /* # free msg q */
 static struct dmsg_tqh free_dmsgq; /* free msg q */
 
 static const struct string MAGIC_STR = string("   $2014$ ");
@@ -610,7 +609,6 @@ dmsg_put(struct dmsg *dmsg)
     if (log_loggable(LOG_VVVERB)) {
         log_debug(LOG_VVVERB, "put dmsg %p id %"PRIu64"", dmsg, dmsg->id);
     }
-    nfree_dmsgq++;
     TAILQ_INSERT_HEAD(&free_dmsgq, dmsg, m_tqe);
 }
 
@@ -628,7 +626,6 @@ dmsg_init(void)
     log_debug(LOG_VVVERB, "dmsg size %d", sizeof(struct dmsg));
 
     dmsg_id = 0;
-    nfree_dmsgq = 0;
     TAILQ_INIT(&free_dmsgq);
 }
 
@@ -639,12 +636,12 @@ dmsg_deinit(void)
     struct dmsg *dmsg, *ndmsg;
 
     for (dmsg = TAILQ_FIRST(&free_dmsgq); dmsg != NULL;
-         dmsg = ndmsg, nfree_dmsgq--) {
-        ASSERT(nfree_dmsgq > 0);
+         dmsg = ndmsg) {
+        ASSERT(TAILQ_COUNT(&free_dmsgq) > 0);
         ndmsg = TAILQ_NEXT(dmsg, m_tqe);
         dmsg_free(dmsg);
     }
-    ASSERT(nfree_dmsgq == 0);
+    ASSERT(TAILQ_COUNT(&free_dmsgq) == 0);
 }
 
 
@@ -661,10 +658,9 @@ dmsg_get(void)
     struct dmsg *dmsg;
 
     if (!TAILQ_EMPTY(&free_dmsgq)) {
-        ASSERT(nfree_dmsgq > 0);
+        ASSERT(TAILQ_COUNT(&free_dmsgq) > 0);
 
         dmsg = TAILQ_FIRST(&free_dmsgq);
-        nfree_dmsgq--;
         TAILQ_REMOVE(&free_dmsgq, dmsg, m_tqe);
         goto done;
     }

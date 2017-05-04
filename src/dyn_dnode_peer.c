@@ -1226,7 +1226,7 @@ dnode_peer_pool_deinit(struct array *server_pool)
         sp = array_pop(server_pool);
         ASSERT(sp->p_conn == NULL);
         //fixe me to use different variables
-        ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
+        ASSERT(TAILQ_EMPTY(&sp->c_conn_q));
 
 
         dnode_peer_deinit(&sp->peers);
@@ -1643,13 +1643,12 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_INSERT_TAIL(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, req->id, req->parent_id);
 
-    conn->imsg_count++;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_incr(ctx, peer_in_queue);
         stats_pool_incr_by(ctx, peer_in_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->remote_peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_incr(ctx, remote_peer_in_queue);
         stats_pool_incr_by(ctx, remote_peer_in_queue_bytes, req->mlen);
     }
@@ -1673,13 +1672,12 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_REMOVE(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, req->id, req->parent_id);
 
-    conn->imsg_count--;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_decr(ctx, peer_in_queue);
         stats_pool_decr_by(ctx, peer_in_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->remote_peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_decr(ctx, remote_peer_in_queue);
         stats_pool_decr_by(ctx, remote_peer_in_queue_bytes, req->mlen);
     }
@@ -1694,13 +1692,12 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_INSERT_TAIL(&conn->omsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, req->id, req->parent_id);
 
-    conn->omsg_count++;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_incr(ctx, peer_out_queue);
         stats_pool_incr_by(ctx, peer_out_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->remote_peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_incr(ctx, remote_peer_out_queue);
         stats_pool_incr_by(ctx, remote_peer_out_queue_bytes, req->mlen);
     }
@@ -1717,13 +1714,12 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_REMOVE(&conn->omsg_q, req, s_tqe);
     log_debug(LOG_VVERB, "conn %p dequeue outq %p", conn, req);
 
-    conn->omsg_count--;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_decr(ctx, peer_out_queue);
         stats_pool_decr_by(ctx, peer_out_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->remote_peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_decr(ctx, remote_peer_out_queue);
         stats_pool_decr_by(ctx, remote_peer_out_queue_bytes, req->mlen);
     }

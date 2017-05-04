@@ -144,7 +144,6 @@
  */
 static uint64_t msg_id;          /* message id counter */
 static uint64_t frag_id;         /* fragment id counter */
-static size_t nfree_msgq;        /* # free msg q */
 static struct msg_tqh free_msgq; /* free msg q */
 static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
@@ -289,10 +288,9 @@ _msg_get(struct conn *conn, bool request, const char *const caller)
     struct msg *msg;
 
     if (!TAILQ_EMPTY(&free_msgq)) {
-        ASSERT(nfree_msgq);
+        ASSERT(TAILQ_COUNT(&free_msgq));
 
         msg = TAILQ_FIRST(&free_msgq);
-        nfree_msgq--;
         TAILQ_REMOVE(&free_msgq, msg, m_tqe);
         goto done;
     }
@@ -400,7 +398,7 @@ size_t msg_alloc_msgs()
 
 size_t msg_free_queue_size(void)
 {
-    return nfree_msgq;
+    return TAILQ_COUNT(&free_msgq);
 }
 
 struct msg *
@@ -608,7 +606,6 @@ msg_put(struct msg *msg)
         mbuf_put(mbuf);
     }
 
-    nfree_msgq++;
     TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }
 
@@ -676,7 +673,6 @@ msg_init(size_t msgs_max)
     log_debug(LOG_DEBUG, "msg size %d", sizeof(struct msg));
     msg_id = 0;
     frag_id = 0;
-    nfree_msgq = 0;
     alloc_msgs_max = msgs_max;
     TAILQ_INIT(&free_msgq);
     rbtree_init(&tmo_rbt, &tmo_rbs);
@@ -688,12 +684,12 @@ msg_deinit(void)
     struct msg *msg, *nmsg;
 
     for (msg = TAILQ_FIRST(&free_msgq); msg != NULL;
-         msg = nmsg, nfree_msgq--) {
-        ASSERT(nfree_msgq);
+         msg = nmsg) {
+        ASSERT(TAILQ_COUNT(&free_msgq));
         nmsg = TAILQ_NEXT(msg, m_tqe);
         msg_free(msg);
     }
-    ASSERT(nfree_msgq == 0);
+    ASSERT(TAILQ_COUNT(&free_msgq) == 0);
 }
 
 struct string *
@@ -1269,7 +1265,7 @@ msg_send(struct context *ctx, struct conn *conn)
             return status;
         }
 
-        if (conn->omsg_count > MAX_CONN_QUEUE_SIZE) {
+        if (TAILQ_COUNT(&conn->omsg_q) > MAX_CONN_QUEUE_SIZE) {
             conn->send_ready = 0;
             conn->err = ENOTRECOVERABLE;
             log_error("%M Setting ENOTRECOVERABLE happens here!", conn);
