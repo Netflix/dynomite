@@ -51,6 +51,7 @@
  *    @(#)queue.h    8.5 (Berkeley) 8/20/94
  * $FreeBSD: src/sys/sys/queue.h,v 1.73 2010/02/20 01:05:30 emaste Exp $
  */
+#include <stdint.h>
 #include "dyn_log.h"
 
 
@@ -511,11 +512,12 @@ struct {                                                                \
 struct name {                                                           \
     struct type *tqh_first; /* first element */                         \
     struct type **tqh_last; /* addr of last next element */             \
+    uint64_t    count;                                                  \
     TRACEBUF                                                            \
 }
 
 #define TAILQ_HEAD_INITIALIZER(head)                                    \
-    { NULL, &(head).tqh_first }
+    { NULL, &(head).tqh_first, 0 }
 
 #define TAILQ_ENTRY(type)                                               \
 struct {                                                                \
@@ -569,6 +571,7 @@ struct {                                                                \
         *(head1)->tqh_last = (head2)->tqh_first;                        \
         (head2)->tqh_first->field.tqe_prev = (head1)->tqh_last;         \
         (head1)->tqh_last = (head2)->tqh_last;                          \
+        (head1)->count += (head2)->count;                               \
         TAILQ_INIT((head2));                                            \
         QMD_TRACE_HEAD(head1);                                          \
         QMD_TRACE_HEAD(head2);                                          \
@@ -577,6 +580,7 @@ struct {                                                                \
 
 #define TAILQ_EMPTY(head)    ((head)->tqh_first == NULL)
 
+#define TAILQ_COUNT(head)    ((head)->count)
 #define TAILQ_FIRST(head)    ((head)->tqh_first)
 
 #define TAILQ_FOREACH(var, head, field)                                 \
@@ -601,6 +605,7 @@ struct {                                                                \
 
 #define TAILQ_INIT(head) do {                                           \
     TAILQ_FIRST((head)) = NULL;                                         \
+    (head)->count = 0;                                                  \
     (head)->tqh_last = &TAILQ_FIRST((head));                            \
     QMD_TRACE_HEAD(head);                                               \
 } while (0)
@@ -614,6 +619,7 @@ struct {                                                                \
         QMD_TRACE_HEAD(head);                                           \
     }                                                                   \
     TAILQ_NEXT((listelm), field) = (elm);                               \
+    (head)->count++;                                                    \
     (elm)->field.tqe_prev = &TAILQ_NEXT((listelm), field);              \
     QMD_TRACE_ELEM(&(elm)->field);                                      \
     QMD_TRACE_ELEM(&listelm->field);                                    \
@@ -623,6 +629,7 @@ struct {                                                                \
     QMD_TAILQ_CHECK_PREV(listelm, field);                               \
     (elm)->field.tqe_prev = (listelm)->field.tqe_prev;                  \
     TAILQ_NEXT((elm), field) = (listelm);                               \
+    (head)->count++;                                                    \
     *(listelm)->field.tqe_prev = (elm);                                 \
     (listelm)->field.tqe_prev = &TAILQ_NEXT((elm), field);              \
     QMD_TRACE_ELEM(&(elm)->field);                                      \
@@ -637,6 +644,7 @@ struct {                                                                \
     else                                                                \
         (head)->tqh_last = &TAILQ_NEXT((elm), field);                   \
     TAILQ_FIRST((head)) = (elm);                                        \
+    (head)->count++;                                                    \
     (elm)->field.tqe_prev = &TAILQ_FIRST((head));                       \
     QMD_TRACE_HEAD(head);                                               \
     QMD_TRACE_ELEM(&(elm)->field);                                      \
@@ -646,6 +654,7 @@ struct {                                                                \
     QMD_TAILQ_CHECK_TAIL(head, field);                                  \
     TAILQ_NEXT((elm), field) = NULL;                                    \
     (elm)->field.tqe_prev = (head)->tqh_last;                           \
+    (head)->count++;                                                    \
     *(head)->tqh_last = (elm);                                          \
     (head)->tqh_last = &TAILQ_NEXT((elm), field);                       \
     QMD_TRACE_HEAD(head);                                               \
@@ -673,6 +682,7 @@ struct {                                                                \
         QMD_TRACE_HEAD(head);                                           \
     }                                                                   \
     *(elm)->field.tqe_prev = TAILQ_NEXT((elm), field);                  \
+    (head)->count--;                                                    \
     TRASHIT(*oldnext);                                                  \
     TRASHIT(*oldprev);                                                  \
     QMD_TRACE_ELEM(&(elm)->field);                                      \
@@ -693,6 +703,9 @@ struct {                                                                \
         swap_first->field.tqe_prev = &(head2)->tqh_first;               \
     else                                                                \
         (head2)->tqh_last = &(head2)->tqh_first;                        \
+    uint64_t temp = (head1)->count;                                     \
+    (head1)->count = (head2)->count;                                    \
+    (head2)->count = temp;                                              \
 } while (0)
 
 /*
