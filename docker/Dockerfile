@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y \
 	tcl8.5
 
 # Clone the Dynomite Git
-RUN git clone https://github.com/Netflix/dynomite.git
+RUN git clone https://github.com/TravelSupermarket/dynomite.git
 RUN echo 'Git repo has been cloned in your Docker VM'
 
 RUN echo 'copy file'
@@ -78,3 +78,5 @@ RUN sysctl vm.overcommit_memory=1
 
 # Set the entry-point to be the startup script
 ENTRYPOINT ["/dynomite/startup.sh"]
+
+CMD ['--conf-file=conf/redis_single.yml', '--mbuf-size=16384']
