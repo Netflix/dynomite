@@ -425,7 +425,6 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     init_object(&sp->object, OBJ_POOL, print_server_pool);
     sp->ctx = NULL;
     sp->p_conn = NULL;
-    sp->dn_conn_q = 0;
     TAILQ_INIT(&sp->c_conn_q);
     TAILQ_INIT(&sp->ready_conn_q);
 

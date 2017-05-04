@@ -358,8 +358,6 @@ server_close(struct context *ctx, struct conn *conn)
 static void
 server_connected(struct context *ctx, struct conn *conn)
 {
-	struct datastore *server = conn->owner;
-
     ASSERT(conn->type == CONN_SERVER);
 	ASSERT(conn->connecting && !conn->connected);
 
@@ -476,7 +474,7 @@ void
 server_pool_deinit(struct server_pool *sp)
 {
     ASSERT(sp->p_conn == NULL);
-    ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
+    ASSERT(TAILQ_EMPTY(&sp->c_conn_q));
 
     server_deinit(&sp->datastore);
     log_debug(LOG_DEBUG, "deinit pool '%.*s'", sp->name.len, sp->name.data);
@@ -920,8 +918,7 @@ req_server_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *req
     TAILQ_INSERT_TAIL(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, req->id, req->parent_id);
 
-    conn->imsg_count++;
-    histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
+    histo_add(&ctx->stats->server_in_queue, TAILQ_COUNT(&conn->imsg_q));
     stats_server_incr(ctx, in_queue);
     stats_server_incr_by(ctx, in_queue_bytes, req->mlen);
 }
@@ -937,8 +934,7 @@ req_server_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg *req
     usec_t delay = dn_usec_now() - req->request_inqueue_enqueue_time_us;
     histo_add(&ctx->stats->server_queue_wait_time_histo, delay);
 
-    conn->imsg_count--;
-    histo_add(&ctx->stats->server_in_queue, conn->imsg_count);
+    histo_add(&ctx->stats->server_in_queue, TAILQ_COUNT(&conn->imsg_q));
     stats_server_decr(ctx, in_queue);
     stats_server_decr_by(ctx, in_queue_bytes, req->mlen);
 }
@@ -952,8 +948,7 @@ req_server_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *req
     TAILQ_INSERT_TAIL(&conn->omsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, req->id, req->parent_id);
 
-    conn->omsg_count++;
-    histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
+    histo_add(&ctx->stats->server_out_queue, TAILQ_COUNT(&conn->omsg_q));
     stats_server_incr(ctx, out_queue);
     stats_server_incr_by(ctx, out_queue_bytes, req->mlen);
 }
@@ -969,8 +964,7 @@ req_server_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *req
     TAILQ_REMOVE(&conn->omsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue outq %d:%d", conn, req->id, req->parent_id);
 
-    conn->omsg_count--;
-    histo_add(&ctx->stats->server_out_queue, conn->omsg_count);
+    histo_add(&ctx->stats->server_out_queue, TAILQ_COUNT(&conn->omsg_q));
     stats_server_decr(ctx, out_queue);
     stats_server_decr_by(ctx, out_queue_bytes, req->mlen);
 }

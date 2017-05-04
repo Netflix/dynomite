@@ -279,7 +279,6 @@ struct server_pool {
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
     struct conn        *p_conn;              /* proxy connection (listener) */
-    uint32_t           dn_conn_q;            /* # client connection */
     struct conn_tqh    c_conn_q;             /* client connection q */
     struct conn_tqh    ready_conn_q;         /* ready connection q */
 
