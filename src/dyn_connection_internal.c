@@ -132,7 +132,6 @@ _conn_get(void)
     conn->same_dc = 1;
     conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
-    conn->attempted_reconnect = 0;
     //conn->non_bytes_send = 0;
     conn_set_read_consistency(conn, g_read_consistency);
     conn_set_write_consistency(conn, g_write_consistency);

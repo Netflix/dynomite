@@ -581,7 +581,7 @@ dnode_peer_each_preconnect(void *elem, void *data)
     if (status != DN_OK) {
         log_warn("dyn: connect to peer '%.*s' failed, ignored: %s",
                 peer->endpoint.pname.len, peer->endpoint.pname.data, strerror(errno));
-        dnode_peer_close(sp->ctx, conn);
+        conn_close(sp->ctx, conn);
     }
 
     return DN_OK;
@@ -665,7 +665,7 @@ dnode_peer_forward_state(void *rmsg)
 
     status = conn_connect(sp->ctx, conn);
     if (status != DN_OK ) {
-        dnode_peer_close(sp->ctx, conn);
+        conn_close(sp->ctx, conn);
         log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
         return DN_ERROR;
     }
@@ -739,7 +739,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
         status = conn_connect(sp->ctx, conn);
         if (status != DN_OK ) {
-            dnode_peer_close(sp->ctx, conn);
+            conn_close(sp->ctx, conn);
             log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
             return DN_ERROR;
         }
@@ -1133,7 +1133,7 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
         dnode_peer_close_socket(ctx, conn);
         if (conn_connect(ctx, conn) != DN_OK) {
             conn->err = EHOSTDOWN;
-            dnode_peer_close(ctx, conn);
+            conn_close(ctx, conn);
             return NULL;
         }
 
@@ -1143,7 +1143,7 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
     }
 
     if (conn_connect(ctx, conn) != DN_OK) {
-        dnode_peer_close(ctx, conn);
+        conn_close(ctx, conn);
         return NULL;
     }
 

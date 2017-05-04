@@ -29,7 +29,6 @@
 #include "dyn_token.h"
 #include "dyn_dnode_peer.h"
 
-static void server_close(struct context *ctx, struct conn *conn);
 static void
 server_ref(struct conn *conn, void *owner)
 {
@@ -149,7 +148,7 @@ datastore_preconnect(struct datastore *datastore)
 	if (status != DN_OK) {
 		log_warn("connect to datastore '%.*s' failed, ignored: %s",
 				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
-		server_close(pool->ctx, conn);
+		conn_close(pool->ctx, conn);
 	}
 
 	return DN_OK;
@@ -427,7 +426,7 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 
 	status = conn_connect(ctx, conn);
 	if (status != DN_OK) {
-		server_close(ctx, conn);
+		conn_close(ctx, conn);
 		return NULL;
 	}
 
