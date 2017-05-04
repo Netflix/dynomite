@@ -59,6 +59,7 @@ typedef void (*func_unref_t)(struct conn *);
 typedef void (*func_msgq_t)(struct context *, struct conn *, struct msg *);
 typedef rstatus_t (*func_response_handler)(struct conn *, msgid_t reqid,
                                            struct msg *rsp);
+struct conn_pool;
 
 struct conn_ops {
     func_recv_t        recv;          /* recv (read) handler */
@@ -96,6 +97,7 @@ struct conn {
     TAILQ_ENTRY(conn)  ready_tqe;     /* link in ready connection q */
     TAILQ_ENTRY(conn)  pool_tqe;      /* link in active connection pool */
     void               *owner;        /* connection owner - server_pool / server */
+    struct conn_pool   *conn_pool;
 
     int                sd;            /* socket descriptor */
     struct string      pname;

@@ -38,3 +38,10 @@ struct conn *conn_pool_get(conn_pool_t *cp, uint16_t tag);
  * 
  */
 rstatus_t conn_pool_reset(conn_pool_t *cp);
+
+/**
+ * If a connection that is part of a pool is being closed, this function should
+ * called so the pool can do its cleanup.
+ * 
+ */
+void conn_pool_notify_conn_close(conn_pool_t *cp, struct conn *conn);

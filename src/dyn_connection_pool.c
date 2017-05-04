@@ -38,6 +38,7 @@ conn_pool_create(void *owner, uint8_t max_connections, func_conn_init_t func_con
         if (conn == NULL) {
             continue;
         }
+        conn->conn_pool = cp;
         TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, ready_tqe);
     }
     return cp;
@@ -90,4 +91,10 @@ conn_pool_reset(conn_pool_t *cp)
     // clear everything in hash table.
     // for every connection, kill it
     return DN_OK;
+}
+
+void
+conn_pool_notify_conn_close(conn_pool_t *cp, struct conn *conn)
+{
+    TAILQ_REMOVE(&cp->active_conn_q, conn, pool_tqe);
 }

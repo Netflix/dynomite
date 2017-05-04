@@ -18,6 +18,7 @@
  */
 
 #include "dyn_connection_internal.h"
+#include "dyn_connection_pool.h"
 #include "event/dyn_event.h"
 
 static uint32_t nfree_connq;       /* # free conn q */
@@ -90,6 +91,7 @@ _conn_get(void)
 
     init_object(&conn->object, OBJ_CONN, _print_conn);
     conn->owner = NULL;
+    conn->conn_pool = NULL;
 
     conn->sd = -1;
     string_init(&conn->pname);
@@ -177,6 +179,8 @@ _conn_put(struct conn *conn)
 {
     nfree_connq++;
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
+    if (conn->conn_pool)
+        conn_pool_notify_conn_close(conn->conn_pool, conn);
 }
 
 /**
