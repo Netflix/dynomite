@@ -159,6 +159,11 @@ aes_init(void)
 rstatus_t
 crypto_init(struct server_pool *sp)
 {
+    if (sp->secure_server_option == SECURE_OPTION_NONE) {
+        log_debug(LOG_NOTICE, "secure_server_option is none, skipping crypto_init()");
+        return DN_OK;
+    }
+
     //init AES
     THROW_STATUS(aes_init());
     //init RSA
