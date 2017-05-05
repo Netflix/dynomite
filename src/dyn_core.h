@@ -115,6 +115,7 @@ typedef int err_t;     /* error type */
 #include "dyn_mbuf.h"
 #include "dyn_message.h"
 #include "dyn_connection.h"
+#include "dyn_connection_pool.h"
 #include "dyn_cbuf.h"
 #include "dyn_ring_queue.h"
 #include "dyn_crypto.h"
@@ -232,7 +233,8 @@ struct datastore {
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    struct conn        *conn;         /* the only server connection */
+    //struct conn        *conn;         /* the only server connection */
+    conn_pool_t        *conn_pool;
 
     msec_t             next_retry_ms; /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */

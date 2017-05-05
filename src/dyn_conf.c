@@ -180,7 +180,7 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->endpoint.family = cs->info.family;
     s->endpoint.addrlen = cs->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cs->info.addr;
-    s->conn = NULL;
+    s->conn_pool = NULL;
     s->next_retry_ms = 0ULL;
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;

@@ -17,7 +17,8 @@ print_conn_pool(FILE *stream, const struct object *obj)
 {
     ASSERT(obj->type == OBJ_CONN_POOL);
     conn_pool_t *cp = (conn_pool_t *)obj;
-    return fprintf(stream, "<CONN_POOL %p>", cp);
+    return fprintf(stream, "<CONN_POOL %p active_conn:%lu max %u>", cp,
+                   TAILQ_COUNT(&cp->active_conn_q), cp->max_connections);
 }
 
 conn_pool_t *
@@ -39,8 +40,10 @@ conn_pool_create(void *owner, uint8_t max_connections, func_conn_init_t func_con
             continue;
         }
         conn->conn_pool = cp;
-        TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, ready_tqe);
+        log_notice("created %M", conn);
+        TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
     }
+    log_notice("created %M", cp);
     return cp;
 }
 
@@ -51,9 +54,11 @@ conn_pool_preconnect(struct context *ctx, conn_pool_t *cp)
     rstatus_t overall_status = DN_OK;
     struct conn *conn, *nconn;
     TAILQ_FOREACH_SAFE(conn, &cp->active_conn_q, pool_tqe, nconn) {
+        log_notice("conn %M nconn %M", conn, nconn);
         rstatus_t s = conn_connect(ctx, conn);
-        if (s == DN_OK)
+        if (s == DN_OK) {
             continue;
+        }
 
         TAILQ_REMOVE(&cp->active_conn_q, conn, pool_tqe);
         ASSERT(TAILQ_COUNT(&cp->active_conn_q) > 0);
@@ -80,13 +85,14 @@ conn_pool_get(conn_pool_t *cp, uint16_t tag)
         //recycle connection
         TAILQ_REMOVE(&cp->active_conn_q, conn, pool_tqe);
         TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
+        //log_notice("returning %M", conn);
         return conn;
     }
     return NULL;
 }
 
 rstatus_t
-conn_pool_reset(conn_pool_t *cp)
+conn_pool_reset(struct context *ctx, conn_pool_t *cp)
 {
     // clear everything in hash table.
     // for every connection, kill it

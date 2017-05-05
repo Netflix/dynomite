@@ -360,8 +360,8 @@ conn_connect(struct context *ctx, struct conn *conn)
     if (status != DN_OK) {
         if (errno == EINPROGRESS) {
             conn->connecting = 1;
-            log_debug(LOG_DEBUG, "connecting on s %d to '%.*s'",
-                    conn->sd, conn->pname.len, conn->pname.data);
+            log_notice("connecting on s %d to '%.*s'",
+                       conn->sd, conn->pname.len, conn->pname.data);
             return DN_OK;
         }
 

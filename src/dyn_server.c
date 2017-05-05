@@ -32,22 +32,20 @@
 static void
 server_ref(struct conn *conn, void *owner)
 {
-	struct datastore *server = owner;
+	struct datastore *datastore = owner;
 
     ASSERT(conn->type == CONN_SERVER);
     ASSERT(conn->owner == NULL);
-    ASSERT(server->conn == NULL);
 
-	conn->family = server->endpoint.family;
-	conn->addrlen = server->endpoint.addrlen;
-	conn->addr = server->endpoint.addr;
-    string_duplicate(&conn->pname, &server->endpoint.pname);
-    server->conn = conn;
+	conn->family = datastore->endpoint.family;
+	conn->addrlen = datastore->endpoint.addrlen;
+	conn->addr = datastore->endpoint.addr;
+    string_duplicate(&conn->pname, &datastore->endpoint.pname);
 
-	conn->owner = owner;
+	conn->owner = datastore;
 
-	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
-			server->endpoint.pname.len, server->endpoint.pname.data);
+	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, datastore,
+			  datastore->endpoint.pname.len, datastore->endpoint.pname.data);
 }
 
 static void
@@ -62,8 +60,8 @@ server_unref(struct conn *conn)
 	server = conn->owner;
 	conn->owner = NULL;
 
-    ASSERT(server->conn);
-    server->conn = NULL;
+    //ASSERT(server->conn);
+    //server->conn = NULL;
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -118,51 +116,35 @@ server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
-    ASSERT((*pdatastore)->conn == NULL);
+    struct server_pool *pool = (*pdatastore)->owner;
+    ASSERT((*pdatastore)->conn_pool != NULL);
+    conn_pool_reset(pool->ctx, (*pdatastore)->conn_pool);
+
 }
 
 static struct conn *
 server_conn(struct datastore *datastore)
 {
-    if (!datastore->conn) {
-        return conn_get(datastore, init_server_conn);
-    }
-    return datastore->conn;
+    return conn_pool_get(datastore->conn_pool, 1);
 }
 
 static rstatus_t
 datastore_preconnect(struct datastore *datastore)
 {
-	rstatus_t status;
 	struct server_pool *pool;
-	struct conn *conn;
 
 	pool = datastore->owner;
 
-	conn = server_conn(datastore);
-	if (conn == NULL) {
-		return DN_ENOMEM;
-	}
-
-	status = conn_connect(pool->ctx, conn);
-	if (status != DN_OK) {
-		log_warn("connect to datastore '%.*s' failed, ignored: %s",
-				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
-		conn_close(pool->ctx, conn);
-	}
-
-	return DN_OK;
+    return conn_pool_preconnect(pool->ctx, datastore->conn_pool);
 }
 
 static rstatus_t
 datastore_disconnect(struct datastore *datastore)
 {
 	struct server_pool *pool = datastore->owner;
-
-    struct conn *conn = datastore->conn;
-    if (conn) {
-		conn_close(pool->ctx, conn);
-	}
+    if (datastore->conn_pool) {
+        conn_pool_reset(pool->ctx, datastore->conn_pool);
+    }
 
 	return DN_OK;
 }
@@ -436,9 +418,10 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 rstatus_t
 server_pool_preconnect(struct context *ctx)
 {
-	if (!ctx->pool.preconnect) {
+	/*if (!ctx->pool.preconnect) {
 		return DN_OK;
-	}
+	}*/
+    log_notice("PRECONNEcTING");
     return datastore_preconnect(ctx->pool.datastore);
 }
 
@@ -460,6 +443,8 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 {
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
+    struct datastore *datastore = sp->datastore;
+    datastore->conn_pool = conn_pool_create(datastore, 3, init_server_conn);
 	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
