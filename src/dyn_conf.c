@@ -57,6 +57,7 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_ARGS       3
 #define CONF_UNSET_BOOL false
 #define CONF_UNSET_NUM  UNSET_NUM
+#define CONF_DEFAULT_CONNECTIONS 1
 #define CONF_UNSET_PTR  NULL
 #define CONF_DEFAULT_SERVERS    8
 #define CONF_UNSET_HASH (hash_type_t) -1
@@ -167,7 +168,8 @@ conf_server_deinit(struct conf_server *cs)
 
 // copy from struct conf_server to struct server
 static rstatus_t
-conf_datastore_transform(struct datastore *s, struct conf_server *cs)
+conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
+                         struct conf_server *cs)
 {
     ASSERT(cs->valid);
     ASSERT(s != NULL);
@@ -181,12 +183,13 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->endpoint.addrlen = cs->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cs->info.addr;
     s->conn_pool = NULL;
+    s->max_connections = cp->datastore_connections;
     s->next_retry_ms = 0ULL;
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
-    log_debug(LOG_VERB, "transform to server '%.*s'",
-              s->endpoint.pname.len, s->endpoint.pname.data);
+    log_debug(LOG_NOTICE, "transform to server '%.*s', max_connections %u",
+              s->endpoint.pname.len, s->endpoint.pname.data, s->max_connections);
 
     return DN_OK;
 }
@@ -284,6 +287,9 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->auto_eject_hosts = CONF_UNSET_NUM;
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->datastore_connections = CONF_UNSET_NUM;
+    cp->local_peer_connections = CONF_UNSET_NUM;
+    cp->remote_peer_connections = CONF_UNSET_NUM;
     cp->stats_interval = CONF_UNSET_NUM;
 
     //initialization for dynomite
@@ -464,7 +470,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->preconnect = cp->preconnect ? 1 : 0;
 
     sp->datastore = dn_zalloc(sizeof(*sp->datastore));
-    status = conf_datastore_transform(sp->datastore, cp->conf_datastore);
+    status = conf_datastore_transform(sp->datastore, cp, cp->conf_datastore);
     if (status != DN_OK) {
         return status;
     }
@@ -603,6 +609,12 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  max_msgs: %d", cp->alloc_msgs_max);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
+    log_debug(LOG_VVERB, "  datastore_connections: %d",
+            cp->datastore_connections);
+    log_debug(LOG_VVERB, "  local_peer_connections: %d",
+            cp->local_peer_connections);
+    log_debug(LOG_VVERB, "  remote_peer_connections: %d",
+            cp->remote_peer_connections);
 }
 
 static rstatus_t
@@ -1435,6 +1447,18 @@ static struct command conf_commands[] = {
     { string("max_msgs"),
       conf_set_num,
       offsetof(struct conf_pool, alloc_msgs_max) },
+
+    { string("datastore_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, datastore_connections) },
+
+    { string("local_peer_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, local_peer_connections) },
+
+    { string("remote_peer_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, remote_peer_connections) },
 
     null_command
 };
@@ -2298,6 +2322,18 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     if (string_empty(&cp->recon_iv_file)) {
         string_copy_c(&cp->recon_iv_file, (const uint8_t *)RECON_IV_FILE);
         log_debug(LOG_INFO, "setting reconciliation IV file to default value:%s", RECON_IV_FILE);
+    }
+
+    if (cp->datastore_connections == CONF_UNSET_NUM) {
+        cp->datastore_connections = CONF_DEFAULT_CONNECTIONS;
+    }
+
+    if (cp->local_peer_connections == CONF_UNSET_NUM) {
+        cp->local_peer_connections = CONF_DEFAULT_CONNECTIONS;
+    }
+
+    if (cp->remote_peer_connections == CONF_UNSET_NUM) {
+        cp->remote_peer_connections = CONF_DEFAULT_CONNECTIONS;
     }
 
     status = conf_validate_server(cf, cp);

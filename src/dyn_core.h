@@ -235,6 +235,7 @@ struct datastore {
 
     //struct conn        *conn;         /* the only server connection */
     conn_pool_t        *conn_pool;
+    uint8_t            max_connections;
 
     msec_t             next_retry_ms; /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */

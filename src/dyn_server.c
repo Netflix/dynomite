@@ -412,9 +412,9 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 rstatus_t
 server_pool_preconnect(struct context *ctx)
 {
-	/*if (!ctx->pool.preconnect) {
+	if (!ctx->pool.preconnect) {
 		return DN_OK;
-	}*/
+	}
     log_notice("PRECONNEcTING");
     return datastore_preconnect(ctx->pool.datastore);
 }
@@ -438,7 +438,9 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
     struct datastore *datastore = sp->datastore;
-    datastore->conn_pool = conn_pool_create(ctx, datastore, 3, init_server_conn);
+    datastore->conn_pool = conn_pool_create(ctx, datastore,
+                                            datastore->max_connections,
+                                            init_server_conn);
 	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }

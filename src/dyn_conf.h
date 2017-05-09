@@ -121,6 +121,11 @@ struct conf_pool {
     int                stats_interval;        /* stats aggregation interval */
     struct conf_listen stats_listen;          /* stats_listen: socket info for stats */
 
+    /* connection pool details */
+    uint8_t            datastore_connections;
+    uint8_t            local_peer_connections;
+    uint8_t            remote_peer_connections;
+
 };
 
 
