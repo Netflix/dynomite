@@ -10,7 +10,8 @@ typedef struct conn_pool conn_pool_t;
  * creates connection objects using conn_get and uses func_conn_init to initialize
  * them.
  */
-conn_pool_t *conn_pool_create(void *owner, uint8_t max_connections,
+conn_pool_t *conn_pool_create(struct context *ctx, void *owner,
+                              uint8_t max_connections,
                               func_conn_init_t func_conn_init);
 
 /**
@@ -18,7 +19,7 @@ conn_pool_t *conn_pool_create(void *owner, uint8_t max_connections,
  * but does not wait for it to finish. The conn_connect function automatically
  * adds the connection to the event loop
  */
-rstatus_t conn_pool_preconnect(struct context *ctx, conn_pool_t *cp);
+rstatus_t conn_pool_preconnect(conn_pool_t *cp);
 
 /**
  * Given a tag (just a uint16_t number), get a connection from the connection pool.
@@ -37,7 +38,7 @@ struct conn *conn_pool_get(conn_pool_t *cp, uint16_t tag);
  * This function, tears down all the connection in the pool, clears up its state
  * 
  */
-rstatus_t conn_pool_reset(struct context *ctx, conn_pool_t *cp);
+rstatus_t conn_pool_reset(conn_pool_t *cp);
 
 /**
  * If a connection that is part of a pool is being closed, this function should

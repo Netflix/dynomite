@@ -116,9 +116,8 @@ server_deinit(struct datastore **pdatastore)
 {
     if (!pdatastore || !*pdatastore)
         return;
-    struct server_pool *pool = (*pdatastore)->owner;
     ASSERT((*pdatastore)->conn_pool != NULL);
-    conn_pool_reset(pool->ctx, (*pdatastore)->conn_pool);
+    conn_pool_reset((*pdatastore)->conn_pool);
 
 }
 
@@ -131,19 +130,14 @@ server_conn(struct datastore *datastore)
 static rstatus_t
 datastore_preconnect(struct datastore *datastore)
 {
-	struct server_pool *pool;
-
-	pool = datastore->owner;
-
-    return conn_pool_preconnect(pool->ctx, datastore->conn_pool);
+    return conn_pool_preconnect(datastore->conn_pool);
 }
 
 static rstatus_t
 datastore_disconnect(struct datastore *datastore)
 {
-	struct server_pool *pool = datastore->owner;
     if (datastore->conn_pool) {
-        conn_pool_reset(pool->ctx, datastore->conn_pool);
+        conn_pool_reset(datastore->conn_pool);
     }
 
 	return DN_OK;
@@ -444,7 +438,7 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
 	THROW_STATUS(conf_pool_transform(sp, cp));
 	sp->ctx = ctx;
     struct datastore *datastore = sp->datastore;
-    datastore->conn_pool = conn_pool_create(datastore, 3, init_server_conn);
+    datastore->conn_pool = conn_pool_create(ctx, datastore, 3, init_server_conn);
 	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
