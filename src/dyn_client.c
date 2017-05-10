@@ -69,7 +69,6 @@ client_ref(struct conn *conn, void *owner)
     conn->addrlen = 0;
     conn->addr = NULL;
 
-    pool->dn_conn_q++;
     TAILQ_INSERT_TAIL(&pool->c_conn_q, conn, conn_tqe);
 
     /* owner of the client connection is the server pool */
@@ -108,8 +107,7 @@ client_unref_and_try_put(struct conn *conn)
     struct server_pool *pool;
     pool = conn->owner;
     ASSERT(conn->owner != NULL);
-    ASSERT(pool->dn_conn_q != 0);
-    pool->dn_conn_q--;
+    ASSERT(TAILQ_COUNT(&pool->c_conn_q) != 0);
     TAILQ_REMOVE(&pool->c_conn_q, conn, conn_tqe);
     conn->waiting_to_unref = 1;
     client_unref_internal_try_put(conn);
@@ -1012,9 +1010,8 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *req
     ASSERT(req->is_request);
     ASSERT(conn->type == CONN_CLIENT);
 
-    conn->omsg_count++;
-    histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
     TAILQ_INSERT_TAIL(&conn->omsg_q, req, c_tqe);
+    histo_add(&ctx->stats->client_out_queue, TAILQ_COUNT(&conn->omsg_q));
     log_debug(LOG_VERB, "%M enqueue outq %M", conn, req);
 }
 
@@ -1028,9 +1025,8 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *req
         usec_t latency = dn_usec_now() - req->stime_in_microsec;
         stats_histo_add_latency(ctx, latency);
     }
-    conn->omsg_count--;
-    histo_add(&ctx->stats->client_out_queue, conn->omsg_count);
     TAILQ_REMOVE(&conn->omsg_q, req, c_tqe);
+    histo_add(&ctx->stats->client_out_queue, TAILQ_COUNT(&conn->omsg_q));
     log_debug(LOG_VERB, "%M dequeue outq %M", conn, req);
 }
 

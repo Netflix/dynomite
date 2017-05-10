@@ -20,7 +20,7 @@
 
 #define TEST_CONF_PATH                 "conf/dynomite.yml"
 
-#define TEST_LOG_DEFAULT               LOG_PVERB
+#define TEST_LOG_DEFAULT               LOG_NOTICE
 #define TEST_LOG_PATH                  NULL
 
 #define TEST_MBUF_SIZE                 16384
@@ -189,6 +189,13 @@ test_get_options(int argc, char **argv, struct instance *nci)
     return DN_OK;
 }
 
+static void
+print_banner(const char*s)
+{
+    loga("===================================================================");
+    loga("    Running Test: %s", s);
+    loga("===================================================================");
+}
 
 static rstatus_t
 init_peer(struct node *s)
@@ -265,6 +272,7 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
 {
     struct msg *nmsg;
     struct mbuf *mbuf, *nbuf;
+    print_banner("MSG_RECV_CHAIN");
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
 
@@ -355,6 +363,7 @@ rsa_test(void)
     static unsigned char decrypted_buf[AES_KEYLEN + 1];
     static unsigned char *msg;
 
+    print_banner("RSA");
     int i=0;
     for(; i<3; i++) {
         msg = generate_aes_key();
@@ -394,7 +403,7 @@ static rstatus_t
 aes_test(void)
 {
     unsigned char msg[MAX_MSG_LEN+1];
-    loga("=======================AES======================");
+    print_banner("AES");
     unsigned char* aes_key = generate_aes_key();
     SCOPED_CHARPTR(aes_key_print) = base64_encode(aes_key, strlen((char*)aes_key));
     loga("aesKey is '%s'", aes_key_print);
@@ -444,17 +453,135 @@ aes_test(void)
     }
     return DN_OK;
 }
+/**
+ * I recently added a counter to the tailQ in dyn_queue.h
+ * This is a function to test the counter.
+ * It is implied that all changes to the tailQ should be
+ * done via the macros provided.
+ */
+struct test {
+    TAILQ_ENTRY(test)  test_tqe;      /* link in active connection pool */
+};
 
-void
+TAILQ_HEAD(test_tqh, test);
+static rstatus_t
+test_tailq(void)
+{
+    struct test_tqh     test_q1;
+    print_banner("TAILQ COUNTER");
+    TAILQ_INIT(&test_q1);
+    unsigned int i = 0;
+    for (i = 0; i< 5; i++) {
+        struct test *test = dn_zalloc(sizeof(struct test));
+        TAILQ_INSERT_TAIL(&test_q1, test, test_tqe);
+        if ((i + 1) != TAILQ_COUNT(&test_q1)) {
+            log_error("Count mismatch expected %d, got %lu",
+                      i+1, TAILQ_COUNT(&test_q1));
+            return DN_ERROR;
+        }
+    }
+    struct test_tqh     test_q2;
+    TAILQ_INIT(&test_q2);
+    for (i = 0; i< 5; i++) {
+        struct test *test = dn_zalloc(sizeof(struct test));
+        TAILQ_INSERT_TAIL(&test_q2, test, test_tqe);
+        if ((i + 1) != TAILQ_COUNT(&test_q2)) {
+            log_error("Count mismatch expected %lu, got %lu",
+                      i+1, TAILQ_COUNT(&test_q2));
+            return DN_ERROR;
+        }
+    }
+    //CONCATENATE
+    TAILQ_CONCAT(&test_q1, &test_q2, test_tqe);
+    if ((10 != TAILQ_COUNT(&test_q1)) || (0 != TAILQ_COUNT(&test_q2))) {
+        log_error("Count mismatch: q1: %lu, q2: %lu",
+                  TAILQ_COUNT(&test_q1), TAILQ_COUNT(&test_q2));
+        return DN_ERROR;
+    }
+    // REMOVE HEAD
+    struct test *test = TAILQ_FIRST(&test_q1);
+    TAILQ_REMOVE(&test_q1, test, test_tqe);
+    if (9 != TAILQ_COUNT(&test_q1)) {
+        log_error("Count mismatch expected 9, got %lu",
+                  TAILQ_COUNT(&test_q1));
+        return DN_ERROR;
+    }
+    // REMOVE TAIL
+    test = TAILQ_LAST(&test_q1, test_tqh);
+    TAILQ_REMOVE(&test_q1, test, test_tqe);
+    if (8 != TAILQ_COUNT(&test_q1)) {
+        log_error("Count mismatch expected 8, got %lu",
+                  TAILQ_COUNT(&test_q1));
+        return DN_ERROR;
+    }
+    
+    // SWAP TAILQ
+    TAILQ_SWAP(&test_q1, &test_q2, test, test_tqe);
+    if ((0 != TAILQ_COUNT(&test_q1)) || (8 != TAILQ_COUNT(&test_q2))) {
+        log_error("Count mismatch: q1: %lu, q2: %lu",
+                  TAILQ_COUNT(&test_q1), TAILQ_COUNT(&test_q2));
+        return DN_ERROR;
+    }
+
+    // SWAP BACK
+    TAILQ_SWAP(&test_q1, &test_q2, test, test_tqe);
+    if ((8 != TAILQ_COUNT(&test_q1)) || (0 != TAILQ_COUNT(&test_q2))) {
+        log_error("Count mismatch: q1: %lu, q2: %lu",
+                  TAILQ_COUNT(&test_q1), TAILQ_COUNT(&test_q2));
+        return DN_ERROR;
+    }
+    
+    // FOREACH SAFE, REMOVE
+    struct test *temp_test;
+    i = 8;
+    TAILQ_FOREACH_SAFE(test, &test_q1, test_tqe, temp_test) {
+        if (i != TAILQ_COUNT(&test_q1)) {
+            log_error("Count mismatch expected %lu, got %lu",
+                      i, TAILQ_COUNT(&test_q1));
+            return DN_ERROR;
+        }
+        TAILQ_REMOVE(&test_q1, test, test_tqe);
+        i--;
+    }
+    loga(".....SUCCESS...");
+    return DN_OK;
+}
+
+static void
+peer_ref(struct conn *conn, void *owner)
+{
+}
+
+struct conn_ops peer_ops = {
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    peer_ref,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+};
+
+static void
 init_peer_conn(struct conn *conn)
 {
     conn->dyn_mode = 1;
     conn->sd = 0;
+    conn->ops = &peer_ops;
 }
 /* Inspection test */
 static rstatus_t
 aes_msg_test(struct node *server)
 {
+    print_banner("AES MSG");
     //unsigned char* aes_key = generate_aes_key();
     struct conn *conn = conn_get(server, init_peer_conn);
     struct msg *msg = msg_get(conn, true, __FUNCTION__);
@@ -602,7 +729,14 @@ main(int argc, char **argv)
         loga("Error in testing msg_recv_chain!!!");
         goto err_out;
     }
-    ret = rsa_test();
+
+    ret = test_tailq();
+    if (ret != DN_OK) {
+        loga("Error in testing msg_recv_chain!!!");
+        goto err_out;
+    }
+
+    //ret = rsa_test();
     if (ret != DN_OK) {
         loga("Error in testing RSA !!!");
         goto err_out;

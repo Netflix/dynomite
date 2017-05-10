@@ -485,8 +485,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *req, *nmsg; /* current and next message */
 
-    struct node *peer = conn->owner;
-
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
     dnode_peer_close_stats(ctx, conn);
@@ -1046,26 +1044,6 @@ dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
 }
 
 static struct node *
-dnode_peer_pool_reroute_server(struct server_pool *pool, struct rack *rack, uint8_t *key, uint32_t keylen)
-{
-    uint32_t pos = 0;
-    struct node *server = NULL;
-    struct continuum *entry;
-
-    if (rack->ncontinuum > 1) {
-        do {
-            pos = pos % rack->ncontinuum;
-            entry = rack->continuum + pos;
-            server = array_get(&pool->peers, entry->index);
-            pos++;
-        } while (server->state == DOWN && pos < rack->ncontinuum);
-    }
-
-    //TODOs: pick another server in another rack of the same DC if we don't have any good server
-    return server;
-}
-
-static struct node *
 dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
                            uint8_t *key, uint32_t keylen)
 {
@@ -1093,18 +1071,6 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
     ASSERT(idx < array_n(&pool->peers));
 
     server = array_get(&pool->peers, idx);
-
-    /*if (server->state == DOWN) {
-        if (!is_same_dc(pool, server)) {
-            //pick another reroute server in the server DC
-            struct server *reroute_server = dnode_peer_pool_reroute_server(pool,
-                                                            rack, key, keylen);
-            // If there is no reroute server, just return the down server and
-            // let upper layer handle the connection failures.
-            if (reroute_server)
-                server = reroute_server;
-        }
-    }*/
 
     if (log_loggable(LOG_VERB)) {
         log_debug(LOG_VERB, "dyn: key '%.*s' maps to server '%.*s'", keylen,
@@ -1226,7 +1192,7 @@ dnode_peer_pool_deinit(struct array *server_pool)
         sp = array_pop(server_pool);
         ASSERT(sp->p_conn == NULL);
         //fixe me to use different variables
-        ASSERT(TAILQ_EMPTY(&sp->c_conn_q) && sp->dn_conn_q == 0);
+        ASSERT(TAILQ_EMPTY(&sp->c_conn_q));
 
 
         dnode_peer_deinit(&sp->peers);
@@ -1242,14 +1208,6 @@ dnode_peer_pool_deinit(struct array *server_pool)
     log_debug(LOG_DEBUG, "deinit %"PRIu32" peer pools", npool);
 }
 */
-
-static struct msg *
-dnode_rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
-{
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-
-    return rsp_recv_next(ctx, conn, alloc);
-}
 
 static bool
 dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *rsp)
@@ -1616,21 +1574,6 @@ dnode_req_send_next(struct context *ctx, struct conn *conn)
 }
 
 static void
-dnode_req_send_done(struct context *ctx, struct conn *conn, struct msg *req)
-{
-    if (log_loggable(LOG_DEBUG)) {
-       log_debug(LOG_VERB, "dnode_req_send_done entering!!!");
-    }
-    ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
-    // TODO: crashes because dmsg is NULL :(
-    /*log_debug(LOG_DEBUG, "DNODE REQ SEND %s %d dmsg->id %u",
-              conn_get_type_string(conn), conn->sd, req->dmsg->id);*/
-
-    req->request_send_time = dn_usec_now();
-    req_send_done(ctx, conn, req);
-}
-
-static void
 dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg *req)
 {
     ASSERT(req->is_request);
@@ -1643,13 +1586,12 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_INSERT_TAIL(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, req->id, req->parent_id);
 
-    conn->imsg_count++;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_incr(ctx, peer_in_queue);
         stats_pool_incr_by(ctx, peer_in_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->remote_peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_incr(ctx, remote_peer_in_queue);
         stats_pool_incr_by(ctx, remote_peer_in_queue_bytes, req->mlen);
     }
@@ -1673,13 +1615,12 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_REMOVE(&conn->imsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, req->id, req->parent_id);
 
-    conn->imsg_count--;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_decr(ctx, peer_in_queue);
         stats_pool_decr_by(ctx, peer_in_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_in_queue, conn->imsg_count);
+        histo_add(&ctx->stats->remote_peer_in_queue, TAILQ_COUNT(&conn->imsg_q));
         stats_pool_decr(ctx, remote_peer_in_queue);
         stats_pool_decr_by(ctx, remote_peer_in_queue_bytes, req->mlen);
     }
@@ -1694,13 +1635,12 @@ dnode_req_peer_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_INSERT_TAIL(&conn->omsg_q, req, s_tqe);
     log_debug(LOG_VERB, "conn %p enqueue outq %d:%d", conn, req->id, req->parent_id);
 
-    conn->omsg_count++;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_incr(ctx, peer_out_queue);
         stats_pool_incr_by(ctx, peer_out_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->remote_peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_incr(ctx, remote_peer_out_queue);
         stats_pool_incr_by(ctx, remote_peer_out_queue_bytes, req->mlen);
     }
@@ -1717,13 +1657,12 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
     TAILQ_REMOVE(&conn->omsg_q, req, s_tqe);
     log_debug(LOG_VVERB, "conn %p dequeue outq %p", conn, req);
 
-    conn->omsg_count--;
     if (conn->same_dc) {
-        histo_add(&ctx->stats->peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_decr(ctx, peer_out_queue);
         stats_pool_decr_by(ctx, peer_out_queue_bytes, req->mlen);
     } else {
-        histo_add(&ctx->stats->remote_peer_out_queue, conn->omsg_count);
+        histo_add(&ctx->stats->remote_peer_out_queue, TAILQ_COUNT(&conn->omsg_q));
         stats_pool_decr(ctx, remote_peer_out_queue);
         stats_pool_decr_by(ctx, remote_peer_out_queue_bytes, req->mlen);
     }
@@ -1732,11 +1671,11 @@ dnode_req_peer_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg 
 
 struct conn_ops dnode_peer_ops = {
     msg_recv,
-    dnode_rsp_recv_next,
+    rsp_recv_next,
     dnode_rsp_recv_done,
     msg_send,
     dnode_req_send_next,
-    dnode_req_send_done,
+    req_send_done,
     dnode_peer_close,
     dnode_peer_active,
     dnode_peer_ref,
