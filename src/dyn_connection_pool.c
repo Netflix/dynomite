@@ -103,6 +103,7 @@ conn_pool_get(conn_pool_t *cp, uint16_t tag)
     return NULL;
 }
 
+// TODO: Decide the behaviour for this function.
 rstatus_t
 conn_pool_reset(conn_pool_t *cp)
 {

@@ -89,14 +89,14 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_MIN_ALLOC_MSGS	         MIN_ALLOC_MSGS
 #define CONF_DEFAULT_MAX_ALLOC_MSGS	         MAX_ALLOC_MSGS
 
-#define CONF_STR_NONE                        "none"
-#define CONF_STR_DC                          "datacenter"
-#define CONF_STR_RACK                        "rack"
-#define CONF_STR_ALL                         "all"
+#define CONF_SECURE_OPTION_NONE                        "none"
+#define CONF_SECURE_OPTION_DC                          "datacenter"
+#define CONF_SECURE_OPTION_RACK                        "rack"
+#define CONF_SECURE_OPTION_ALL                         "all"
 
 #define CONF_DEFAULT_RACK                    "localrack"
 #define CONF_DEFAULT_DC                      "localdc"
-#define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
+#define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_SECURE_OPTION_NONE
 
 #define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
@@ -190,62 +190,6 @@ conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
 
     log_debug(LOG_NOTICE, "transform to server '%.*s', max_connections %u",
               s->endpoint.pname.len, s->endpoint.pname.data, s->max_connections);
-
-    return DN_OK;
-}
-
-/**
- * Copy seed struct conf_server to struct server
- * @param elem conf_server
- * @param data server
- * @return rstatus_t Return status code.
- */
-rstatus_t
-conf_seed_each_transform(void *elem, void *data)
-{
-    struct conf_server *cseed = elem;
-    struct array *seeds = data;
-    struct node *s;
-
-    ASSERT(cseed->valid);
-
-    s = array_push(seeds);
-    ASSERT(s != NULL);
-
-    s->idx = array_idx(seeds, s);
-    s->owner = NULL;
-    s->endpoint.pname = cseed->pname;
-
-    s->state = DOWN;//assume peers are down initially
-
-    uint8_t *p = cseed->name.data + cseed->name.len - 1;
-    uint8_t *start = cseed->name.data;
-    string_copy(&s->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
-
-    s->rack = cseed->rack;
-    s->dc = cseed->dc;
-    //string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
-
-    s->is_local = false;
-    //TODO-jeb need to copy over tokens, not sure if this is good enough
-    s->tokens = cseed->tokens;
-
-    s->endpoint.port = (uint16_t)cseed->port;
-    s->endpoint.weight = (uint32_t)cseed->weight;
-    s->endpoint.family = cseed->info.family;
-    s->endpoint.addrlen = cseed->info.addrlen;
-    s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
-    s->conn = NULL;
-    s->next_retry_ms = 0ULL;
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
-    s->failure_count = 0;
-
-    s->processed = 0;
-    s->is_seed = 1;
-    s->is_secure = cseed->is_secure;
-
-    log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
-              s->idx, s->endpoint.pname.len, s->endpoint.pname.data);
 
     return DN_OK;
 }
@@ -399,16 +343,16 @@ conf_pool_deinit(struct conf_pool *cp)
 static secure_server_option_t
 get_secure_server_option(struct string option)
 {
-    if (dn_strcmp(option.data, CONF_STR_NONE) == 0) {
+    if (dn_strcmp(option.data, CONF_SECURE_OPTION_NONE) == 0) {
         return SECURE_OPTION_NONE;
     }
-    if (dn_strcmp(option.data, CONF_STR_RACK) == 0) {
+    if (dn_strcmp(option.data, CONF_SECURE_OPTION_RACK) == 0) {
         return SECURE_OPTION_RACK;
     }
-    if (dn_strcmp(option.data, CONF_STR_DC) == 0) {
+    if (dn_strcmp(option.data, CONF_SECURE_OPTION_DC) == 0) {
         return SECURE_OPTION_DC;
     }
-    if (dn_strcmp(option.data, CONF_STR_ALL) == 0) {
+    if (dn_strcmp(option.data, CONF_SECURE_OPTION_ALL) == 0) {
         return SECURE_OPTION_ALL;
     }
     return SECURE_OPTION_NONE;
@@ -485,7 +429,8 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->dnode_proxy_endpoint.family = cp->dyn_listen.info.family;
     sp->dnode_proxy_endpoint.addrlen = cp->dyn_listen.info.addrlen;
     sp->dnode_proxy_endpoint.addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
-    sp->peer_connections = (uint32_t)cp->dyn_connections;
+    sp->max_local_peer_connections = cp->local_peer_connections;
+    sp->max_remote_peer_connections = cp->remote_peer_connections;
     sp->rack = cp->rack;
     sp->dc = cp->dc;
     sp->tokens = cp->tokens;
@@ -2274,10 +2219,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                               (const uint8_t *)CONF_DEFAULT_STATS_PNAME);
     }
 
-    if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL))
+    if (dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_NONE) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_RACK) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_DC) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_ALL))
     {
         log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'rack' 'datacenter' 'all'");
     }
@@ -2358,15 +2303,16 @@ conf_set_is_secure(struct conf *cf)
     nseeds = array_n(&cp->dyn_seeds);
     for (j = 0; j < nseeds; j++) {
         struct conf_server *cs = array_get(&cp->dyn_seeds, j);
+        cs->is_secure = 0;
         // if dc then communication only between nodes in different dc is secured
-        if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_DC)) {
+        if (!dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_DC)) {
             if (string_compare(&cp->dc, &cs->dc)) {
                 cs->is_secure = 1;
             }
         }
         // if rack then communication only between nodes in different rack is secured.
         // communication secured between nodes if they are in rack with same name across dcs.
-        else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK)) {
+        else if (!dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_RACK)) {
             // if not same rack or dc
             if (string_compare(&cp->rack, &cs->rack)
                     || string_compare(&cp->dc, &cs->dc)) {
@@ -2374,7 +2320,7 @@ conf_set_is_secure(struct conf *cf)
             }
         }
         // if all then all communication between nodes will be secured.
-        else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
+        else if (!dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_ALL)) {
             cs->is_secure = 1;
         }
     }

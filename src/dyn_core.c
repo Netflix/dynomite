@@ -110,7 +110,7 @@ static rstatus_t
 core_dnode_peer_init(struct context *ctx)
 {
 	/* initialize peers */
-	THROW_STATUS(dnode_peer_init(ctx));
+	THROW_STATUS(dnode_initialize_peers(ctx));
 	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK)
 	    dnode_peer_pool_disconnect(ctx);
@@ -118,15 +118,17 @@ core_dnode_peer_init(struct context *ctx)
 }
 
 static rstatus_t
-core_dnode_init(struct context *ctx)
+core_dnode_proxy_init(struct context *ctx)
 {
 	/* initialize dnode listener per server pool */
-    THROW_STATUS(dnode_init(ctx));
+    THROW_STATUS(dnode_proxy_init(ctx));
 
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
     rstatus_t status = core_dnode_peer_init(ctx);
-    if (status != DN_OK)
+    if (status != DN_OK) {
         dnode_peer_deinit(&ctx->pool.peers);
+        dnode_peer_deinit(&ctx->pool.seeds);
+    }
     return status;
 }
 
@@ -135,9 +137,9 @@ core_proxy_init(struct context *ctx)
 {
 	/* initialize proxy per server pool */
     THROW_STATUS(proxy_init(ctx));
-    rstatus_t status = core_dnode_init(ctx);
+    rstatus_t status = core_dnode_proxy_init(ctx);
     if (status != DN_OK)
-        dnode_deinit(ctx);
+        dnode_proxy_deinit(ctx);
     return status;
 }
 

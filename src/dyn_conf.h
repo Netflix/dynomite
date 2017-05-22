@@ -151,8 +151,6 @@ struct conf {
 
 // converts conf_pool to server_pool
 rstatus_t conf_pool_transform(struct server_pool *, struct conf_pool *);
-// converts conf_server to server ... except that this is for peers
-rstatus_t conf_seed_each_transform(void *elem, void *data);
 
 struct conf *conf_create(char *filename);
 void conf_destroy(struct conf *cf);

@@ -233,7 +233,6 @@ struct datastore {
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    //struct conn        *conn;         /* the only server connection */
     conn_pool_t        *conn_pool;
     uint8_t            max_connections;
 
@@ -261,6 +260,7 @@ struct node {
     struct string      dc;            /* server's dc */
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
+    bool               is_same_dc;    /* is this peer the current running node?  */
     unsigned           is_seed:1;     /* seed? */
     unsigned           processed:1;   /* flag to indicate whether this has been processed */
     unsigned           is_secure:1;   /* is the connection to the server secure? */
@@ -312,7 +312,8 @@ struct server_pool {
     int                d_backlog;            /* listen backlog */
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
-    uint32_t           peer_connections;     /* maximum # peer connections */
+    uint8_t            max_local_peer_connections;
+    uint8_t            max_remote_peer_connections;
     struct string      rack;                 /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 

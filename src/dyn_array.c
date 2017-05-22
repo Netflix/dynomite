@@ -207,3 +207,24 @@ array_each(struct array *a, array_each_t func, void *data)
 
     return DN_OK;
 }
+
+rstatus_t
+array_each_2(struct array *a, array_each_2_t func, void *data1, void *data2)
+{
+    uint32_t i, nelem;
+
+    ASSERT(array_n(a) != 0);
+    ASSERT(func != NULL);
+
+    for (i = 0, nelem = array_n(a); i < nelem; i++) {
+        void *elem = array_get(a, i);
+        rstatus_t status;
+
+        status = func(elem, data1, data2);
+        if (status != DN_OK) {
+            return status;
+        }
+    }
+
+    return DN_OK;
+}
