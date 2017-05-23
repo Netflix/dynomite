@@ -157,8 +157,8 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     self->next_retry_ms = 0ULL;
     self->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     self->failure_count = 0;
-    self->is_seed = 1;
     self->is_same_dc = 1;
+    self->is_secure = false;
     self->processed = 0;
     string_copy(&self->dc, pool->dc.data, pool->dc.len);
     self->owner = pool;
@@ -196,13 +196,13 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
 {
     struct context *ctx = data1;
     struct server_pool *sp = &ctx->pool;
-    struct array *seeds = data2;
+    struct array *peers = data2;
     struct conf_server *cseed = elem;
     ASSERT(cseed->valid);
-    struct node *s = array_push(seeds);
+    struct node *s = array_push(peers);
     ASSERT(s != NULL);
 
-    s->idx = array_idx(seeds, s);
+    s->idx = array_idx(peers, s);
     s->owner = sp;
     s->endpoint.pname = cseed->pname;
 
@@ -232,7 +232,6 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     s->is_same_dc = (string_compare(&sp->dc, &s->dc) == 0);
 
     s->processed = 0;
-    s->is_seed = 1;
     s->is_secure = cseed->is_secure;
 
     log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
@@ -246,7 +245,6 @@ dnode_initialize_peers(struct context *ctx)
     struct server_pool *sp = &ctx->pool;
     struct array *conf_seeds = &sp->conf_pool->dyn_seeds;
 
-    struct array * seeds = &sp->seeds;
     struct array * peers = &sp->peers;
     uint32_t nseed;
 
@@ -265,14 +263,6 @@ dnode_initialize_peers(struct context *ctx)
         return DN_OK;
     }
 
-    ASSERT(array_n(seeds) == 0);
-
-    THROW_STATUS(array_init(seeds, nseed, sizeof(struct node)));
-
-    /* transform conf seeds to seeds */
-    THROW_STATUS(array_each_2(conf_seeds, dnode_initialize_peer_each, ctx, seeds));
-    ASSERT(array_n(seeds) == nseed);
-
     /* initialize peers list = seeds list */
     ASSERT(array_n(peers) == 0);
 
@@ -286,13 +276,11 @@ dnode_initialize_peers(struct context *ctx)
 
     THROW_STATUS(array_each_2(conf_seeds, dnode_initialize_peer_each, ctx, peers));
 
-    IGNORE_RET_VAL(peer_cnt);
     ASSERT(array_n(peers) == peer_cnt);
 
     THROW_STATUS(dnode_peer_pool_run(sp));
 
-    log_debug(LOG_DEBUG, "init %"PRIu32" seeds and peers in pool '%.*s'",
-              nseed, sp->name.len, sp->name.data);
+    log_debug(LOG_DEBUG, "init %"PRIu32" peers in pool %M'", nseed, sp);
 
     return DN_OK;
 }
@@ -733,12 +721,6 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->owner = sp;
     s->idx = array_idx(peers, s);
 
-    //log_debug(LOG_VERB, "node rack_name         : '%.*s'", node->rack.len, node->rack.data);
-    //log_debug(LOG_VERB, "node dc_name        : '%.*s'", node->dc.len, node->dc.data);
-    //log_debug(LOG_VERB, "node address          : '%.*s'", node->endpoint.pname.len, node->endpoint.pname.data);
-    //log_debug(LOG_VERB, "node ip         : '%.*s'", node->name.len, node->name.data);
-
-
     string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
     string_copy(&s->name, node->name.data, node->name.len);
     string_copy(&s->rack, node->rack.data, node->rack.len);
@@ -764,7 +746,9 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->next_retry_ms = 0ULL;
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
-    s->is_seed = node->is_seed;
+    s->is_same_dc = (string_compare(&sp->dc, &s->dc) == 0);
+
+    //s->is_secure = cseed->is_secure;
 
     log_debug(LOG_VERB, "add a node to peer %"PRIu32" '%.*s'",
             s->idx, s->endpoint.pname.len, s->endpoint.pname.data);

@@ -60,9 +60,6 @@ server_unref(struct conn *conn)
 	server = conn->owner;
 	conn->owner = NULL;
 
-    //ASSERT(server->conn);
-    //server->conn = NULL;
-
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
 }
@@ -515,7 +512,6 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
     sp->recon_key_file = cp->recon_key_file;
     sp->recon_iv_file = cp->recon_iv_file;
 
-    array_null(&sp->seeds);
     array_null(&sp->peers);
     array_init(&sp->datacenters, 1, sizeof(struct datacenter));
     sp->conf_pool = cp;

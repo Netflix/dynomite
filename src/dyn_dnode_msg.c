@@ -991,7 +991,6 @@ dmsg_parse(struct dmsg *dmsg)
 
       rnode->port = sp->dnode_proxy_endpoint.port;
       rnode->is_local = false;
-      rnode->is_seed = false;
 
       ts[ts_len] = '\0';
       rnode->ts = (uint64_t)atol((char*)ts);

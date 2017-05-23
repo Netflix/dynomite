@@ -259,7 +259,6 @@ struct node {
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
     bool               is_same_dc;    /* is this peer the current running node?  */
-    unsigned           is_seed:1;     /* seed? */
     unsigned           processed:1;   /* flag to indicate whether this has been processed */
     unsigned           is_secure:1;   /* is the connection to the server secure? */
     dyn_state_t        state;         /* state of the server - used mainly in peers  */
@@ -302,7 +301,6 @@ struct server_pool {
 
     /* dynomite */
     struct string      seed_provider;
-    struct array       seeds;                /*dyn seeds */
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
     struct endpoint    dnode_proxy_endpoint;

@@ -240,7 +240,6 @@ init_peer(struct node *s)
     s->failure_count = 0;
 
     s->processed = 0;
-    s->is_seed = 1;
     s->is_secure = 0;
 
     log_debug(LOG_NOTICE, "Filling up server data");

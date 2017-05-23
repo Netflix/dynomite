@@ -127,7 +127,6 @@ core_dnode_proxy_init(struct context *ctx)
     rstatus_t status = core_dnode_peer_init(ctx);
     if (status != DN_OK) {
         dnode_peer_deinit(&ctx->pool.peers);
-        dnode_peer_deinit(&ctx->pool.seeds);
     }
     return status;
 }

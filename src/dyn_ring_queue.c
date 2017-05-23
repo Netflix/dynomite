@@ -147,7 +147,6 @@ node_init(struct gossip_node *node)
 	node->last_retry = 0;
 	node->failure_count = 0;
 
-	node->is_seed = false;
 	node->is_local = false;
 	node->state = INIT;
 
@@ -182,7 +181,6 @@ node_copy(const struct gossip_node *src, struct gossip_node *dst)
 
 	dst->state = src->state;
 	dst->is_local = src->is_local;
-	dst->is_seed = src->is_seed;
 	dst->failure_count = src->failure_count;
 	dst->last_retry = src->last_retry;
 	dst->next_retry = src->next_retry;

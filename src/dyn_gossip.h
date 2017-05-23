@@ -35,7 +35,6 @@ struct gossip_node {
     msec_t             last_retry;       /* last retry time in msec */
     uint32_t           failure_count;    /* # consecutive failures */
 
-    bool               is_seed;          /* seed? */
     bool               is_local;         /* is this peer the current running node?  */
     uint8_t            state;            /* state of a node that this host knows */
     uint64_t           ts;               /* timestamp */
