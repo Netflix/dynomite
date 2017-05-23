@@ -1,4 +1,4 @@
-#include "dyn_token.h"
+#include "hashkit/dyn_token.h"
 #include "dyn_core.h"
 #include "dyn_dict.h"
 
