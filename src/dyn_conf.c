@@ -35,20 +35,7 @@
 
 #include "dyn_token.h"
 #include "proto/dyn_proto.h"
-
-#define DEFINE_ACTION(_hash, _name) string(#_name),
-static struct string hash_strings[] = {
-    HASH_CODEC( DEFINE_ACTION )
-    null_string
-};
-#undef DEFINE_ACTION
-
-#define DEFINE_ACTION(_hash, _name) hash_##_name,
-static hash_t hash_algos[] = {
-    HASH_CODEC( DEFINE_ACTION )
-    NULL
-};
-#undef DEFINE_ACTION
+#include "hashkit/dyn_hashkit.h"
 
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
@@ -167,7 +154,7 @@ conf_server_deinit(struct conf_server *cs)
 }
 
 // copy from struct conf_server to struct server
-static rstatus_t
+rstatus_t
 conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
                          struct conf_server *cs)
 {
@@ -340,131 +327,22 @@ conf_pool_deinit(struct conf_pool *cp)
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }
 
-static secure_server_option_t
-get_secure_server_option(struct string option)
+secure_server_option_t
+get_secure_server_option(struct string *option)
 {
-    if (dn_strcmp(option.data, CONF_SECURE_OPTION_NONE) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_NONE) == 0) {
         return SECURE_OPTION_NONE;
     }
-    if (dn_strcmp(option.data, CONF_SECURE_OPTION_RACK) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_RACK) == 0) {
         return SECURE_OPTION_RACK;
     }
-    if (dn_strcmp(option.data, CONF_SECURE_OPTION_DC) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_DC) == 0) {
         return SECURE_OPTION_DC;
     }
-    if (dn_strcmp(option.data, CONF_SECURE_OPTION_ALL) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_ALL) == 0) {
         return SECURE_OPTION_ALL;
     }
     return SECURE_OPTION_NONE;
-}
-
-/**
- * Copy connection pool configuration parsed from dynomite.yaml into the server
- * pool.
- * @param[in,out] sp Server pool.
- * @param cp
- * @return
- */
-rstatus_t
-conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
-{
-    rstatus_t status;
-    ASSERT(cp->valid);
-
-    memset(sp, 0, sizeof(struct server_pool));
-    init_object(&sp->object, OBJ_POOL, print_server_pool);
-    sp->ctx = NULL;
-    sp->p_conn = NULL;
-    TAILQ_INIT(&sp->c_conn_q);
-    TAILQ_INIT(&sp->ready_conn_q);
-
-    array_null(&sp->datacenters);
-    /* sp->ncontinuum = 0; */
-    /* sp->nserver_continuum = 0; */
-    /* sp->continuum = NULL; */
-    sp->next_rebuild = 0ULL;
-
-    sp->name = cp->name;
-    sp->proxy_endpoint.pname = cp->listen.pname;
-    sp->proxy_endpoint.port = (uint16_t)cp->listen.port;
-
-    sp->proxy_endpoint.family = cp->listen.info.family;
-    sp->proxy_endpoint.addrlen = cp->listen.info.addrlen;
-    sp->proxy_endpoint.addr = (struct sockaddr *)&cp->listen.info.addr;
-
-    sp->key_hash_type = cp->hash;
-    sp->key_hash = hash_algos[cp->hash];
-    sp->hash_tag = cp->hash_tag;
-
-    g_data_store = cp->data_store;
-    if ((g_data_store != DATA_REDIS) &&
-        (g_data_store != DATA_MEMCACHE)) {
-        log_error("Invalid datastore in conf file");
-        return DN_ERROR;
-    }
-    set_datastore_ops();
-    sp->timeout = cp->timeout;
-    sp->backlog = cp->backlog;
-
-    sp->client_connections = (uint32_t)cp->client_connections;
-
-    sp->server_retry_timeout_ms = cp->server_retry_timeout_ms;
-    sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
-    sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
-    sp->preconnect = cp->preconnect ? 1 : 0;
-
-    sp->datastore = dn_zalloc(sizeof(*sp->datastore));
-    status = conf_datastore_transform(sp->datastore, cp, cp->conf_datastore);
-    if (status != DN_OK) {
-        return status;
-    }
-    sp->datastore->owner = sp;
-	log_debug(LOG_DEBUG, "init datastore in pool '%.*s'",
-			  sp->name.len, sp->name.data);
-
-    /* dynomite init */
-    sp->seed_provider = cp->dyn_seed_provider;
-    sp->dnode_proxy_endpoint.pname = cp->dyn_listen.pname;
-    sp->dnode_proxy_endpoint.port = (uint16_t)cp->dyn_listen.port;
-    sp->dnode_proxy_endpoint.family = cp->dyn_listen.info.family;
-    sp->dnode_proxy_endpoint.addrlen = cp->dyn_listen.info.addrlen;
-    sp->dnode_proxy_endpoint.addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
-    sp->max_local_peer_connections = cp->local_peer_connections;
-    sp->max_remote_peer_connections = cp->remote_peer_connections;
-    sp->rack = cp->rack;
-    sp->dc = cp->dc;
-    sp->tokens = cp->tokens;
-    sp->env = cp->env;
-    sp->enable_gossip = cp->enable_gossip;
-
-    /* dynomite stats init */
-    sp->stats_endpoint.pname = cp->stats_listen.pname;
-    sp->stats_endpoint.port = (uint16_t)cp->stats_listen.port;
-    sp->stats_endpoint.family = cp->stats_listen.info.family;
-    sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
-    sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
-    sp->stats_interval = cp->stats_interval;
-    sp->mbuf_size = cp->mbuf_size;
-    sp->alloc_msgs_max = cp->alloc_msgs_max;
-
-    sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
-    sp->pem_key_file = cp->pem_key_file;
-    sp->recon_key_file = cp->recon_key_file;
-    sp->recon_iv_file = cp->recon_iv_file;
-
-    array_null(&sp->seeds);
-    array_null(&sp->peers);
-    array_init(&sp->datacenters, 1, sizeof(struct datacenter));
-    sp->conf_pool = cp;
-
-    /* gossip */
-    sp->g_interval = cp->gos_interval;
-
-    set_msgs_per_sec(cp->conn_msg_rate);
-
-    log_debug(LOG_VERB, "transform to pool '%.*s'", sp->name.len, sp->name.data);
-
-    return DN_OK;
 }
 
 /**
@@ -1181,7 +1059,7 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 {
     uint8_t *p;
     hash_type_t *hp;
-    struct string *value, *hash;
+    struct string *value;
 
     p = conf;
     hp = (hash_type_t *)(p + cmd->offset);
@@ -1192,17 +1070,10 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 
     value = array_top(&cf->arg);
 
-    for (hash = hash_strings; hash->len != 0; hash++) {
-        if (string_compare(value, hash) != 0) {
-            continue;
-        }
-
-        *hp = hash - hash_strings;
-
-        return CONF_OK;
-    }
-
-    return "is not a valid hash";
+    *hp = get_hash_type(value);
+    if (*hp == HASH_INVALID)
+        return "is not a valid hash";
+    return CONF_OK;
 }
 
 static char *

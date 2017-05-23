@@ -26,7 +26,9 @@
 #ifndef _DYN_HASHKIT_H_
 #define _DYN_HASHKIT_H_
 
+void md5_signature(const unsigned char *key, unsigned int length, unsigned char *result);
 
+uint32_t crc32_sz(const char *buf, size_t length, uint32_t in_crc32);
 
 #define HASH_CODEC(ACTION)                      \
     ACTION( HASH_ONE_AT_A_TIME, one_at_a_time ) \
@@ -46,26 +48,11 @@
 #define DEFINE_ACTION(_hash, _name) _hash,
 typedef enum hash_type {
     HASH_CODEC( DEFINE_ACTION )
-    HASH_SENTINEL
+    HASH_INVALID
 } hash_type_t;
 #undef DEFINE_ACTION
 
-rstatus_t hash_one_at_a_time(const char *key, size_t key_length, struct dyn_token *token);
-void md5_signature(const unsigned char *key, unsigned int length, unsigned char *result);
-rstatus_t hash_md5(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_crc16(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_crc32(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_crc32a(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_hsieh(const char *key, size_t key_length, struct dyn_token *token);
-rstatus_t hash_jenkins(const char *key, size_t length, struct dyn_token *token);
-
-uint32_t crc32_sz(const char *buf, size_t length, uint32_t in_crc32);
-
-rstatus_t hash_murmur(const char *key, size_t length, struct dyn_token *token);
-rstatus_t hash_murmur3(const char *key, size_t length, struct dyn_token *token);
+hash_func_t get_hash_func(hash_type_t hash_type);
+hash_type_t get_hash_type(struct string *hash_name);
 
 #endif

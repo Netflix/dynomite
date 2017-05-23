@@ -1663,10 +1663,18 @@ preselect_remote_rack_for_replication(struct context *ctx)
     uint32_t dc_cnt = array_n(&sp->datacenters);
     uint32_t dc_index;
     uint32_t my_rack_index = 0;
+
+    // Sort the racks in the dcs
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
         struct datacenter *dc = array_get(&sp->datacenters, dc_index);
         // sort the racks.
         array_sort(&dc->racks, rack_name_cmp);
+    }
+
+    // Find the rack index for the local rack
+    for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
+        struct datacenter *dc = array_get(&sp->datacenters, dc_index);
+
         if (string_compare(dc->name, &sp->dc) != 0)
             continue;
 
@@ -1683,6 +1691,7 @@ preselect_remote_rack_for_replication(struct context *ctx)
         }
     }
 
+    // For every remote DC, find the corresponding rack to replicate to.
     for(dc_index = 0; dc_index < dc_cnt; dc_index++) {
         struct datacenter *dc = array_get(&sp->datacenters, dc_index);
         dc->preselected_rack_for_replication = NULL;

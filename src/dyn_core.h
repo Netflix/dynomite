@@ -121,12 +121,10 @@ typedef int err_t;     /* error type */
 #include "dyn_crypto.h"
 #include "dyn_setting.h"
 
-
 #include "entropy/dyn_entropy.h"
 
 #define ENCRYPTION 1
-
-typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
+typedef rstatus_t (*hash_func_t)(const char *, size_t, struct dyn_token *);
 
 typedef enum dyn_state {
 	INIT        = 0,
@@ -292,7 +290,7 @@ struct server_pool {
     struct string      name;                 /* pool name (ref in conf_pool) */
     struct endpoint    proxy_endpoint;
     int                key_hash_type;        /* key hash type (hash_type_t) */
-    hash_t             key_hash;             /* key hasher */
+    hash_func_t        key_hash;             /* key hasher */
     struct string      hash_tag;             /* key hash tag (ref in conf_pool) */
     msec_t             timeout;              /* timeout in msec */
     int                backlog;              /* listen backlog */
@@ -347,8 +345,8 @@ struct context {
     struct entropy     *entropy;    /* reconciliation connection */
     struct server_pool pool;        /* server_pool[] */
     struct event_base  *evb;        /* event base */
-    int                max_timeout; /* max timeout in msec */
-    int                timeout;     /* timeout in msec */
+    msec_t             max_timeout; /* max timeout in msec */
+    msec_t             timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     uint32_t           admin_opt;   /* admin mode */

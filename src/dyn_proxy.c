@@ -219,8 +219,6 @@ proxy_accept(struct context *ctx, struct conn *p)
 static rstatus_t
 proxy_recv(struct context *ctx, struct conn *conn)
 {
-    rstatus_t status;
-
     ASSERT(conn->type == CONN_PROXY);
     ASSERT(conn->recv_active);
 

@@ -149,10 +149,10 @@ struct conf {
 
 #define null_command { null_string, NULL, 0 }
 
-// converts conf_pool to server_pool
-rstatus_t conf_pool_transform(struct server_pool *, struct conf_pool *);
-
 struct conf *conf_create(char *filename);
 void conf_destroy(struct conf *cf);
+rstatus_t conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
+                                   struct conf_server *cs);
+secure_server_option_t get_secure_server_option(struct string *option);
 
 #endif

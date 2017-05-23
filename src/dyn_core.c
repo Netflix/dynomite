@@ -644,7 +644,7 @@ core_loop(struct context *ctx)
     core_timeout(ctx);
     execute_expired_tasks(0);
     ctx->timeout = MIN(ctx->timeout, time_to_next_task());
-    nsd = event_wait(ctx->evb, ctx->timeout);
+    nsd = event_wait(ctx->evb, (int)ctx->timeout);
     if (nsd < 0) {
         return nsd;
     }
