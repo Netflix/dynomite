@@ -64,7 +64,6 @@ struct conf_server {
     struct string   pname;       /* server: as "name:port:weight" */
     struct string   name;        /* name */
     int             port;        /* port */
-    int             weight;      /* weight - unused and no config parsing support */
     struct sockinfo info;        /* connect socket info */
     struct array    tokens;      /* tokens for this server */
     struct string   rack;        /* peer node or server's rack */

@@ -219,7 +219,6 @@ struct datacenter {
 struct endpoint {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
     uint16_t           port;          /* port */
-    uint32_t           weight;        /* weight */
     int                family;        /* socket family */
     socklen_t          addrlen;       /* socket length */
     struct sockaddr    *addr;         /* socket address (ref in conf_server) */

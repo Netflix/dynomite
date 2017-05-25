@@ -126,7 +126,6 @@ conf_server_init(struct conf_server *cs)
     }
 
     cs->port = 0;
-    cs->weight = 0;
 
     memset(&cs->info, 0, sizeof(cs->info));
 
@@ -164,7 +163,6 @@ conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
     s->endpoint.pname = cs->pname;
     s->name = cs->name;
     s->endpoint.port = (uint16_t)cs->port;
-    s->endpoint.weight = (uint32_t)cs->weight;
 
     s->endpoint.family = cs->info.family;
     s->endpoint.addrlen = cs->info.addrlen;
@@ -669,8 +667,8 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     struct string *value;
     struct conf_server *field;
     uint8_t *p, *q, *start;
-    uint8_t *pname, *addr, *port, *weight, *name;
-    uint32_t k, delimlen, pnamelen, addrlen, portlen, weightlen, namelen;
+    uint8_t *pname, *addr, *port, *name;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, namelen;
     struct string address;
     char delim[] = " ::";
 
@@ -694,8 +692,6 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     start = value->data;
     addr = NULL;
     addrlen = 0;
-    weight = NULL;
-    weightlen = 0;
     port = NULL;
     portlen = 0;
     name = NULL;
@@ -723,8 +719,8 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
             break;
 
         case 1:
-            weight = q + 1;
-            weightlen = (uint32_t)(p - weight + 1);
+            // ignore the weight portion, we never use it.
+            // But parse it nevertheless for backward compatibility
             break;
 
         case 2:
@@ -754,11 +750,6 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
 
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
-
-    field->weight = dn_atoi(weight, weightlen);
-    if (field->weight < 0) {
-        return "has an invalid weight in \"hostname:port:weight [name]\" format string";
-    }
 
     if (value->data[0] != '/') {
         field->port = dn_atoi(port, portlen);

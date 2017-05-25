@@ -143,7 +143,6 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     //self->name = pool->d_addrstr;
     self->endpoint.port = pool->dnode_proxy_endpoint.port;
 
-    self->endpoint.weight = 0;  /* hacking this out of the way for now */
     self->rack = pool->rack;
     self->is_local = true;
     //TODO-jeb might need to copy over tokens, not sure if this is good enough
@@ -221,7 +220,6 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     s->tokens = cseed->tokens;
 
     s->endpoint.port = (uint16_t)cseed->port;
-    s->endpoint.weight = (uint32_t)cseed->weight;
     s->endpoint.family = cseed->info.family;
     s->endpoint.addrlen = cseed->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;

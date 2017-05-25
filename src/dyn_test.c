@@ -212,7 +212,6 @@ init_peer(struct node *s)
     s->state = UNKNOWN;
 
     s->endpoint.port = (uint16_t)8102;
-    s->endpoint.weight = (uint32_t)1;
 
     struct string rack = string("rack1");
     string_copy(&s->rack, rack.data, rack.len);
