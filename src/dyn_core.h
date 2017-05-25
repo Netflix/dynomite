@@ -242,6 +242,7 @@ struct datastore {
  * @brief Dynomite server node.
  */
 struct node {
+    struct object      obj;
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint    endpoint;

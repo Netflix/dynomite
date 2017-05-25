@@ -69,7 +69,6 @@ struct conf_server {
     struct string   rack;        /* peer node or server's rack */
     struct string   dc;          /* peer node's dc */
     unsigned        valid:1;     /* valid? */
-    unsigned        is_secure:1; /* is the connection to the server secure? */
 };
 
 /** \struct conf_pool

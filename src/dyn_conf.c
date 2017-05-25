@@ -130,7 +130,6 @@ conf_server_init(struct conf_server *cs)
     memset(&cs->info, 0, sizeof(cs->info));
 
     cs->valid = 0;
-    cs->is_secure = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
     return DN_OK;
@@ -2156,41 +2155,30 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     return DN_OK;
 }
 
-
-/* Determine which peer node communications need to be secured  */
-static bool
-conf_set_is_secure(struct conf *cf)
+bool
+is_secure(secure_server_option_t option, struct string *this_dc, struct string *this_rack,
+          struct string *that_dc, struct string *that_rack)
 {
-    bool valid = true;
-    uint32_t j, nseeds;
-
-    struct conf_pool *cp = &cf->pool;
-    nseeds = array_n(&cp->dyn_seeds);
-    for (j = 0; j < nseeds; j++) {
-        struct conf_server *cs = array_get(&cp->dyn_seeds, j);
-        cs->is_secure = 0;
-        // if dc then communication only between nodes in different dc is secured
-        if (!dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_DC)) {
-            if (string_compare(&cp->dc, &cs->dc)) {
-                cs->is_secure = 1;
-            }
-        }
-        // if rack then communication only between nodes in different rack is secured.
-        // communication secured between nodes if they are in rack with same name across dcs.
-        else if (!dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_RACK)) {
-            // if not same rack or dc
-            if (string_compare(&cp->rack, &cs->rack)
-                    || string_compare(&cp->dc, &cs->dc)) {
-                cs->is_secure = 1;
-            }
-        }
-        // if all then all communication between nodes will be secured.
-        else if (!dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_ALL)) {
-            cs->is_secure = 1;
+    // if dc then communication only between nodes in different dc is secured
+    if (option == SECURE_OPTION_DC) {
+        if (string_compare(this_dc, that_dc)) {
+            return true;
         }
     }
-
-    return valid;
+    // if rack then communication only between nodes in different rack is secured.
+    // communication secured between nodes if they are in rack with same name across dcs.
+    else if (option == SECURE_OPTION_RACK) {
+        // if not same rack or dc
+        if (string_compare(this_rack, that_rack)
+                || string_compare(this_dc, that_dc)) {
+            return true;
+        }
+    }
+    // if all then all communication between nodes will be secured.
+    else if (option == SECURE_OPTION_ALL) {
+        return true;
+    }
+    return false;
 }
 
 static rstatus_t
@@ -2200,11 +2188,6 @@ conf_post_validate(struct conf *cf)
     ASSERT(!cf->valid);
 
     THROW_STATUS(conf_validate_pool(cf, &cf->pool));
-
-    /* Determine which peer node communications need to be secured  */
-    if (!conf_set_is_secure(cf)) {
-        return DN_ERROR;
-    }
     return DN_OK;
 }
 

@@ -213,7 +213,6 @@ array_each_2(struct array *a, array_each_2_t func, void *data1, void *data2)
 {
     uint32_t i, nelem;
 
-    ASSERT(array_n(a) != 0);
     ASSERT(func != NULL);
 
     for (i = 0, nelem = array_n(a); i < nelem; i++) {
