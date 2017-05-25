@@ -748,9 +748,12 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
+    // addr: hostname
     addr = start;
+    // addrlen: hostname length
     addrlen = (uint32_t)(p - start + 1);
 
+    // port is relevant only for non unix socket address
     if (value->data[0] != '/') {
         field->port = dn_atoi(port, portlen);
         if (field->port < 0 || !dn_valid_port(field->port)) {
@@ -927,13 +930,13 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
+    // addr is hostname
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
-    if (value->data[0] != '/') {
-        field->port = dn_atoi(port, portlen);
-        if (field->port < 0 || !dn_valid_port(field->port)) {
-            return "has an invalid port in \"hostname:port:weight [name]\" format string";
-        }
+
+    field->port = dn_atoi(port, portlen);
+    if (field->port < 0 || !dn_valid_port(field->port)) {
+        return "has an invalid port in \"hostname:port:weight [name]\" format string";
     }
 
     if (name == NULL) {

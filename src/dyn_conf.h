@@ -61,11 +61,11 @@ struct conf_listen {
  * Server configuration.
  */
 struct conf_server {
-    struct string   pname;       /* server: as "name:port:weight" */
-    struct string   name;        /* name */
+    struct string   pname;       /* server: as "name:port:weight" or "hostname:port:rack:dc:tokens" */
+    struct string   name;        /* name if given or the hostname */
     int             port;        /* port */
     struct sockinfo info;        /* connect socket info */
-    struct array    tokens;      /* tokens for this server */
+    struct array    tokens;      /* tokens for this server, empty for local server */
     struct string   rack;        /* peer node or server's rack */
     struct string   dc;          /* peer node's dc */
     unsigned        valid:1;     /* valid? */

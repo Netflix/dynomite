@@ -21,24 +21,24 @@ typedef uint8_t (*seeds_provider_t)(struct context *, struct mbuf *);
 extern struct gossip_node_pool gn_pool;
 
 
+// In comparison to conf_server in dyn_conf.h, this structure,
+// has sockinfo & valid flag missing
+// It has is_local, state, and timestamp extra
+// Also in conf_server, pname is name:port:weight,
+// whereas here it is just name:port
 struct gossip_node {
-    struct dyn_token   token;            /* token for this node */
-    struct string      dc;
-    struct string      rack;
-
     struct string      pname;            /* name:port */
     struct string      name;             /* name  */
-
     int                port;             /* port */
-
-    msec_t             next_retry;       /* next retry time in msec */
-    msec_t             last_retry;       /* last retry time in msec */
-    uint32_t           failure_count;    /* # consecutive failures */
+    // info is missing
+    struct dyn_token   token;            /* token for this node */
+    struct string      rack;
+    struct string      dc;
+    bool               is_secure;        /* is a secured conn */
 
     bool               is_local;         /* is this peer the current running node?  */
     uint8_t            state;            /* state of a node that this host knows */
     uint64_t           ts;               /* timestamp */
-    bool               is_secure;        /* is a secured conn */
 
 };
 

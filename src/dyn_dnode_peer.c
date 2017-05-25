@@ -203,7 +203,6 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
 
     s->idx = array_idx(peers, s);
     s->owner = sp;
-    s->endpoint.pname = cseed->pname;
 
     s->state = DOWN;//assume peers are down initially
 
@@ -219,6 +218,7 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     //TODO-jeb need to copy over tokens, not sure if this is good enough
     s->tokens = cseed->tokens;
 
+    s->endpoint.pname = cseed->pname;
     s->endpoint.port = (uint16_t)cseed->port;
     s->endpoint.family = cseed->info.family;
     s->endpoint.addrlen = cseed->info.addrlen;
@@ -769,7 +769,7 @@ dnode_peer_add(void *rmsg)
     struct ring_msg *msg = rmsg;
     struct server_pool *sp = msg->sp;
     struct gossip_node *node = array_get(&msg->nodes, 0);
-    log_debug(LOG_VVERB, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
+    log_debug(LOG_NOTICE, "dyn: peer has an added message '%.*s'", node->name.len, node->name.data);
     status = dnode_peer_add_node(sp, node);
 
     return status;
@@ -811,6 +811,7 @@ dnode_peer_replace(void *rmsg)
 
             if (cmp_dyn_token(ptoken, ntoken) == 0) {
                 s = peer; //found a node to replace
+                break;
             }
         }
     }
