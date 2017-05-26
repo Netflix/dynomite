@@ -796,7 +796,7 @@ gossip_loop(void *arg)
         log_debug(LOG_VERB, "Gossip is running ...");
 
         if (gn_pool.seeds_provider != NULL && gn_pool.seeds_provider(sp->ctx, seeds_buf) == DN_OK) {
-            log_notice("Got seed nodes  '%.*s'", mbuf_length(seeds_buf), seeds_buf->pos);
+            log_info("Got seed nodes  '%.*s'", mbuf_length(seeds_buf), seeds_buf->pos);
             gossip_update_seeds(sp, seeds_buf);
         }
 
@@ -954,6 +954,14 @@ gossip_pool_init(struct context *ctx)
             string_deinit(&gnode->name);
             string_copy(&gnode->name, b_address, dn_strlen(b_address));
         } else {
+
+            char *local_ip4 = hostname_to_private_ip4( (char *) gnode->name.data);
+            // Use the local_ipv4 instead of the hostname, thats what we use for
+            // comparison eventually anyways
+            if (local_ip4 != NULL) {
+                string_deinit(&gnode->name);
+                string_copy_c(&gnode->name, local_ip4);
+            }
             gnode->state = DOWN;
             gnode->ts = 1010101;  //make this to be a very aged ts
         }
