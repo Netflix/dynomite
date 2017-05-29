@@ -337,14 +337,10 @@ dn_get_options(int argc, char **argv, struct instance *nci)
     int c, value;
 
     opterr = 0;
-
-    for (;;) {
+    
+    c = 0;
+    while (c != -1) {
         c = getopt_long(argc, argv, short_options, long_options, NULL);
-        if (c == -1) {
-            /* no more options */
-            break;
-        }
-
         switch (c) {
         case 'h':
             show_version = 1;
