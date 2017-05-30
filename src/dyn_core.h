@@ -248,7 +248,7 @@ struct node {
     struct endpoint    endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    struct conn        *conn;         /* the only peer connection */
+    conn_pool_t        *conn_pool;         /* the only peer connection */
 
     msec_t             next_retry_ms;    /* next retry time in msec */
     sec_t              reconnect_backoff_sec; /* backoff time in seconds */

@@ -32,10 +32,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->addr = peer->endpoint.addr;
     string_duplicate(&conn->pname, &peer->endpoint.pname);
 
-    ASSERT(peer->conn == NULL);
-    peer->conn = conn;
-
-    conn->owner = owner;
+    conn->owner = peer;
 
     conn->dnode_secured = peer->is_secure;
     conn->dnode_crypto_state = 0;
@@ -59,16 +56,13 @@ dnode_peer_unref(struct conn *conn)
     peer = conn->owner;
     conn->owner = NULL;
     // Mark the peer as down
-    peer->state = DOWN;
+    peer->state = DOWN; //TODO: ?? questionable
 
     /* FIXME: This is a wrong place to schedule a reconnection since this unref has no
      * context around why the disconnection happened. Ideally this task should be
      * scheduled by a higher layer which monitors the overall cluster health and
      * individual connections */
     schedule_task_1(dnode_peer_connect_task, peer, peer->reconnect_backoff_sec * 1000);
-
-    ASSERT(peer->conn);
-    peer->conn = NULL;
 
     log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
               peer->endpoint.pname.len, peer->endpoint.pname.data);
@@ -140,7 +134,7 @@ _print_node(FILE *stream, const struct object *obj)
 static void
 _init_peer_struct(struct node *node)
 {
-    memset(node, 0, sizeof(node));
+    memset(node, 0, sizeof(*node));
     init_object(&node->obj, OBJ_NODE, _print_node);
 }
 
@@ -192,7 +186,9 @@ dnode_peer_deinit(struct array *nodes)
 
         s = array_pop(nodes);
         IGNORE_RET_VAL(s);
-        ASSERT(s->conn == NULL);
+        if (s->conn_pool) {
+            conn_pool_reset(s->conn_pool);
+        }
     }
     array_deinit(nodes);
 }
@@ -212,7 +208,6 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
 
     struct conf_server *cseed = elem;
     ASSERT(cseed->valid);
-    rstatus_t status;
     struct array *peers = data2;
     struct node *s = array_push(peers);
     _init_peer_struct(s);
@@ -244,6 +239,11 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     s->is_secure = is_secure(sp->secure_server_option, &sp->dc, &sp->rack, &s->dc,
                              &s->rack);
     s->state = DOWN;//assume peers are down initially
+    if (!s->is_local) {
+        uint8_t max_connections = s->is_same_dc ? sp->max_local_peer_connections :
+                                                  sp->max_remote_peer_connections;
+        s->conn_pool = conn_pool_create(ctx, s, max_connections, init_dnode_peer_conn);
+    }
     log_notice("added peer %M", s);
 
     return DN_OK;
@@ -288,11 +288,7 @@ dnode_initialize_peers(struct context *ctx)
 static struct conn *
 dnode_peer_conn(struct node *peer)
 {
-    if (peer->conn == NULL) {
-        return conn_get(peer, init_dnode_peer_conn);
-    }
-
-    return peer->conn;
+    return conn_pool_get(peer->conn_pool, 1);
 }
 
 static void
@@ -500,30 +496,12 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 static rstatus_t
 dnode_peer_each_preconnect(void *elem, void *data)
 {
-    rstatus_t status;
-    struct node *peer;
-    struct server_pool *sp;
-    struct conn *conn;
-
-    peer = elem;
-    sp = peer->owner;
+    struct node *peer = elem;
 
     if (peer->is_local)  //don't bother to connect if it is a self-connection
         return DN_OK;
 
-    conn = dnode_peer_conn(peer);
-    if (conn == NULL) {
-        return DN_ENOMEM;
-    }
-
-    status = conn_connect(sp->ctx, conn);
-    if (status != DN_OK) {
-        log_warn("dyn: connect to peer '%.*s' failed, ignored: %s",
-                peer->endpoint.pname.len, peer->endpoint.pname.data, strerror(errno));
-        conn_close(sp->ctx, conn);
-    }
-
-    return DN_OK;
+    return conn_pool_preconnect(peer->conn_pool);
 }
 
 static void
@@ -537,11 +515,9 @@ static rstatus_t
 dnode_peer_each_disconnect(void *elem, void *data)
 {
     struct node *peer = elem;
-    struct server_pool *pool;
 
-    pool = peer->owner;
-    if (peer->conn) {
-        conn_close(pool->ctx, peer->conn);
+    if (peer->conn_pool) {
+        conn_pool_reset(peer->conn_pool);
     }
 
     return DN_OK;
@@ -732,6 +708,11 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
                              &s->rack);
     s->state = node->state;
 
+    if (!s->is_local) {
+        uint8_t max_connections = s->is_same_dc ? sp->max_local_peer_connections :
+                                                  sp->max_remote_peer_connections;
+        s->conn_pool = conn_pool_create(sp->ctx, s, max_connections, init_dnode_peer_conn);
+    }
     log_notice("added peer %M", s);
 
     status = dnode_peer_pool_run(sp);
@@ -972,15 +953,14 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
     if (peer->state == DOWN) {
         return NULL;
     }
+    ASSERT(!peer->is_local);
+    if (peer->is_local)
+        return NULL;
 
     /* pick a connection to a given peer */
     struct conn *conn = dnode_peer_conn(peer);
     if (conn == NULL) {
         return NULL;
-    }
-
-    if (peer->is_local) {
-        return conn; //Don't bother to connect
     }
 
     if (peer->state == RESET) {

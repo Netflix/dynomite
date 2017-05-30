@@ -152,5 +152,8 @@ void conf_destroy(struct conf *cf);
 rstatus_t conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
                                    struct conf_server *cs);
 secure_server_option_t get_secure_server_option(struct string *option);
+bool is_secure(secure_server_option_t option, struct string *this_dc,
+               struct string *this_rack, struct string *that_dc,
+               struct string *that_rack);
 
 #endif

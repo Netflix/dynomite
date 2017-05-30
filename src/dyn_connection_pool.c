@@ -71,6 +71,25 @@ conn_pool_preconnect(conn_pool_t *cp)
     return overall_status;
 }
 
+static void
+_create_missing_connections(conn_pool_t *cp)
+{
+    // Attempt reconnect if connections are few.
+    uint8_t failures = 0;
+    while (TAILQ_COUNT(&cp->active_conn_q) < cp->max_connections) {
+        struct conn *conn = conn_get(cp->owner, cp->func_conn_init);
+        if (conn != NULL) {
+            conn->conn_pool = cp;
+            log_notice("created %M", conn);
+            TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
+        } else {
+            if (++failures == 3) {
+                return;
+            }
+        }
+    }
+
+}
 struct conn *
 conn_pool_get(conn_pool_t *cp, uint16_t tag)
 {
@@ -79,17 +98,7 @@ conn_pool_get(conn_pool_t *cp, uint16_t tag)
     // get a new connection to use from the currenly active connections
     // add tag->new_conn in hash table
     // return new_conn
-
-    // Attempt reconnect if connections are few.
-    if (TAILQ_COUNT(&cp->active_conn_q) < cp->max_connections) {
-        struct conn *conn = conn_get(cp->owner, cp->func_conn_init);
-        if (conn != NULL) {
-            conn->conn_pool = cp;
-            log_notice("created %M", conn);
-            TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
-        }
-    }
-
+    _create_missing_connections(cp);
 
     // TODO: First cut: just return a random connection in the queue and recycle
     if (TAILQ_COUNT(&cp->active_conn_q) > 0) {
