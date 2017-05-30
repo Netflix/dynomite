@@ -769,7 +769,6 @@ dnode_peer_add(struct server_pool *sp, struct gossip_node *node)
 }
 */
 
-//TODO CHECK THIS ONE:::::::::::::::::::::::::::::::::::
 rstatus_t
 dnode_peer_replace(void *rmsg)
 {
@@ -828,65 +827,6 @@ dnode_peer_replace(void *rmsg)
 
     return DN_OK;
 }
-
-
-/*
-rstatus_t
-dnode_peer_replace(struct server_pool *sp, struct gossip_node *node)
-{
-    //rstatus_t status;
-    log_debug(LOG_VVERB, "dyn: peer has a replaced message '%.*s'", node->name.len, node->name.data);
-    struct array *peers = &sp->peers;
-    struct node *s = NULL;
-
-    uint32_t i,nelem;
-    //bool node_exist = false;
-    //TODOs: use hash table here
-    for (i=1, nelem = array_n(peers); i< nelem; i++) {
-        struct node * peer = (struct node *) array_get(peers, i);
-        if (string_compare(&peer->rack, &node->rack) == 0) {
-            //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
-            struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
-            struct dyn_token *ntoken = &node->token;
-
-            if (cmp_dyn_token(ptoken, ntoken) == 0) {
-                s = peer; //found a node to replace
-            }
-        }
-    }
-
-
-    if (s != NULL) {
-        log_debug(LOG_INFO, "Found an old node to replace '%.*s'", s->name.len, s->name.data);
-        log_debug(LOG_INFO, "Replace with address '%.*s'", node->name.len, node->name.data);
-
-        string_deinit(&s->endpoint.pname);
-        string_deinit(&s->name);
-        string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
-        string_copy(&s->name, node->name.data, node->name.len);
-
-        //TODOs: need to free the previous s->endpoint.addr?
-        //if (s->endpoint.addr != NULL) {
-        //   dn_free(s->endpoint.addr);
-        //}
-
-        struct sockinfo  *info =  dn_alloc(sizeof(*info)); //need to free this
-        dn_resolve(&s->name, s->endpoint.port, info);
-        s->endpoint.family = info->family;
-        s->endpoint.addrlen = info->addrlen;
-        s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
-
-
-        dnode_peer_each_disconnect(s, NULL);
-        dnode_peer_each_preconnect(s, NULL);
-    } else {
-        log_debug(LOG_INFO, "Unable to find any node matched the token");
-    }
-
-    return DN_OK;
-}
-*/
-
 
 void
 dnode_peer_connected(struct context *ctx, struct conn *conn)
