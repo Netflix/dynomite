@@ -337,14 +337,10 @@ dn_get_options(int argc, char **argv, struct instance *nci)
     int c, value;
 
     opterr = 0;
-
-    for (;;) {
-        c = getopt_long(argc, argv, short_options, long_options, NULL);
-        if (c == -1) {
-            /* no more options */
-            break;
-        }
-
+    
+    c = getopt_long(argc, argv, short_options, long_options, NULL);
+    while (c != -1) {
+        
         switch (c) {
         case 'h':
             show_version = 1;
@@ -471,6 +467,7 @@ dn_get_options(int argc, char **argv, struct instance *nci)
             return DN_ERROR;
 
         }
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
     }
 
     return DN_OK;
