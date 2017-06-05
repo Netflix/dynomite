@@ -2,6 +2,8 @@
 #include "dyn_types.h"
 #include "dyn_core.h"
 
+struct task;
+
 /* handler that takes 1 argument */
 typedef void (*task_handler_1)(void *arg1);
 
@@ -13,7 +15,7 @@ rstatus_t task_mgr_init(void);
  * arg1 : the argument that will be sent back to handler1
  * timeout : time in msec after which this task should get fired
  */
-void schedule_task_1(task_handler_1 handler1, void *arg1, msec_t timeout);
+struct task *schedule_task_1(task_handler_1 handler1, void *arg1, msec_t timeout);
 
 /* Returns the time in msec to the next task */
 msec_t time_to_next_task(void);
@@ -23,3 +25,7 @@ msec_t time_to_next_task(void);
  *       > 0 (upto limit tasks)
  */
 void execute_expired_tasks(uint32_t limit);
+
+/* Cancel the provided task. The caller should keep track of the tasks scheduled
+ * and use it to cancel */
+void cancel_task(struct task *task);
