@@ -62,6 +62,7 @@ dnode_peer_unref(struct conn *conn)
      * context around why the disconnection happened. Ideally this task should be
      * scheduled by a higher layer which monitors the overall cluster health and
      * individual connections */
+    log_notice("%M unref, rescheduling connection", peer);
     schedule_task_1(dnode_peer_connect_task, peer, peer->reconnect_backoff_sec * 1000);
 
     log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
@@ -188,6 +189,7 @@ dnode_peer_deinit(struct array *nodes)
         IGNORE_RET_VAL(s);
         if (s->conn_pool) {
             conn_pool_reset(s->conn_pool);
+            s->conn_pool = NULL;
         }
     }
     array_deinit(nodes);
@@ -198,6 +200,21 @@ dnode_peer_pool_run(struct server_pool *pool)
 {
     ASSERT(array_n(&pool->peers) != 0);
     return vnode_update(pool);
+}
+
+static void
+dnode_create_connection_pool(struct server_pool *sp, struct node *peer)
+{
+    if (peer->conn_pool)
+        return;
+    struct context *ctx = sp->ctx;
+    if (!peer->is_local) {
+        uint8_t max_connections = peer->is_same_dc ? sp->max_local_peer_connections :
+                                                     sp->max_remote_peer_connections;
+        peer->conn_pool = conn_pool_create(ctx, peer, max_connections,
+                                           init_dnode_peer_conn);
+    }
+
 }
 
 static rstatus_t
@@ -239,11 +256,7 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     s->is_secure = is_secure(sp->secure_server_option, &sp->dc, &sp->rack, &s->dc,
                              &s->rack);
     s->state = DOWN;//assume peers are down initially
-    if (!s->is_local) {
-        uint8_t max_connections = s->is_same_dc ? sp->max_local_peer_connections :
-                                                  sp->max_remote_peer_connections;
-        s->conn_pool = conn_pool_create(ctx, s, max_connections, init_dnode_peer_conn);
-    }
+    dnode_create_connection_pool(sp, s);
     log_notice("added peer %M", s);
 
     return DN_OK;
@@ -367,7 +380,6 @@ dnode_peer_failure(struct context *ctx, struct node *server)
     if (server->reconnect_backoff_sec < MIN_WAIT_BEFORE_RECONNECT_IN_SECS)
         server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 
-    server->next_retry_ms = now_ms + (server->reconnect_backoff_sec * 1000);
     server->reconnect_backoff_sec =
         (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
                                                 MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
@@ -518,6 +530,7 @@ dnode_peer_each_disconnect(void *elem, void *data)
 
     if (peer->conn_pool) {
         conn_pool_reset(peer->conn_pool);
+        peer->conn_pool = NULL;
     }
 
     return DN_OK;
@@ -708,11 +721,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
                              &s->rack);
     s->state = node->state;
 
-    if (!s->is_local) {
-        uint8_t max_connections = s->is_same_dc ? sp->max_local_peer_connections :
-                                                  sp->max_remote_peer_connections;
-        s->conn_pool = conn_pool_create(sp->ctx, s, max_connections, init_dnode_peer_conn);
-    }
+    dnode_create_connection_pool(sp, s);
     log_notice("added peer %M", s);
 
     status = dnode_peer_pool_run(sp);
@@ -783,6 +792,7 @@ dnode_peer_replace(void *rmsg)
         log_notice("Found an old node to replace '%.*s'", s->name.len, s->name.data);
         log_notice("Replace with address '%.*s'", node->name.len, node->name.data);
 
+        dnode_peer_each_disconnect(s, NULL);
         string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
         string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
@@ -799,8 +809,8 @@ dnode_peer_replace(void *rmsg)
         s->endpoint.addrlen = info->addrlen;
         s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
 
+        dnode_create_connection_pool(sp, s);
 
-        dnode_peer_each_disconnect(s, NULL);
         dnode_peer_each_preconnect(s, NULL);
     } else {
         log_debug(LOG_INFO, "Unable to find any node matched the token");
@@ -838,7 +848,6 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
             " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
             server->failure_count);
     server->failure_count = 0;
-    server->next_retry_ms = 0ULL;
     server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 }
 
@@ -966,6 +975,7 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
     if (peer->state == RESET) {
         log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
 
+        // Ideally the connection pool should be resetted.
         dnode_peer_close_socket(ctx, conn);
         if (conn_connect(ctx, conn) != DN_OK) {
             conn->err = EHOSTDOWN;
@@ -1015,35 +1025,6 @@ dnode_peer_pool_disconnect(struct context *ctx)
     status = array_each(&sp->peers, dnode_peer_each_disconnect, NULL);
     IGNORE_RET_VAL(status);
 }
-
-/*
-static void
-dnode_peer_pool_deinit(struct array *server_pool)
-{
-    uint32_t i, npool;
-
-    for (i = 0, npool = array_n(server_pool); i < npool; i++) {
-        struct server_pool *sp;
-
-        sp = array_pop(server_pool);
-        ASSERT(sp->p_conn == NULL);
-        //fixe me to use different variables
-        ASSERT(TAILQ_EMPTY(&sp->c_conn_q));
-
-
-        dnode_peer_deinit(&sp->peers);
-        array_each(&sp->datacenters, datacenter_destroy, NULL);
-        array_deinit(&sp->datacenters);
-
-        log_debug(LOG_DEBUG, "dyn: deinit peer pool %"PRIu32" '%.*s'", sp->idx,
-                sp->name.len, sp->name.data);
-    }
-
-    //array_deinit(server_pool);
-
-    log_debug(LOG_DEBUG, "deinit %"PRIu32" peer pools", npool);
-}
-*/
 
 static bool
 dnode_rsp_filter(struct context *ctx, struct conn *conn, struct msg *rsp)

@@ -1,6 +1,5 @@
 #include "dyn_core.h"
 #include "dyn_connection_pool.h"
-#include "dyn_array.h"
 
 struct conn_pool {
     struct object   obj;
@@ -50,27 +49,6 @@ conn_pool_create(struct context *ctx, void *owner, uint8_t max_connections,
     return cp;
 }
 
-rstatus_t
-conn_pool_preconnect(conn_pool_t *cp)
-{
-    // for each conn in array, call conn_connect
-    rstatus_t overall_status = DN_OK;
-    struct conn *conn, *nconn;
-    TAILQ_FOREACH_SAFE(conn, &cp->active_conn_q, pool_tqe, nconn) {
-        log_notice("conn %M nconn %M", conn, nconn);
-        rstatus_t s = conn_connect(cp->ctx, conn);
-        if (s == DN_OK) {
-            continue;
-        }
-
-        TAILQ_REMOVE(&cp->active_conn_q, conn, pool_tqe);
-        ASSERT(TAILQ_COUNT(&cp->active_conn_q) > 0);
-        conn_close(cp->ctx, conn);
-        overall_status = s;
-    }
-    return overall_status;
-}
-
 static void
 _create_missing_connections(conn_pool_t *cp)
 {
@@ -90,6 +68,29 @@ _create_missing_connections(conn_pool_t *cp)
     }
 
 }
+
+rstatus_t
+conn_pool_preconnect(conn_pool_t *cp)
+{
+    _create_missing_connections(cp);
+    // for each conn in array, call conn_connect
+    rstatus_t overall_status = DN_OK;
+    struct conn *conn, *nconn;
+    TAILQ_FOREACH_SAFE(conn, &cp->active_conn_q, pool_tqe, nconn) {
+        log_notice("conn %M nconn %M", conn, nconn);
+        rstatus_t s = conn_connect(cp->ctx, conn);
+        if (s == DN_OK) {
+            continue;
+        }
+
+        TAILQ_REMOVE(&cp->active_conn_q, conn, pool_tqe);
+        ASSERT(TAILQ_COUNT(&cp->active_conn_q) > 0);
+        conn_close(cp->ctx, conn);
+        overall_status = s;
+    }
+    return overall_status;
+}
+
 struct conn *
 conn_pool_get(conn_pool_t *cp, uint16_t tag)
 {
@@ -118,6 +119,14 @@ conn_pool_reset(conn_pool_t *cp)
 {
     // clear everything in hash table.
     // for every connection, kill it
+    struct conn *conn, *nconn;
+    TAILQ_FOREACH_SAFE(conn, &cp->active_conn_q, pool_tqe, nconn) {
+        log_notice("%M Closing %M", cp, conn);
+        conn_close(cp->ctx, conn);
+        TAILQ_REMOVE(&cp->active_conn_q, conn, pool_tqe);
+    }
+    log_notice("%M Destroying", cp);
+    dn_free(cp);
     return DN_OK;
 }
 

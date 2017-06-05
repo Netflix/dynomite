@@ -109,13 +109,14 @@ server_active(struct conn *conn)
 }
 
 static void
-server_deinit(struct datastore **pdatastore)
+server_deinit(struct datastore *pdatastore)
 {
-    if (!pdatastore || !*pdatastore)
+    if (!pdatastore)
         return;
-    ASSERT((*pdatastore)->conn_pool != NULL);
-    conn_pool_reset((*pdatastore)->conn_pool);
-
+    if (pdatastore->conn_pool) {
+        conn_pool_reset(pdatastore->conn_pool);
+        pdatastore->conn_pool = NULL;
+    }
 }
 
 static struct conn *
@@ -128,16 +129,6 @@ static rstatus_t
 datastore_preconnect(struct datastore *datastore)
 {
     return conn_pool_preconnect(datastore->conn_pool);
-}
-
-static rstatus_t
-datastore_disconnect(struct datastore *datastore)
-{
-    if (datastore->conn_pool) {
-        conn_pool_reset(datastore->conn_pool);
-    }
-
-	return DN_OK;
 }
 
 static void
@@ -419,7 +410,11 @@ server_pool_preconnect(struct context *ctx)
 void
 server_pool_disconnect(struct context *ctx)
 {
-    datastore_disconnect(ctx->pool.datastore);
+    struct datastore *datastore = ctx->pool.datastore;
+    if (datastore->conn_pool) {
+        conn_pool_reset(datastore->conn_pool);
+        datastore->conn_pool = NULL;
+    }
 }
 
 /**
@@ -544,7 +539,9 @@ server_pool_deinit(struct server_pool *sp)
     ASSERT(sp->p_conn == NULL);
     ASSERT(TAILQ_EMPTY(&sp->c_conn_q));
 
-    server_deinit(&sp->datastore);
+    server_deinit(sp->datastore);
+    dn_free(sp->datastore);
+    sp->datastore = NULL;
     log_debug(LOG_DEBUG, "deinit pool '%.*s'", sp->name.len, sp->name.data);
 }
 
