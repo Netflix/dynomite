@@ -172,8 +172,7 @@ conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
-    log_debug(LOG_NOTICE, "transform to server '%.*s', max_connections %u",
-              s->endpoint.pname.len, s->endpoint.pname.data, s->max_connections);
+    log_debug(LOG_NOTICE, "Created %M", s);
 
     return DN_OK;
 }

@@ -45,6 +45,7 @@ typedef enum {
     OBJ_CONN,
     OBJ_CONN_POOL,
     OBJ_POOL,
+    OBJ_DATASTORE,
     OBJ_NODE,
     OBJ_LAST
 }object_type_t;

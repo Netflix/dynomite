@@ -29,14 +29,14 @@ _conn_get_type_string(struct conn *conn)
 {
     switch(conn->type) {
         case CONN_UNSPECIFIED: return "UNSPEC";
-        case CONN_PROXY : return "PROXY";
-        case CONN_CLIENT: return "CLIENT";
-        case CONN_SERVER: return "SERVER";
-        case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
+        case CONN_PROXY : return "CONN_PROXY";
+        case CONN_CLIENT: return "CONN_CLIENT";
+        case CONN_SERVER: return "CONN_SERVER";
+        case CONN_DNODE_PEER_PROXY: return "CONN_PEER_PROXY";
         case CONN_DNODE_PEER_CLIENT: return conn->same_dc ?
-                                            "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
+                                            "CONN_LOCAL_PEER_CLIENT" : "CONN_REMOTE_PEER_CLIENT";
         case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
-                                            "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
+                                            "CONN_LOCAL_PEER_SERVER" : "CONN_REMOTE_PEER_SERVER";
     }
     return "INVALID";
 }

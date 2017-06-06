@@ -17,7 +17,6 @@
 #include "dyn_vnode.h"
 
 static rstatus_t dnode_peer_pool_update(struct server_pool *pool);
-static void dnode_peer_connect_task(void *p);
 
 static void
 dnode_peer_ref(struct conn *conn, void *owner)
@@ -57,13 +56,6 @@ dnode_peer_unref(struct conn *conn)
     conn->owner = NULL;
     // Mark the peer as down
     peer->state = DOWN; //TODO: ?? questionable
-
-    /* FIXME: This is a wrong place to schedule a reconnection since this unref has no
-     * context around why the disconnection happened. Ideally this task should be
-     * scheduled by a higher layer which monitors the overall cluster health and
-     * individual connections */
-    log_notice("%M unref, rescheduling connection", peer);
-    schedule_task_1(dnode_peer_connect_task, peer, peer->reconnect_backoff_sec * 1000);
 
     log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
               peer->endpoint.pname.len, peer->endpoint.pname.data);
@@ -188,7 +180,7 @@ dnode_peer_deinit(struct array *nodes)
         s = array_pop(nodes);
         IGNORE_RET_VAL(s);
         if (s->conn_pool) {
-            conn_pool_reset(s->conn_pool);
+            conn_pool_destroy(s->conn_pool);
             s->conn_pool = NULL;
         }
     }
@@ -212,7 +204,8 @@ dnode_create_connection_pool(struct server_pool *sp, struct node *peer)
         uint8_t max_connections = peer->is_same_dc ? sp->max_local_peer_connections :
                                                      sp->max_remote_peer_connections;
         peer->conn_pool = conn_pool_create(ctx, peer, max_connections,
-                                           init_dnode_peer_conn);
+                                           init_dnode_peer_conn, sp->server_failure_limit,
+                                           MAX_WAIT_BEFORE_RECONNECT_IN_SECS);
     }
 
 }
@@ -349,43 +342,13 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
 
 
 static void
-dnode_peer_failure(struct context *ctx, struct node *server)
+dnode_peer_failure(struct context *ctx, struct node *peer)
 {
-    struct server_pool *pool = server->owner;
-    rstatus_t status;
+    struct server_pool *pool = peer->owner;
+    conn_pool_notify_conn_errored(peer->conn_pool);
+    stats_pool_set_ts(ctx, peer_ejected_at, (int64_t)dn_msec_now());
 
-    server->failure_count++;
-
-    log_notice("dyn: peer '%.*s' failure count %"PRIu32" ",
-               server->endpoint.pname.len, server->endpoint.pname.data,
-               server->failure_count);
-
-    if (server->failure_count < pool->server_failure_limit) {
-        return;
-    }
-
-    msec_t now_ms = dn_msec_now();
-    if (now_ms < 0) {
-        return;
-    }
-
-    stats_pool_set_ts(ctx, peer_ejected_at, (int64_t)now_ms);
-
-    log_notice("dyn: update peer pool '%.*s' for peer '%.*s' "
-               "for next %"PRIu32" secs", pool->name.len,
-               pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
-               WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS/1000);
-
-    stats_pool_incr(ctx, peer_ejects);
-    if (server->reconnect_backoff_sec < MIN_WAIT_BEFORE_RECONNECT_IN_SECS)
-        server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
-
-    server->reconnect_backoff_sec =
-        (2 * server->reconnect_backoff_sec) > MAX_WAIT_BEFORE_RECONNECT_IN_SECS ?
-                                                MAX_WAIT_BEFORE_RECONNECT_IN_SECS :
-                                                2 * server->reconnect_backoff_sec;
-    status = dnode_peer_pool_update(pool);
-    if (status != DN_OK) {
+    if (dnode_peer_pool_update(peer->owner) != DN_OK) {
         log_error("dyn: updating peer pool '%.*s' failed: %s",
                   pool->name.len, pool->name.data, strerror(errno));
     }
@@ -433,13 +396,14 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     struct msg *req, *nmsg; /* current and next message */
 
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
+    struct node *peer = conn->owner;
 
     dnode_peer_close_stats(ctx, conn);
 
     if (conn->sd < 0) {
-        dnode_peer_failure(ctx, conn->owner);
         conn_unref(conn);
         conn_put(conn);
+        dnode_peer_failure(ctx, peer);
         return;
     }
     uint32_t out_counter = 0;
@@ -492,8 +456,6 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     ASSERT(conn->smsg == NULL);
 
-    dnode_peer_failure(ctx, conn->owner);
-
     conn_unref(conn);
 
     status = close(conn->sd);
@@ -503,6 +465,8 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
     conn->sd = -1;
 
     conn_put(conn);
+    dnode_peer_failure(ctx, peer);
+
 }
 
 static rstatus_t
@@ -516,20 +480,13 @@ dnode_peer_each_preconnect(void *elem, void *data)
     return conn_pool_preconnect(peer->conn_pool);
 }
 
-static void
-dnode_peer_connect_task(void *p)
-{
-    rstatus_t s = dnode_peer_each_preconnect(p, NULL);
-    IGNORE_RET_VAL(s);
-}
-
 static rstatus_t
 dnode_peer_each_disconnect(void *elem, void *data)
 {
     struct node *peer = elem;
 
     if (peer->conn_pool) {
-        conn_pool_reset(peer->conn_pool);
+        conn_pool_destroy(peer->conn_pool);
         peer->conn_pool = NULL;
     }
 
@@ -832,6 +789,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
     conn->connecting = 0;
     conn->connected = 1;
     peer->state = NORMAL;
+    conn_pool_connected(peer->conn_pool, conn);
 
     log_notice("%M connected", conn);
 }

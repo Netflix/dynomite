@@ -12,7 +12,8 @@ typedef struct conn_pool conn_pool_t;
  */
 conn_pool_t *conn_pool_create(struct context *ctx, void *owner,
                               uint8_t max_connections,
-                              func_conn_init_t func_conn_init);
+                              func_conn_init_t func_conn_init,
+                              uint8_t max_failures, sec_t max_timeout);
 
 /**
  * This function starts a preconnect process for every underlying connection object
@@ -38,7 +39,7 @@ struct conn *conn_pool_get(conn_pool_t *cp, uint16_t tag);
  * This function, tears down all the connection in the pool, clears up its state
  * 
  */
-rstatus_t conn_pool_reset(conn_pool_t *cp);
+rstatus_t conn_pool_destroy(conn_pool_t *cp);
 
 /**
  * If a connection that is part of a pool is being closed, this function should
@@ -46,3 +47,19 @@ rstatus_t conn_pool_reset(conn_pool_t *cp);
  * 
  */
 void conn_pool_notify_conn_close(conn_pool_t *cp, struct conn *conn);
+
+/**
+ * If a connection that is part of a pool got errored, this function should
+ * called before closing so the pool can schedule proper reconnection logic
+ * 
+ */
+void conn_pool_notify_conn_errored(conn_pool_t *cp);
+
+/**
+ * Notify the connection pool that the connection is connected
+ * TODO: Aware of the fact that this should be the connection pool's job but
+ * trying to fit the changes in the existing code to have minimal breakage.
+ * The reason is that the main thread does the epoll and so it knows that the
+ * connection is all good.
+ */
+void conn_pool_connected(conn_pool_t *cp, struct conn *conn);

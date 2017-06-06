@@ -29,6 +29,15 @@
 #include "dyn_token.h"
 #include "dyn_dnode_peer.h"
 
+static int
+_print_datastore(FILE *stream, const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_DATASTORE);
+    struct datastore *ds = (struct datastore *)obj;
+    return fprintf(stream, "<DATASTORE %p %.*s>", ds, ds->endpoint.pname.len,
+                   ds->endpoint.pname.data);
+
+}
 static void
 server_ref(struct conn *conn, void *owner)
 {
@@ -114,7 +123,7 @@ server_deinit(struct datastore *pdatastore)
     if (!pdatastore)
         return;
     if (pdatastore->conn_pool) {
-        conn_pool_reset(pdatastore->conn_pool);
+        conn_pool_destroy(pdatastore->conn_pool);
         pdatastore->conn_pool = NULL;
     }
 }
@@ -134,40 +143,9 @@ datastore_preconnect(struct datastore *datastore)
 static void
 server_failure(struct context *ctx, struct datastore *server)
 {
-	struct server_pool *pool = server->owner;
-	if (!pool->auto_eject_hosts) {
-		return;
-	}
-
-	server->failure_count++;
-
-	log_warn("server '%.*s' failure count %"PRIu32" limit %"PRIu32,
-			 server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count,
-			 pool->server_failure_limit);
-
-	if (server->failure_count < pool->server_failure_limit) {
-		return;
-	}
-
-	msec_t now_ms, next_ms;
-	now_ms = dn_msec_now();
-	if (now_ms == 0) {
-		return;
-	}
-
-	stats_server_set_ts(ctx, server_ejected_at, now_ms);
-
-	next_ms = now_ms + pool->server_retry_timeout_ms;
-
-	log_info("update pool '%.*s' to delete server '%.*s' "
-			"for next %"PRIu32" secs", pool->name.len,
-			pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
-			pool->server_retry_timeout_ms/1000);
-
-	stats_pool_incr(ctx, server_ejects);
-
-	server->failure_count = 0;
-	server->next_retry_ms = next_ms;
+    conn_pool_notify_conn_errored(server->conn_pool);
+    stats_server_set_ts(ctx, server_ejected_at, dn_msec_now());
+    stats_pool_incr(ctx, server_ejects);
 }
 
 static void
@@ -250,14 +228,14 @@ server_close(struct context *ctx, struct conn *conn)
 	struct msg *req, *nmsg; /* current and next message */
 
     ASSERT(conn->type == CONN_SERVER);
+    struct datastore *datastore = conn->owner;
 
-	server_close_stats(ctx, conn->owner, conn->err, conn->eof,
-			conn->connected);
+    server_close_stats(ctx, datastore, conn->err, conn->eof, conn->connected);
 
 	if (conn->sd < 0) {
-		server_failure(ctx, conn->owner);
 		conn_unref(conn);
 		conn_put(conn);
+		server_failure(ctx, datastore);
 		return;
 	}
 
@@ -305,8 +283,6 @@ server_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->smsg == NULL);
 
-	server_failure(ctx, conn->owner);
-
 	conn_unref(conn);
 
 	rstatus_t status = close(conn->sd);
@@ -316,6 +292,8 @@ server_close(struct context *ctx, struct conn *conn)
 	conn->sd = -1;
 
 	conn_put(conn);
+
+	server_failure(ctx, datastore);
 }
 
 static void
@@ -326,6 +304,7 @@ server_connected(struct context *ctx, struct conn *conn)
 
 	conn->connecting = 0;
 	conn->connected = 1;
+    conn_pool_connected(conn->conn_pool, conn);
 
     log_notice("%M connected ", conn);
 }
@@ -403,7 +382,6 @@ server_pool_preconnect(struct context *ctx)
 	if (!ctx->pool.preconnect) {
 		return DN_OK;
 	}
-    log_notice("PRECONNEcTING");
     return datastore_preconnect(ctx->pool.datastore);
 }
 
@@ -412,7 +390,7 @@ server_pool_disconnect(struct context *ctx)
 {
     struct datastore *datastore = ctx->pool.datastore;
     if (datastore->conn_pool) {
-        conn_pool_reset(datastore->conn_pool);
+        conn_pool_destroy(datastore->conn_pool);
         datastore->conn_pool = NULL;
     }
 }
@@ -472,6 +450,7 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
     sp->preconnect = cp->preconnect ? 1 : 0;
 
     sp->datastore = dn_zalloc(sizeof(*sp->datastore));
+    init_object(&(sp->datastore->obj), OBJ_DATASTORE, _print_datastore);
     THROW_STATUS(conf_datastore_transform(sp->datastore, cp, cp->conf_datastore));
     sp->datastore->owner = sp;
 	log_debug(LOG_DEBUG, "init datastore in pool '%.*s'",
@@ -523,7 +502,8 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
     struct datastore *datastore = sp->datastore;
     datastore->conn_pool = conn_pool_create(ctx, datastore,
                                             datastore->max_connections,
-                                            init_server_conn);
+                                            init_server_conn, sp->server_failure_limit,
+                                            sp->server_retry_timeout_ms/1000);
 	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
