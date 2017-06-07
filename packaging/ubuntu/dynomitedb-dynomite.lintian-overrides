@@ -1,0 +1,37 @@
+# DynomiteDB Dynomite package
+# Ignore excessive lintian warnings
+
+dynomitedb-dynomite: wrong-name-for-changelog-of-native-package usr/share/doc/dynomitedb-dynomite/changelog.Debian.gz
+dynomitedb-dynomite: no-copyright-file
+dynomitedb-dynomite: dir-in-usr-local usr/local/bin/
+dynomitedb-dynomite: file-in-usr-local usr/local/bin/dynomite-hash-tool
+dynomitedb-dynomite: file-in-unusual-dir usr/local/bin/dynomite-hash-tool
+dynomitedb-dynomite: dir-in-usr-local usr/local/dynomitedb/
+dynomitedb-dynomite: dir-in-usr-local usr/local/dynomitedb/dynomite/
+dynomitedb-dynomite: file-in-usr-local usr/local/dynomitedb/dynomite/LICENSE
+dynomitedb-dynomite: file-in-unusual-dir usr/local/dynomitedb/dynomite/LICENSE
+dynomitedb-dynomite: extra-license-file usr/local/dynomitedb/dynomite/LICENSE
+dynomitedb-dynomite: file-in-usr-local usr/local/dynomitedb/dynomite/NOTICE
+dynomitedb-dynomite: file-in-unusual-dir usr/local/dynomitedb/dynomite/NOTICE
+dynomitedb-dynomite: file-in-usr-local usr/local/dynomitedb/dynomite/README.md
+dynomitedb-dynomite: file-in-unusual-dir usr/local/dynomitedb/dynomite/README.md
+dynomitedb-dynomite: dir-in-usr-local usr/local/sbin/
+dynomitedb-dynomite: file-in-usr-local usr/local/sbin/dynomite
+dynomitedb-dynomite: file-in-unusual-dir usr/local/sbin/dynomite
+dynomitedb-dynomite: file-in-usr-local usr/local/sbin/dynomite-test
+dynomitedb-dynomite: file-in-unusual-dir usr/local/sbin/dynomite-test
+dynomitedb-dynomite: dir-in-usr-local usr/local/share/
+dynomitedb-dynomite: dir-in-usr-local usr/local/share/man/
+dynomitedb-dynomite: dir-in-usr-local usr/local/share/man/man8/
+dynomitedb-dynomite: file-in-usr-local usr/local/share/man/man8/dynomite.8
+dynomitedb-dynomite: file-in-unusual-dir usr/local/share/man/man8/dynomite.8
+dynomitedb-dynomite: non-standard-dir-perm usr/share/doc/ 0775 != 0755
+dynomitedb-dynomite: non-standard-dir-perm usr/share/doc/dynomitedb-dynomite/ 0775 != 0755
+dynomitedb-dynomite: file-missing-in-md5sums usr/share/doc/dynomitedb-dynomite/changelog.Debian.gz
+dynomitedb-dynomite: executable-not-elf-or-script usr/share/lintian/overrides/dynomitedb-dynomite
+dynomitedb-dynomite: unstripped-binary-or-object usr/local/sbin/dynomite-debug
+dynomitedb-dynomite: unstripped-binary-or-object usr/local/sbin/dynomite-test-debug
+dynomitedb-dynomite: file-in-usr-local usr/local/sbin/dynomite-debug
+dynomitedb-dynomite: file-in-unusual-dir usr/local/sbin/dynomite-debug
+dynomitedb-dynomite: file-in-usr-local usr/local/sbin/dynomite-test-debug
+dynomitedb-dynomite: file-in-unusual-dir usr/local/sbin/dynomite-test-debug

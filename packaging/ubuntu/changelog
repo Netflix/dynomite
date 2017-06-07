@@ -1,0 +1,5 @@
+dynomitedb-dynomite (0.5.7-0ubuntu1) trusty; urgency=low
+
+  * Initial package release
+
+ -- Akbar S. Ahmed <akbar@dynomitedb.com>  Sat, 10 Mar 2016 12:06:03 -0700

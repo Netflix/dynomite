@@ -20,9 +20,13 @@ CMakeLists.txt
 *.gcov
 *.pyc
 
-# Packages
+# Packages / packaging
 *.tar.gz
 *.tar.bz2
+*.deb
+*.rpm
+dynomitedb-dynomite
+tmp
 
 # Logs
 *.log
