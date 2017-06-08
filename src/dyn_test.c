@@ -233,7 +233,6 @@ init_peer(struct node *s)
     s->endpoint.addr = (struct sockaddr *)&info->addr;
 
     s->next_retry_ms = 0ULL;
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     s->processed = 0;

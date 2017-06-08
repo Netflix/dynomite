@@ -324,7 +324,6 @@ server_ok(struct context *ctx, struct conn *conn)
     }
     server->failure_count = 0;
     server->next_retry_ms = 0ULL;
-    server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 }
 
 static rstatus_t

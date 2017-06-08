@@ -235,7 +235,6 @@ struct datastore {
     uint8_t            max_connections;
 
     msec_t             next_retry_ms; /* next retry time in msec */
-    sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 };
 
@@ -252,7 +251,6 @@ struct node {
     conn_pool_t        *conn_pool;         /* the only peer connection */
 
     msec_t             next_retry_ms;    /* next retry time in msec */
-    sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */

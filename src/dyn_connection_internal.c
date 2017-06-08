@@ -129,7 +129,7 @@ _conn_get(void)
     /* for dynomite */
     conn->dyn_mode = 0;
     conn->dnode_secured = 0;
-    conn->dnode_crypto_state = 0;
+    conn->crypto_key_sent = 0;
 
     conn->same_dc = 1;
     conn->avail_tokens = msgs_per_sec();

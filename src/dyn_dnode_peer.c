@@ -34,7 +34,7 @@ dnode_peer_ref(struct conn *conn, void *owner)
     conn->owner = peer;
 
     conn->dnode_secured = peer->is_secure;
-    conn->dnode_crypto_state = 0;
+    conn->crypto_key_sent = 0;
     conn->same_dc = peer->is_same_dc;
 
     if (log_loggable(LOG_VVERB)) {
@@ -64,16 +64,13 @@ dnode_peer_unref(struct conn *conn)
 msec_t
 dnode_peer_timeout(struct msg *req, struct conn *conn)
 {
-    struct node *server;
-    struct server_pool *pool;
-
     ASSERT(conn->type == CONN_DNODE_PEER_SERVER);
 
-    server = conn->owner;
-    pool = server->owner;
+    struct node *peer = conn->owner;
+    struct server_pool *pool = peer->owner;
     msec_t additional_timeout = 0;
 
-   if (conn->same_dc)
+   if (peer->is_same_dc)
        additional_timeout = 200;
    else
        additional_timeout = 5000;
@@ -150,8 +147,6 @@ dnode_peer_add_local(struct server_pool *pool, struct node *self)
     uint8_t *p = p_pname->data + p_pname->len - 1;
     uint8_t *start = p_pname->data;
     string_copy(&self->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
-
-    self->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 
     string_duplicate(&self->rack, &pool->rack);
     string_duplicate(&self->dc, &pool->dc);
@@ -234,8 +229,6 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     uint8_t *p = cseed->name.data + cseed->name.len - 1;
     uint8_t *start = cseed->name.data;
     string_copy(&s->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
-
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 
     string_copy(&s->rack, cseed->rack.data, cseed->rack.len);
     string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
@@ -493,23 +486,6 @@ dnode_peer_each_disconnect(void *elem, void *data)
     return DN_OK;
 }
 
-static void
-dnode_peer_close_socket(struct context *ctx, struct conn *conn)
-{
-    rstatus_t status;
-
-    if (conn != NULL) {
-        status = close(conn->sd);
-        if (status < 0) {
-            log_error("dyn: close s %d failed, ignored: %s", conn->sd, strerror(errno));
-        }
-    }
-
-    conn->dnode_crypto_state = 0;
-    conn->sd = -1;
-}
-
-
 rstatus_t
 dnode_peer_forward_state(void *rmsg)
 {
@@ -661,8 +637,6 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     s->endpoint.addrlen = info->addrlen;
     s->endpoint.addr = (struct sockaddr *)&info->addr;  //TODOs: fix this by copying, not reference
 
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
-
     string_copy(&s->rack, node->rack.data, node->rack.len);
     string_copy(&s->dc, node->dc.data, node->dc.len);
 
@@ -806,7 +780,6 @@ dnode_peer_ok(struct context *ctx, struct conn *conn)
             " to 0", server->endpoint.pname.len, server->endpoint.pname.data,
             server->failure_count);
     server->failure_count = 0;
-    server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 }
 
 static rstatus_t
@@ -917,33 +890,23 @@ dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
 struct conn *
 dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
 {
-    if (peer->state == DOWN) {
-        return NULL;
-    }
     ASSERT(!peer->is_local);
-    if (peer->is_local)
-        return NULL;
 
+    if (peer->state == RESET) {
+        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
+        if (peer->conn_pool) {
+            conn_pool_destroy(peer->conn_pool);
+            peer->conn_pool = NULL;
+        }
+
+        dnode_create_connection_pool(&ctx->pool, peer);
+        if (conn_pool_preconnect(peer->conn_pool) != DN_OK)
+            return NULL;
+    }
     /* pick a connection to a given peer */
     struct conn *conn = dnode_peer_conn(peer);
     if (conn == NULL) {
         return NULL;
-    }
-
-    if (peer->state == RESET) {
-        log_debug(LOG_WARN, "Detecting peer '%.*s' is set with state Reset", peer->name);
-
-        // Ideally the connection pool should be resetted.
-        dnode_peer_close_socket(ctx, conn);
-        if (conn_connect(ctx, conn) != DN_OK) {
-            conn->err = EHOSTDOWN;
-            conn_close(ctx, conn);
-            return NULL;
-        }
-
-        peer->state = NORMAL;
-        log_debug(LOG_WARN, "after setting back peer's state to NORMAL");
-        return conn;
     }
 
     if (conn_connect(ctx, conn) != DN_OK) {

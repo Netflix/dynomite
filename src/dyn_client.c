@@ -641,11 +641,6 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
         return local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
     }
 
-    if (peer->state == DOWN) {
-        *dyn_error_code = PEER_HOST_DOWN;
-        return DN_ERROR;
-    }
-
     // now get a peer connection
     struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
     if (!p_conn) {

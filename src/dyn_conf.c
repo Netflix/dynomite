@@ -169,7 +169,6 @@ conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
     s->conn_pool = NULL;
     s->max_connections = cp->datastore_connections;
     s->next_retry_ms = 0ULL;
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     log_debug(LOG_NOTICE, "Created %M", s);
