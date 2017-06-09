@@ -64,6 +64,7 @@ core_print_peer_status(void *arg1)
             }
         }
     }
+    schedule_task_1(core_print_peer_status, ctx, 30000);
 }
 
 void

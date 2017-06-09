@@ -54,8 +54,11 @@ dnode_peer_unref(struct conn *conn)
 
     peer = conn->owner;
     conn->owner = NULL;
-    // Mark the peer as down
-    peer->state = DOWN; //TODO: ?? questionable
+    // if this is the last connection, mark the peer as down.
+    if (conn_pool_active_count(peer->conn_pool) ==  1) {
+        log_notice("Marking %M as down", peer);
+        peer->state = DOWN;
+    }
 
     log_debug(LOG_VVERB, "dyn: unref peer conn %p owner %p from '%.*s'", conn, peer,
               peer->endpoint.pname.len, peer->endpoint.pname.data);

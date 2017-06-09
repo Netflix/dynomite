@@ -63,3 +63,6 @@ void conn_pool_notify_conn_errored(conn_pool_t *cp);
  * connection is all good.
  */
 void conn_pool_connected(conn_pool_t *cp, struct conn *conn);
+
+/* Returns the currently active connection count */
+uint8_t conn_pool_active_count(conn_pool_t *cp);

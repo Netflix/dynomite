@@ -29,6 +29,26 @@ print_conn_pool(FILE *stream, const struct object *obj)
                    TAILQ_COUNT(&cp->active_conn_q), cp->max_connections);
 }
 
+static void
+_create_missing_connections(conn_pool_t *cp)
+{
+    // Attempt reconnect if connections are few.
+    uint8_t failures = 0;
+    while (TAILQ_COUNT(&cp->active_conn_q) < cp->max_connections) {
+        struct conn *conn = conn_get(cp->owner, cp->func_conn_init);
+        if (conn != NULL) {
+            conn->conn_pool = cp;
+            log_notice("%M %M created %M", cp->owner, cp, conn);
+            TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
+        } else {
+            if (++failures == 3) {
+                return;
+            }
+        }
+    }
+
+}
+
 conn_pool_t *
 conn_pool_create(struct context *ctx, void *owner, uint8_t max_connections,
                  func_conn_init_t func_conn_init, uint8_t max_failures,
@@ -50,37 +70,8 @@ conn_pool_create(struct context *ctx, void *owner, uint8_t max_connections,
     cp->scheduled_reconnect_task = NULL;
 
     log_notice("%M Creating %M", cp->owner, cp);
-    uint8_t index = 0;
-    for (index = 0; index < max_connections; index++) {
-        struct conn *conn = conn_get(owner, func_conn_init);
-        if (conn == NULL) {
-            continue;
-        }
-        conn->conn_pool = cp;
-        log_notice("%M, %M Creating %M", cp->owner, cp, conn);
-        TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
-    }
+    _create_missing_connections(cp);
     return cp;
-}
-
-static void
-_create_missing_connections(conn_pool_t *cp)
-{
-    // Attempt reconnect if connections are few.
-    uint8_t failures = 0;
-    while (TAILQ_COUNT(&cp->active_conn_q) < cp->max_connections) {
-        struct conn *conn = conn_get(cp->owner, cp->func_conn_init);
-        if (conn != NULL) {
-            conn->conn_pool = cp;
-            log_notice("%M %M created %M", cp->owner, cp, conn);
-            TAILQ_INSERT_TAIL(&cp->active_conn_q, conn, pool_tqe);
-        } else {
-            if (++failures == 3) {
-                return;
-            }
-        }
-    }
-
 }
 
 rstatus_t
@@ -113,7 +104,6 @@ conn_pool_get(conn_pool_t *cp, uint16_t tag)
     // get a new connection to use from the currenly active connections
     // add tag->new_conn in hash table
     // return new_conn
-    _create_missing_connections(cp);
 
     // TODO: First cut: just return a random connection in the queue and recycle
     if (TAILQ_COUNT(&cp->active_conn_q) > 0) {
@@ -133,8 +123,11 @@ conn_pool_destroy(conn_pool_t *cp)
 {
     // clear everything in hash table.
     // for every connection, kill it
-    if (cp->scheduled_reconnect_task)
+    if (cp->scheduled_reconnect_task) {
+        log_info("%M %M Cancelling task %p", cp->owner, cp,
+                 cp->scheduled_reconnect_task);
         cancel_task(cp->scheduled_reconnect_task);
+    }
     cp->scheduled_reconnect_task = NULL;
     struct conn *conn, *nconn;
     TAILQ_FOREACH_SAFE(conn, &cp->active_conn_q, pool_tqe, nconn) {
@@ -180,6 +173,7 @@ conn_pool_notify_conn_errored(conn_pool_t *cp)
                cp->current_timeout_sec);
     cp->scheduled_reconnect_task = schedule_task_1(_conn_pool_reconnect_task,
                                                    cp, cp->current_timeout_sec * 1000);
+    log_info("%M %M Scheduled %p", cp->owner, cp, cp->scheduled_reconnect_task);
 
     cp->current_timeout_sec = 2 * cp->current_timeout_sec;
     if (cp->current_timeout_sec > cp->max_timeout_sec)
@@ -189,8 +183,17 @@ conn_pool_notify_conn_errored(conn_pool_t *cp)
 void
 conn_pool_connected(conn_pool_t *cp, struct conn *conn)
 {
-    if (cp->scheduled_reconnect_task)
+    if (cp->scheduled_reconnect_task) {
+        log_info("%M %M Cancelling task %p", cp->owner, cp, cp->scheduled_reconnect_task);
         cancel_task(cp->scheduled_reconnect_task);
+    }
+    cp->scheduled_reconnect_task = NULL;
     cp->failure_count = 0;
     cp->current_timeout_sec = 0;
+}
+
+uint8_t
+conn_pool_active_count(conn_pool_t *cp)
+{
+    return (uint8_t)TAILQ_COUNT(&cp->active_conn_q);
 }
