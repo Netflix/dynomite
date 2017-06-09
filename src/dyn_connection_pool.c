@@ -183,11 +183,6 @@ conn_pool_notify_conn_errored(conn_pool_t *cp)
 void
 conn_pool_connected(conn_pool_t *cp, struct conn *conn)
 {
-    if (cp->scheduled_reconnect_task) {
-        log_info("%M %M Cancelling task %p", cp->owner, cp, cp->scheduled_reconnect_task);
-        cancel_task(cp->scheduled_reconnect_task);
-    }
-    cp->scheduled_reconnect_task = NULL;
     cp->failure_count = 0;
     cp->current_timeout_sec = 0;
 }
