@@ -129,9 +129,9 @@ server_deinit(struct datastore *pdatastore)
 }
 
 static struct conn *
-server_conn(struct datastore *datastore)
+server_conn(struct datastore *datastore, int tag)
 {
-    return conn_pool_get(datastore->conn_pool, 1);
+    return conn_pool_get(datastore->conn_pool, tag);
 }
 
 static rstatus_t
@@ -348,7 +348,7 @@ datastore_check_autoeject(struct datastore *datastore)
 }
 
 struct conn *
-get_datastore_conn(struct context *ctx, struct server_pool *pool)
+get_datastore_conn(struct context *ctx, struct server_pool *pool, int tag)
 {
 	rstatus_t status;
 	struct datastore *datastore = pool->datastore;
@@ -361,7 +361,7 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 	}
 
 	/* pick a connection to a given server */
-	conn = server_conn(datastore);
+	conn = server_conn(datastore, tag);
 	if (conn == NULL) {
 		return NULL;
 	}

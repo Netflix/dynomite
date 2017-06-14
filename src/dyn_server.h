@@ -77,7 +77,8 @@ struct rack *server_get_rack_by_dc_rack(struct server_pool *sp, struct string *r
 
 rstatus_t datacenter_destroy(void *elem, void *data);
 
-struct conn *get_datastore_conn(struct context *ctx, struct server_pool *pool);
+struct conn *get_datastore_conn(struct context *ctx, struct server_pool *pool,
+                                int tag);
 rstatus_t server_pool_preconnect(struct context *ctx);
 void server_pool_disconnect(struct context *ctx);
 rstatus_t server_pool_init(struct server_pool *server_pool, struct conf_pool *conf_pool, struct context *ctx);

@@ -95,7 +95,6 @@ struct conn {
     object_t           object;
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
     TAILQ_ENTRY(conn)  ready_tqe;     /* link in ready connection q */
-    TAILQ_ENTRY(conn)  pool_tqe;      /* link in active connection pool */
     void               *owner;        /* connection owner - server_pool / server */
     struct conn_pool   *conn_pool;
 

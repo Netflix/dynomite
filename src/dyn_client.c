@@ -546,7 +546,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
-    s_conn = get_datastore_conn(ctx, c_conn->owner);
+    s_conn = get_datastore_conn(ctx, c_conn->owner, c_conn->sd);
     log_debug(LOG_VERB, "c_conn %p got server conn %p", c_conn, s_conn);
     if (s_conn == NULL) {
         *dyn_error_code = STORAGE_CONNECTION_REFUSE;
@@ -642,7 +642,7 @@ remote_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
     }
 
     // now get a peer connection
-    struct conn *p_conn = dnode_peer_pool_server_conn(ctx, peer);
+    struct conn *p_conn = dnode_peer_get_conn(ctx, peer, c_conn->sd);
     if (!p_conn) {
         // No active connection. return error
         *dyn_error_code = PEER_HOST_NOT_CONNECTED;

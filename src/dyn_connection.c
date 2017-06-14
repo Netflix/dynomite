@@ -175,7 +175,6 @@ rstatus_t
 conn_event_add_conn(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
-    _add_to_ready_q(ctx, conn);
     return event_add_conn(ctx->evb, conn);
 }
 

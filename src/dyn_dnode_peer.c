@@ -288,9 +288,9 @@ dnode_initialize_peers(struct context *ctx)
 }
 
 static struct conn *
-dnode_peer_conn(struct node *peer)
+dnode_peer_conn(struct node *peer, int tag)
 {
-    return conn_pool_get(peer->conn_pool, 1);
+    return conn_pool_get(peer->conn_pool, tag);
 }
 
 static void
@@ -520,7 +520,7 @@ dnode_peer_forward_state(void *rmsg)
 
     //log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
-    struct conn * conn = dnode_peer_conn(peer);
+    struct conn * conn = dnode_peer_conn(peer, 0);
     if (conn == NULL) {
         //running out of connection due to memory exhaust
         log_debug(LOG_ERR, "Unable to obtain a connection object");
@@ -593,7 +593,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
         log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
-        struct conn * conn = dnode_peer_conn(peer);
+        struct conn * conn = dnode_peer_conn(peer, 0);
         if (conn == NULL) {
             //running out of connection due to memory exhaust
             log_debug(LOG_DEBUG, "Unable to obtain a connection object");
@@ -891,7 +891,7 @@ dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
 }
 
 struct conn *
-dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
+dnode_peer_get_conn(struct context *ctx, struct node *peer, int tag)
 {
     ASSERT(!peer->is_local);
 
@@ -907,7 +907,7 @@ dnode_peer_pool_server_conn(struct context *ctx, struct node *peer)
             return NULL;
     }
     /* pick a connection to a given peer */
-    struct conn *conn = dnode_peer_conn(peer);
+    struct conn *conn = dnode_peer_conn(peer, tag);
     if (conn == NULL) {
         return NULL;
     }

@@ -23,7 +23,7 @@ conn_pool_t *conn_pool_create(struct context *ctx, void *owner,
 rstatus_t conn_pool_preconnect(conn_pool_t *cp);
 
 /**
- * Given a tag (just a uint16_t number), get a connection from the connection pool.
+ * Given a tag (just an int number), get a connection from the connection pool.
  * The purpose of the tag is to get the same underlying connection for a given tag.
  * If the tag is not seen before, a new random connection is allocated.
  * And all subsequent conn_pool_get with the same tag should yield the same
@@ -33,7 +33,7 @@ rstatus_t conn_pool_preconnect(conn_pool_t *cp);
  * will not follow strict ordering leading to out of order execution on differnt
  * nodes
  */
-struct conn *conn_pool_get(conn_pool_t *cp, uint16_t tag);
+struct conn *conn_pool_get(conn_pool_t *cp, int tag);
 
 /**
  * This function, tears down all the connection in the pool, clears up its state

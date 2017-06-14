@@ -101,8 +101,9 @@ core_gossip_pool_init(struct context *ctx)
 static rstatus_t
 core_dnode_peer_pool_preconnect(struct context *ctx)
 {
-    THROW_STATUS(dnode_peer_pool_preconnect(ctx));
-    rstatus_t status = core_gossip_pool_init(ctx);
+    rstatus_t status = dnode_peer_pool_preconnect(ctx);
+    IGNORE_RET_VAL(status);
+    status = core_gossip_pool_init(ctx);
     //if (status != DN_OK)
       //  gossip_pool_deinit(ctx);
     return status;
@@ -146,9 +147,10 @@ core_proxy_init(struct context *ctx)
 static rstatus_t
 core_server_pool_preconnect(struct context *ctx)
 {
-	THROW_STATUS(server_pool_preconnect(ctx));
+    rstatus_t status = server_pool_preconnect(ctx);
+	IGNORE_RET_VAL(status);
 
-     rstatus_t status = core_proxy_init(ctx);
+     status = core_proxy_init(ctx);
      if (status != DN_OK)
         proxy_deinit(ctx);
     return status;
