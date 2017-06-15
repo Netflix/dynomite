@@ -35,16 +35,12 @@ void
 init_dyn_token(struct dyn_token *token)
 {
 	token->signum = 0;
-	token->mag = NULL;
 	token->len = 0;
 }
 
 void 
 deinit_dyn_token(struct dyn_token *token)
 {
-	if (token->mag != NULL)
-	   dn_free(token->mag);
-
 	token->signum = 0;
 	token->len = 0;
 }
@@ -53,12 +49,6 @@ deinit_dyn_token(struct dyn_token *token)
 rstatus_t 
 size_dyn_token(struct dyn_token *token, uint32_t token_len)
 {
-	uint32_t size = sizeof(uint32_t) * token_len;
-	token->mag = dn_alloc(size);
-	if (token->mag == NULL) {
-		return DN_ENOMEM;
-	}
-	memset(token->mag, 0, size);
 	token->len = token_len;
 	token->signum = 0;
 
@@ -152,11 +142,6 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
 	/*     nwords = (nbits + 32) >> 5; */
 	/* } */
 
-	token->mag = dn_alloc(nwords * sizeof(uint32_t));
-	if (token->mag == NULL) {
-		return DN_ENOMEM;
-	}
-	memset(token->mag, 0, nwords * sizeof(uint32_t));
 	uint32_t *buf = token->mag;
 	token->len = nwords;
 
