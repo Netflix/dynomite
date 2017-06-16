@@ -49,6 +49,7 @@ deinit_dyn_token(struct dyn_token *token)
 rstatus_t 
 size_dyn_token(struct dyn_token *token, uint32_t token_len)
 {
+	ASSERT(token_len <= 4);
 	token->len = token_len;
 	token->signum = 0;
 
