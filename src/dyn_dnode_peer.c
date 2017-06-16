@@ -1022,50 +1022,23 @@ dnode_peer_pool_update(struct server_pool *pool)
 
 }
 
-static struct dyn_token *
-dnode_peer_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
-{
-    ASSERT(array_n(&pool->peers) != 0);
-    ASSERT(key != NULL && keylen != 0);
-
-    struct dyn_token *token = dn_alloc(sizeof(struct dyn_token));
-    if (token == NULL) {
-        return NULL;
-    }
-    init_dyn_token(token);
-
-    rstatus_t status = pool->key_hash((char *)key, keylen, token);
-    if (status != DN_OK) {
-        dn_free(token);
-        return NULL;
-    }
-
-    return token;
-}
-
 static struct node *
 dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
                            uint8_t *key, uint32_t keylen)
 {
     struct node *server;
     uint32_t idx;
-    struct dyn_token *token = NULL;
+    struct dyn_token token;
 
     ASSERT(array_n(&pool->peers) != 0);
 
     if (keylen == 0) {
         idx = 0; //for no argument command
     } else {
-        token = dnode_peer_pool_hash(pool, key, keylen);
+        pool->key_hash((char *)key, keylen, &token);
         //print_dyn_token(token, 1);
-        idx = vnode_dispatch(rack->continuum, rack->ncontinuum, token);
+        idx = vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
         //loga("found idx %d for rack '%.*s' ", idx, rack->name->len, rack->name->data);
-
-        //TODOs: should reuse the token
-        if (token != NULL) {
-            deinit_dyn_token(token);
-            dn_free(token);
-        }
     }
 
     ASSERT(idx < array_n(&pool->peers));

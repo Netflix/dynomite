@@ -12,7 +12,7 @@
 
 struct dyn_token {
     uint32_t signum;
-    uint32_t *mag;
+    uint32_t mag[4];
     uint32_t len;
 };
 
