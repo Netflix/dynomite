@@ -36,7 +36,7 @@ _print_conn_pool(FILE *stream, const struct object *obj)
 static void
 _create_missing_connections(conn_pool_t *cp)
 {
-    // Attempt reconnect if connections are few.
+    // create connections if they are less than required.
     uint8_t idx = 0, failures = 0;
     uint32_t count = array_n(&cp->active_connections);
     while (idx < count) {
