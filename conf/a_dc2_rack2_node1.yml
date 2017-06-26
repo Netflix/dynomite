@@ -18,6 +18,3 @@ dyn_o_mite:
   enable_gossip: false
   mbuf_size: 16384
   max_msgs: 300000
-  datastore_connections: 3
-  local_peer_connections: 3
-  remote_peer_connections: 3
