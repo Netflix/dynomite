@@ -20,19 +20,10 @@
  * limitations under the License.
  */
 
-#include <sys/uio.h>
-
 #include "dyn_core.h"
-#include "dyn_server.h"
-#include "dyn_client.h"
-#include "dyn_proxy.h"
 #include "dyn_connection_internal.h"
-#include "dyn_dnode_proxy.h"
-#include "dyn_dnode_peer.h"
-#include "dyn_dnode_client.h"
 #include "event/dyn_event.h"
 
-#include "proto/dyn_proto.h"
 
 /*
  *                   dyn_connection.[ch]
@@ -184,7 +175,6 @@ rstatus_t
 conn_event_add_conn(struct conn *conn)
 {
     struct context *ctx = conn_to_ctx(conn);
-    _add_to_ready_q(ctx, conn);
     return event_add_conn(ctx->evb, conn);
 }
 
@@ -369,8 +359,6 @@ conn_connect(struct context *ctx, struct conn *conn)
     if (status != DN_OK) {
         if (errno == EINPROGRESS) {
             conn->connecting = 1;
-            log_debug(LOG_DEBUG, "connecting on s %d to '%.*s'",
-                    conn->sd, conn->pname.len, conn->pname.data);
             return DN_OK;
         }
 
@@ -382,6 +370,7 @@ conn_connect(struct context *ctx, struct conn *conn)
 
     ASSERT(!conn->connecting);
     conn->connected = 1;
+    conn_pool_connected(conn->conn_pool, conn);
     log_debug(LOG_WARN, "%M connected to '%.*s'", conn,
             conn->pname.len, conn->pname.data);
 

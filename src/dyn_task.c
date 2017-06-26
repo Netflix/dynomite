@@ -46,7 +46,7 @@ _create_task(void)
     return task;
 }
 
-void
+struct task *
 schedule_task_1(task_handler_1 handler1, void *arg1, msec_t timeout)
 {
     struct task *task = _create_task();
@@ -60,7 +60,7 @@ schedule_task_1(task_handler_1 handler1, void *arg1, msec_t timeout)
     rbnode->key = now_ms + timeout;
     rbnode->data = task;
     rbtree_insert(&task_rbt, rbnode);
-    return;
+    return task;
 }
 
 
@@ -111,4 +111,12 @@ execute_expired_tasks(uint32_t limit)
         }
         break;
     }
+}
+
+void
+cancel_task(struct task *task)
+{
+    struct rbnode *rbnode = (struct rbnode *)task;
+    rbtree_delete(&task_rbt, rbnode);
+    dn_free(task);
 }

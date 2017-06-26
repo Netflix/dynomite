@@ -28,7 +28,8 @@
 
 
 typedef int (*array_compare_t)(const void *, const void *);
-typedef rstatus_t (*array_each_t)(void *, void *);
+typedef rstatus_t (*array_each_t)(void *elem, void *data1);
+typedef rstatus_t (*array_each_2_t)(void *elem, void *data1, void *data2);
 
 struct array {
     uint32_t nelem;  /* # element */
@@ -76,5 +77,6 @@ void *array_top(struct array *a);
 void array_swap(struct array *a, struct array *b);
 void array_sort(struct array *a, array_compare_t compare);
 rstatus_t array_each(struct array *a, array_each_t func, void *data);
+rstatus_t array_each_2(struct array *a, array_each_2_t func, void *data1, void *data2);
 
 #endif

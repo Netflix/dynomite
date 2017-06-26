@@ -84,7 +84,7 @@ dnode_close(struct context *ctx, struct conn *conn)
  * then log a message with the socket descriptor, the Dynomite
  */
 rstatus_t
-dnode_init(struct context *ctx)
+dnode_proxy_init(struct context *ctx)
 {
     rstatus_t status;
     struct server_pool *pool = &ctx->pool;
@@ -113,7 +113,7 @@ dnode_init(struct context *ctx)
 }
 
 void
-dnode_deinit(struct context *ctx)
+dnode_proxy_deinit(struct context *ctx)
 {
     struct server_pool *pool = &ctx->pool;
     struct conn *p = pool->d_conn;

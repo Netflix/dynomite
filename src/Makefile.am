@@ -39,6 +39,7 @@ dynomite_SOURCES =			                          \
         dyn_conf.c dyn_conf.h		                          \
         dyn_connection.c dyn_connection.h                         \
         dyn_connection_internal.c dyn_connection_internal.h       \
+        dyn_connection_pool.c dyn_connection_pool.h               \
         dyn_core.c dyn_core.h                                     \
         dyn_crypto.c dyn_crypto.h                                 \
         dyn_dict_msg_id.h dyn_dict_msg_id.c                       \
@@ -61,7 +62,6 @@ dynomite_SOURCES =			                          \
         dyn_signal.c dyn_signal.h		                  \
         dyn_stats.c dyn_stats.h		                          \
         dyn_string.c dyn_string.h		                  \
-        dyn_token.c dyn_token.h                                   \
         dyn_types.c dyn_types.h                                   \
         dyn_log.c dyn_log.h		                          \
         dyn_util.c dyn_util.h		                          \
@@ -87,6 +87,7 @@ dynomite_test_SOURCES =                                           \
         dyn_core.c dyn_core.h                                     \
         dyn_connection.c dyn_connection.h                         \
         dyn_connection_internal.c dyn_connection_internal.h		  \
+        dyn_connection_pool.c dyn_connection_pool.h               \
         dyn_client.c dyn_client.h                                 \
         dyn_dict_msg_id.h dyn_dict_msg_id.c                       \
         dyn_dnode_client.h dyn_dnode_client.c                     \
@@ -107,7 +108,6 @@ dynomite_test_SOURCES =                                           \
         dyn_setting.c dyn_setting.h                               \
         dyn_stats.c dyn_stats.h                                   \
         dyn_signal.c dyn_signal.h                                 \
-        dyn_token.c dyn_token.h                                   \
         dyn_types.c dyn_types.h                                   \
         dyn_rbtree.c dyn_rbtree.h                                 \
         dyn_log.c dyn_log.h                                       \

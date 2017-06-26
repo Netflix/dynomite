@@ -27,7 +27,7 @@ bin_PROGRAMS = dynomite-hash-tool
 
 dynomite_hash_tool_SOURCES = \
         dyn_hash_tool.c \
-	../dyn_token.c \
+	../hashkit/dyn_token.c \
 	../dyn_log.c \
 	../dyn_util.c \
 	../dyn_array.c

@@ -115,17 +115,16 @@ typedef int err_t;     /* error type */
 #include "dyn_mbuf.h"
 #include "dyn_message.h"
 #include "dyn_connection.h"
+#include "dyn_connection_pool.h"
 #include "dyn_cbuf.h"
 #include "dyn_ring_queue.h"
 #include "dyn_crypto.h"
 #include "dyn_setting.h"
 
-
 #include "entropy/dyn_entropy.h"
 
 #define ENCRYPTION 1
-
-typedef rstatus_t (*hash_t)(const char *, size_t, struct dyn_token *);
+typedef rstatus_t (*hash_func_t)(const char *, size_t, struct dyn_token *);
 
 typedef enum dyn_state {
 	INIT        = 0,
@@ -220,22 +219,22 @@ struct datacenter {
 struct endpoint {
     struct string      pname;         /* name:port:weight (ref in conf_server) */
     uint16_t           port;          /* port */
-    uint32_t           weight;        /* weight */
     int                family;        /* socket family */
     socklen_t          addrlen;       /* socket length */
     struct sockaddr    *addr;         /* socket address (ref in conf_server) */
 };
 
 struct datastore {
+    struct object      obj;
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint     endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    struct conn        *conn;         /* the only server connection */
+    conn_pool_t        *conn_pool;
+    uint8_t            max_connections;
 
     msec_t             next_retry_ms; /* next retry time in msec */
-    sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 };
 
@@ -243,22 +242,22 @@ struct datastore {
  * @brief Dynomite server node.
  */
 struct node {
+    struct object      obj;
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint    endpoint;
     struct string      name;          /* name (ref in conf_server) */
 
-    struct conn        *conn;         /* the only peer connection */
+    conn_pool_t        *conn_pool;         /* the only peer connection */
 
     msec_t             next_retry_ms;    /* next retry time in msec */
-    sec_t              reconnect_backoff_sec; /* backoff time in seconds */
     uint32_t           failure_count; /* # consecutive failures */
 
     struct string      rack;          /* logical rack */
     struct string      dc;            /* server's dc */
     struct array       tokens;        /* DHT tokens this peer owns */
     bool               is_local;      /* is this peer the current running node?  */
-    unsigned           is_seed:1;     /* seed? */
+    bool               is_same_dc;    /* is this peer the current running node?  */
     unsigned           processed:1;   /* flag to indicate whether this has been processed */
     unsigned           is_secure:1;   /* is the connection to the server secure? */
     dyn_state_t        state;         /* state of the server - used mainly in peers  */
@@ -289,7 +288,7 @@ struct server_pool {
     struct string      name;                 /* pool name (ref in conf_pool) */
     struct endpoint    proxy_endpoint;
     int                key_hash_type;        /* key hash type (hash_type_t) */
-    hash_t             key_hash;             /* key hasher */
+    hash_func_t        key_hash;             /* key hasher */
     struct string      hash_tag;             /* key hash tag (ref in conf_pool) */
     msec_t             timeout;              /* timeout in msec */
     int                backlog;              /* listen backlog */
@@ -301,7 +300,6 @@ struct server_pool {
 
     /* dynomite */
     struct string      seed_provider;
-    struct array       seeds;                /*dyn seeds */
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
     struct endpoint    dnode_proxy_endpoint;
@@ -309,7 +307,8 @@ struct server_pool {
     int                d_backlog;            /* listen backlog */
     int64_t            d_retry_timeout;      /* peer retry timeout in usec */
     uint32_t           d_failure_limit;      /* peer failure limit */
-    uint32_t           peer_connections;     /* maximum # peer connections */
+    uint8_t            max_local_peer_connections;
+    uint8_t            max_remote_peer_connections;
     struct string      rack;                 /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 
@@ -343,8 +342,8 @@ struct context {
     struct entropy     *entropy;    /* reconciliation connection */
     struct server_pool pool;        /* server_pool[] */
     struct event_base  *evb;        /* event base */
-    int                max_timeout; /* max timeout in msec */
-    int                timeout;     /* timeout in msec */
+    msec_t             max_timeout; /* max timeout in msec */
+    msec_t             timeout;     /* timeout in msec */
     dyn_state_t        dyn_state;   /* state of the node.  Don't need volatile as
                                        it is ok to eventually get its new value */
     uint32_t           admin_opt;   /* admin mode */

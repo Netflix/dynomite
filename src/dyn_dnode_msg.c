@@ -430,7 +430,7 @@ dyn_parse_req(struct msg *r)
 
 		if (r->dyn_parse_state == DYN_DONE && dmsg->flags == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
-			r->owner->dnode_crypto_state = 1;
+			r->owner->crypto_key_sent = 1;
 			r->dyn_parse_state = DYN_POST_DONE;
 			r->result = MSG_PARSE_REPAIR;
 
@@ -530,7 +530,7 @@ void dyn_parse_rsp(struct msg *r)
 
 		if (r->dyn_parse_state == DYN_DONE && dmsg->flags == 1) {
 			dmsg->owner->owner->dnode_secured = 1;
-			r->owner->dnode_crypto_state = 1;
+			r->owner->crypto_key_sent = 1;
 			r->dyn_parse_state = DYN_POST_DONE;
 			r->result = MSG_PARSE_REPAIR;
 
@@ -730,21 +730,18 @@ dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
     //write aes key
     unsigned char *aes_key = conn->aes_key;
 
-    if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
+    if (conn->dnode_secured && !conn->crypto_key_sent) {
         mbuf_write_uint32(mbuf, (uint32_t)dyn_rsa_size());
+        //payload
+        mbuf_write_char(mbuf, ' ');
+        dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
+        mbuf_write_bytes(mbuf, aes_encrypted_buf, dyn_rsa_size());
+        conn->crypto_key_sent = 1;
     } else {
         mbuf_write_uint32(mbuf, 1);
-    }
-
-    //payload
-    mbuf_write_char(mbuf, ' ');
-    //mbuf_write_string(mbuf, data);
-    if (conn->dnode_secured && conn->dnode_crypto_state == 0) {
-       dyn_rsa_encrypt(aes_key, aes_encrypted_buf);
-       mbuf_write_bytes(mbuf, aes_encrypted_buf, dyn_rsa_size());
-       conn->dnode_crypto_state = 1;
-    } else {
-       mbuf_write_char(mbuf, 'd'); //TODOs: replace with another string
+        //payload
+        mbuf_write_char(mbuf, ' ');
+        mbuf_write_char(mbuf, 'd'); //TODOs: replace with another string
     }
 
     mbuf_write_char(mbuf, ' ');
@@ -991,7 +988,6 @@ dmsg_parse(struct dmsg *dmsg)
 
       rnode->port = sp->dnode_proxy_endpoint.port;
       rnode->is_local = false;
-      rnode->is_seed = false;
 
       ts[ts_len] = '\0';
       rnode->ts = (uint64_t)atol((char*)ts);

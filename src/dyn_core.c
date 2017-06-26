@@ -64,6 +64,7 @@ core_print_peer_status(void *arg1)
             }
         }
     }
+    schedule_task_1(core_print_peer_status, ctx, 30000);
 }
 
 void
@@ -100,8 +101,9 @@ core_gossip_pool_init(struct context *ctx)
 static rstatus_t
 core_dnode_peer_pool_preconnect(struct context *ctx)
 {
-    THROW_STATUS(dnode_peer_pool_preconnect(ctx));
-    rstatus_t status = core_gossip_pool_init(ctx);
+    rstatus_t status = dnode_peer_pool_preconnect(ctx);
+    IGNORE_RET_VAL(status);
+    status = core_gossip_pool_init(ctx);
     //if (status != DN_OK)
       //  gossip_pool_deinit(ctx);
     return status;
@@ -110,7 +112,7 @@ static rstatus_t
 core_dnode_peer_init(struct context *ctx)
 {
 	/* initialize peers */
-	THROW_STATUS(dnode_peer_init(ctx));
+	THROW_STATUS(dnode_initialize_peers(ctx));
 	rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
 	if (status != DN_OK)
 	    dnode_peer_pool_disconnect(ctx);
@@ -118,15 +120,16 @@ core_dnode_peer_init(struct context *ctx)
 }
 
 static rstatus_t
-core_dnode_init(struct context *ctx)
+core_dnode_proxy_init(struct context *ctx)
 {
 	/* initialize dnode listener per server pool */
-    THROW_STATUS(dnode_init(ctx));
+    THROW_STATUS(dnode_proxy_init(ctx));
 
 	ctx->dyn_state = JOINING;  //TODOS: change this to JOINING
     rstatus_t status = core_dnode_peer_init(ctx);
-    if (status != DN_OK)
+    if (status != DN_OK) {
         dnode_peer_deinit(&ctx->pool.peers);
+    }
     return status;
 }
 
@@ -135,18 +138,19 @@ core_proxy_init(struct context *ctx)
 {
 	/* initialize proxy per server pool */
     THROW_STATUS(proxy_init(ctx));
-    rstatus_t status = core_dnode_init(ctx);
+    rstatus_t status = core_dnode_proxy_init(ctx);
     if (status != DN_OK)
-        dnode_deinit(ctx);
+        dnode_proxy_deinit(ctx);
     return status;
 }
 
 static rstatus_t
 core_server_pool_preconnect(struct context *ctx)
 {
-	THROW_STATUS(server_pool_preconnect(ctx));
+    rstatus_t status = server_pool_preconnect(ctx);
+	IGNORE_RET_VAL(status);
 
-     rstatus_t status = core_proxy_init(ctx);
+     status = core_proxy_init(ctx);
      if (status != DN_OK)
         proxy_deinit(ctx);
     return status;
@@ -642,7 +646,7 @@ core_loop(struct context *ctx)
     core_timeout(ctx);
     execute_expired_tasks(0);
     ctx->timeout = MIN(ctx->timeout, time_to_next_task());
-    nsd = event_wait(ctx->evb, ctx->timeout);
+    nsd = event_wait(ctx->evb, (int)ctx->timeout);
     if (nsd < 0) {
         return nsd;
     }

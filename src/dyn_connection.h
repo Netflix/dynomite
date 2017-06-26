@@ -59,6 +59,7 @@ typedef void (*func_unref_t)(struct conn *);
 typedef void (*func_msgq_t)(struct context *, struct conn *, struct msg *);
 typedef rstatus_t (*func_response_handler)(struct conn *, msgid_t reqid,
                                            struct msg *rsp);
+struct conn_pool;
 
 struct conn_ops {
     func_recv_t        recv;          /* recv (read) handler */
@@ -95,6 +96,7 @@ struct conn {
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
     TAILQ_ENTRY(conn)  ready_tqe;     /* link in ready connection q */
     void               *owner;        /* connection owner - server_pool / server */
+    struct conn_pool   *conn_pool;
 
     int                sd;            /* socket descriptor */
     struct string      pname;
@@ -126,12 +128,11 @@ struct conn {
     unsigned           done:1;        /* done? aka close? */
     unsigned           dyn_mode:1;           /* is a dyn connection? */
     unsigned           dnode_secured:1;      /* is a secured connection? */
-    unsigned           dnode_crypto_state:1; /* crypto state */
+    unsigned           crypto_key_sent:1; /* crypto state */
     unsigned char      aes_key[50]; //aes_key[34];              /* a place holder for AES key */
     unsigned           same_dc:1;            /* bit to indicate whether a peer conn is same DC */
     uint32_t           avail_tokens;          /* used to throttle the traffics */
     uint32_t           last_sent;             /* ts in sec used to determine the last sent time */
-    uint32_t           attempted_reconnect;   /* #attempted reconnect before calling close */
     //uint32_t           non_bytes_send;        /* #times or epoll triggers that we are not able to send any bytes */
     consistency_t      read_consistency;
     consistency_t      write_consistency;

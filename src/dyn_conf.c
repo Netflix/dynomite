@@ -35,20 +35,7 @@
 
 #include "dyn_token.h"
 #include "proto/dyn_proto.h"
-
-#define DEFINE_ACTION(_hash, _name) string(#_name),
-static struct string hash_strings[] = {
-    HASH_CODEC( DEFINE_ACTION )
-    null_string
-};
-#undef DEFINE_ACTION
-
-#define DEFINE_ACTION(_hash, _name) hash_##_name,
-static hash_t hash_algos[] = {
-    HASH_CODEC( DEFINE_ACTION )
-    NULL
-};
-#undef DEFINE_ACTION
+#include "hashkit/dyn_hashkit.h"
 
 #define CONF_OK             (void *) NULL
 #define CONF_ERROR          (void *) "has an invalid value"
@@ -57,6 +44,7 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_ARGS       3
 #define CONF_UNSET_BOOL false
 #define CONF_UNSET_NUM  UNSET_NUM
+#define CONF_DEFAULT_CONNECTIONS 1
 #define CONF_UNSET_PTR  NULL
 #define CONF_DEFAULT_SERVERS    8
 #define CONF_UNSET_HASH (hash_type_t) -1
@@ -88,14 +76,14 @@ static hash_t hash_algos[] = {
 #define CONF_DEFAULT_MIN_ALLOC_MSGS	         MIN_ALLOC_MSGS
 #define CONF_DEFAULT_MAX_ALLOC_MSGS	         MAX_ALLOC_MSGS
 
-#define CONF_STR_NONE                        "none"
-#define CONF_STR_DC                          "datacenter"
-#define CONF_STR_RACK                        "rack"
-#define CONF_STR_ALL                         "all"
+#define CONF_SECURE_OPTION_NONE                        "none"
+#define CONF_SECURE_OPTION_DC                          "datacenter"
+#define CONF_SECURE_OPTION_RACK                        "rack"
+#define CONF_SECURE_OPTION_ALL                         "all"
 
 #define CONF_DEFAULT_RACK                    "localrack"
 #define CONF_DEFAULT_DC                      "localdc"
-#define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_STR_NONE
+#define CONF_DEFAULT_SECURE_SERVER_OPTION    CONF_SECURE_OPTION_NONE
 
 #define CONF_DEFAULT_SEED_PROVIDER           "simple_provider"
 
@@ -138,12 +126,10 @@ conf_server_init(struct conf_server *cs)
     }
 
     cs->port = 0;
-    cs->weight = 0;
 
     memset(&cs->info, 0, sizeof(cs->info));
 
     cs->valid = 0;
-    cs->is_secure = 0;
 
     log_debug(LOG_VVERB, "init conf server %p", cs);
     return DN_OK;
@@ -166,8 +152,9 @@ conf_server_deinit(struct conf_server *cs)
 }
 
 // copy from struct conf_server to struct server
-static rstatus_t
-conf_datastore_transform(struct datastore *s, struct conf_server *cs)
+rstatus_t
+conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
+                         struct conf_server *cs)
 {
     ASSERT(cs->valid);
     ASSERT(s != NULL);
@@ -175,74 +162,16 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->endpoint.pname = cs->pname;
     s->name = cs->name;
     s->endpoint.port = (uint16_t)cs->port;
-    s->endpoint.weight = (uint32_t)cs->weight;
 
     s->endpoint.family = cs->info.family;
     s->endpoint.addrlen = cs->info.addrlen;
     s->endpoint.addr = (struct sockaddr *)&cs->info.addr;
-    s->conn = NULL;
+    s->conn_pool = NULL;
+    s->max_connections = cp->datastore_connections;
     s->next_retry_ms = 0ULL;
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
-    log_debug(LOG_VERB, "transform to server '%.*s'",
-              s->endpoint.pname.len, s->endpoint.pname.data);
-
-    return DN_OK;
-}
-
-/**
- * Copy seed struct conf_server to struct server
- * @param elem conf_server
- * @param data server
- * @return rstatus_t Return status code.
- */
-rstatus_t
-conf_seed_each_transform(void *elem, void *data)
-{
-    struct conf_server *cseed = elem;
-    struct array *seeds = data;
-    struct node *s;
-
-    ASSERT(cseed->valid);
-
-    s = array_push(seeds);
-    ASSERT(s != NULL);
-
-    s->idx = array_idx(seeds, s);
-    s->owner = NULL;
-    s->endpoint.pname = cseed->pname;
-
-    s->state = DOWN;//assume peers are down initially
-
-    uint8_t *p = cseed->name.data + cseed->name.len - 1;
-    uint8_t *start = cseed->name.data;
-    string_copy(&s->name, start, (uint32_t)(dn_strrchr(p, start, ':') - start));
-
-    s->rack = cseed->rack;
-    s->dc = cseed->dc;
-    //string_copy(&s->dc, cseed->dc.data, cseed->dc.len);
-
-    s->is_local = false;
-    //TODO-jeb need to copy over tokens, not sure if this is good enough
-    s->tokens = cseed->tokens;
-
-    s->endpoint.port = (uint16_t)cseed->port;
-    s->endpoint.weight = (uint32_t)cseed->weight;
-    s->endpoint.family = cseed->info.family;
-    s->endpoint.addrlen = cseed->info.addrlen;
-    s->endpoint.addr = (struct sockaddr *)&cseed->info.addr;
-    s->conn = NULL;
-    s->next_retry_ms = 0ULL;
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
-    s->failure_count = 0;
-
-    s->processed = 0;
-    s->is_seed = 1;
-    s->is_secure = cseed->is_secure;
-
-    log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
-              s->idx, s->endpoint.pname.len, s->endpoint.pname.data);
+    log_debug(LOG_NOTICE, "Created %M", s);
 
     return DN_OK;
 }
@@ -284,6 +213,9 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->auto_eject_hosts = CONF_UNSET_NUM;
     cp->server_retry_timeout_ms = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->datastore_connections = CONF_UNSET_NUM;
+    cp->local_peer_connections = CONF_UNSET_NUM;
+    cp->remote_peer_connections = CONF_UNSET_NUM;
     cp->stats_interval = CONF_UNSET_NUM;
 
     //initialization for dynomite
@@ -390,130 +322,22 @@ conf_pool_deinit(struct conf_pool *cp)
     log_debug(LOG_VVERB, "deinit conf pool %p", cp);
 }
 
-static secure_server_option_t
-get_secure_server_option(struct string option)
+secure_server_option_t
+get_secure_server_option(struct string *option)
 {
-    if (dn_strcmp(option.data, CONF_STR_NONE) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_NONE) == 0) {
         return SECURE_OPTION_NONE;
     }
-    if (dn_strcmp(option.data, CONF_STR_RACK) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_RACK) == 0) {
         return SECURE_OPTION_RACK;
     }
-    if (dn_strcmp(option.data, CONF_STR_DC) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_DC) == 0) {
         return SECURE_OPTION_DC;
     }
-    if (dn_strcmp(option.data, CONF_STR_ALL) == 0) {
+    if (dn_strcmp(option->data, CONF_SECURE_OPTION_ALL) == 0) {
         return SECURE_OPTION_ALL;
     }
     return SECURE_OPTION_NONE;
-}
-
-/**
- * Copy connection pool configuration parsed from dynomite.yaml into the server
- * pool.
- * @param[in,out] sp Server pool.
- * @param cp
- * @return
- */
-rstatus_t
-conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
-{
-    rstatus_t status;
-    ASSERT(cp->valid);
-
-    memset(sp, 0, sizeof(struct server_pool));
-    init_object(&sp->object, OBJ_POOL, print_server_pool);
-    sp->ctx = NULL;
-    sp->p_conn = NULL;
-    TAILQ_INIT(&sp->c_conn_q);
-    TAILQ_INIT(&sp->ready_conn_q);
-
-    array_null(&sp->datacenters);
-    /* sp->ncontinuum = 0; */
-    /* sp->nserver_continuum = 0; */
-    /* sp->continuum = NULL; */
-    sp->next_rebuild = 0ULL;
-
-    sp->name = cp->name;
-    sp->proxy_endpoint.pname = cp->listen.pname;
-    sp->proxy_endpoint.port = (uint16_t)cp->listen.port;
-
-    sp->proxy_endpoint.family = cp->listen.info.family;
-    sp->proxy_endpoint.addrlen = cp->listen.info.addrlen;
-    sp->proxy_endpoint.addr = (struct sockaddr *)&cp->listen.info.addr;
-
-    sp->key_hash_type = cp->hash;
-    sp->key_hash = hash_algos[cp->hash];
-    sp->hash_tag = cp->hash_tag;
-
-    g_data_store = cp->data_store;
-    if ((g_data_store != DATA_REDIS) &&
-        (g_data_store != DATA_MEMCACHE)) {
-        log_error("Invalid datastore in conf file");
-        return DN_ERROR;
-    }
-    set_datastore_ops();
-    sp->timeout = cp->timeout;
-    sp->backlog = cp->backlog;
-
-    sp->client_connections = (uint32_t)cp->client_connections;
-
-    sp->server_retry_timeout_ms = cp->server_retry_timeout_ms;
-    sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
-    sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
-    sp->preconnect = cp->preconnect ? 1 : 0;
-
-    sp->datastore = dn_zalloc(sizeof(*sp->datastore));
-    status = conf_datastore_transform(sp->datastore, cp->conf_datastore);
-    if (status != DN_OK) {
-        return status;
-    }
-    sp->datastore->owner = sp;
-	log_debug(LOG_DEBUG, "init datastore in pool '%.*s'",
-			  sp->name.len, sp->name.data);
-
-    /* dynomite init */
-    sp->seed_provider = cp->dyn_seed_provider;
-    sp->dnode_proxy_endpoint.pname = cp->dyn_listen.pname;
-    sp->dnode_proxy_endpoint.port = (uint16_t)cp->dyn_listen.port;
-    sp->dnode_proxy_endpoint.family = cp->dyn_listen.info.family;
-    sp->dnode_proxy_endpoint.addrlen = cp->dyn_listen.info.addrlen;
-    sp->dnode_proxy_endpoint.addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
-    sp->peer_connections = (uint32_t)cp->dyn_connections;
-    sp->rack = cp->rack;
-    sp->dc = cp->dc;
-    sp->tokens = cp->tokens;
-    sp->env = cp->env;
-    sp->enable_gossip = cp->enable_gossip;
-
-    /* dynomite stats init */
-    sp->stats_endpoint.pname = cp->stats_listen.pname;
-    sp->stats_endpoint.port = (uint16_t)cp->stats_listen.port;
-    sp->stats_endpoint.family = cp->stats_listen.info.family;
-    sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
-    sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
-    sp->stats_interval = cp->stats_interval;
-    sp->mbuf_size = cp->mbuf_size;
-    sp->alloc_msgs_max = cp->alloc_msgs_max;
-
-    sp->secure_server_option = get_secure_server_option(cp->secure_server_option);
-    sp->pem_key_file = cp->pem_key_file;
-    sp->recon_key_file = cp->recon_key_file;
-    sp->recon_iv_file = cp->recon_iv_file;
-
-    array_null(&sp->seeds);
-    array_null(&sp->peers);
-    array_init(&sp->datacenters, 1, sizeof(struct datacenter));
-    sp->conf_pool = cp;
-
-    /* gossip */
-    sp->g_interval = cp->gos_interval;
-
-    set_msgs_per_sec(cp->conn_msg_rate);
-
-    log_debug(LOG_VERB, "transform to pool '%.*s'", sp->name.len, sp->name.data);
-
-    return DN_OK;
 }
 
 /**
@@ -603,6 +427,12 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  max_msgs: %d", cp->alloc_msgs_max);
 
     log_debug(LOG_VVERB, "  dc: \"%.*s\"", cp->dc.len, cp->dc.data);
+    log_debug(LOG_VVERB, "  datastore_connections: %d",
+            cp->datastore_connections);
+    log_debug(LOG_VVERB, "  local_peer_connections: %d",
+            cp->local_peer_connections);
+    log_debug(LOG_VVERB, "  remote_peer_connections: %d",
+            cp->remote_peer_connections);
 }
 
 static rstatus_t
@@ -834,8 +664,8 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     struct string *value;
     struct conf_server *field;
     uint8_t *p, *q, *start;
-    uint8_t *pname, *addr, *port, *weight, *name;
-    uint32_t k, delimlen, pnamelen, addrlen, portlen, weightlen, namelen;
+    uint8_t *pname, *addr, *port, *name;
+    uint32_t k, delimlen, pnamelen, addrlen, portlen, namelen;
     struct string address;
     char delim[] = " ::";
 
@@ -859,8 +689,6 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
     start = value->data;
     addr = NULL;
     addrlen = 0;
-    weight = NULL;
-    weightlen = 0;
     port = NULL;
     portlen = 0;
     name = NULL;
@@ -888,8 +716,8 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
             break;
 
         case 1:
-            weight = q + 1;
-            weightlen = (uint32_t)(p - weight + 1);
+            // ignore the weight portion, we never use it.
+            // But parse it nevertheless for backward compatibility
             break;
 
         case 2:
@@ -917,14 +745,12 @@ conf_add_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
+    // addr: hostname
     addr = start;
+    // addrlen: hostname length
     addrlen = (uint32_t)(p - start + 1);
 
-    field->weight = dn_atoi(weight, weightlen);
-    if (field->weight < 0) {
-        return "has an invalid weight in \"hostname:port:weight [name]\" format string";
-    }
-
+    // port is relevant only for non unix socket address
     if (value->data[0] != '/') {
         field->port = dn_atoi(port, portlen);
         if (field->port < 0 || !dn_valid_port(field->port)) {
@@ -1101,13 +927,13 @@ conf_add_dyn_server(struct conf *cf, struct command *cmd, void *conf)
         return CONF_ERROR;
     }
 
+    // addr is hostname
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
-    if (value->data[0] != '/') {
-        field->port = dn_atoi(port, portlen);
-        if (field->port < 0 || !dn_valid_port(field->port)) {
-            return "has an invalid port in \"hostname:port:weight [name]\" format string";
-        }
+
+    field->port = dn_atoi(port, portlen);
+    if (field->port < 0 || !dn_valid_port(field->port)) {
+        return "has an invalid port in \"hostname:port:weight [name]\" format string";
     }
 
     if (name == NULL) {
@@ -1224,7 +1050,7 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 {
     uint8_t *p;
     hash_type_t *hp;
-    struct string *value, *hash;
+    struct string *value;
 
     p = conf;
     hp = (hash_type_t *)(p + cmd->offset);
@@ -1235,17 +1061,10 @@ conf_set_hash(struct conf *cf, struct command *cmd, void *conf)
 
     value = array_top(&cf->arg);
 
-    for (hash = hash_strings; hash->len != 0; hash++) {
-        if (string_compare(value, hash) != 0) {
-            continue;
-        }
-
-        *hp = hash - hash_strings;
-
-        return CONF_OK;
-    }
-
-    return "is not a valid hash";
+    *hp = get_hash_type(value);
+    if (*hp == HASH_INVALID)
+        return "is not a valid hash";
+    return CONF_OK;
 }
 
 static char *
@@ -1435,6 +1254,18 @@ static struct command conf_commands[] = {
     { string("max_msgs"),
       conf_set_num,
       offsetof(struct conf_pool, alloc_msgs_max) },
+
+    { string("datastore_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, datastore_connections) },
+
+    { string("local_peer_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, local_peer_connections) },
+
+    { string("remote_peer_connections"),
+      conf_set_num,
+      offsetof(struct conf_pool, remote_peer_connections) },
 
     null_command
 };
@@ -2250,10 +2081,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
                               (const uint8_t *)CONF_DEFAULT_STATS_PNAME);
     }
 
-    if (dn_strcmp(cp->secure_server_option.data, CONF_STR_NONE) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_DC) &&
-        dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL))
+    if (dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_NONE) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_RACK) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_DC) &&
+        dn_strcmp(cp->secure_server_option.data, CONF_SECURE_OPTION_ALL))
     {
         log_error("conf: directive \"secure_server_option:\"must be one of 'none' 'rack' 'datacenter' 'all'");
     }
@@ -2300,6 +2131,18 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         log_debug(LOG_INFO, "setting reconciliation IV file to default value:%s", RECON_IV_FILE);
     }
 
+    if (cp->datastore_connections == CONF_UNSET_NUM) {
+        cp->datastore_connections = CONF_DEFAULT_CONNECTIONS;
+    }
+
+    if (cp->local_peer_connections == CONF_UNSET_NUM) {
+        cp->local_peer_connections = CONF_DEFAULT_CONNECTIONS;
+    }
+
+    if (cp->remote_peer_connections == CONF_UNSET_NUM) {
+        cp->remote_peer_connections = CONF_DEFAULT_CONNECTIONS;
+    }
+
     status = conf_validate_server(cf, cp);
     if (status != DN_OK) {
         return status;
@@ -2310,40 +2153,30 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     return DN_OK;
 }
 
-
-/* Determine which peer node communications need to be secured  */
-static bool
-conf_set_is_secure(struct conf *cf)
+bool
+is_secure(secure_server_option_t option, struct string *this_dc, struct string *this_rack,
+          struct string *that_dc, struct string *that_rack)
 {
-    bool valid = true;
-    uint32_t j, nseeds;
-
-    struct conf_pool *cp = &cf->pool;
-    nseeds = array_n(&cp->dyn_seeds);
-    for (j = 0; j < nseeds; j++) {
-        struct conf_server *cs = array_get(&cp->dyn_seeds, j);
-        // if dc then communication only between nodes in different dc is secured
-        if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_DC)) {
-            if (string_compare(&cp->dc, &cs->dc)) {
-                cs->is_secure = 1;
-            }
-        }
-        // if rack then communication only between nodes in different rack is secured.
-        // communication secured between nodes if they are in rack with same name across dcs.
-        else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_RACK)) {
-            // if not same rack or dc
-            if (string_compare(&cp->rack, &cs->rack)
-                    || string_compare(&cp->dc, &cs->dc)) {
-                cs->is_secure = 1;
-            }
-        }
-        // if all then all communication between nodes will be secured.
-        else if (!dn_strcmp(cp->secure_server_option.data, CONF_STR_ALL)) {
-            cs->is_secure = 1;
+    // if dc then communication only between nodes in different dc is secured
+    if (option == SECURE_OPTION_DC) {
+        if (string_compare(this_dc, that_dc)) {
+            return true;
         }
     }
-
-    return valid;
+    // if rack then communication only between nodes in different rack is secured.
+    // communication secured between nodes if they are in rack with same name across dcs.
+    else if (option == SECURE_OPTION_RACK) {
+        // if not same rack or dc
+        if (string_compare(this_rack, that_rack)
+                || string_compare(this_dc, that_dc)) {
+            return true;
+        }
+    }
+    // if all then all communication between nodes will be secured.
+    else if (option == SECURE_OPTION_ALL) {
+        return true;
+    }
+    return false;
 }
 
 static rstatus_t
@@ -2353,11 +2186,6 @@ conf_post_validate(struct conf *cf)
     ASSERT(!cf->valid);
 
     THROW_STATUS(conf_validate_pool(cf, &cf->pool));
-
-    /* Determine which peer node communications need to be secured  */
-    if (!conf_set_is_secure(cf)) {
-        return DN_ERROR;
-    }
     return DN_OK;
 }
 

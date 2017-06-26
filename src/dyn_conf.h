@@ -61,16 +61,14 @@ struct conf_listen {
  * Server configuration.
  */
 struct conf_server {
-    struct string   pname;       /* server: as "name:port:weight" */
-    struct string   name;        /* name */
+    struct string   pname;       /* server: as "name:port:weight" or "hostname:port:rack:dc:tokens" */
+    struct string   name;        /* name if given or the hostname */
     int             port;        /* port */
-    int             weight;      /* weight - unused and no config parsing support */
     struct sockinfo info;        /* connect socket info */
-    struct array    tokens;      /* tokens for this server */
+    struct array    tokens;      /* tokens for this server, empty for local server */
     struct string   rack;        /* peer node or server's rack */
     struct string   dc;          /* peer node's dc */
     unsigned        valid:1;     /* valid? */
-    unsigned        is_secure:1; /* is the connection to the server secure? */
 };
 
 /** \struct conf_pool
@@ -121,6 +119,11 @@ struct conf_pool {
     int                stats_interval;        /* stats aggregation interval */
     struct conf_listen stats_listen;          /* stats_listen: socket info for stats */
 
+    /* connection pool details */
+    uint8_t            datastore_connections;
+    uint8_t            local_peer_connections;
+    uint8_t            remote_peer_connections;
+
 };
 
 
@@ -144,12 +147,13 @@ struct conf {
 
 #define null_command { null_string, NULL, 0 }
 
-// converts conf_pool to server_pool
-rstatus_t conf_pool_transform(struct server_pool *, struct conf_pool *);
-// converts conf_server to server ... except that this is for peers
-rstatus_t conf_seed_each_transform(void *elem, void *data);
-
 struct conf *conf_create(char *filename);
 void conf_destroy(struct conf *cf);
+rstatus_t conf_datastore_transform(struct datastore *s, struct conf_pool *cp,
+                                   struct conf_server *cs);
+secure_server_option_t get_secure_server_option(struct string *option);
+bool is_secure(secure_server_option_t option, struct string *this_dc,
+               struct string *this_rack, struct string *that_dc,
+               struct string *that_rack);
 
 #endif

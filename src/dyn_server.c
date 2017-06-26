@@ -29,26 +29,32 @@
 #include "dyn_token.h"
 #include "dyn_dnode_peer.h"
 
-static void server_close(struct context *ctx, struct conn *conn);
+static int
+_print_datastore(FILE *stream, const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_DATASTORE);
+    struct datastore *ds = (struct datastore *)obj;
+    return fprintf(stream, "<DATASTORE %p %.*s>", ds, ds->endpoint.pname.len,
+                   ds->endpoint.pname.data);
+
+}
 static void
 server_ref(struct conn *conn, void *owner)
 {
-	struct datastore *server = owner;
+	struct datastore *datastore = owner;
 
     ASSERT(conn->type == CONN_SERVER);
     ASSERT(conn->owner == NULL);
-    ASSERT(server->conn == NULL);
 
-	conn->family = server->endpoint.family;
-	conn->addrlen = server->endpoint.addrlen;
-	conn->addr = server->endpoint.addr;
-    string_duplicate(&conn->pname, &server->endpoint.pname);
-    server->conn = conn;
+	conn->family = datastore->endpoint.family;
+	conn->addrlen = datastore->endpoint.addrlen;
+	conn->addr = datastore->endpoint.addr;
+    string_duplicate(&conn->pname, &datastore->endpoint.pname);
 
-	conn->owner = owner;
+	conn->owner = datastore;
 
-	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, server,
-			server->endpoint.pname.len, server->endpoint.pname.data);
+	log_debug(LOG_VVERB, "ref conn %p owner %p into '%.*s", conn, datastore,
+			  datastore->endpoint.pname.len, datastore->endpoint.pname.data);
 }
 
 static void
@@ -62,9 +68,6 @@ server_unref(struct conn *conn)
     conn_event_del_conn(conn);
 	server = conn->owner;
 	conn->owner = NULL;
-
-    ASSERT(server->conn);
-    server->conn = NULL;
 
 	log_debug(LOG_VVERB, "unref conn %p owner %p from '%.*s'", conn, server,
 			server->endpoint.pname.len, server->endpoint.pname.data);
@@ -115,96 +118,34 @@ server_active(struct conn *conn)
 }
 
 static void
-server_deinit(struct datastore **pdatastore)
+server_deinit(struct datastore *pdatastore)
 {
-    if (!pdatastore || !*pdatastore)
+    if (!pdatastore)
         return;
-    ASSERT((*pdatastore)->conn == NULL);
+    if (pdatastore->conn_pool) {
+        conn_pool_destroy(pdatastore->conn_pool);
+        pdatastore->conn_pool = NULL;
+    }
 }
 
 static struct conn *
-server_conn(struct datastore *datastore)
+server_conn(struct datastore *datastore, int tag)
 {
-    if (!datastore->conn) {
-        return conn_get(datastore, init_server_conn);
-    }
-    return datastore->conn;
+    return conn_pool_get(datastore->conn_pool, tag);
 }
 
 static rstatus_t
 datastore_preconnect(struct datastore *datastore)
 {
-	rstatus_t status;
-	struct server_pool *pool;
-	struct conn *conn;
-
-	pool = datastore->owner;
-
-	conn = server_conn(datastore);
-	if (conn == NULL) {
-		return DN_ENOMEM;
-	}
-
-	status = conn_connect(pool->ctx, conn);
-	if (status != DN_OK) {
-		log_warn("connect to datastore '%.*s' failed, ignored: %s",
-				datastore->endpoint.pname.len, datastore->endpoint.pname.data, strerror(errno));
-		server_close(pool->ctx, conn);
-	}
-
-	return DN_OK;
-}
-
-static rstatus_t
-datastore_disconnect(struct datastore *datastore)
-{
-	struct server_pool *pool = datastore->owner;
-
-    struct conn *conn = datastore->conn;
-    if (conn) {
-		conn_close(pool->ctx, conn);
-	}
-
-	return DN_OK;
+    return conn_pool_preconnect(datastore->conn_pool);
 }
 
 static void
 server_failure(struct context *ctx, struct datastore *server)
 {
-	struct server_pool *pool = server->owner;
-	if (!pool->auto_eject_hosts) {
-		return;
-	}
-
-	server->failure_count++;
-
-	log_warn("server '%.*s' failure count %"PRIu32" limit %"PRIu32,
-			 server->endpoint.pname.len, server->endpoint.pname.data, server->failure_count,
-			 pool->server_failure_limit);
-
-	if (server->failure_count < pool->server_failure_limit) {
-		return;
-	}
-
-	msec_t now_ms, next_ms;
-	now_ms = dn_msec_now();
-	if (now_ms == 0) {
-		return;
-	}
-
-	stats_server_set_ts(ctx, server_ejected_at, now_ms);
-
-	next_ms = now_ms + pool->server_retry_timeout_ms;
-
-	log_info("update pool '%.*s' to delete server '%.*s' "
-			"for next %"PRIu32" secs", pool->name.len,
-			pool->name.data, server->endpoint.pname.len, server->endpoint.pname.data,
-			pool->server_retry_timeout_ms/1000);
-
-	stats_pool_incr(ctx, server_ejects);
-
-	server->failure_count = 0;
-	server->next_retry_ms = next_ms;
+    conn_pool_notify_conn_errored(server->conn_pool);
+    stats_server_set_ts(ctx, server_ejected_at, dn_msec_now());
+    stats_pool_incr(ctx, server_ejects);
 }
 
 static void
@@ -287,14 +228,14 @@ server_close(struct context *ctx, struct conn *conn)
 	struct msg *req, *nmsg; /* current and next message */
 
     ASSERT(conn->type == CONN_SERVER);
+    struct datastore *datastore = conn->owner;
 
-	server_close_stats(ctx, conn->owner, conn->err, conn->eof,
-			conn->connected);
+    server_close_stats(ctx, datastore, conn->err, conn->eof, conn->connected);
 
 	if (conn->sd < 0) {
-		server_failure(ctx, conn->owner);
 		conn_unref(conn);
 		conn_put(conn);
+		server_failure(ctx, datastore);
 		return;
 	}
 
@@ -342,8 +283,6 @@ server_close(struct context *ctx, struct conn *conn)
 
 	ASSERT(conn->smsg == NULL);
 
-	server_failure(ctx, conn->owner);
-
 	conn_unref(conn);
 
 	rstatus_t status = close(conn->sd);
@@ -353,6 +292,8 @@ server_close(struct context *ctx, struct conn *conn)
 	conn->sd = -1;
 
 	conn_put(conn);
+
+	server_failure(ctx, datastore);
 }
 
 static void
@@ -363,6 +304,7 @@ server_connected(struct context *ctx, struct conn *conn)
 
 	conn->connecting = 0;
 	conn->connected = 1;
+    conn_pool_connected(conn->conn_pool, conn);
 
     log_notice("%M connected ", conn);
 }
@@ -382,7 +324,6 @@ server_ok(struct context *ctx, struct conn *conn)
     }
     server->failure_count = 0;
     server->next_retry_ms = 0ULL;
-    server->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 }
 
 static rstatus_t
@@ -407,7 +348,7 @@ datastore_check_autoeject(struct datastore *datastore)
 }
 
 struct conn *
-get_datastore_conn(struct context *ctx, struct server_pool *pool)
+get_datastore_conn(struct context *ctx, struct server_pool *pool, int tag)
 {
 	rstatus_t status;
 	struct datastore *datastore = pool->datastore;
@@ -420,14 +361,14 @@ get_datastore_conn(struct context *ctx, struct server_pool *pool)
 	}
 
 	/* pick a connection to a given server */
-	conn = server_conn(datastore);
+	conn = server_conn(datastore, tag);
 	if (conn == NULL) {
 		return NULL;
 	}
 
 	status = conn_connect(ctx, conn);
 	if (status != DN_OK) {
-		server_close(ctx, conn);
+		conn_close(ctx, conn);
 		return NULL;
 	}
 
@@ -446,7 +387,11 @@ server_pool_preconnect(struct context *ctx)
 void
 server_pool_disconnect(struct context *ctx)
 {
-    datastore_disconnect(ctx->pool.datastore);
+    struct datastore *datastore = ctx->pool.datastore;
+    if (datastore->conn_pool) {
+        conn_pool_destroy(datastore->conn_pool);
+        datastore->conn_pool = NULL;
+    }
 }
 
 /**
@@ -459,8 +404,105 @@ server_pool_disconnect(struct context *ctx)
 rstatus_t
 server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *ctx)
 {
-	THROW_STATUS(conf_pool_transform(sp, cp));
+    ASSERT(cp->valid);
+
+    memset(sp, 0, sizeof(struct server_pool));
+    init_object(&sp->object, OBJ_POOL, print_server_pool);
+    sp->ctx = ctx;
+    sp->p_conn = NULL;
+    TAILQ_INIT(&sp->c_conn_q);
+    TAILQ_INIT(&sp->ready_conn_q);
+
+    array_null(&sp->datacenters);
+    /* sp->ncontinuum = 0; */
+    /* sp->nserver_continuum = 0; */
+    /* sp->continuum = NULL; */
+    sp->next_rebuild = 0ULL;
+
+    sp->name = cp->name;
+    sp->proxy_endpoint.pname = cp->listen.pname;
+    sp->proxy_endpoint.port = (uint16_t)cp->listen.port;
+
+    sp->proxy_endpoint.family = cp->listen.info.family;
+    sp->proxy_endpoint.addrlen = cp->listen.info.addrlen;
+    sp->proxy_endpoint.addr = (struct sockaddr *)&cp->listen.info.addr;
+
+    sp->key_hash_type = cp->hash;
+    sp->key_hash = get_hash_func(cp->hash);
+    sp->hash_tag = cp->hash_tag;
+
+    g_data_store = cp->data_store;
+    if ((g_data_store != DATA_REDIS) &&
+        (g_data_store != DATA_MEMCACHE)) {
+        log_error("Invalid datastore in conf file");
+        return DN_ERROR;
+    }
+    set_datastore_ops();
+    sp->timeout = cp->timeout;
+    sp->backlog = cp->backlog;
+
+    sp->client_connections = (uint32_t)cp->client_connections;
+
+    sp->server_retry_timeout_ms = cp->server_retry_timeout_ms;
+    sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
+    sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
+    sp->preconnect = cp->preconnect ? 1 : 0;
+
+    sp->datastore = dn_zalloc(sizeof(*sp->datastore));
+    init_object(&(sp->datastore->obj), OBJ_DATASTORE, _print_datastore);
+    THROW_STATUS(conf_datastore_transform(sp->datastore, cp, cp->conf_datastore));
+    sp->datastore->owner = sp;
+	log_debug(LOG_DEBUG, "init datastore in pool '%.*s'",
+			  sp->name.len, sp->name.data);
+
+    /* dynomite init */
+    sp->seed_provider = cp->dyn_seed_provider;
+    sp->dnode_proxy_endpoint.pname = cp->dyn_listen.pname;
+    sp->dnode_proxy_endpoint.port = (uint16_t)cp->dyn_listen.port;
+    sp->dnode_proxy_endpoint.family = cp->dyn_listen.info.family;
+    sp->dnode_proxy_endpoint.addrlen = cp->dyn_listen.info.addrlen;
+    sp->dnode_proxy_endpoint.addr = (struct sockaddr *)&cp->dyn_listen.info.addr;
+    sp->max_local_peer_connections = cp->local_peer_connections;
+    sp->max_remote_peer_connections = cp->remote_peer_connections;
+    sp->rack = cp->rack;
+    sp->dc = cp->dc;
+    sp->tokens = cp->tokens;
+    sp->env = cp->env;
+    sp->enable_gossip = cp->enable_gossip;
+
+    /* dynomite stats init */
+    sp->stats_endpoint.pname = cp->stats_listen.pname;
+    sp->stats_endpoint.port = (uint16_t)cp->stats_listen.port;
+    sp->stats_endpoint.family = cp->stats_listen.info.family;
+    sp->stats_endpoint.addrlen = cp->stats_listen.info.addrlen;
+    sp->stats_endpoint.addr = (struct sockaddr *)&cp->stats_listen.info.addr;
+    sp->stats_interval = cp->stats_interval;
+    sp->mbuf_size = cp->mbuf_size;
+    sp->alloc_msgs_max = cp->alloc_msgs_max;
+
+    sp->secure_server_option = get_secure_server_option(&cp->secure_server_option);
+    sp->pem_key_file = cp->pem_key_file;
+    sp->recon_key_file = cp->recon_key_file;
+    sp->recon_iv_file = cp->recon_iv_file;
+
+    array_null(&sp->peers);
+    array_init(&sp->datacenters, 1, sizeof(struct datacenter));
+    sp->conf_pool = cp;
+
+    /* gossip */
+    sp->g_interval = cp->gos_interval;
+
+    set_msgs_per_sec(cp->conn_msg_rate);
+
+    log_debug(LOG_VERB, "transform to pool '%.*s'", sp->name.len, sp->name.data);
+
+
 	sp->ctx = ctx;
+    struct datastore *datastore = sp->datastore;
+    datastore->conn_pool = conn_pool_create(ctx, datastore,
+                                            datastore->max_connections,
+                                            init_server_conn, sp->server_failure_limit,
+                                            sp->server_retry_timeout_ms/1000);
 	log_debug(LOG_DEBUG, "Initialized server pool");
 	return DN_OK;
 }
@@ -476,7 +518,9 @@ server_pool_deinit(struct server_pool *sp)
     ASSERT(sp->p_conn == NULL);
     ASSERT(TAILQ_EMPTY(&sp->c_conn_q));
 
-    server_deinit(&sp->datastore);
+    server_deinit(sp->datastore);
+    dn_free(sp->datastore);
+    sp->datastore = NULL;
     log_debug(LOG_DEBUG, "deinit pool '%.*s'", sp->name.len, sp->name.data);
 }
 

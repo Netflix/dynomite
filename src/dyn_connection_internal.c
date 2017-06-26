@@ -17,19 +17,9 @@
  * limitations under the License.
  */
 
-#include <sys/uio.h>
-
-#include "dyn_core.h"
-#include "dyn_server.h"
-#include "dyn_client.h"
-#include "dyn_proxy.h"
 #include "dyn_connection_internal.h"
-#include "dyn_dnode_proxy.h"
-#include "dyn_dnode_peer.h"
-#include "dyn_dnode_client.h"
+#include "dyn_connection_pool.h"
 #include "event/dyn_event.h"
-
-#include "proto/dyn_proto.h"
 
 static uint32_t nfree_connq;       /* # free conn q */
 static struct conn_tqh free_connq; /* free conn q */
@@ -39,14 +29,14 @@ _conn_get_type_string(struct conn *conn)
 {
     switch(conn->type) {
         case CONN_UNSPECIFIED: return "UNSPEC";
-        case CONN_PROXY : return "PROXY";
-        case CONN_CLIENT: return "CLIENT";
-        case CONN_SERVER: return "SERVER";
-        case CONN_DNODE_PEER_PROXY: return "PEER_PROXY";
+        case CONN_PROXY : return "CONN_PROXY";
+        case CONN_CLIENT: return "CONN_CLIENT";
+        case CONN_SERVER: return "CONN_SERVER";
+        case CONN_DNODE_PEER_PROXY: return "CONN_PEER_PROXY";
         case CONN_DNODE_PEER_CLIENT: return conn->same_dc ?
-                                            "LOCAL_PEER_CLIENT" : "REMOTE_PEER_CLIENT";
+                                            "CONN_LOCAL_PEER_CLIENT" : "CONN_REMOTE_PEER_CLIENT";
         case CONN_DNODE_PEER_SERVER: return conn->same_dc ?
-                                            "LOCAL_PEER_SERVER" : "REMOTE_PEER_SERVER";
+                                            "CONN_LOCAL_PEER_SERVER" : "CONN_REMOTE_PEER_SERVER";
     }
     return "INVALID";
 }
@@ -101,6 +91,7 @@ _conn_get(void)
 
     init_object(&conn->object, OBJ_CONN, _print_conn);
     conn->owner = NULL;
+    conn->conn_pool = NULL;
 
     conn->sd = -1;
     string_init(&conn->pname);
@@ -138,12 +129,11 @@ _conn_get(void)
     /* for dynomite */
     conn->dyn_mode = 0;
     conn->dnode_secured = 0;
-    conn->dnode_crypto_state = 0;
+    conn->crypto_key_sent = 0;
 
     conn->same_dc = 1;
     conn->avail_tokens = msgs_per_sec();
     conn->last_sent = 0;
-    conn->attempted_reconnect = 0;
     //conn->non_bytes_send = 0;
     conn_set_read_consistency(conn, g_read_consistency);
     conn_set_write_consistency(conn, g_write_consistency);
@@ -189,6 +179,8 @@ _conn_put(struct conn *conn)
 {
     nfree_connq++;
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
+    if (conn->conn_pool)
+        conn_pool_notify_conn_close(conn->conn_pool, conn);
 }
 
 /**

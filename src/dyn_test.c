@@ -212,7 +212,6 @@ init_peer(struct node *s)
     s->state = UNKNOWN;
 
     s->endpoint.port = (uint16_t)8102;
-    s->endpoint.weight = (uint32_t)1;
 
     struct string rack = string("rack1");
     string_copy(&s->rack, rack.data, rack.len);
@@ -233,14 +232,10 @@ init_peer(struct node *s)
     s->endpoint.addrlen = info->addrlen;
     s->endpoint.addr = (struct sockaddr *)&info->addr;
 
-    s->conn = NULL;
-
     s->next_retry_ms = 0ULL;
-    s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
     s->processed = 0;
-    s->is_seed = 1;
     s->is_secure = 0;
 
     log_debug(LOG_NOTICE, "Filling up server data");

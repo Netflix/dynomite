@@ -12,9 +12,10 @@ AM_CFLAGS += -Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wmissin
 
 noinst_LIBRARIES = libhashkit.a
 
-noinst_HEADERS = dyn_hashkit.h
+noinst_HEADERS = dyn_hashkit.h dyn_token.h
 
 libhashkit_a_SOURCES =		\
+	dyn_hashkit.c		\
 	dyn_crc16.c		\
 	dyn_crc32.c		\
 	dyn_fnv.c		\
@@ -23,4 +24,5 @@ libhashkit_a_SOURCES =		\
 	dyn_md5.c		\
 	dyn_murmur.c		\
 	dyn_one_at_a_time.c	\
+	dyn_token.c			\
 	dyn_murmur3.c
