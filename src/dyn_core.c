@@ -280,7 +280,6 @@ core_ctx_create(struct instance *nci)
     ctx->cf = conf_create(nci->conf_filename);
     if (ctx->cf == NULL) {
         loga("Failed to create conf!!!");
-        conf_destroy(ctx->cf);
         dn_free(ctx);
         return DN_ERROR;
     }
@@ -325,6 +324,7 @@ core_start(struct instance *nci)
     rstatus_t status = core_ctx_create(nci);
     if (status != DN_OK) {
         conn_deinit();
+        return status;
     }
 
     /**

@@ -20,8 +20,7 @@ static EVP_CIPHER *aes_cipher;
 static RSA *rsa;
 static int rsa_size = 0;
 
-static int aes_key_size = AES_KEYLEN;
-static unsigned char aes_key[AES_KEYLEN];
+static unsigned char aes_key[AES_KEYLEN+1];
 
 static EVP_CIPHER_CTX *aes_encrypt_ctx;
 static EVP_CIPHER_CTX *aes_decrypt_ctx;
@@ -144,7 +143,7 @@ aes_init(void)
     aes_cipher =  EVP_aes_128_cbc();
 
 
-    if(RAND_bytes(aes_key, aes_key_size) == 0) {
+    if(RAND_bytes(aes_key, AES_KEYLEN) == 0) {
         return DN_ERROR;
     }
 
@@ -474,9 +473,10 @@ aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, unsigned char **dec_msg,
 
 unsigned char* generate_aes_key(void)
 {
-    if(RAND_bytes(aes_key, aes_key_size) == 0) {
+    if(RAND_bytes(aes_key, AES_KEYLEN) == 0) {
         return NULL;
     }
+    aes_key[AES_KEYLEN] = '\0';
 
     return aes_key;
 }
