@@ -42,6 +42,10 @@
 # include <execinfo.h>
 #endif
 
+#ifndef MONOTONIC_CLOCK_TYPE
+#define MONOTONIC_CLOCK_TYPE CLOCK_MONOTONIC
+#endif
+
 int
 dn_set_blocking(int sd)
 {
@@ -477,6 +481,22 @@ msec_t
 dn_msec_now(void)
 {
     return dn_usec_now() / 1000ULL;
+}
+
+static msec_t
+timespec_to_msec(struct timespec *t)
+{
+    return (t->tv_sec * 1000 + (t->tv_nsec/(1000*1000)));
+}
+
+msec_t
+dn_system_monotonic_msec_now(void)
+{
+    struct timespec temp;
+    if (clock_gettime(MONOTONIC_CLOCK_TYPE, &temp)) {
+        return dn_msec_now();
+    }
+    return timespec_to_msec(&temp);
 }
 
 static int

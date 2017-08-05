@@ -98,6 +98,9 @@ _conn_get(void)
     /* {family, addrlen, addr} are initialized in enqueue handler */
 
     TAILQ_INIT(&conn->imsg_q);
+    conn->imsgq_count = 0;
+    conn->eligible = false;
+    conn->last_serve_time = 0;
 
     TAILQ_INIT(&conn->omsg_q);
 

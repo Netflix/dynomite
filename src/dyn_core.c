@@ -475,7 +475,9 @@ core_timeout(struct context *ctx)
 			return;
 		}
 
-        log_warn("%M on %M timedout, timeout was %d", req, conn, req->tmo_rbe.timeout);
+        log_warn("%M on %M timedout, timeout was %d time since last serve %lu", req, conn, req->tmo_rbe.timeout,
+                 dn_system_monotonic_msec_now() - conn->last_serve_time);
+        conn->last_serve_time = dn_system_monotonic_msec_now();
 
 		msg_tmo_delete(req);
 
@@ -506,8 +508,14 @@ core_core(void *arg, uint32_t events)
 	struct context *ctx = conn_to_ctx(conn);
 
     log_debug(LOG_VVERB, "event %04"PRIX32" on %M", events, conn);
+    if (conn->eligible) {
+        log_warn("event %04"PRIX32" on %M after eligible %u", events, conn,
+                 dn_system_monotonic_msec_now());
+        conn->eligible = false;
+    }
 
 	conn->events = events;
+    conn->last_serve_time = dn_system_monotonic_msec_now();
 
 	/* error takes precedence over read | write */
 	if (events & EVENT_ERR) {

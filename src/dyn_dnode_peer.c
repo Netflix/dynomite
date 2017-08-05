@@ -1298,6 +1298,12 @@ dnode_req_peer_enqueue_imsgq(struct context *ctx, struct conn *conn, struct msg 
         msg_tmo_insert(req, conn);
     }
     TAILQ_INSERT_TAIL(&conn->imsg_q, req, s_tqe);
+    conn->imsgq_count++;
+    if (conn->imsgq_count == 1024) {
+        log_warn("%M is eligible to output %lu", conn, dn_system_monotonic_msec_now());
+        conn->eligible = true;
+        //msg_send(ctx, conn);
+    }
     log_debug(LOG_VERB, "conn %p enqueue inq %d:%d", conn, req->id, req->parent_id);
 
     if (conn->same_dc) {
@@ -1327,6 +1333,7 @@ dnode_req_peer_dequeue_imsgq(struct context *ctx, struct conn *conn, struct msg 
             histo_add(&ctx->stats->cross_region_queue_wait_time_histo, delay_us);
     }
     TAILQ_REMOVE(&conn->imsg_q, req, s_tqe);
+    conn->imsgq_count--;
     log_debug(LOG_VERB, "conn %p dequeue inq %d:%d", conn, req->id, req->parent_id);
 
     if (conn->same_dc) {

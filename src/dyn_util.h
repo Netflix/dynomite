@@ -352,6 +352,7 @@ int _scnprintf(char *buf, size_t size, const char *fmt, ...);
 int _vscnprintf(char *buf, size_t size, const char *fmt, va_list args);
 usec_t dn_usec_now(void);
 msec_t dn_msec_now(void);
+msec_t dn_system_monotonic_msec_now(void);
 
 /*
  * Address resolution for internet (ipv4 and ipv6) and unix domain

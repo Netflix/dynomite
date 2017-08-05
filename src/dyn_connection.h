@@ -106,6 +106,9 @@ struct conn {
 
     struct msg_tqh     imsg_q;        /* incoming request Q */
     struct msg_tqh     omsg_q;        /* outstanding request Q */
+    uint64_t           imsgq_count;        /* incoming request Q */
+    bool               eligible;        /* incoming request Q */
+    msec_t             last_serve_time;        /* incoming request Q */
 
     struct msg         *rmsg;         /* current message being rcvd */
     struct msg         *smsg;         /* current message being sent */
