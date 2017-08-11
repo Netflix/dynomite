@@ -500,12 +500,11 @@ stats_add_num_str(struct stats_buffer *buf, const char *key, int64_t val)
 static rstatus_t
 stats_add_num(struct stats_buffer *buf, struct string *key, int64_t val)
 {
-	if (stats_add_num_last(buf,key, val, false) == DN_ERROR) {
-		return DN_ERROR;
-	}
+    if (stats_add_num_last(buf, key, val, false) == DN_ERROR) {
+        return DN_ERROR;
+    }
 
-	return DN_OK;
-
+    return DN_OK;
 }
 
 static rstatus_t
@@ -996,6 +995,9 @@ parse_request(int sd, struct stats_cmd *st_cmd)
     } else  {  // message received
         log_debug(LOG_VERB, "%s", mesg);
         reqline[0] = strtok(mesg, " \t\n");
+        if (!reqline[0]) {
+            return;
+        }
         if ( strncmp(reqline[0], "GET\0", 4) == 0 ) {
             reqline[1] = strtok (NULL, " \t");
             reqline[2] = strtok (NULL, " \t\n");
@@ -1139,7 +1141,6 @@ parse_request(int sd, struct stats_cmd *st_cmd)
             }
         }
     }
-
 }
 
 
@@ -1421,7 +1422,7 @@ stats_create(uint16_t stats_port, struct string pname, int stats_interval,
     st->interval = stats_interval;
     string_init(&st->addr);
     if (string_duplicate(&st->addr,&stats_ip) != DN_OK) {
-    	goto error;
+        goto error;
     }
 
     st->start_ts = (int64_t)time(NULL);
