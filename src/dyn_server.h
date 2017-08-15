@@ -24,7 +24,6 @@
 #define _DYN_SERVER_H_
 
 #include "dyn_core.h"
-#include "dyn_token.h"
 #include "dyn_dict.h"
 
 /*

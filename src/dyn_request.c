@@ -95,8 +95,11 @@ req_done(struct conn *conn, struct msg *req)
         return true;
     }
 
-    /* check all fragments of the given request vector are done */
+    if (req->nfrag_done < req->nfrag)
+        return false;
 
+    /* check all fragments of the given request vector are done */
+    // when we reach here req is always the fragment owner.
     for (pmsg = req, cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
          pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
@@ -113,10 +116,6 @@ req_done(struct conn *conn, struct msg *req)
             return false;
     }
 
-    if (!pmsg->last_fragment) {
-        return false;
-    }
-
     /*
      * At this point, all the fragments including the last fragment have
      * been received.
@@ -126,7 +125,7 @@ req_done(struct conn *conn, struct msg *req)
      */
 
     req->fdone = 1;
-    nfragment = 1;
+    nfragment = 0;
 
     for (pmsg = req, cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
@@ -150,6 +149,25 @@ req_done(struct conn *conn, struct msg *req)
               "fragments is done", conn->sd, id, nfragment);
 
     return true;
+}
+
+rstatus_t
+req_make_reply(struct context *ctx, struct conn *conn, struct msg *req)
+{
+    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
+    if (rsp == NULL) {
+        conn->err = errno;
+        return DN_ENOMEM;
+    }
+
+    req->selected_rsp = rsp;
+    rsp->peer = req;
+    rsp->is_request = 0;
+
+    req->done = 1;
+    conn_enqueue_outq(ctx, conn, req);
+
+    return DN_OK;
 }
 
 /*

@@ -279,6 +279,7 @@ dyn_parse_core(struct msg *r)
 
       case DYN_DONE:
          log_debug(LOG_VVERB, "DYN_DONE");
+         r->mlen -= (p - r->pos);
          r->pos = p;
          dmsg->payload = p;
          r->dyn_parse_state = DYN_DONE;

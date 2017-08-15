@@ -68,6 +68,7 @@ struct mbuf *mbuf_get(void);
 void mbuf_put(struct mbuf *mbuf);
 uint64_t mbuf_alloc_get_count(void);
 uint64_t mbuf_free_queue_size(void);
+void mbuf_dump_pos(struct mbuf *mbuf);
 void mbuf_dump(struct mbuf *mbuf);
 void mbuf_rewind(struct mbuf *mbuf);
 uint32_t mbuf_length(struct mbuf *mbuf);

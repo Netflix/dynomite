@@ -802,23 +802,28 @@ dnode_peer_pool_update(struct server_pool *pool)
 
 }
 
+uint32_t
+dnode_peer_idx_for_key_on_rack(struct server_pool *pool, struct rack *rack,
+                               uint8_t *key, uint32_t keylen)
+{
+    struct dyn_token token;
+    pool->key_hash((char *)key, keylen, &token);
+    return vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
+}
+
 static struct node *
 dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
                            uint8_t *key, uint32_t keylen)
 {
     struct node *server;
     uint32_t idx;
-    struct dyn_token token;
 
     ASSERT(array_n(&pool->peers) != 0);
 
     if (keylen == 0) {
         idx = 0; //for no argument command
     } else {
-        pool->key_hash((char *)key, keylen, &token);
-        //print_dyn_token(token, 1);
-        idx = vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
-        //loga("found idx %d for rack '%.*s' ", idx, rack->name->len, rack->name->data);
+        idx = dnode_peer_idx_for_key_on_rack(pool, rack, key, keylen);
     }
 
     ASSERT(idx < array_n(&pool->peers));

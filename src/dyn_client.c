@@ -936,7 +936,43 @@ req_recv_done(struct context *ctx, struct conn *conn,
     }
 
     req->stime_in_microsec = dn_usec_now();
-    req_forward(ctx, conn, req);
+    struct msg_tqh frag_msgq;
+    TAILQ_INIT(&frag_msgq);
+
+    struct server_pool *pool = conn->owner;
+    struct rack *rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+    rstatus_t status = g_fragment(req, pool, rack, &frag_msgq);
+    if (status != DN_OK) {
+        if (req->expect_datastore_reply) {
+            conn_enqueue_outq(ctx, conn, req);
+        }
+        req_forward_error(ctx, conn, req, DN_OK, status); //TODO: CHeck error code
+    }
+
+    /* if no fragment happened */
+    if (TAILQ_EMPTY(&frag_msgq)) {
+        req_forward(ctx, conn, req);
+        return;
+    }
+
+    status = req_make_reply(ctx, conn, req);
+    if (status != DN_OK) {
+        if (req->expect_datastore_reply) {
+            conn_enqueue_outq(ctx, conn, req);
+        }
+        req_forward_error(ctx, conn, req, DN_OK, status);
+    }
+
+    struct msg *sub_msg, *tmsg;
+    for (sub_msg = TAILQ_FIRST(&frag_msgq); sub_msg != NULL; sub_msg = tmsg) {
+        tmsg = TAILQ_NEXT(sub_msg, m_tqe);
+
+        TAILQ_REMOVE(&frag_msgq, sub_msg, m_tqe);
+        log_info("Forwarding split request %M", sub_msg);
+        req_forward(ctx, conn, sub_msg);
+    }
+    ASSERT(TAILQ_EMPTY(&frag_msgq));
+    return;
 }
 
 static msg_response_handler_t 

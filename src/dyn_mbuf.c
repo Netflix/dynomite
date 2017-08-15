@@ -144,6 +144,18 @@ mbuf_free_queue_size(void)
 }
 
 
+void mbuf_dump_pos(struct mbuf *mbuf)
+{
+     long int len;
+     uint8_t *p, *q;
+
+     p = mbuf->pos;
+     q = mbuf->last;
+     len = q - p;
+
+     loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+}
+
 void mbuf_dump(struct mbuf *mbuf)
 {
      long int len;

@@ -35,6 +35,8 @@
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
 
 typedef void (*func_msg_parse_t)(struct msg *);
+typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
+                                         struct rack *, struct msg_tqh *);
 typedef rstatus_t (*func_msg_post_splitcopy_t)(struct msg *);
 typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
@@ -45,6 +47,7 @@ extern func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
 extern func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
+extern func_msg_fragment_t  g_fragment;   /* message fragment */
 
 
 typedef enum msg_parse_result {
@@ -320,6 +323,10 @@ get_msg_routing_string(msg_routing_t route)
     return "INVALID MSG ROUTING TYPE";
 }
 
+struct keypos {
+    uint8_t              *start;          /* key start pos */
+    uint8_t              *end;            /* key end pos */
+};
 
 struct msg {
     object_t             object;
@@ -351,8 +358,7 @@ struct msg {
 
     msg_type_t           type;            /* message type */
 
-    uint8_t              *key_start;      /* key start */
-    uint8_t              *key_end;        /* key end */
+    struct array         *keys;            /* array of keypos, for req */
 
     uint32_t             vlen;            /* value length (memcache) */
     uint8_t              *end;            /* end marker (memcache) */
@@ -366,7 +372,9 @@ struct msg {
 
     struct msg           *frag_owner;     /* owner of fragment message */
     uint32_t             nfrag;           /* # fragment */
+    uint32_t             nfrag_done;      /* # fragment done */
     uint64_t             frag_id;         /* id of fragmented message */
+    struct msg           **frag_seq;      /* sequence of fragment message, map from keys to fragments*/
 
     err_t                error_code;      /* errno on error? */
     unsigned             is_error:1;      /* error? */
@@ -376,8 +384,6 @@ struct msg {
     unsigned             expect_datastore_reply:1;       /* expect datastore reply */
     unsigned             done:1;          /* done? */
     unsigned             fdone:1;         /* all fragments are done? */
-    unsigned             first_fragment:1;/* first fragment? */
-    unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
     /* We need a way in dnode_rsp_send_next to remember if we already
      * did a dmsg_write of a dnode header in this message. If we do not remember it,
@@ -441,6 +447,7 @@ void msg_dump(struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
+uint64_t msg_gen_frag_id(void);
 size_t msg_alloc_msgs(void);
 uint32_t msg_payload_crc32(struct msg *msg);
 struct msg *msg_get_rsp_integer(struct conn *conn);
@@ -457,6 +464,7 @@ bool req_done(struct conn *conn, struct msg *msg);
 bool req_error(struct conn *conn, struct msg *msg);
 struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc);
 void req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
+rstatus_t req_make_reply(struct context *ctx, struct conn *conn, struct msg *req);
 struct msg *req_send_next(struct context *ctx, struct conn *conn);
 void req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
