@@ -663,14 +663,7 @@ msg_dump(struct msg *msg)
          msg->done, msg->is_error, msg->error_code);
 
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
-        uint8_t *p, *q;
-        long int len;
-
-        p = mbuf->pos;
-        q = mbuf->last;
-        len = q - p;
-
-        loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+        mbuf_dump(mbuf);
     }
 
 }

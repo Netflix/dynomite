@@ -2448,7 +2448,7 @@ redis_copy_bulk(struct msg *dst, struct msg *src, bool log)
     for (; mbuf;) {
         if (log) {
             log_notice("dumping mbuf");
-            mbuf_dump_pos(mbuf);
+            mbuf_dump(mbuf);
         }
         if (mbuf_length(mbuf) <= len) {     /* steal this buf from src to dst */
             nbuf = STAILQ_NEXT(mbuf, next);
