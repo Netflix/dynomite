@@ -37,17 +37,16 @@
 typedef void (*func_msg_parse_t)(struct msg *);
 typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
                                          struct rack *, struct msg_tqh *);
-typedef rstatus_t (*func_msg_post_splitcopy_t)(struct msg *);
 typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef rstatus_t (*func_msg_reply_t)(struct msg *r);
 typedef bool (*func_msg_failure_t)(struct msg *r);
+typedef bool (*func_is_multikey_request)(struct msg *r);
 void set_datastore_ops(void);
-extern func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
-extern func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 extern func_msg_fragment_t  g_fragment;   /* message fragment */
+extern func_is_multikey_request g_is_multikey_request;
 
 
 typedef enum msg_parse_result {

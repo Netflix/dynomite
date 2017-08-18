@@ -33,17 +33,16 @@ void memcache_parse_req(struct msg *r);
 void memcache_parse_rsp(struct msg *r);
 void memcache_pre_coalesce(struct msg *r);
 void memcache_post_coalesce(struct msg *r);
+bool memcache_is_multikey_request(struct msg *r);
 rstatus_t memcache_fragment(struct msg *r, struct server_pool *pool, struct rack *rack,
                          struct msg_tqh *frag_msgq);
 
 void redis_parse_req(struct msg *r);
 void redis_parse_rsp(struct msg *r);
-bool redis_failure(struct msg *r);
-rstatus_t redis_reply(struct msg *r);
 void redis_pre_coalesce(struct msg *r);
 void redis_post_coalesce(struct msg *r);
+bool redis_is_multikey_request(struct msg *r);
 rstatus_t redis_fragment(struct msg *r, struct server_pool *pool, struct rack *rack,
                          struct msg_tqh *frag_msgq);
-void redis_swallow_msg(struct conn *conn, struct msg *pmsg, struct msg *msg);
 
 #endif

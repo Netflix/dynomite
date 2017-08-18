@@ -1575,3 +1575,8 @@ memcache_reply(struct msg *r)
     return DN_OK;
 }
 
+bool
+memcache_is_multikey_request(struct msg *r)
+{
+    return false;
+}

@@ -2978,4 +2978,16 @@ redis_fragment(struct msg *r, struct server_pool *pool, struct rack *rack, struc
     }
 }
 
-
+bool
+redis_is_multikey_request(struct msg *req)
+{
+    ASSERT(req->is_request);
+    switch (req->type) {
+    case MSG_REQ_REDIS_MGET:
+    case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_MSET:
+        return true;
+    default:
+        return false;
+    }
+}

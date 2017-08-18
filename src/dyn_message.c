@@ -149,11 +149,11 @@ static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
 uint8_t g_timeout_factor = 1;
-func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
-func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
+
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 func_msg_fragment_t  g_fragment;   /* message post-coalesce */
+func_is_multikey_request g_is_multikey_request;
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {
@@ -189,11 +189,13 @@ set_datastore_ops(void)
             g_pre_coalesce = redis_pre_coalesce;
             g_post_coalesce = redis_post_coalesce;
             g_fragment = redis_fragment;
+            g_is_multikey_request =  redis_is_multikey_request;
             break;
         case DATA_MEMCACHE:
             g_pre_coalesce = memcache_pre_coalesce;
             g_post_coalesce = memcache_post_coalesce;
             g_fragment = memcache_fragment;
+            g_is_multikey_request =  memcache_is_multikey_request;
             break;
         default:
             return;
