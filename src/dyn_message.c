@@ -154,6 +154,7 @@ func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 func_msg_fragment_t  g_fragment;   /* message post-coalesce */
 func_is_multikey_request g_is_multikey_request;
+func_reconcile_responses g_reconcile_responses;
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {
@@ -190,12 +191,14 @@ set_datastore_ops(void)
             g_post_coalesce = redis_post_coalesce;
             g_fragment = redis_fragment;
             g_is_multikey_request =  redis_is_multikey_request;
+            g_reconcile_responses = redis_reconcile_responses;
             break;
         case DATA_MEMCACHE:
             g_pre_coalesce = memcache_pre_coalesce;
             g_post_coalesce = memcache_post_coalesce;
             g_fragment = memcache_fragment;
             g_is_multikey_request =  memcache_is_multikey_request;
+            g_reconcile_responses = memcache_reconcile_responses;
             break;
         default:
             return;

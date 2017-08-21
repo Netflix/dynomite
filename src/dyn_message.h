@@ -39,15 +39,17 @@ typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
                                          struct rack *, struct msg_tqh *);
 typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
-typedef rstatus_t (*func_msg_reply_t)(struct msg *r);
 typedef bool (*func_msg_failure_t)(struct msg *r);
 typedef bool (*func_is_multikey_request)(struct msg *r);
-void set_datastore_ops(void);
+typedef struct msg *(*func_reconcile_responses)(struct response_mgr *rspmgr);
+
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 extern func_msg_fragment_t  g_fragment;   /* message fragment */
 extern func_is_multikey_request g_is_multikey_request;
+extern func_reconcile_responses g_reconcile_responses;
 
+void set_datastore_ops(void);
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */

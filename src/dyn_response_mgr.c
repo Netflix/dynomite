@@ -134,28 +134,8 @@ rspmgr_get_response(struct response_mgr *rspmgr)
             msg_dump(rspmgr->responses[2]);
         }
     }
-    if (rspmgr->msg->consistency == DC_QUORUM) {
-        log_info("none of the responses match, returning first");
-        return rspmgr->responses[0];
-    } else {
-        log_info("none of the responses match, returning error");
-        struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
-        rsp->is_error = 1;
-        rsp->error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
-        rsp->dyn_error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
-        // There is a case that when 1 out of three nodes are down, the
-        // response manager has 1 error response and 2 good responses.
-        // We reach here when the two responses differ and we want to return
-        // failed to achieve quorum. In this case, free the existing error
-        // response
-        if (rspmgr->err_rsp) {
-            rsp_put(rspmgr->err_rsp);
-        }
-        rspmgr->err_rsp = rsp;
-        rspmgr->error_responses++;
-        return rsp;
+    return g_reconcile_responses(rspmgr);
     }
-}
 
 void
 rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
