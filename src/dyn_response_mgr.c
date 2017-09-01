@@ -135,7 +135,7 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         }
     }
     return g_reconcile_responses(rspmgr);
-    }
+}
 
 void
 rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free)
@@ -174,4 +174,31 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
     }
     msg_decr_awaiting_rsps(rspmgr->msg);
     return DN_OK;
+}
+
+rstatus_t
+rspmgr_clone_responses(struct response_mgr *rspmgr, struct array *responses)
+{
+    uint8_t iter = 0;
+    struct msg *dst = NULL;
+    rstatus_t s = DN_OK;
+    for(iter = 0; iter < rspmgr->good_responses; iter++)
+    {
+        struct msg *src = rspmgr->responses[iter];
+        dst = rsp_get(rspmgr->conn);
+        if (!dst) {
+            s = DN_ENOMEM;
+            goto error;
+        }
+
+        s = msg_clone(src, STAILQ_FIRST(&src->mhdr), dst);
+        if (s != DN_OK)
+            goto error;
+        struct msg **pdst = (struct msg **)array_push(responses);
+        *pdst = dst;
+    }
+    return DN_OK;
+error:
+    rsp_put(dst);
+    return ;
 }

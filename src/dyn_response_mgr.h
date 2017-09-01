@@ -27,6 +27,6 @@ struct msg* rspmgr_get_response(struct response_mgr *rspmgr);
 void rspmgr_free_response(struct response_mgr *rspmgr, struct msg *dont_free);
 void rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free);
 rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
-
+rstatus_t rspmgr_clone_responses(struct response_mgr *src, struct array *responses);
 
 #endif

@@ -29,7 +29,8 @@ rsp_get(struct conn *conn)
     struct msg *rsp;
 
     ASSERT((conn->type == CONN_DNODE_PEER_SERVER) ||
-           (conn->type == CONN_SERVER));
+           (conn->type == CONN_SERVER) ||
+           (conn->type == CONN_CLIENT));
 
     rsp = msg_get(conn, false, __FUNCTION__);
     if (rsp == NULL) {
