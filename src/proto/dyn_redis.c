@@ -2992,9 +2992,269 @@ redis_is_multikey_request(struct msg *req)
     }
 }
 
+static int
+consume_numargs_from_response(struct msg *rsp)
+{
+    enum {
+        SW_START,
+        SW_NARG,
+        SW_NARG_LF,
+        SW_DONE
+    } state;
+    state = SW_START;
+
+    int narg = 0;
+    struct mbuf *b = STAILQ_FIRST(&rsp->mhdr);
+    //struct mbuf *b = STAILQ_LAST(&rsp->mhdr, mbuf, next);
+    uint8_t *p;
+    uint8_t ch;
+    for (p = b->pos; p < b->last; p++) {
+        ch = *p;
+        switch (state) {
+        case SW_START:
+                if (ch != '*') {
+                    goto error;
+                }
+                log_debug(LOG_VVVERB, "SW_START -> SW_NARG");
+                state = SW_NARG;
+                break;
+
+        case SW_NARG:
+            if (isdigit(ch)) {
+                narg = narg * 10 + (ch - '0');
+            } else if (ch == CR) {
+                log_debug(LOG_VVVERB, "SW_START -> SW_NARG_LF %d", narg);
+                state = SW_NARG_LF;
+            } else {
+                goto error;
+            }
+            break;
+
+        case SW_NARG_LF:
+            if (ch == LF) {
+                log_debug(LOG_VVVERB, "SW_NARG_LF -> SW_DONE %d", narg);
+                state = SW_DONE;
+            } else {
+                goto error;
+            }
+            break;
+        case SW_DONE:
+            log_debug(LOG_VVERB, "SW_DONE %d", narg);
+            b->pos = p;
+            return narg;
+        }
+    }
+error:
+    return -1;
+}
+
+static rstatus_t
+consume_numargs_from_responses(struct array *responses, int *narg)
+{
+    uint32_t iter = 0;
+    *narg = -2; // some invalid value
+    
+    while (iter < array_n(responses)) {
+        // get numargs
+        if (*narg == -2) {
+            struct msg *rsp = *(struct msg **)array_get(responses, iter);
+            *narg = consume_numargs_from_response(rsp);
+        } else {
+            if (*narg != consume_numargs_from_response(*(struct msg **)array_get(responses, iter)))
+                return DN_ERROR;
+        }
+        iter++;
+    }
+    return DN_OK;
+}
+
+static rstatus_t
+redis_append_nargs(struct msg *rsp, int nargs)
+{
+    size_t len = 1 + 10 + CRLF_LEN; // len(*<int>CRLF)
+    struct mbuf *mbuf = msg_ensure_mbuf(rsp, len);
+    if (!mbuf)
+        return DN_ENOMEM;
+    rsp->narg_start = mbuf->last;
+    int n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", nargs);
+    mbuf->last += n;
+    rsp->narg_end = (rsp->narg_start + n - CRLF_LEN);
+    rsp->mlen += (uint32_t)n;
+    return DN_OK;
+}
+
+static rstatus_t
+get_next_response_fragment(struct msg *rsp, struct msg **fragment)
+{
+    ASSERT(*fragment == NULL);
+    *fragment = rsp_get(rsp->owner);
+    if (*fragment == NULL) {
+        return DN_ENOMEM;
+    }
+    redis_copy_bulk(*fragment, rsp, false);
+    return DN_OK;
+}
+
+// Returns a quorum response.
+static struct msg *
+redis_get_fragment_quorum(struct array *fragment_from_responses)
+{
+    uint32_t total = array_n(fragment_from_responses);
+    ASSERT(total <= 3);
+    uint32_t    checksums[MAX_REPLICAS_PER_DC];
+    uint32_t fragment_iter;
+    for (fragment_iter = 0; fragment_iter < total; fragment_iter++) {
+        checksums[fragment_iter] = msg_payload_crc32(*(struct msg **)array_get(fragment_from_responses, fragment_iter));
+    }
+    switch(total) {
+        case 2:
+            if (checksums[0] == checksums[1])
+                return *(struct msg **)array_get(fragment_from_responses, 0);
+            else
+                return NULL;
+        case 3:
+            if (checksums[0] == checksums[1])
+                return *(struct msg **)array_get(fragment_from_responses, 0);
+            if (checksums[0] == checksums[2])
+                return *(struct msg **)array_get(fragment_from_responses, 0);
+            if (checksums[1] == checksums[2])
+                return *(struct msg **)array_get(fragment_from_responses, 1);
+            return NULL;
+        default:
+            return NULL;
+    }
+}
+
+rstatus_t
+free_rsp_each(void *elem)
+{
+    struct msg *rsp = *(struct msg **)elem;
+    ASSERT(rsp->object.type == OBJ_RSP);
+    rsp_put(rsp);
+    return DN_OK;
+}
+
+// if no quorum could be achieved, return NULL
+static struct msg *
+redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
+{
+    // take the responses. get each value, and compare and return the common one
+    // create a copy of the responses;
+
+    struct array cloned_responses;
+    struct array cloned_rsp_fragment_array;
+    struct msg *selected_rsp = NULL;
+
+    rstatus_t s = array_init(&cloned_responses, rspmgr->good_responses, sizeof(struct msg *));
+    if (s != DN_OK)
+        goto cleanup;
+
+    s = rspmgr_clone_responses(rspmgr, &cloned_responses);
+    if (s != DN_OK)
+        goto cleanup;
+
+    log_notice("clone has %d responses", array_n(&cloned_responses));
+
+    // if number of arguments do not match, return NULL;
+    int nargs;
+    s = consume_numargs_from_responses(&cloned_responses, &nargs);
+    if (s != DN_OK)
+        goto cleanup;
+
+    log_notice("numargs matched = %d", nargs);
+
+    // create the result response
+    selected_rsp = rsp_get(rspmgr->conn);
+    if (!selected_rsp) {
+        s = DN_ENOMEM;
+        goto cleanup;
+    }
+    selected_rsp->expect_datastore_reply = rspmgr->responses[0]->expect_datastore_reply;
+    selected_rsp->swallow = rspmgr->responses[0]->swallow;
+    selected_rsp->type = rspmgr->responses[0]->type;
+
+    s = redis_append_nargs(selected_rsp, nargs);
+    if (s != DN_OK)
+        goto cleanup;
+
+    log_notice("rsp after appending nargs %M", selected_rsp);
+    msg_dump(selected_rsp);
+
+    // array to hold 1 fragment from each response 
+    s = array_init(&cloned_rsp_fragment_array, rspmgr->good_responses,
+                   sizeof(struct msg *));
+    if (s != DN_OK)
+        goto cleanup;
+
+    // for every response fragment, try to achieve a quorum
+    int arg_iter;
+    for (arg_iter =0; arg_iter < nargs; arg_iter++) {
+        // carve out one fragment from each response
+        uint8_t response_iter;
+        for (response_iter = 0; response_iter < rspmgr->good_responses; response_iter++) {
+            struct msg *cloned_rsp = *(struct msg **)array_get(&cloned_responses, response_iter);
+            struct msg *cloned_rsp_fragment = NULL;
+            s = get_next_response_fragment(cloned_rsp, &cloned_rsp_fragment);
+            if (s != DN_OK) {
+                goto cleanup;
+            }
+            log_notice("response fragment from response(%d) %M", response_iter, cloned_rsp_fragment);
+            msg_dump(cloned_rsp_fragment);
+
+            struct msg **pdst = (struct msg **)array_push(&cloned_rsp_fragment_array);
+            *pdst = cloned_rsp_fragment;
+        }
+
+        // Now that we have 1 fragment from each good response, try to get a quorum on them
+        struct msg *quorum_fragment = redis_get_fragment_quorum(&cloned_rsp_fragment_array);
+        if (quorum_fragment == NULL) {
+            if (rspmgr->msg->consistency == DC_QUORUM) {
+                log_notice("none of the fragments match, selecting first fragment");
+                quorum_fragment = *(struct msg**)array_get(&cloned_rsp_fragment_array, 0);
+            } else {
+                s = DN_ERROR;
+                goto cleanup;
+            }
+        }
+
+        log_notice("quorum fragment ");
+        msg_dump(quorum_fragment);
+        // Copy that fragment to the resulting response
+        s = redis_copy_bulk(selected_rsp, quorum_fragment, false);
+        if (s != DN_OK) {
+            goto cleanup;
+        }
+
+        log_notice("response now is %M",selected_rsp);
+        msg_dump(selected_rsp);
+        // free the responses in the array
+        array_each(&cloned_rsp_fragment_array, free_rsp_each);
+        array_reset(&cloned_rsp_fragment_array);
+    }
+cleanup:
+    array_each(&cloned_responses, free_rsp_each);
+    array_deinit(&cloned_responses);
+    array_each(&cloned_rsp_fragment_array, free_rsp_each);
+    array_deinit(&cloned_rsp_fragment_array);
+    if (s != DN_OK) {
+        rsp_put(selected_rsp);
+        selected_rsp = NULL;
+    }
+    return selected_rsp;
+}
+
 struct msg *
 redis_reconcile_responses(struct response_mgr *rspmgr)
 {
+    struct msg *selected_rsp = NULL;
+    if (redis_is_multikey_request(rspmgr->msg)) {
+        selected_rsp = redis_reconcile_multikey_responses(rspmgr);
+    }
+    // if a quorum response was achieved, good, return that.
+    if (selected_rsp != NULL)
+        return selected_rsp;
+
+    // No quorum was achieved.
     if (rspmgr->msg->consistency == DC_QUORUM) {
         log_info("none of the responses match, returning first");
         return rspmgr->responses[0];
