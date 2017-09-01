@@ -466,7 +466,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 }
 
 static rstatus_t
-dnode_peer_each_preconnect(void *elem, void *data)
+dnode_peer_each_preconnect(void *elem)
 {
     struct node *peer = elem;
 
@@ -477,7 +477,7 @@ dnode_peer_each_preconnect(void *elem, void *data)
 }
 
 static rstatus_t
-dnode_peer_each_disconnect(void *elem, void *data)
+dnode_peer_each_disconnect(void *elem)
 {
     struct node *peer = elem;
 
@@ -662,7 +662,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     if (status != DN_OK)
         return status;
 
-    status = dnode_peer_each_preconnect(s, NULL);
+    status = dnode_peer_each_preconnect(s);
 
     return status;
 }
@@ -726,7 +726,7 @@ dnode_peer_replace(void *rmsg)
         log_notice("Found an old node to replace '%.*s'", s->name.len, s->name.data);
         log_notice("Replace with address '%.*s'", node->name.len, node->name.data);
 
-        dnode_peer_each_disconnect(s, NULL);
+        dnode_peer_each_disconnect(s);
         string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
         string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
@@ -745,7 +745,7 @@ dnode_peer_replace(void *rmsg)
 
         dnode_create_connection_pool(sp, s);
 
-        dnode_peer_each_preconnect(s, NULL);
+        dnode_peer_each_preconnect(s);
     } else {
         log_debug(LOG_INFO, "Unable to find any node matched the token");
     }
@@ -909,7 +909,7 @@ dnode_peer_pool_preconnect(struct context *ctx)
         return DN_OK;
     }
 
-    status = array_each(&sp->peers, dnode_peer_each_preconnect, NULL);
+    status = array_each(&sp->peers, dnode_peer_each_preconnect);
     if (status != DN_OK) {
         return status;
     }
@@ -924,7 +924,7 @@ dnode_peer_pool_disconnect(struct context *ctx)
     rstatus_t status;
     struct server_pool *sp = &ctx->pool;
 
-    status = array_each(&sp->peers, dnode_peer_each_disconnect, NULL);
+    status = array_each(&sp->peers, dnode_peer_each_disconnect);
     IGNORE_RET_VAL(status);
 }
 

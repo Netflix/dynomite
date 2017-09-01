@@ -490,7 +490,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
         }
         nbuf = mbuf_get();
         if (nbuf == NULL) {
-            return ENOMEM;
+            return DN_ENOMEM;
         }
 
         uint32_t len = mbuf_length(mbuf);
@@ -670,6 +670,7 @@ msg_dump(struct msg *msg)
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
         mbuf_dump(mbuf);
     }
+    loga("=================================================");
 
 }
 

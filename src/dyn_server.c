@@ -578,7 +578,7 @@ dc_init(struct datacenter *dc)
 }
 
 static rstatus_t
-rack_destroy(void *elem, void *data)
+rack_destroy(void *elem)
 {
 	struct rack *rack = elem;
 	return rack_deinit(rack);
@@ -587,7 +587,7 @@ rack_destroy(void *elem, void *data)
 static rstatus_t
 dc_deinit(struct datacenter *dc)
 {
-	array_each(&dc->racks, rack_destroy, NULL);
+	array_each(&dc->racks, rack_destroy);
 	string_deinit(dc->name);
 	//dictRelease(dc->dict_rack);
 	return DN_OK;
