@@ -2503,6 +2503,7 @@ redis_pre_coalesce(struct msg *rsp)
         return;
     }
 
+    req->frag_owner->nfrag_done++;
     switch (rsp->type) {
     case MSG_RSP_REDIS_INTEGER:
         /* only redis 'del' fragmented request sends back integer reply */
@@ -2734,7 +2735,7 @@ redis_post_coalesce_old(struct msg *req)
         log_error("req %lu:%lu type %u has rsp %lu:%lu with invalid type %u",
                   req->id, req->parent_id, req->type, rsp->id, rsp->parent_id, rsp->type);
         if (log_loggable(LOG_INFO)) {
-            msg_dump(rsp);
+            msg_dump(LOG_INFO, rsp);
         }
         NOT_REACHED();
     }
@@ -3153,7 +3154,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_notice("clone has %d responses", array_n(&cloned_responses));
+    log_info("%M cloned %d good responses", rspmgr->msg, array_n(&cloned_responses));
 
     // if number of arguments do not match, return NULL;
     int nargs;
@@ -3161,7 +3162,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_notice("numargs matched = %d", nargs);
+    log_info("numargs matched = %d", nargs);
 
     // create the result response
     selected_rsp = rsp_get(rspmgr->conn);
@@ -3177,8 +3178,8 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_notice("rsp after appending nargs %M", selected_rsp);
-    msg_dump(selected_rsp);
+    log_debug(LOG_DEBUG, "%M after appending nargs %M", selected_rsp);
+    msg_dump(LOG_DEBUG, selected_rsp);
 
     // array to hold 1 fragment from each response 
     s = array_init(&cloned_rsp_fragment_array, rspmgr->good_responses,
@@ -3198,8 +3199,9 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             if (s != DN_OK) {
                 goto cleanup;
             }
-            log_notice("response fragment from response(%d) %M", response_iter, cloned_rsp_fragment);
-            msg_dump(cloned_rsp_fragment);
+            log_debug(LOG_DEBUG, "Fragment %d of %d, from response(%d of %d) %M",
+                      arg_iter+1, nargs, response_iter+1, rspmgr->good_responses, cloned_rsp_fragment);
+            msg_dump(LOG_DEBUG, cloned_rsp_fragment);
 
             struct msg **pdst = (struct msg **)array_push(&cloned_rsp_fragment_array);
             *pdst = cloned_rsp_fragment;
@@ -3209,7 +3211,8 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
         struct msg *quorum_fragment = redis_get_fragment_quorum(&cloned_rsp_fragment_array);
         if (quorum_fragment == NULL) {
             if (rspmgr->msg->consistency == DC_QUORUM) {
-                log_notice("none of the fragments match, selecting first fragment");
+                log_info("Fragment %d of %d, none of them match, selecting first fragment",
+                         arg_iter+1, nargs);
                 quorum_fragment = *(struct msg**)array_get(&cloned_rsp_fragment_array, 0);
             } else {
                 s = DN_ERROR;
@@ -3217,16 +3220,16 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             }
         }
 
-        log_notice("quorum fragment ");
-        msg_dump(quorum_fragment);
+        log_debug(LOG_DEBUG, "quorum fragment %M", quorum_fragment);
+        msg_dump(LOG_DEBUG, quorum_fragment);
         // Copy that fragment to the resulting response
         s = redis_copy_bulk(selected_rsp, quorum_fragment, false);
         if (s != DN_OK) {
             goto cleanup;
         }
 
-        log_notice("response now is %M",selected_rsp);
-        msg_dump(selected_rsp);
+        log_info("response now is %M", selected_rsp);
+        msg_dump(LOG_INFO, selected_rsp);
         // free the responses in the array
         array_each(&cloned_rsp_fragment_array, free_rsp_each);
         array_reset(&cloned_rsp_fragment_array);

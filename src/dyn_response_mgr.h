@@ -15,7 +15,7 @@ struct response_mgr {
     uint8_t     error_responses;    // error responses received
     struct msg  *err_rsp;           // first error response
     struct conn *conn;
-    struct msg *msg;
+    struct msg *msg;                // corresponding request
 };
 
 void init_response_mgr(struct response_mgr *rspmgr, struct msg*, bool is_read,

@@ -508,7 +508,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct msg *rsp;
     struct mbuf *mbuf;
     int n;
-    char *errstr = err ? dn_strerror(err) : "unknown";
+    char *errstr = dyn_err ? dn_strerror(dyn_err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source = dyn_error_source(dyn_err);
 
@@ -653,9 +653,12 @@ uint32_t msg_length(struct msg *msg)
 }
 
 void
-msg_dump(struct msg *msg)
+msg_dump(int level, struct msg *msg)
 {
 
+    if (!log_loggable(level)) {
+        return;
+    }
     struct mbuf *mbuf;
 
     if (msg == NULL) {
@@ -1051,7 +1054,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (log_loggable(LOG_VVERB)) {
        loga("About to dump out the content of msg");
-       msg_dump(msg);
+       msg_dump(LOG_VVERB, msg);
     }
 
     TAILQ_INIT(&send_msgq);

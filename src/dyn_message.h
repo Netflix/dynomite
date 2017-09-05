@@ -444,7 +444,7 @@ void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
 struct msg *msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err);
-void msg_dump(struct msg *msg);
+void msg_dump(int level, struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);

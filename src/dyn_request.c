@@ -95,7 +95,8 @@ req_done(struct conn *conn, struct msg *req)
         return true;
     }
 
-    if (req->nfrag_done < req->nfrag)
+    struct msg *frag_owner = req->frag_owner;
+    if (frag_owner->nfrag_done < frag_owner->nfrag)
         return false;
 
     /* check all fragments of the given request vector are done */

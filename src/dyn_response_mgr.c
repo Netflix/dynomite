@@ -103,7 +103,7 @@ rspmgr_get_response(struct response_mgr *rspmgr)
                   rspmgr->msg->id, rspmgr->err_rsp, rspmgr->good_responses,
                   rspmgr->quorum_responses);
         if (log_loggable(LOG_INFO))
-            msg_dump(rspmgr->err_rsp);
+            msg_dump(LOG_INFO, rspmgr->err_rsp);
         return rspmgr->err_rsp;
     }
 
@@ -122,16 +122,16 @@ rspmgr_get_response(struct response_mgr *rspmgr)
     rspmgr_incr_non_quorum_responses_stats(rspmgr);
     if (log_loggable(LOG_DEBUG)) {
         log_error("Request: ");
-        msg_dump(rspmgr->msg);
+        msg_dump(LOG_DEBUG, rspmgr->msg);
     }
     if (log_loggable(LOG_VVERB)) {
         log_error("Respone 0: ");
-        msg_dump(rspmgr->responses[0]);
+        msg_dump(LOG_VVERB, rspmgr->responses[0]);
         log_error("Respone 1: ");
-        msg_dump(rspmgr->responses[1]);
+        msg_dump(LOG_VVERB, rspmgr->responses[1]);
         if (rspmgr->good_responses == 3) {
             log_error("Respone 2: ");
-            msg_dump(rspmgr->responses[2]);
+            msg_dump(LOG_VVERB, rspmgr->responses[2]);
         }
     }
     return g_reconcile_responses(rspmgr);

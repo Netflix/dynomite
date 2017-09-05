@@ -1019,10 +1019,10 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     if (log_loggable(LOG_VVERB)) {
         loga("%M Dumping content:", rsp);
-        msg_dump(rsp);
+        msg_dump(LOG_VVERB, rsp);
 
         loga("%M Dumping content:", req);
-        msg_dump(req);
+        msg_dump(LOG_VVERB, req);
     }
 
     conn_dequeue_outq(ctx, peer_conn, req);
@@ -1124,7 +1124,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 
         if (log_loggable(LOG_VVERB)) {
             loga("skipping req:   ");
-            msg_dump(req);
+            msg_dump(LOG_VVERB, req);
         }
 
 
@@ -1169,11 +1169,11 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 
     if (log_loggable(LOG_VVERB)) {
        loga("Dumping content for rsp:   ");
-       msg_dump(rsp);
+       msg_dump(LOG_VVERB, rsp);
 
        if (nmsg != NULL) {
           loga("Dumping content for nmsg :");
-          msg_dump(nmsg);
+          msg_dump(LOG_VVERB, nmsg);
        }
     }
 

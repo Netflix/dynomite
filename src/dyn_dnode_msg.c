@@ -410,7 +410,7 @@ dyn_parse_req(struct msg *r)
 {
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_req, start to process request :::::::::::::::::::::: ");
-		msg_dump(r);
+		msg_dump(LOG_VVERB, r);
 	}
 
 	bool done_parsing = false;
@@ -501,7 +501,7 @@ dyn_parse_req(struct msg *r)
 	//bad case
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, "Bad or splitted message");  //fix me to do something
-		msg_dump(r);
+		msg_dump(LOG_VVERB, r);
 	}
 	r->result = MSG_PARSE_AGAIN;
 }
@@ -511,7 +511,7 @@ void dyn_parse_rsp(struct msg *r)
 {
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
-		msg_dump(r);
+		msg_dump(LOG_VVERB, r);
 	}
 
 	bool done_parsing = false;
@@ -588,7 +588,7 @@ void dyn_parse_rsp(struct msg *r)
 	//bad case
 	if (log_loggable(LOG_DEBUG)) {
 		log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
-		msg_dump(r);
+		msg_dump(LOG_DEBUG, r);
 	}
 
 	r->result = MSG_PARSE_AGAIN;

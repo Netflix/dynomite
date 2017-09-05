@@ -483,7 +483,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
         if (log_loggable(LOG_VVERB)) {
             log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
-            msg_dump(rsp);
+            msg_dump(LOG_VVERB, rsp);
         }
 
     }

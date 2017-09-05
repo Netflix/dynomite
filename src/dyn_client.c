@@ -403,8 +403,8 @@ void
 req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                   err_t error_code, err_t dyn_error_code)
 {
-    log_info("%M FORWARD FAILEED %M len %"PRIu32": %s", conn, req, req->mlen,
-             strerror(error_code));
+    log_info("%M FORWARD FAILED %M len %"PRIu32": %d:%s", conn, req, req->mlen,
+             error_code, dn_strerror(error_code));
 
     // Nothing to do if request is not expecting a reply.
     // The higher layer will take care of freeing the request
