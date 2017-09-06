@@ -34,7 +34,7 @@
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
 
-typedef void (*func_msg_parse_t)(struct msg *);
+typedef void (*func_msg_parse_t)(struct msg *, const struct string *hash_tag);
 typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
                                          struct rack *, struct msg_tqh *);
 typedef void (*func_msg_coalesce_t)(struct msg *r);
@@ -327,6 +327,8 @@ get_msg_routing_string(msg_routing_t route)
 struct keypos {
     uint8_t              *start;          /* key start pos */
     uint8_t              *end;            /* key end pos */
+    uint8_t              *tag_start;      /* hashtagged key start pos */
+    uint8_t              *tag_end;        /* hashtagged key end pos */
 };
 
 struct msg {
@@ -457,7 +459,8 @@ rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
 
-uint8_t *msg_get_key(struct msg *req, const struct string *hash_tag, uint32_t *keylen);
+uint8_t *msg_get_tagged_key(struct msg *req, uint32_t key_index, uint32_t *keylen);
+uint8_t *msg_get_full_key(struct msg *req, uint32_t key_index, uint32_t *keylen);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);

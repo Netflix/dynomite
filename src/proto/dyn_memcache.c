@@ -142,7 +142,7 @@ memcache_touch(struct msg *r)
 }
 
 void
-memcache_parse_req(struct msg *r)
+memcache_parse_req(struct msg *r, const struct string *hash_tag)
 {
     struct mbuf *b;
     uint8_t *p, *m;
@@ -377,6 +377,21 @@ memcache_parse_req(struct msg *r)
                 if (kpos == NULL) {
                     goto enomem;
                 }
+                kpos->start = kpos->tag_start = r->token;
+                kpos->end = kpos->tag_end = p;
+                if (!string_empty(hash_tag)) {
+                    uint8_t *tag_start, *tag_end;
+
+                    tag_start = dn_strchr(kpos->start, kpos->end, hash_tag->data[0]);
+                    if (tag_start != NULL) {
+                        tag_end = dn_strchr(tag_start + 1, kpos->end, hash_tag->data[1]);
+                        if (tag_end != NULL) {
+                            kpos->tag_start = tag_start + 1;
+                            kpos->tag_end = tag_end;
+                        }
+                    }
+                }
+
                 kpos->start = r->token;
                 kpos->end = p;
 
@@ -766,7 +781,7 @@ error:
 }
 
 void
-memcache_parse_rsp(struct msg *r)
+memcache_parse_rsp(struct msg *r, const struct string *UNUSED)
 {
     struct mbuf *b;
     uint8_t *p, *m;

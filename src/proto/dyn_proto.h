@@ -29,8 +29,8 @@
 
 
 
-void memcache_parse_req(struct msg *r);
-void memcache_parse_rsp(struct msg *r);
+void memcache_parse_req(struct msg *r, const struct string *hash_tag);
+void memcache_parse_rsp(struct msg *r, const struct string *UNUSED);
 void memcache_pre_coalesce(struct msg *r);
 void memcache_post_coalesce(struct msg *r);
 bool memcache_is_multikey_request(struct msg *r);
@@ -38,8 +38,8 @@ struct msg *memcache_reconcile_responses(struct response_mgr *rspmgr);
 rstatus_t memcache_fragment(struct msg *r, struct server_pool *pool, struct rack *rack,
                          struct msg_tqh *frag_msgq);
 
-void redis_parse_req(struct msg *r);
-void redis_parse_rsp(struct msg *r);
+void redis_parse_req(struct msg *r, const struct string *hash_tag);
+void redis_parse_rsp(struct msg *r, const struct string *UNUSED);
 void redis_pre_coalesce(struct msg *r);
 void redis_post_coalesce(struct msg *r);
 bool redis_is_multikey_request(struct msg *r);

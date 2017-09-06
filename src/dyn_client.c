@@ -850,9 +850,12 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
         stats_pool_incr(ctx, client_write_requests);
 
     uint32_t keylen = 0;
-    uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
+    uint8_t *key = msg_get_tagged_key(req, 0, &keylen);
+    uint32_t full_keylen = 0;
+    uint8_t *full_key = msg_get_full_key(req, 0, &full_keylen);
 
-    log_info(">>>>>>>>>>>>>>>>>>>>>>> %M RECEIVED %M key '%.*s'", c_conn, req, keylen, key);
+    log_info(">>>>>>>>>>>>>>>>>>>>>>> %M RECEIVED %M key '%.*s' tagged key '%.*s'",
+             c_conn, req, full_keylen, full_key, keylen, key);
     // add the message to the dict
     dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 

@@ -373,7 +373,7 @@ redis_error(struct msg *r)
  * The inline ping is being utilized by redis-benchmark
  */
 void
-redis_parse_req(struct msg *r)
+redis_parse_req(struct msg *r, const struct string *hash_tag)
 {
     struct mbuf *b;
     uint8_t *p, *m = 0;
@@ -1331,9 +1331,20 @@ redis_parse_req(struct msg *r)
                 if (kpos == NULL) {
                     goto enomem;
                 }
-                kpos->start = m;
-                kpos->end = p;
+                kpos->start = kpos->tag_start = m;
+                kpos->end = kpos->tag_end = p;
+                if (!string_empty(hash_tag)) {
+                    uint8_t *tag_start, *tag_end;
 
+                    tag_start = dn_strchr(kpos->start, kpos->end, hash_tag->data[0]);
+                    if (tag_start != NULL) {
+                        tag_end = dn_strchr(tag_start + 1, kpos->end, hash_tag->data[1]);
+                        if (tag_end != NULL) {
+                            kpos->tag_start = tag_start + 1;
+                            kpos->tag_end = tag_end;
+                        }
+                    }
+                }
                 state = SW_KEY_LF;
             }
 
@@ -1863,7 +1874,7 @@ error:
  *     will follow. The first byte of a multi bulk reply is always *.
  */
 void
-redis_parse_rsp(struct msg *r)
+redis_parse_rsp(struct msg *r, const struct string *UNUSED)
 {
     struct mbuf *b;
     uint8_t *p, *m;
@@ -2742,7 +2753,7 @@ redis_post_coalesce_old(struct msg *req)
 }
 
 static rstatus_t
-redis_append_key(struct msg *r, uint8_t *key, uint32_t keylen)
+redis_append_key(struct msg *r, struct keypos *kpos_src)
 {
     uint32_t len;
     struct mbuf *mbuf;
@@ -2750,6 +2761,8 @@ redis_append_key(struct msg *r, uint8_t *key, uint32_t keylen)
     struct keypos *kpos;
 
     /* 1. keylen */
+    uint32_t keylen = kpos_src->end - kpos_src->start;
+    uint32_t taglen = kpos_src->tag_end - kpos_src->tag_start;
     len = (uint32_t)dn_snprintf(printbuf, sizeof(printbuf), "$%d\r\n", keylen);
     mbuf = msg_ensure_mbuf(r, len);
     if (mbuf == NULL) {
@@ -2770,8 +2783,12 @@ redis_append_key(struct msg *r, uint8_t *key, uint32_t keylen)
     }
 
     kpos->start = mbuf->last;
-    kpos->end = mbuf->last + keylen;
-    mbuf_copy(mbuf, key, keylen);
+    kpos->tag_start = kpos->start + (kpos_src->tag_start - kpos_src->start);
+
+    kpos->end = kpos->start + keylen;
+    kpos->tag_end = kpos->tag_start + taglen;
+
+    mbuf_copy(mbuf, kpos_src->start, keylen);
     r->mlen += keylen;
 
     /* 3. CRLF */
@@ -2884,8 +2901,9 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
     for (i = 0; i < array_n(r->keys); i++) {        /* for each key */
         struct msg *sub_msg;
         struct keypos *kpos = array_get(r->keys, i);
-        uint32_t idx = dnode_peer_idx_for_key_on_rack(pool, rack, kpos->start,
-                                                      kpos->end - kpos->start);
+        // use hash-tagged start and end for forwarding.
+        uint32_t idx = dnode_peer_idx_for_key_on_rack(pool, rack, kpos->tag_start,
+                                                      kpos->tag_end - kpos->tag_start);
 
         if (sub_msgs[idx] == NULL) {
             sub_msgs[idx] = msg_get(r->owner, r->is_request, __FUNCTION__);
@@ -2897,7 +2915,7 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         r->frag_seq[i] = sub_msg = sub_msgs[idx];
 
         sub_msg->narg++;
-        status = redis_append_key(sub_msg, kpos->start, kpos->end - kpos->start);
+        status = redis_append_key(sub_msg, kpos);
         if (status != DN_OK) {
             dn_free(sub_msgs);
             return status;
