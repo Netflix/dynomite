@@ -14,7 +14,7 @@ The ultimate goal with Dynomite is to be able to implement high availability and
 
 ## Workflow
 
-The stable version of Dynomite is the [master]( https://github.com/Netflix/dynomite/tree/master ) branch. 
+Every branch numbered like v0.5.9, v0.5.8 etc is stable and safe to use in production unless marked as pre-release. The [dev]( https://github.com/Netflix/dynomite/tree/dev ) branch is the development unstable branch. Over time master branch has fallen behind and is not maintained. We will eventually delete it and may or may not recreate it.
 
 For questions or contributions, please consider reading [CONTRIBUTING.md](CONTRIBUTING.md).
 
