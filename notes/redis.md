@@ -172,7 +172,7 @@
     |      RPUSHX       |    Yes     | RPUSHX key value                                                                                                    |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* RPOPLPUSH support requires that source and destination keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for source and destination key. Dynomite does no checking on its end to verify that source and destination key hash to the same server, and the RPOPLPUSH command is forwarded to the server that the source key hashes to
+* RPOPLPUSH support requires that source and destination keys hash to the same server. You can ensure this by using the same [hashtag](recommendation.md#hash-tags) for source and destination key. Dynomite does no checking on its end to verify that source and destination key hash to the same server, and the RPOPLPUSH command is forwarded to the server that the source key hashes to
 
 ### Sets
 
@@ -210,7 +210,7 @@
     |      SSCAN        |    Yes**   | SSCAN key cursor [MATCH pattern] [COUNT count]                                                                      |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* SIDFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION and SUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
+* SIDFF, SDIFFSTORE, SINTER, SINTERSTORE, SMOVE, SUNION and SUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 ** SSCAN scans only sets in the local node.
 
@@ -254,7 +254,7 @@
     |      ZSCAN        |    Yes**   | ZSCAN key cursor [MATCH pattern] [COUNT count]                                                                      |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
-* ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](notes/recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
+* ZINTERSTORE and ZUNIONSTORE support requires that the supplied keys hash to the same server. You can ensure this by using the same [hashtag](recommendation.md#hash-tags) for all keys in the command. Dynomite does no checking on its end to verify that all the keys hash to the same server, and the given command is forwarded to the server that the first key hashes to.
 
 ** SSCAN scans only sorted sets in the local node.
 
