@@ -178,8 +178,9 @@ print_rsp(FILE *stream, const struct object *obj)
 {
     ASSERT(obj->type == OBJ_RSP);
     struct msg *rsp = (struct msg *)obj;
-    return fprintf(stream, "<RSP %p %lu:%lu len:%u>", rsp, rsp->id,
-                   rsp->parent_id, rsp->mlen);
+    struct string *rsp_type = msg_type_string(rsp->type);
+    return fprintf(stream, "<RSP %p %lu:%lu %.*s len:%u>", rsp, rsp->id,
+                   rsp->parent_id, rsp_type->len, rsp_type->data, rsp->mlen);
 }
 
 void

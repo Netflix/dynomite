@@ -321,7 +321,7 @@ redis_argeval(struct msg *r)
  * Return true, if the redis response is an error response i.e. a simple
  * string whose first character is '-', otherwise return false.
  */
-/*static bool
+static bool
 redis_error(struct msg *r)
 {
     switch (r->type) {
@@ -345,7 +345,7 @@ redis_error(struct msg *r)
         break;
     }
     return false;
-}*/
+}
 
 /*
  * Reference: http://redis.io/topics/protocol
@@ -2370,6 +2370,7 @@ redis_parse_rsp(struct msg *r, const struct string *UNUSED)
     ASSERT(p == b->last);
     r->pos = p;
     r->state = state;
+    r->is_error = redis_error(r);
 
     if (b->last == b->end && r->token != NULL) {
         r->pos = r->token;
@@ -2391,6 +2392,7 @@ done:
     r->state = SW_START;
     r->token = NULL;
     r->result = MSG_PARSE_OK;
+    r->is_error = redis_error(r);
 
     log_hexdump(LOG_VERB, b->pos, mbuf_length(b), "parsed rsp %"PRIu64" res %d "
                 "type %d state %d rpos %d of %d", r->id, r->result, r->type,
@@ -2577,10 +2579,8 @@ redis_pre_coalesce(struct msg *rsp)
          * MSG_RSP_REDIS_MULTIBULK. For an invalid response, we send out -ERR
          * with EINVAL errno
          */
-        mbuf = STAILQ_FIRST(&rsp->mhdr);
-        if (mbuf)
-            log_hexdump(LOG_ERR, mbuf->pos, mbuf_length(mbuf), "rsp fragment "
-                        "with unknown type %d", rsp->type);
+        msg_dump(LOG_INFO, rsp);
+        msg_dump(LOG_INFO, req);
         req->is_error = 1;
         req->error_code = EINVAL;
         break;
@@ -2646,11 +2646,8 @@ redis_post_coalesce_mget(struct msg *request)
             response->owner->err = 1;
             return;
         }
-        //TODO: check if the selected rsp is an error or what?
-        //log_notice("copy bulk");
-        //msg_dump(sub_msg);
-        status = redis_copy_bulk(response, sub_msg, false);
-        if (status != DN_OK) {
+        msg_dump(LOG_INFO, sub_msg);
+        if ((sub_msg->is_error) || redis_copy_bulk(response, sub_msg, false)) {
             log_warn("marking %M as error", response->owner);
             response->owner->err = 1;
             return;
@@ -2692,65 +2689,6 @@ redis_post_coalesce(struct msg *req)
     }
 }
 
-
-void
-redis_post_coalesce_old(struct msg *req)
-{
-    struct msg *rsp = req->selected_rsp; /* peer response */
-    struct mbuf *mbuf;
-    int n;
-    rstatus_t status = DN_OK;
-
-    if (req->is_error || req->is_ferror) {
-        /* do nothing, if msg is in error */
-        return;
-    }
-
-    ASSERT(!rsp->is_request);
-
-    switch (rsp->type) {
-    case MSG_RSP_REDIS_INTEGER:
-        /* only redis 'del' fragmented request sends back integer reply */
-        ASSERT(req->type == MSG_REQ_REDIS_DEL);
-
-        mbuf = STAILQ_FIRST(&rsp->mhdr);
-
-        ASSERT(rsp->mlen == 0);
-        ASSERT(mbuf_empty(mbuf));
-
-        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":%d\r\n", req->integer);
-        mbuf->last += n;
-        rsp->mlen += (uint32_t)n;
-        break;
-
-    case MSG_RSP_REDIS_MULTIBULK:
-        /* only redis 'mget' fragmented request sends back multi-bulk reply */
-        ASSERT(req->type == MSG_REQ_REDIS_MGET);
-
-        mbuf = STAILQ_FIRST(&rsp->mhdr);
-        ASSERT(mbuf_empty(mbuf));
-
-        n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", req->nfrag);
-        mbuf->last += n;
-        rsp->mlen += (uint32_t)n;
-        break;
-
-    case MSG_RSP_REDIS_STATUS:
-        status = msg_append(rsp, rsp_ok.data, rsp_ok.len);
-        if (status != DN_OK) {
-            rsp->is_error = 1;        /* mark this msg as err */
-            rsp->error_code = errno;
-        }
-        break;
-    default:
-        log_error("req %lu:%lu type %u has rsp %lu:%lu with invalid type %u",
-                  req->id, req->parent_id, req->type, rsp->id, rsp->parent_id, rsp->type);
-        if (log_loggable(LOG_INFO)) {
-            msg_dump(LOG_INFO, rsp);
-        }
-        NOT_REACHED();
-    }
-}
 
 static rstatus_t
 redis_append_key(struct msg *r, struct keypos *kpos_src)

@@ -249,6 +249,8 @@ dn_strerror(dyn_error_t err)
             return "Invalid request in Dynomite's admin mode";
         case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
+        case PEER_CONNECTION_REFUSE:
+            return "Peer Node refused connection";
         case PEER_HOST_DOWN:
             return "Peer Node is down";
         case PEER_HOST_NOT_CONNECTED:
