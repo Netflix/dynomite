@@ -70,7 +70,7 @@ req_put(struct msg *req)
 bool
 req_done(struct conn *conn, struct msg *req)
 {
-    struct msg *cmsg, *pmsg; /* current and previous message */
+    struct msg *cmsg; /* current and previous message */
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
 
@@ -95,26 +95,25 @@ req_done(struct conn *conn, struct msg *req)
         return true;
     }
 
-    /* check all fragments of the given request vector are done */
-
-    for (pmsg = req, cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
-
-        if (!cmsg->selected_rsp)
-            return false;
-    }
-
-    for (pmsg = req, cmsg = TAILQ_NEXT(req, c_tqe);
-         cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
-
-        if (!cmsg->selected_rsp)
-            return false;
-    }
-
-    if (!pmsg->last_fragment) {
+    struct msg *frag_owner = req->frag_owner;
+    if (frag_owner->nfrag_done < frag_owner->nfrag)
         return false;
+
+    // check all fragments of the given request vector are done.
+    for (cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
+         cmsg != NULL && cmsg->frag_id == id;
+         cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
+
+        if (!cmsg->selected_rsp)
+            return false;
+    }
+
+    for (cmsg = TAILQ_NEXT(req, c_tqe);
+         cmsg != NULL && cmsg->frag_id == id;
+         cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
+
+        if (!cmsg->selected_rsp)
+            return false;
     }
 
     /*
@@ -126,18 +125,18 @@ req_done(struct conn *conn, struct msg *req)
      */
 
     req->fdone = 1;
-    nfragment = 1;
+    nfragment = 0;
 
-    for (pmsg = req, cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
+    for (cmsg = TAILQ_PREV(req, msg_tqh, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
+         cmsg = TAILQ_PREV(cmsg, msg_tqh, c_tqe)) {
         cmsg->fdone = 1;
         nfragment++;
     }
 
-    for (pmsg = req, cmsg = TAILQ_NEXT(req, c_tqe);
+    for (cmsg = TAILQ_NEXT(req, c_tqe);
          cmsg != NULL && cmsg->frag_id == id;
-         pmsg = cmsg, cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
+         cmsg = TAILQ_NEXT(cmsg, c_tqe)) {
         cmsg->fdone = 1;
         nfragment++;
     }
@@ -150,6 +149,25 @@ req_done(struct conn *conn, struct msg *req)
               "fragments is done", conn->sd, id, nfragment);
 
     return true;
+}
+
+rstatus_t
+req_make_reply(struct context *ctx, struct conn *conn, struct msg *req)
+{
+    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
+    if (rsp == NULL) {
+        conn->err = errno;
+        return DN_ENOMEM;
+    }
+
+    req->selected_rsp = rsp;
+    rsp->peer = req;
+    rsp->is_request = 0;
+
+    req->done = 1;
+    conn_enqueue_outq(ctx, conn, req);
+
+    return DN_OK;
 }
 
 /*

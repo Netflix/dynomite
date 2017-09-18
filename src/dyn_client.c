@@ -403,8 +403,8 @@ void
 req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                   err_t error_code, err_t dyn_error_code)
 {
-    log_info("%M FORWARD FAILEED %M len %"PRIu32": %s", conn, req, req->mlen,
-             strerror(error_code));
+    log_info("%M FORWARD FAILED %M len %"PRIu32": %d:%s", conn, req, req->mlen,
+             error_code, dn_strerror(error_code));
 
     // Nothing to do if request is not expecting a reply.
     // The higher layer will take care of freeing the request
@@ -850,9 +850,12 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
         stats_pool_incr(ctx, client_write_requests);
 
     uint32_t keylen = 0;
-    uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
+    uint8_t *key = msg_get_tagged_key(req, 0, &keylen);
+    uint32_t full_keylen = 0;
+    uint8_t *full_key = msg_get_full_key(req, 0, &full_keylen);
 
-    log_info(">>>>>>>>>>>>>>>>>>>>>>> %M RECEIVED %M key '%.*s'", c_conn, req, keylen, key);
+    log_info(">>>>>>>>>>>>>>>>>>>>>>> %M RECEIVED %M key '%.*s' tagged key '%.*s'",
+             c_conn, req, full_keylen, full_key, keylen, key);
     // add the message to the dict
     dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
@@ -936,7 +939,43 @@ req_recv_done(struct context *ctx, struct conn *conn,
     }
 
     req->stime_in_microsec = dn_usec_now();
-    req_forward(ctx, conn, req);
+    struct msg_tqh frag_msgq;
+    TAILQ_INIT(&frag_msgq);
+
+    struct server_pool *pool = conn->owner;
+    struct rack *rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+    rstatus_t status = g_fragment(req, pool, rack, &frag_msgq);
+    if (status != DN_OK) {
+        if (req->expect_datastore_reply) {
+            conn_enqueue_outq(ctx, conn, req);
+        }
+        req_forward_error(ctx, conn, req, DN_OK, status); //TODO: CHeck error code
+    }
+
+    /* if no fragment happened */
+    if (TAILQ_EMPTY(&frag_msgq)) {
+        req_forward(ctx, conn, req);
+        return;
+    }
+
+    status = req_make_reply(ctx, conn, req);
+    if (status != DN_OK) {
+        if (req->expect_datastore_reply) {
+            conn_enqueue_outq(ctx, conn, req);
+        }
+        req_forward_error(ctx, conn, req, DN_OK, status);
+    }
+
+    struct msg *sub_msg, *tmsg;
+    for (sub_msg = TAILQ_FIRST(&frag_msgq); sub_msg != NULL; sub_msg = tmsg) {
+        tmsg = TAILQ_NEXT(sub_msg, m_tqe);
+
+        TAILQ_REMOVE(&frag_msgq, sub_msg, m_tqe);
+        log_info("Forwarding split request %M", sub_msg);
+        req_forward(ctx, conn, sub_msg);
+    }
+    ASSERT(TAILQ_EMPTY(&frag_msgq));
+    return;
 }
 
 static msg_response_handler_t 

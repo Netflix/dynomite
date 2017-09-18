@@ -38,7 +38,7 @@ vnode_item_cmp(const void *t1, const void *t2)
 }
 
 static rstatus_t
-vnode_rack_verify_continuum(void *elem, void *data)
+vnode_rack_verify_continuum(void *elem)
 {
     struct rack *rack = elem;
     qsort(rack->continuum, rack->ncontinuum, sizeof(*rack->continuum),
@@ -110,7 +110,7 @@ vnode_update(struct server_pool *sp)
         }
 
         if (array_n(&dc->racks) != 0) {
-             rstatus_t status = array_each(&dc->racks, vnode_rack_verify_continuum, NULL);
+             rstatus_t status = array_each(&dc->racks, vnode_rack_verify_continuum);
              if (status != DN_OK) {
                   return status;
              }

@@ -279,6 +279,7 @@ dyn_parse_core(struct msg *r)
 
       case DYN_DONE:
          log_debug(LOG_VVERB, "DYN_DONE");
+         r->mlen -= (uint32_t)(p - r->pos);
          r->pos = p;
          dmsg->payload = p;
          r->dyn_parse_state = DYN_DONE;
@@ -403,13 +404,27 @@ error:
    return false;
 }
 
+static void
+data_store_parse_req(struct msg *r, const struct string *hash_tag)
+{
+    if (g_data_store == DATA_REDIS) {
+        return redis_parse_req(r, hash_tag);
+    }
+    else if (g_data_store == DATA_MEMCACHE){
+        return memcache_parse_req(r, hash_tag);
+    }
+    else{
+        ASSERT_LOG(false, "invalid datastore");
+        exit(1);
+    }
+}
 
 void
-dyn_parse_req(struct msg *r)
+dyn_parse_req(struct msg *r, const struct string *hash_tag)
 {
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_req, start to process request :::::::::::::::::::::: ");
-		msg_dump(r);
+		msg_dump(LOG_VVERB, r);
 	}
 
 	bool done_parsing = false;
@@ -463,7 +478,7 @@ dyn_parse_req(struct msg *r)
 
 				r->mlen = mbuf_length(decrypted_buf);
 
-				data_store_parse_req(r);
+				data_store_parse_req(r, hash_tag);
 
 			}
 
@@ -474,7 +489,7 @@ dyn_parse_req(struct msg *r)
 		} else if (r->dyn_parse_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
-				data_store_parse_req(r);
+				data_store_parse_req(r, hash_tag);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
@@ -494,23 +509,37 @@ dyn_parse_req(struct msg *r)
 		if (done_parsing)
 			return;
 
-		return data_store_parse_req(r);
+		return data_store_parse_req(r, hash_tag);
 	}
 
 	//bad case
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, "Bad or splitted message");  //fix me to do something
-		msg_dump(r);
+		msg_dump(LOG_VVERB, r);
 	}
 	r->result = MSG_PARSE_AGAIN;
 }
 
+static void
+data_store_parse_rsp(struct msg *r, const struct string *hash_tag)
+{
+    if (g_data_store == DATA_REDIS) {
+        return redis_parse_rsp(r, hash_tag);
+    }
+    else if (g_data_store == DATA_MEMCACHE){
+        return memcache_parse_rsp(r, hash_tag);
+    }
+    else{
+        ASSERT_LOG(false, "invalid datastore");
+        exit(1);
+    }
+}
 
-void dyn_parse_rsp(struct msg *r)
+void dyn_parse_rsp(struct msg *r, const struct string *UNUSED)
 {
 	if (log_loggable(LOG_VVERB)) {
 		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_rsp, start to process response :::::::::::::::::::::::: ");
-		msg_dump(r);
+		msg_dump(LOG_VVERB, r);
 	}
 
 	bool done_parsing = false;
@@ -561,7 +590,7 @@ void dyn_parse_rsp(struct msg *r)
 
 				r->mlen = mbuf_length(decrypted_buf);
 
-				return data_store_parse_rsp(r);
+				return data_store_parse_rsp(r, UNUSED);
 			}
 
 			//Subtract already received bytes
@@ -571,7 +600,7 @@ void dyn_parse_rsp(struct msg *r)
 		} else if (r->dyn_parse_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
 			if (last_buf->read_flip == 1) {
-				data_store_parse_rsp(r);
+				data_store_parse_rsp(r, UNUSED);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
 			}
@@ -581,13 +610,13 @@ void dyn_parse_rsp(struct msg *r)
 		if (done_parsing)
 			return;
 
-		return data_store_parse_rsp(r);
+		return data_store_parse_rsp(r, UNUSED);
 	}
 
 	//bad case
 	if (log_loggable(LOG_DEBUG)) {
 		log_debug(LOG_DEBUG, "Resp: bad message - cannot parse");  //fix me to do something
-		msg_dump(r);
+		msg_dump(LOG_DEBUG, r);
 	}
 
 	r->result = MSG_PARSE_AGAIN;
@@ -1039,42 +1068,4 @@ dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg)
     }
        
     return false;
-}
-
-/*
- *
- */
-
-void
-data_store_parse_req(struct msg *r)
-{
-	if (g_data_store == DATA_REDIS) {
-		return redis_parse_req(r);
-	}
-	else if (g_data_store == DATA_MEMCACHE){
-		return memcache_parse_req(r);
-	}
-	else{
-		//if (log_loggable(LOG_VVERB)) {
-			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-		//}
-		exit(0);
-	}
-}
-
-void
-data_store_parse_rsp(struct msg *r)
-{
-	if (g_data_store == DATA_REDIS) {
-		return redis_parse_rsp(r);
-	}
-	else if (g_data_store == DATA_MEMCACHE){
-		return memcache_parse_rsp(r);
-	}
-	else{
-		//if (log_loggable(LOG_VVERB)) {
-			//	log_hexdump(LOG_VVERB,"incorrect selection of data store %d (parse request)", data_store);
-		//}
-		exit(0);
-	}
 }

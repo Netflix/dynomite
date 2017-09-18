@@ -10,10 +10,12 @@ fi
 
 # parse options
 rebuild=true
+debug=false
 while [ "$#" -gt 0 ]; do
     arg=$1
     case $1 in
         -n|--no-rebuild) shift; rebuild=false;;
+        -d|--debug) shift; debug=true;;
         -*) usage_fatal "unknown option: '$1'";;
         *) break;; # reached the list of file names
     esac
@@ -98,7 +100,11 @@ fi
 echo "Cluster Deployed....."
 sleep 10
 
-./func_test.py
+if [[ "${debug}" == "true" ]]; then
+    sh -c ./func_test.py --debug
+else
+    sh -c ./func_test.py
+fi
 RESULT=$?
 echo $RESULT
 

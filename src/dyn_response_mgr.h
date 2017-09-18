@@ -15,7 +15,7 @@ struct response_mgr {
     uint8_t     error_responses;    // error responses received
     struct msg  *err_rsp;           // first error response
     struct conn *conn;
-    struct msg *msg;
+    struct msg *msg;                // corresponding request
 };
 
 void init_response_mgr(struct response_mgr *rspmgr, struct msg*, bool is_read,
@@ -27,6 +27,6 @@ struct msg* rspmgr_get_response(struct response_mgr *rspmgr);
 void rspmgr_free_response(struct response_mgr *rspmgr, struct msg *dont_free);
 void rspmgr_free_other_responses(struct response_mgr *rspmgr, struct msg *dont_free);
 rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp);
-
+rstatus_t rspmgr_clone_responses(struct response_mgr *src, struct array *responses);
 
 #endif

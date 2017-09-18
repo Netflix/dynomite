@@ -149,10 +149,12 @@ static struct rbtree tmo_rbt;    /* timeout rbtree */
 static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max;	 /* maximum number of allowed allocated messages */
 uint8_t g_timeout_factor = 1;
-func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
-func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
+
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
+func_msg_fragment_t  g_fragment;   /* message post-coalesce */
+func_is_multikey_request g_is_multikey_request;
+func_reconcile_responses g_reconcile_responses;
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {
@@ -167,8 +169,8 @@ print_req(FILE *stream, const struct object *obj)
     ASSERT(obj->type == OBJ_REQ);
     struct msg *req = (struct msg *)obj;
     struct string *req_type = msg_type_string(req->type);
-    return fprintf(stream, "<REQ %p %lu:%lu %.*s>", req, req->id, req->parent_id,
-                   req_type->len, req_type->data);
+    return fprintf(stream, "<REQ %p %lu:%lu::%lu %.*s>", req, req->id, req->parent_id,
+                   req->frag_id, req_type->len, req_type->data);
 }
 
 static int
@@ -176,7 +178,9 @@ print_rsp(FILE *stream, const struct object *obj)
 {
     ASSERT(obj->type == OBJ_RSP);
     struct msg *rsp = (struct msg *)obj;
-    return fprintf(stream, "<RSP %p %lu:%lu>", rsp, rsp->id, rsp->parent_id);
+    struct string *rsp_type = msg_type_string(rsp->type);
+    return fprintf(stream, "<RSP %p %lu:%lu %.*s len:%u>", rsp, rsp->id,
+                   rsp->parent_id, rsp_type->len, rsp_type->data, rsp->mlen);
 }
 
 void
@@ -184,16 +188,18 @@ set_datastore_ops(void)
 {
     switch(g_data_store) {
         case DATA_REDIS:
-            g_pre_splitcopy = redis_pre_splitcopy;
-            g_post_splitcopy = redis_post_splitcopy;
             g_pre_coalesce = redis_pre_coalesce;
             g_post_coalesce = redis_post_coalesce;
+            g_fragment = redis_fragment;
+            g_is_multikey_request =  redis_is_multikey_request;
+            g_reconcile_responses = redis_reconcile_responses;
             break;
         case DATA_MEMCACHE:
-            g_pre_splitcopy = memcache_pre_splitcopy;
-            g_post_splitcopy = memcache_post_splitcopy;
             g_pre_coalesce = memcache_pre_coalesce;
             g_post_coalesce = memcache_post_coalesce;
+            g_fragment = memcache_fragment;
+            g_is_multikey_request =  memcache_is_multikey_request;
+            g_reconcile_responses = memcache_reconcile_responses;
             break;
         default:
             return;
@@ -349,14 +355,19 @@ done:
 
     msg->type = MSG_UNKNOWN;
 
-    msg->key_start = NULL;
-    msg->key_end = NULL;
+    msg->keys = array_create(1, sizeof(struct keypos));
+    if (msg->keys == NULL) {
+        dn_free(msg);
+        return NULL;
+    }
 
     msg->vlen = 0;
     msg->end = NULL;
 
     msg->frag_owner = NULL;
+    msg->frag_seq = NULL;
     msg->nfrag = 0;
+    msg->nfrag_done = 0;
     msg->frag_id = 0;
 
     msg->narg_start = NULL;
@@ -374,8 +385,6 @@ done:
     msg->expect_datastore_reply = 1;
     msg->done = 0;
     msg->fdone = 0;
-    msg->first_fragment = 0;
-    msg->last_fragment = 0;
     msg->swallow = 0;
     msg->dnode_header_prepended = 0;
     msg->rsp_sent = 0;
@@ -466,8 +475,6 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
     target->expect_datastore_reply = src->expect_datastore_reply;
     target->swallow = src->swallow;
     target->type = src->type;
-    target->key_start = src->key_start;
-    target->key_end = src->key_end;
     target->mlen = src->mlen;
     target->pos = src->pos;
     target->vlen = src->vlen;
@@ -484,7 +491,7 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
         }
         nbuf = mbuf_get();
         if (nbuf == NULL) {
-            return ENOMEM;
+            return DN_ENOMEM;
         }
 
         uint32_t len = mbuf_length(mbuf);
@@ -502,7 +509,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     struct msg *rsp;
     struct mbuf *mbuf;
     int n;
-    char *errstr = err ? dn_strerror(err) : "unknown";
+    char *errstr = dyn_err ? dn_strerror(dyn_err) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
     char *source = dyn_error_source(dyn_err);
 
@@ -606,6 +613,16 @@ msg_put(struct msg *msg)
         mbuf_put(mbuf);
     }
 
+    if (msg->frag_seq) {
+        dn_free(msg->frag_seq);
+        msg->frag_seq = NULL;
+    }
+
+    if (msg->keys) {
+        array_destroy(msg->keys);
+        msg->keys = NULL;
+    }
+
     TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }
 
@@ -636,9 +653,12 @@ uint32_t msg_length(struct msg *msg)
 }
 
 void
-msg_dump(struct msg *msg)
+msg_dump(int level, struct msg *msg)
 {
 
+    if (!log_loggable(level)) {
+        return;
+    }
     struct mbuf *mbuf;
 
     if (msg == NULL) {
@@ -651,15 +671,9 @@ msg_dump(struct msg *msg)
          msg->done, msg->is_error, msg->error_code);
 
     STAILQ_FOREACH(mbuf, &msg->mhdr, next) {
-        uint8_t *p, *q;
-        long int len;
-
-        p = mbuf->start;
-        q = mbuf->last;
-        len = q - p;
-
-        loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+        mbuf_dump(mbuf);
     }
+    loga("=================================================");
 
 }
 
@@ -704,29 +718,30 @@ msg_empty(struct msg *msg)
     return msg->mlen == 0 ? true : (msg->dyn_error_code == BAD_FORMAT? true : false);
 }
 
-uint8_t *
-msg_get_key(struct msg *req, const struct string *hash_tag, uint32_t *keylen)
+static uint8_t *
+msg_get_key(struct msg *req, uint32_t key_index, uint32_t *keylen, bool tagged_only)
 {
-    uint8_t *key = NULL;
     *keylen = 0;
-    if (!string_empty(hash_tag)) {
-        uint8_t *tag_start, *tag_end;
+    if (array_n(req->keys) == 0)
+            return NULL;
+    ASSERT_LOG(key_index < array_n(req->keys), "%M has %u keys", req, array_n(req->keys));
 
-        tag_start = dn_strchr(req->key_start, req->key_end, hash_tag->data[0]);
-        if (tag_start != NULL) {
-            tag_end = dn_strchr(tag_start + 1, req->key_end, hash_tag->data[1]);
-            if (tag_end != NULL) {
-                key = tag_start + 1;
-                *keylen = (uint32_t)(tag_end - key);
-            }
-        }
-    }
+    struct keypos *kpos = array_get(req->keys, key_index);
+    uint8_t *key_start = tagged_only ? kpos->tag_start : kpos->start;
+    uint8_t *key_end = tagged_only ? kpos->tag_end : kpos->end;
+    *keylen = (uint32_t)(key_end - key_start);
+    return key_start;
+}
 
-    if (*keylen == 0) {
-        key = req->key_start;
-        *keylen = (uint32_t)(req->key_end - req->key_start);
-    }
-    return key;
+uint8_t *
+msg_get_full_key(struct msg *req, uint32_t key_index, uint32_t *keylen)
+{
+    return msg_get_key(req, key_index, keylen, false);
+}
+uint8_t *
+msg_get_tagged_key(struct msg *req, uint32_t key_index, uint32_t *keylen)
+{
+    return msg_get_key(req, key_index, keylen, true);
 }
 
 uint32_t
@@ -761,6 +776,12 @@ msg_payload_crc32(struct msg *rsp)
     }
     return crc;
 
+}
+
+inline uint64_t
+msg_gen_frag_id(void)
+{
+    return ++frag_id;
 }
 
 static rstatus_t
@@ -807,108 +828,6 @@ msg_parsed(struct context *ctx, struct conn *conn, struct msg *msg)
 }
 
 static rstatus_t
-msg_fragment(struct context *ctx, struct conn *conn, struct msg *msg)
-{
-    rstatus_t status;  /* return status */
-    struct msg *nmsg;  /* new message */
-    struct mbuf *nbuf; /* new mbuf */
-
-    ASSERT((conn->type == CONN_CLIENT) ||
-           (conn->type == CONN_DNODE_PEER_CLIENT));
-    ASSERT(msg->is_request);
-
-    nbuf = mbuf_split(&msg->mhdr, msg->pos, g_pre_splitcopy, msg);
-    if (nbuf == NULL) {
-        return DN_ENOMEM;
-    }
-
-    status = g_post_splitcopy(msg);
-    if (status != DN_OK) {
-        mbuf_put(nbuf);
-        return status;
-    }
-
-    nmsg = msg_get(msg->owner, msg->is_request, __FUNCTION__);
-    if (nmsg == NULL) {
-        mbuf_put(nbuf);
-        return DN_ENOMEM;
-    }
-    mbuf_insert(&nmsg->mhdr, nbuf);
-    nmsg->pos = nbuf->pos;
-
-    /* update length of current (msg) and new message (nmsg) */
-    nmsg->mlen = mbuf_length(nbuf);
-    msg->mlen -= nmsg->mlen;
-
-    /*
-     * Attach unique fragment id to all fragments of the message vector. All
-     * fragments of the message, including the first fragment point to the
-     * first fragment through the frag_owner pointer. The first_fragment and
-     * last_fragment identify first and last fragment respectively.
-     *
-     * For example, a message vector given below is split into 3 fragments:
-     *  'mget key1 key2 key3\r\n'
-     *  Or,
-     *  '*4\r\n$4\r\nmget\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n'
-     *
-     *   +--------------+
-     *   |  msg vector  |
-     *   |(original msg)|
-     *   +--------------+
-     *
-     *       frag_owner         frag_owner
-     *     /-----------+      /------------+
-     *     |           |      |            |
-     *     |           v      v            |
-     *   +--------------------+     +---------------------+
-     *   |   frag_id = 10     |     |   frag_id = 10      |
-     *   | first_fragment = 1 |     |  first_fragment = 0 |
-     *   | last_fragment = 0  |     |  last_fragment = 0  |
-     *   |     nfrag = 3      |     |      nfrag = 0      |
-     *   +--------------------+     +---------------------+
-     *               ^
-     *               |  frag_owner
-     *               \-------------+
-     *                             |
-     *                             |
-     *                  +---------------------+
-     *                  |   frag_id = 10      |
-     *                  |  first_fragment = 0 |
-     *                  |  last_fragment = 1  |
-     *                  |      nfrag = 0      |
-     *                  +---------------------+
-     *
-     *
-     */
-    if (msg->frag_id == 0) {
-        msg->frag_id = ++frag_id;
-        msg->first_fragment = 1;
-        msg->nfrag = 1;
-        msg->frag_owner = msg;
-    }
-    nmsg->frag_id = msg->frag_id;
-    msg->last_fragment = 0;
-    nmsg->last_fragment = 1;
-    nmsg->frag_owner = msg->frag_owner;
-    msg->frag_owner->nfrag++;
-
-    if (!conn->dyn_mode) {
-       stats_pool_incr(ctx, fragments);
-    } else {
-        
-    }
-
-    if (log_loggable(LOG_VERB)) {
-       log_debug(LOG_VERB, "fragment msg into %"PRIu64" and %"PRIu64" frag id "
-              "%"PRIu64"", msg->id, nmsg->id, msg->frag_id);
-    }
-
-    conn_recv_done(ctx, conn, msg, nmsg);
-
-    return DN_OK;
-}
-
-static rstatus_t
 msg_repair(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct mbuf *nbuf;
@@ -935,17 +854,12 @@ msg_parse(struct context *ctx, struct conn *conn, struct msg *msg)
         return DN_OK;
     }
 
-    msg->parser(msg);
+    msg->parser(msg, &ctx->pool.hash_tag);
 
     switch (msg->result) {
     case MSG_PARSE_OK:
         //log_debug(LOG_VVERB, "MSG_PARSE_OK");
         status = msg_parsed(ctx, conn, msg);
-        break;
-
-    case MSG_PARSE_FRAGMENT:
-        //log_debug(LOG_VVERB, "MSG_PARSE_FRAGMENT");
-        status = msg_fragment(ctx, conn, msg);
         break;
 
     case MSG_PARSE_REPAIR:
@@ -1136,7 +1050,7 @@ msg_send_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     if (log_loggable(LOG_VVERB)) {
        loga("About to dump out the content of msg");
-       msg_dump(msg);
+       msg_dump(LOG_VVERB, msg);
     }
 
     TAILQ_INIT(&send_msgq);

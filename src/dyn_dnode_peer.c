@@ -466,7 +466,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 }
 
 static rstatus_t
-dnode_peer_each_preconnect(void *elem, void *data)
+dnode_peer_each_preconnect(void *elem)
 {
     struct node *peer = elem;
 
@@ -477,7 +477,7 @@ dnode_peer_each_preconnect(void *elem, void *data)
 }
 
 static rstatus_t
-dnode_peer_each_disconnect(void *elem, void *data)
+dnode_peer_each_disconnect(void *elem)
 {
     struct node *peer = elem;
 
@@ -662,7 +662,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     if (status != DN_OK)
         return status;
 
-    status = dnode_peer_each_preconnect(s, NULL);
+    status = dnode_peer_each_preconnect(s);
 
     return status;
 }
@@ -726,7 +726,7 @@ dnode_peer_replace(void *rmsg)
         log_notice("Found an old node to replace '%.*s'", s->name.len, s->name.data);
         log_notice("Replace with address '%.*s'", node->name.len, node->name.data);
 
-        dnode_peer_each_disconnect(s, NULL);
+        dnode_peer_each_disconnect(s);
         string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
         string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
@@ -745,7 +745,7 @@ dnode_peer_replace(void *rmsg)
 
         dnode_create_connection_pool(sp, s);
 
-        dnode_peer_each_preconnect(s, NULL);
+        dnode_peer_each_preconnect(s);
     } else {
         log_debug(LOG_INFO, "Unable to find any node matched the token");
     }
@@ -802,23 +802,28 @@ dnode_peer_pool_update(struct server_pool *pool)
 
 }
 
+uint32_t
+dnode_peer_idx_for_key_on_rack(struct server_pool *pool, struct rack *rack,
+                               uint8_t *key, uint32_t keylen)
+{
+    struct dyn_token token;
+    pool->key_hash((char *)key, keylen, &token);
+    return vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
+}
+
 static struct node *
 dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
                            uint8_t *key, uint32_t keylen)
 {
     struct node *server;
     uint32_t idx;
-    struct dyn_token token;
 
     ASSERT(array_n(&pool->peers) != 0);
 
     if (keylen == 0) {
         idx = 0; //for no argument command
     } else {
-        pool->key_hash((char *)key, keylen, &token);
-        //print_dyn_token(token, 1);
-        idx = vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
-        //loga("found idx %d for rack '%.*s' ", idx, rack->name->len, rack->name->data);
+        idx = dnode_peer_idx_for_key_on_rack(pool, rack, key, keylen);
     }
 
     ASSERT(idx < array_n(&pool->peers));
@@ -904,7 +909,7 @@ dnode_peer_pool_preconnect(struct context *ctx)
         return DN_OK;
     }
 
-    status = array_each(&sp->peers, dnode_peer_each_preconnect, NULL);
+    status = array_each(&sp->peers, dnode_peer_each_preconnect);
     if (status != DN_OK) {
         return status;
     }
@@ -919,7 +924,7 @@ dnode_peer_pool_disconnect(struct context *ctx)
     rstatus_t status;
     struct server_pool *sp = &ctx->pool;
 
-    status = array_each(&sp->peers, dnode_peer_each_disconnect, NULL);
+    status = array_each(&sp->peers, dnode_peer_each_disconnect);
     IGNORE_RET_VAL(status);
 }
 
@@ -1014,10 +1019,10 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
 
     if (log_loggable(LOG_VVERB)) {
         loga("%M Dumping content:", rsp);
-        msg_dump(rsp);
+        msg_dump(LOG_VVERB, rsp);
 
         loga("%M Dumping content:", req);
-        msg_dump(req);
+        msg_dump(LOG_VVERB, req);
     }
 
     conn_dequeue_outq(ctx, peer_conn, req);
@@ -1119,7 +1124,7 @@ dnode_rsp_forward(struct context *ctx, struct conn *peer_conn, struct msg *rsp)
 
         if (log_loggable(LOG_VVERB)) {
             loga("skipping req:   ");
-            msg_dump(req);
+            msg_dump(LOG_VVERB, req);
         }
 
 
@@ -1164,11 +1169,11 @@ dnode_rsp_recv_done(struct context *ctx, struct conn *conn,
 
     if (log_loggable(LOG_VVERB)) {
        loga("Dumping content for rsp:   ");
-       msg_dump(rsp);
+       msg_dump(LOG_VVERB, rsp);
 
        if (nmsg != NULL) {
           loga("Dumping content for nmsg :");
-          msg_dump(nmsg);
+          msg_dump(LOG_VVERB, nmsg);
        }
     }
 

@@ -287,9 +287,11 @@ test_msg_recv_chain(struct conn *conn, struct msg *msg)
 
 
     bool is_done = false;
+    struct string hash_tag;
+    string_init(&hash_tag);
 
     for(;!is_done;) {
-        msg->parser(msg);
+        msg->parser(msg, &hash_tag);
 
         switch (msg->result) {
         case MSG_PARSE_OK:

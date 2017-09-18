@@ -127,7 +127,7 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 
     if (log_loggable(LOG_VVERB)) {
         log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn message header: ");
-        msg_dump(req);
+        msg_dump(LOG_VVERB, req);
     }
 
     conn_enqueue_inq(ctx, p_conn, req);
@@ -260,7 +260,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     if (log_loggable(LOG_VVERB)) {
         log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "dyn gossip message header: ");
-        msg_dump(msg);
+        msg_dump(LOG_VVERB, msg);
     }
 
     /* enqueue the message (request) into peer inq */

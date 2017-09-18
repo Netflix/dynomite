@@ -34,18 +34,22 @@
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS  500
 
-typedef void (*func_msg_parse_t)(struct msg *);
-typedef rstatus_t (*func_msg_post_splitcopy_t)(struct msg *);
+typedef void (*func_msg_parse_t)(struct msg *, const struct string *hash_tag);
+typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
+                                         struct rack *, struct msg_tqh *);
 typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
-typedef rstatus_t (*func_msg_reply_t)(struct msg *r);
 typedef bool (*func_msg_failure_t)(struct msg *r);
-void set_datastore_ops(void);
-extern func_mbuf_copy_t     g_pre_splitcopy;   /* message pre-split copy */
-extern func_msg_post_splitcopy_t g_post_splitcopy;  /* message post-split copy */
+typedef bool (*func_is_multikey_request)(struct msg *r);
+typedef struct msg *(*func_reconcile_responses)(struct response_mgr *rspmgr);
+
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
+extern func_msg_fragment_t  g_fragment;   /* message fragment */
+extern func_is_multikey_request g_is_multikey_request;
+extern func_reconcile_responses g_reconcile_responses;
 
+void set_datastore_ops(void);
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -245,6 +249,8 @@ dn_strerror(dyn_error_t err)
             return "Invalid request in Dynomite's admin mode";
         case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
+        case PEER_CONNECTION_REFUSE:
+            return "Peer Node refused connection";
         case PEER_HOST_DOWN:
             return "Peer Node is down";
         case PEER_HOST_NOT_CONNECTED:
@@ -320,6 +326,12 @@ get_msg_routing_string(msg_routing_t route)
     return "INVALID MSG ROUTING TYPE";
 }
 
+struct keypos {
+    uint8_t              *start;          /* key start pos */
+    uint8_t              *end;            /* key end pos */
+    uint8_t              *tag_start;      /* hashtagged key start pos */
+    uint8_t              *tag_end;        /* hashtagged key end pos */
+};
 
 struct msg {
     object_t             object;
@@ -351,8 +363,7 @@ struct msg {
 
     msg_type_t           type;            /* message type */
 
-    uint8_t              *key_start;      /* key start */
-    uint8_t              *key_end;        /* key end */
+    struct array         *keys;            /* array of keypos, for req */
 
     uint32_t             vlen;            /* value length (memcache) */
     uint8_t              *end;            /* end marker (memcache) */
@@ -366,7 +377,9 @@ struct msg {
 
     struct msg           *frag_owner;     /* owner of fragment message */
     uint32_t             nfrag;           /* # fragment */
+    uint32_t             nfrag_done;      /* # fragment done */
     uint64_t             frag_id;         /* id of fragmented message */
+    struct msg           **frag_seq;      /* sequence of fragment message, map from keys to fragments*/
 
     err_t                error_code;      /* errno on error? */
     unsigned             is_error:1;      /* error? */
@@ -376,8 +389,6 @@ struct msg {
     unsigned             expect_datastore_reply:1;       /* expect datastore reply */
     unsigned             done:1;          /* done? */
     unsigned             fdone:1;         /* all fragments are done? */
-    unsigned             first_fragment:1;/* first fragment? */
-    unsigned             last_fragment:1; /* last fragment? */
     unsigned             swallow:1;       /* swallow response? */
     /* We need a way in dnode_rsp_send_next to remember if we already
      * did a dmsg_write of a dnode header in this message. If we do not remember it,
@@ -437,10 +448,11 @@ void msg_put(struct msg *msg);
 uint32_t msg_mbuf_size(struct msg *msg);
 uint32_t msg_length(struct msg *msg);
 struct msg *msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err);
-void msg_dump(struct msg *msg);
+void msg_dump(int level, struct msg *msg);
 bool msg_empty(struct msg *msg);
 rstatus_t msg_recv(struct context *ctx, struct conn *conn);
 rstatus_t msg_send(struct context *ctx, struct conn *conn);
+uint64_t msg_gen_frag_id(void);
 size_t msg_alloc_msgs(void);
 uint32_t msg_payload_crc32(struct msg *msg);
 struct msg *msg_get_rsp_integer(struct conn *conn);
@@ -449,7 +461,8 @@ rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
 
-uint8_t *msg_get_key(struct msg *req, const struct string *hash_tag, uint32_t *keylen);
+uint8_t *msg_get_tagged_key(struct msg *req, uint32_t key_index, uint32_t *keylen);
+uint8_t *msg_get_full_key(struct msg *req, uint32_t key_index, uint32_t *keylen);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);
@@ -457,6 +470,7 @@ bool req_done(struct conn *conn, struct msg *msg);
 bool req_error(struct conn *conn, struct msg *msg);
 struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc);
 void req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, struct msg *nmsg);
+rstatus_t req_make_reply(struct context *ctx, struct conn *conn, struct msg *req);
 struct msg *req_send_next(struct context *ctx, struct conn *conn);
 void req_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 

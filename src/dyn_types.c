@@ -36,10 +36,10 @@ print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
         return fprintf(stream, "<NULL>");
     }
     if (obj->magic != OBJECT_MAGIC) {
-        return fprintf(stream, "<CORRUPTION> MAGIC NUMBER 0x%x", obj->magic);
+        return fprintf(stream, "addr:%p <CORRUPTION> MAGIC NUMBER 0x%x", obj, obj->magic);
     }
     if ((obj->type >= 0) && (obj->type < OBJ_LAST))
        return obj->func_print(stream, obj);
     else
-        return fprintf(stream, "<CORRUPTION> INVALID TYPE %d", obj->type);
+        return fprintf(stream, "addr:%p <CORRUPTION> INVALID TYPE %d", obj, obj->type);
 }

@@ -188,18 +188,17 @@ array_sort(struct array *a, array_compare_t compare)
  * success. On failure short-circuits and returns the error status.
  */
 rstatus_t
-array_each(struct array *a, array_each_t func, void *data)
+array_each(struct array *a, array_each_t func)
 {
     uint32_t i, nelem;
 
-    ASSERT(array_n(a) != 0);
     ASSERT(func != NULL);
 
     for (i = 0, nelem = array_n(a); i < nelem; i++) {
         void *elem = array_get(a, i);
         rstatus_t status;
 
-        status = func(elem, data);
+        status = func(elem);
         if (status != DN_OK) {
             return status;
         }

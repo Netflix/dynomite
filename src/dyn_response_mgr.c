@@ -103,7 +103,7 @@ rspmgr_get_response(struct response_mgr *rspmgr)
                   rspmgr->msg->id, rspmgr->err_rsp, rspmgr->good_responses,
                   rspmgr->quorum_responses);
         if (log_loggable(LOG_INFO))
-            msg_dump(rspmgr->err_rsp);
+            msg_dump(LOG_INFO, rspmgr->err_rsp);
         return rspmgr->err_rsp;
     }
 
@@ -122,39 +122,19 @@ rspmgr_get_response(struct response_mgr *rspmgr)
     rspmgr_incr_non_quorum_responses_stats(rspmgr);
     if (log_loggable(LOG_DEBUG)) {
         log_error("Request: ");
-        msg_dump(rspmgr->msg);
+        msg_dump(LOG_DEBUG, rspmgr->msg);
     }
     if (log_loggable(LOG_VVERB)) {
         log_error("Respone 0: ");
-        msg_dump(rspmgr->responses[0]);
+        msg_dump(LOG_VVERB, rspmgr->responses[0]);
         log_error("Respone 1: ");
-        msg_dump(rspmgr->responses[1]);
+        msg_dump(LOG_VVERB, rspmgr->responses[1]);
         if (rspmgr->good_responses == 3) {
             log_error("Respone 2: ");
-            msg_dump(rspmgr->responses[2]);
+            msg_dump(LOG_VVERB, rspmgr->responses[2]);
         }
     }
-    if (rspmgr->msg->consistency == DC_QUORUM) {
-        log_info("none of the responses match, returning first");
-        return rspmgr->responses[0];
-    } else {
-        log_info("none of the responses match, returning error");
-        struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
-        rsp->is_error = 1;
-        rsp->error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
-        rsp->dyn_error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
-        // There is a case that when 1 out of three nodes are down, the
-        // response manager has 1 error response and 2 good responses.
-        // We reach here when the two responses differ and we want to return
-        // failed to achieve quorum. In this case, free the existing error
-        // response
-        if (rspmgr->err_rsp) {
-            rsp_put(rspmgr->err_rsp);
-        }
-        rspmgr->err_rsp = rsp;
-        rspmgr->error_responses++;
-        return rsp;
-    }
+    return g_reconcile_responses(rspmgr);
 }
 
 void
@@ -194,4 +174,31 @@ rspmgr_submit_response(struct response_mgr *rspmgr, struct msg*rsp)
     }
     msg_decr_awaiting_rsps(rspmgr->msg);
     return DN_OK;
+}
+
+rstatus_t
+rspmgr_clone_responses(struct response_mgr *rspmgr, struct array *responses)
+{
+    uint8_t iter = 0;
+    struct msg *dst = NULL;
+    rstatus_t s = DN_OK;
+    for(iter = 0; iter < rspmgr->good_responses; iter++)
+    {
+        struct msg *src = rspmgr->responses[iter];
+        dst = rsp_get(rspmgr->conn);
+        if (!dst) {
+            s = DN_ENOMEM;
+            goto error;
+        }
+
+        s = msg_clone(src, STAILQ_FIRST(&src->mhdr), dst);
+        if (s != DN_OK)
+            goto error;
+        struct msg **pdst = (struct msg **)array_push(responses);
+        *pdst = dst;
+    }
+    return DN_OK;
+error:
+    rsp_put(dst);
+    return ;
 }

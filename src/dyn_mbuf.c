@@ -146,10 +146,10 @@ mbuf_free_queue_size(void)
 
 void mbuf_dump(struct mbuf *mbuf)
 {
-     long int len;
      uint8_t *p, *q;
+     long int len;
 
-     p = mbuf->start;
+     p = mbuf->pos;
      q = mbuf->last;
      len = q - p;
 

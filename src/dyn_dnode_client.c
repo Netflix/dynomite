@@ -292,7 +292,7 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
     dictAdd(conn->outstanding_msgs_dict, &req->id, req);
 
     uint32_t keylen = 0;
-    uint8_t *key = msg_get_key(req, &pool->hash_tag, &keylen);
+    uint8_t *key = msg_get_tagged_key(req, 0, &keylen);
 
     ASSERT(req->dmsg != NULL);
     /* enqueue message (request) into client outq, if response is expected
@@ -483,7 +483,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
 
         if (log_loggable(LOG_VVERB)) {
             log_hexdump(LOG_VVERB, header_buf->pos, mbuf_length(header_buf), "resp dyn message - header: ");
-            msg_dump(rsp);
+            msg_dump(LOG_VVERB, rsp);
         }
 
     }

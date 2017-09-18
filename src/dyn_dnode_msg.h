@@ -81,8 +81,8 @@ struct dmsg {
 TAILQ_HEAD(dmsg_tqh, dmsg);
 
 
-void dyn_parse_req(struct msg *r);
-void dyn_parse_rsp(struct msg *r);
+void dyn_parse_req(struct msg *r, const struct string *hash_tag);
+void dyn_parse_rsp(struct msg *r, const struct string *UNUSED);
 
 void dmsg_free(struct dmsg *dmsg);
 void dmsg_put(struct dmsg *dmsg);
@@ -97,8 +97,5 @@ rstatus_t dmsg_write(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 rstatus_t dmsg_write_mbuf(struct mbuf *mbuf, uint64_t msg_id, uint8_t type,
 		                  struct conn *conn, uint32_t plen);
 bool dmsg_process(struct context *ctx, struct conn *conn, struct dmsg *dmsg);
-
-void data_store_parse_req(struct msg *r);
-void data_store_parse_rsp(struct msg *r);
 
 #endif

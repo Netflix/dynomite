@@ -23,6 +23,8 @@ struct node *dnode_peer_pool_server(struct context *ctx, struct server_pool *poo
 struct conn *dnode_peer_get_conn(struct context *ctx, struct node *server, int tag);
 rstatus_t dnode_peer_pool_preconnect(struct context *ctx);
 void dnode_peer_pool_disconnect(struct context *ctx);
+uint32_t dnode_peer_idx_for_key_on_rack(struct server_pool *pool, struct rack *rack,
+                                        uint8_t *key, uint32_t keylen);
 rstatus_t dnode_peer_forward_state(void *rmsg);
 rstatus_t dnode_peer_add(void *rmsg);
 rstatus_t dnode_peer_replace(void *rmsg);
