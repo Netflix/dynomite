@@ -1028,6 +1028,19 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 } else if (strcmp(reqline[1], "/describe") == 0) {
                     st_cmd->cmd = CMD_DESCRIBE;
                     return;
+                } else if (strncmp(reqline[1], "/setloglevel", dn_strlen("/setloglevel")) == 0) {
+                    st_cmd->cmd = CMD_SET_LOG_LEVEL;
+                    log_notice("Setting loglevel: %s", reqline[1]);
+                    char* val = reqline[1] + dn_strlen("/setloglevel");
+                    if (*val != '/') {
+                        st_cmd->cmd = CMD_UNKNOWN;
+                        return;
+                    } else {
+                        val++;
+                        string_init(&st_cmd->req_data);
+                        string_copy_c(&st_cmd->req_data, val);
+                    }
+                    return;
                 } else if (strcmp(reqline[1], "/loglevelup") == 0) {
                     st_cmd->cmd = CMD_LOG_LEVEL_UP;
                     return;
@@ -1075,10 +1088,10 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 } else if (strcmp(reqline[1], "/get_timeout_factor") == 0) {
                     st_cmd->cmd = CMD_GET_TIMEOUT_FACTOR;
                     return;
-                } else if (strncmp(reqline[1], "/set_timeout_factor", 19) == 0) {
+                } else if (dn_strncmp(reqline[1], "/set_timeout_factor", 19) == 0) {
                     st_cmd->cmd = CMD_SET_TIMEOUT_FACTOR;
                     log_notice("Setting timeout factor: %s", reqline[1]);
-                    char* val = reqline[1] + 19;
+                    char* val = reqline[1] + dn_strlen("/set_timeout_factor");
                     if (*val != '/') {
                         st_cmd->cmd = CMD_UNKNOWN;
                         return;
@@ -1205,7 +1218,7 @@ stats_send_rsp(struct stats *st)
     } else if (cmd == CMD_HELP) {
         char rsp[5120];
         dn_sprintf(rsp, "/info\n/help\n/ping\n/cluster_describe\n/standby\n"\
-                        "/writes_only\n/loglevelup\n/logleveldown\n/historeset\n"\
+                        "/writes_only\n/setloglevel/<0-11>\n/loglevelup\n/logleveldown\n/historeset\n"\
                         "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum>\n"\
                         "/get_timeout_factor\n/set_timeout_factor/<1-10>\n/peer/<up|down|reset>\n"\
                         "/state/<get_state|writes_only|normal|%s>\n\n", "resuming");
@@ -1231,6 +1244,13 @@ stats_send_rsp(struct stats *st)
         char rsp[1024];
         dn_sprintf(rsp, "State: %s\n", get_state(st->ctx->dyn_state));
         return stats_http_rsp(sd, rsp, dn_strlen(rsp));
+    } else if (cmd == CMD_SET_LOG_LEVEL) {
+        int8_t loglevel = 0;
+        log_warn("st_cmd.req_data '%.*s' ", st_cmd.req_data);
+        sscanf(st_cmd.req_data.data, "%d", &loglevel);
+        log_warn("setting log level = %d", loglevel);
+        log_level_set(loglevel);
+        return stats_http_rsp(sd, ok.data, ok.len);
     } else if (cmd == CMD_LOG_LEVEL_UP) {
         log_level_up();
         return stats_http_rsp(sd, ok.data, ok.len);
