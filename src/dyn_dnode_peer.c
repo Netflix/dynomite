@@ -173,10 +173,7 @@ dnode_peer_deinit(struct array *nodes)
     uint32_t i, nnode;
 
     for (i = 0, nnode = array_n(nodes); i < nnode; i++) {
-        struct node *s;
-
-        s = array_pop(nodes);
-        IGNORE_RET_VAL(s);
+        struct node *s = *(struct node **)array_pop(nodes);
         if (s->conn_pool) {
             conn_pool_destroy(s->conn_pool);
             s->conn_pool = NULL;
@@ -217,10 +214,14 @@ dnode_initialize_peer_each(void *elem, void *data1, void *data2)
     struct conf_server *cseed = elem;
     ASSERT(cseed->valid);
     struct array *peers = data2;
-    struct node *s = array_push(peers);
+    struct node **sptr = array_push(peers);
+    struct node *s = dn_zalloc(sizeof(struct node));
+    if (!s || !sptr)
+        return DN_ENOMEM;
+    *sptr = s;
     _init_peer_struct(s);
 
-    s->idx = array_idx(peers, s);
+    s->idx = array_idx(peers, sptr);
     s->owner = sp;
 
     string_copy(&s->endpoint.pname, cseed->pname.data, cseed->pname.len);
@@ -268,11 +269,14 @@ dnode_initialize_peers(struct context *ctx)
 
     log_debug(LOG_INFO, "Adding local node to the peer list");
 
-    THROW_STATUS(array_init(peers, nseed + 1, sizeof(struct node)));
+    THROW_STATUS(array_init(peers, nseed + 1, sizeof(struct node *)));
 
     // Add self node
-    struct node *self = array_push(peers);
-    ASSERT(self != NULL);
+    struct node **selfptr = array_push(peers);
+    struct node *self = dn_zalloc(sizeof(struct node));
+    if (!self || !selfptr)
+        return DN_ENOMEM;
+    *selfptr = self;
     THROW_STATUS(dnode_peer_add_local(sp, self));
 
     // Add the peer nodes
@@ -468,7 +472,7 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 static rstatus_t
 dnode_peer_each_preconnect(void *elem)
 {
-    struct node *peer = elem;
+    struct node *peer = *(struct node **)elem;
 
     if (peer->is_local)  //don't bother to connect if it is a self-connection
         return DN_OK;
@@ -479,7 +483,7 @@ dnode_peer_each_preconnect(void *elem)
 static rstatus_t
 dnode_peer_each_disconnect(void *elem)
 {
-    struct node *peer = elem;
+    struct node *peer = *(struct node **)elem;
 
     if (peer->conn_pool) {
         conn_pool_destroy(peer->conn_pool);
@@ -516,7 +520,7 @@ dnode_peer_forward_state(void *rmsg)
     if (ran_index == 0)
        ran_index += 1;
 
-    struct node *peer = (struct node *) array_get(peers, ran_index);
+    struct node *peer = *(struct node **) array_get(peers, ran_index);
 
     //log_debug(LOG_VVERB, "Gossiping to node  '%.*s'", peer->name.len, peer->name.data);
 
@@ -587,7 +591,7 @@ dnode_peer_handshake_announcing(void *rmsg)
 
     //for each peer, send a registered msg
     for (i = 0; i < nelem; i++) {
-        struct node *peer = (struct node *) array_get(peers, i);
+        struct node *peer = *(struct node **) array_get(peers, i);
         if (peer->is_local)
             continue;
 
@@ -625,10 +629,14 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
 {
     rstatus_t status;
     struct array *peers = &sp->peers;
-    struct node *s = array_push(peers);
+    struct node **sptr = array_push(peers);
+    struct node *s = dn_zalloc(sizeof(struct node));
+    if (!s || !sptr)
+        return DN_ENOMEM;
+    *sptr = s;
     _init_peer_struct(s);
 
-    s->idx = array_idx(peers, s);
+    s->idx = array_idx(peers, sptr);
     s->owner = sp;
 
     string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
@@ -662,7 +670,7 @@ dnode_peer_add_node(struct server_pool *sp, struct gossip_node *node)
     if (status != DN_OK)
         return status;
 
-    status = dnode_peer_each_preconnect(s);
+    status = dnode_peer_each_preconnect(&s);
 
     return status;
 }
@@ -708,7 +716,7 @@ dnode_peer_replace(void *rmsg)
     //bool node_exist = false;
     //TODOs: use hash table here
     for (i=1, nelem = array_n(peers); i< nelem; i++) {
-        struct node * peer = (struct node *) array_get(peers, i);
+        struct node * peer = *(struct node **) array_get(peers, i);
         if (string_compare(&peer->rack, &node->rack) == 0) {
             //TODOs: now only compare 1st token and support vnode later - use hash string on a tokens for comparison
             struct dyn_token *ptoken = (struct dyn_token *) array_get(&peer->tokens, 0);
@@ -726,7 +734,7 @@ dnode_peer_replace(void *rmsg)
         log_notice("Found an old node to replace '%.*s'", s->name.len, s->name.data);
         log_notice("Replace with address '%.*s'", node->name.len, node->name.data);
 
-        dnode_peer_each_disconnect(s);
+        dnode_peer_each_disconnect(&s);
         string_deinit(&s->endpoint.pname);
         string_deinit(&s->name);
         string_copy(&s->endpoint.pname, node->pname.data, node->pname.len);
@@ -745,7 +753,7 @@ dnode_peer_replace(void *rmsg)
 
         dnode_create_connection_pool(sp, s);
 
-        dnode_peer_each_preconnect(s);
+        dnode_peer_each_preconnect(&s);
     } else {
         log_debug(LOG_INFO, "Unable to find any node matched the token");
     }
@@ -828,7 +836,7 @@ dnode_peer_for_key_on_rack(struct server_pool *pool, struct rack *rack,
 
     ASSERT(idx < array_n(&pool->peers));
 
-    server = array_get(&pool->peers, idx);
+    server = *(struct node **)array_get(&pool->peers, idx);
 
     if (log_loggable(LOG_VERB)) {
         log_debug(LOG_VERB, "dyn: key '%.*s' maps to server '%.*s'", keylen,
@@ -855,7 +863,7 @@ dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
     }
 
     if (msg_routing == ROUTING_LOCAL_NODE_ONLY) {  //always local
-        peer = array_get(&pool->peers, 0);
+        peer = *(struct node **)array_get(&pool->peers, 0);
     } else {
         /* from a given {key, keylen} pick a peer from pool */
         peer = dnode_peer_for_key_on_rack(pool, rack, key, keylen);

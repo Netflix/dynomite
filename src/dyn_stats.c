@@ -1291,7 +1291,7 @@ stats_send_rsp(struct stats *st)
 
         //I think it is ok to keep this simple without a synchronization
         for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-            struct node *peer = array_get(&sp->peers, i);
+            struct node *peer = *(struct node **)array_get(&sp->peers, i);
             log_debug(LOG_VERB, "peer '%.*s' ", peer->name);
 
             if (string_compare(&st_cmd.req_data, &all) == 0) {
