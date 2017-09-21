@@ -54,7 +54,7 @@ core_print_peer_status(void *arg1)
             for (i = 0; i< rack->ncontinuum; i++) {
                 struct continuum *c = &rack->continuum[i];
                 uint32_t peer_index = c->index;
-                struct node *peer = array_get(&sp->peers, peer_index);
+                struct node *peer = *(struct node **)array_get(&sp->peers, peer_index);
                 if (!peer)
                     log_panic("peer is null. Topology not inited proerly");
 
@@ -71,7 +71,7 @@ void
 core_set_local_state(struct context *ctx, dyn_state_t state)
 {
     struct server_pool *sp = &ctx->pool;
-    struct node *peer = array_get(&sp->peers, 0);
+    struct node *peer = *(struct node **)array_get(&sp->peers, 0);
     ctx->dyn_state = state;
     peer->state = state;
 }
@@ -569,7 +569,7 @@ core_debug(struct context *ctx)
     uint32_t j, n;
     for (j = 0, n = array_n(&sp->peers); j < n; j++) {
         log_debug(LOG_VERB, "==============================================");
-        struct node *peer = (struct node *) array_get(&sp->peers, j);
+        struct node *peer = *(struct node **) array_get(&sp->peers, j);
         log_debug(LOG_VERB, "\tPeer DC            : '%.*s'",peer ->dc);
         log_debug(LOG_VERB, "\tPeer Rack          : '%.*s'", peer->rack);
 

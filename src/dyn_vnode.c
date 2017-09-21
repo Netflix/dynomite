@@ -62,7 +62,7 @@ vnode_update(struct server_pool *sp)
 
     int i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
-        struct node *peer = array_get(&sp->peers, i);
+        struct node *peer = *(struct node **)array_get(&sp->peers, i);
 
         log_debug(LOG_VERB, "peer name       : '%.*s'", peer->name.len, peer->name.data);
         log_debug(LOG_VERB, "peer rack       : '%.*s'", peer->rack.len, peer->rack.data);
