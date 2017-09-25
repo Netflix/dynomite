@@ -101,7 +101,7 @@ echo "Cluster Deployed....."
 sleep 10
 
 if [[ "${debug}" == "true" ]]; then
-    sh -c ./func_test.py --debug
+    ./func_test.py --debug
 else
     sh -c ./func_test.py
 fi
