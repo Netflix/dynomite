@@ -26,8 +26,7 @@ def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     print "Running %s tests" % test_name
     for x in range(0, max_keys):
         key = create_key(test_name, x)
-        value = string_generator(size=random.randint(512, 1024))
-        c.run_verify("set", key, value)
+        c.run_verify("set", key, string_generator(size=random.randint(1, max_payload)))
     # get them and see
     for x in range(0, max_keys):
         key = create_key(test_name, x)
@@ -49,7 +48,7 @@ def run_multikey_test(c, max_keys=1000, max_payload=10):
     print "Running %s tests" % test_name
     for n in range(0, 100):
         kv_pairs = {}
-        len = random.randint(1, 5)
+        len = random.randint(1, 50)
         for x in range(0, len):
             key_id = random.randint(0, max_keys-1)
             key = create_key(test_name, key_id)
@@ -148,9 +147,10 @@ def main(args):
     c = dual_run(r_c, d_c, args.debug)
     try:
         run_key_value_tests(c)
-        run_key_value_tests(c, max_payload=16384*1024)
-        run_hash_tests(c, max_keys=10, max_fields=100)
+        # XLarge payloads
+        run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
         run_multikey_test(c)
+        run_hash_tests(c, max_keys=10, max_fields=100)
         print "All test ran fine"
     except ResultMismatchError as r:
         print r;
