@@ -33,7 +33,7 @@ dyn_parse_core(struct msg *r)
    uint8_t ch = ' ';
    uint64_t num = 0;
 
-   dyn_state = r->dyn_parse_state;
+   dyn_parse_state_t dyn_state = r->dyn_parse_state;
    log_debug(LOG_VVERB, "dyn_parse_state:  %d", r->dyn_parse_state);
 
    if (r->dyn_parse_state == DYN_DONE || r->dyn_parse_state == DYN_POST_DONE)
@@ -467,6 +467,7 @@ dyn_parse_req(struct msg *r, const struct string *hash_tag)
 				}
 
 				dyn_aes_decrypt(b->pos, dmsg->plen, decrypted_buf, r->owner->aes_key);
+				decrypted_buf->flags |= MBUF_FLAGS_JUST_DECRYPTED;
 
 				b->pos = b->pos + dmsg->plen;
 				r->pos = decrypted_buf->start;
@@ -479,6 +480,7 @@ dyn_parse_req(struct msg *r, const struct string *hash_tag)
 				r->mlen = mbuf_length(decrypted_buf);
 
 				data_store_parse_req(r, hash_tag);
+				return;
 
 			}
 
@@ -488,7 +490,7 @@ dyn_parse_req(struct msg *r, const struct string *hash_tag)
 			return;
 		} else if (r->dyn_parse_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
-			if (last_buf->read_flip == 1) {
+			if (last_buf->flags & MBUF_FLAGS_READ_FLIP) {
 				data_store_parse_req(r, hash_tag);
 			} else {
 				r->result = MSG_PARSE_AGAIN;
@@ -570,6 +572,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED)
                         strlen((char *)aes_decrypted_buf));
 			}
 
+			// we have received all the remaining ecrypted data
 			if (dmsg->plen + b->pos <= b->last) {
 				struct mbuf *decrypted_buf = mbuf_get();
 				if (decrypted_buf == NULL) {
@@ -579,6 +582,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED)
 				}
 
 				dyn_aes_decrypt(b->pos, dmsg->plen, decrypted_buf, r->owner->aes_key);
+				decrypted_buf->flags |= MBUF_FLAGS_JUST_DECRYPTED;
 
 				b->pos = b->pos + dmsg->plen;
 				r->pos = decrypted_buf->start;
@@ -599,7 +603,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED)
 
 		} else if (r->dyn_parse_state == DYN_POST_DONE) {
 			struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
-			if (last_buf->read_flip == 1) {
+			if (last_buf->flags & MBUF_FLAGS_READ_FLIP) {
 				data_store_parse_rsp(r, UNUSED);
 			} else {
 				r->result = MSG_PARSE_AGAIN;

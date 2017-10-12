@@ -400,7 +400,7 @@ struct msg {
 
     //dynomite
     struct dmsg          *dmsg;          /* dyn message */
-    int                  dyn_parse_state;
+    dyn_parse_state_t    dyn_parse_state;
     dyn_error_t          dyn_error_code; /* error code for dynomite */
     msg_routing_t        msg_routing;
     unsigned             is_read:1;       /*  0 : write

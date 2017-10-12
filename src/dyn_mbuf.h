@@ -36,7 +36,7 @@ struct mbuf {
     uint8_t            *start;  /* start of buffer (const) */
     uint8_t            *end;    /* end of buffer (const) */
     uint8_t            *end_extra; /*end of the buffer - including the extra region */
-    uint32_t           read_flip; /* readable flag used in encryption/decryption mode */
+    uint32_t           flags; /* flags: readflip, just_decrypted etc */
     uint32_t           chunk_size;
 };
 
@@ -48,6 +48,10 @@ STAILQ_HEAD(mhdr, mbuf);
 #define MBUF_SIZE       16384
 #define MBUF_HSIZE      sizeof(struct mbuf)
 #define MBUF_ESIZE      16
+
+// FLAGS
+#define MBUF_FLAGS_READ_FLIP        0x00000001
+#define MBUF_FLAGS_JUST_DECRYPTED   0x00000002
 
 
 static inline bool

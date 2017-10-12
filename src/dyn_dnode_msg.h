@@ -14,7 +14,7 @@ typedef enum dmsg_version {
     VERSION_10 = 1
 } dmsg_version_t;
 
-enum {
+typedef enum {
         DYN_START = 0,
         DYN_MAGIC_STRING = 1000,
         DYN_MSG_ID,
@@ -31,7 +31,7 @@ enum {
         DYN_DONE,
         DYN_POST_DONE,
         DYN_UNKNOWN
-} dyn_state;
+} dyn_parse_state_t;
 
 typedef enum dmsg_type {
     DMSG_UNKNOWN = 0,

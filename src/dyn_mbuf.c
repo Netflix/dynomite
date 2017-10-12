@@ -116,7 +116,7 @@ mbuf_get(void)
     mbuf->pos = mbuf->start;
     mbuf->last = mbuf->start;
 
-    mbuf->read_flip = 0;
+    mbuf->flags = 0;
 
     log_debug(LOG_VVERB, "get mbuf %p", mbuf);
 
@@ -153,7 +153,7 @@ void mbuf_dump(struct mbuf *mbuf)
      q = mbuf->last;
      len = q - p;
 
-     loga_hexdump(p, len, "mbuf with %ld bytes of data", len);
+     loga_hexdump(p, len, "mbuf %p with %ld bytes of data", mbuf, len);
 }
 
 void
