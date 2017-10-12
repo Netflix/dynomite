@@ -200,5 +200,5 @@ rspmgr_clone_responses(struct response_mgr *rspmgr, struct array *responses)
     return DN_OK;
 error:
     rsp_put(dst);
-    return ;
+    return s;
 }
