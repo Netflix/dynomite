@@ -166,8 +166,8 @@ int
 print_req(FILE *stream, struct msg *req)
 {
     struct string *req_type = msg_type_string(req->type);
-    return fprintf(stream, "<REQ %p %lu:%lu %.*s>", req, req->id, req->parent_id,
-                   req_type->len, req_type->data);
+    return fprintf(stream, "<REQ %p %lu:%lu::%lu %.*s len:%u>", req, req->id, req->parent_id,
+                   req->frag_id, req_type->len, req_type->data, req->mlen);
 }
 
 int
@@ -986,8 +986,37 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
          msg->dmsg->flags & 0x1) ? msg->dmsg->plen : -1;  //used in encryption case only
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-    if (mbuf == NULL || mbuf_full(mbuf) ||
-        (expected_fill != -1 && mbuf->last == mbuf->end_extra)) {
+    /* This logic is unncessarily complicated. Ideally a connection should read
+     * the entire payload of an encrypted message before it starts decrypting.
+     * However the code tries to check if a buffer is full and decrypts it before
+     * moving to the next buffer. So at any given point, a message large enough can
+     * have some buffers decrypted and the last one either decrypted or encrypted.
+     * We start decrypting a buffer if we finish reading the payload (dmsg->plen) or
+     * we reach till mbuf->end_extra.
+     * If a buffer is encrypted, it can span till mbuf->end_extra.
+     * If this buffer gets decrypted, it can span till mbuf_full() i.e mbuf->end.
+     * which is 16 bytes (one cypher block) less than mbuf->end_extra
+     *
+     * However there is no way to tell if a buffer that is filled till mbuf->end
+     * is encrypted or decrypted so we cannot know if we should continue writing
+     * to that buffer from mbuf->end till mbuf->end_extra (which is 16 bytes) or
+     * whether we just decrypted a buffer and now it spans till mbuf->end and we
+     * should create a new buffer to start receiving new encrypted data. Hence,
+     * I created a new flag MBUF_FLAG_JUST_DECRYPTED which is solely for this
+     * purpose. One should not write a code like this. We should receive the entire
+     * payload first and then decrypt it. Its slightly slow but worth the simplicity
+     *
+     * Create a new buffer if:
+     * 1) mbuf is NULL
+     * 2) unencrypted case and mbuf is full
+     * 3) encrypted case and
+     *      a) mbuf is full till end_extra
+     *      b) mbuf is full till mbuf->end (mbuf_full) and we just decrypted that buffer.
+     */
+    if (mbuf == NULL ||
+        ((expected_fill == -1) && mbuf_full(mbuf)) ||
+        (expected_fill != -1 && mbuf->last == mbuf->end_extra) ||
+        (expected_fill != -1 && mbuf_full(mbuf) && (mbuf->flags & MBUF_FLAGS_JUST_DECRYPTED))) {
         mbuf = mbuf_get();
         if (mbuf == NULL) {
             return DN_ENOMEM;
@@ -1035,7 +1064,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                 }
 
                 status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
-                if (status == DN_OK) {
+                if (status >= DN_OK) {
                     int remain = n - msg->dmsg->plen;
                     uint8_t *pos = mbuf->last - remain;
                     mbuf_copy(nbuf, pos, remain);
@@ -1052,8 +1081,9 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                 status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
             }
 
-            if (status != DN_ERROR && nbuf != NULL) {
-                nbuf->read_flip = 1;
+            if (status >= 0 && nbuf != NULL) {
+                nbuf->flags |= MBUF_FLAGS_JUST_DECRYPTED;
+                nbuf->flags |= MBUF_FLAGS_READ_FLIP;
                 mbuf_remove(&msg->mhdr, mbuf);
                 mbuf_insert(&msg->mhdr, nbuf);
                 msg->pos = nbuf->start;
