@@ -79,7 +79,7 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **server_retry_timeout**: The timeout value in msec to wait for before retrying on a temporarily ejected server, when auto_eject_host is set to true. Defaults to 30000 msec.
 + **server_failure_limit**: The number of consecutive failures on a server that would lead to it being temporarily ejected when auto_eject_host is set to true. Defaults to 2.
 + **servers**: A list of local server address, port and weight (name:port:weight or ip:port:weight) for this server pool. Currently, there is just one.
-+ **secure_server_option**: Encrypted communication. Must be one of 'none', 'rack', 'datacenter', or 'all'.
++ **secure_server_option**: Encrypted communication. Must be one of 'none', 'rack', 'datacenter', or 'all'. ```datacenter``` means all communication between datacenters is encrypted but within a datacenter it is not. ```rack``` means all communication between racks and regions is encrypted however communication between nodes within the same rack is not encrypted. ```all``` means all communication between all nodes is encrypted. And ```none``` means none of the communication is encrypted. 
 + **stats_listen**: The address and port number for the REST endpoint and for accessing statistics.
 + **stats_interval**: set stats aggregation interval in msec (default: 30000 msec).
 + **mbuf_size**: size of mbuf chunk in bytes (default: 16384 bytes).
