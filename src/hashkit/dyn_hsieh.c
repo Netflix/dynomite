@@ -42,7 +42,7 @@
 #endif
 
 rstatus_t
-hash_hsieh(const char *key, size_t key_length, struct dyn_token *token)
+hash_hsieh(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = 0, tmp;
     int rem;

@@ -29,7 +29,7 @@ static uint32_t FNV_32_INIT = 2166136261UL;
 static uint32_t FNV_32_PRIME = 16777619;
 
 rstatus_t
-hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token)
+hash_fnv1_64(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint64_t hash = FNV_64_INIT;
     size_t x;
@@ -48,7 +48,7 @@ hash_fnv1_64(const char *key, size_t key_length, struct dyn_token *token)
 }
 
 rstatus_t
-hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token)
+hash_fnv1a_64(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = (uint32_t) FNV_64_INIT;
     size_t x;
@@ -66,7 +66,7 @@ hash_fnv1a_64(const char *key, size_t key_length, struct dyn_token *token)
 }
 
 rstatus_t
-hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token)
+hash_fnv1_32(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = FNV_32_INIT;
     size_t x;
@@ -84,7 +84,7 @@ hash_fnv1_32(const char *key, size_t key_length, struct dyn_token *token)
 }
 
 rstatus_t
-hash_fnv1a_32(const char *key, size_t key_length, struct dyn_token *token)
+hash_fnv1a_32(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint32_t hash = FNV_32_INIT;
     size_t x;

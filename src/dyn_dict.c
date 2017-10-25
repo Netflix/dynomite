@@ -107,7 +107,7 @@ uint32_t dictGetHashFunctionSeed(void) {
  * 2. It will not produce the same results on little-endian and big-endian
  *    machines.
  */
-unsigned int dictGenHashFunction(const void *key, int len) {
+unsigned int dictGenHashFunction(const void *key, uint32_t len) {
     /* 'm' and 'r' are mixing constants generated offline.
      They're not really 'magic', they just happen to work well.  */
     uint32_t seed = dict_hash_function_seed;
@@ -151,7 +151,7 @@ unsigned int dictGenHashFunction(const void *key, int len) {
 }
 
 /* And a case insensitive hash function (based on djb hash) */
-unsigned int dictGenCaseHashFunction(const unsigned char *buf, int len) {
+unsigned int dictGenCaseHashFunction(const unsigned char *buf, uint32_t len) {
     unsigned int hash = (unsigned int)dict_hash_function_seed;
 
     while (len--)

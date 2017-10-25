@@ -41,7 +41,7 @@
 #include <dyn_token.h>
 
 rstatus_t 
-hash_murmur(const char *key, size_t length, struct dyn_token *token)
+hash_murmur(const unsigned char *key, size_t length, struct dyn_token *token)
 {
     /*
      * 'm' and 'r' are mixing constants generated offline.  They're not

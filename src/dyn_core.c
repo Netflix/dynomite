@@ -64,7 +64,6 @@ core_print_peer_status(void *arg1)
             }
         }
     }
-    schedule_task_1(core_print_peer_status, ctx, 30000);
 }
 
 void
@@ -470,7 +469,7 @@ core_timeout(struct context *ctx)
 
 		now = dn_msec_now();
 		if (now < then) {
-			int delta = (int)(then - now);
+			msec_t delta = (msec_t)(then - now);
 			ctx->timeout = MIN(delta, ctx->max_timeout);
 			return;
 		}

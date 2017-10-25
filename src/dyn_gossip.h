@@ -67,7 +67,7 @@ struct gossip_node_pool {
     seeds_provider_t   seeds_provider;       /* seeds provider */
     struct array       datacenters;          /* gossip datacenters */
     int64_t            last_run;             /* last time run in usec */
-    int                g_interval;           /* gossip interval */
+    msec_t             g_interval;           /* gossip interval */
     dict               *dict_dc;
 
 };

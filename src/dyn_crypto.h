@@ -28,12 +28,9 @@
 
 
 rstatus_t crypto_init(struct server_pool *sp);
-rstatus_t crypto_init_for_test(void);
 rstatus_t crypto_deinit(void);
 
 char* base64_encode(const unsigned char *message, const size_t length);
-int base64_decode(const char *b64message, const size_t length, unsigned char **buffer);
-int calc_decode_length(const char *b64input, const size_t length);
 
 rstatus_t aes_encrypt(const unsigned char *msg, size_t msgLen, unsigned char **encMsg, unsigned char *aes_key);
 rstatus_t aes_decrypt(unsigned char *encMsg, size_t encMsgLen, unsigned char **decMsg, unsigned char *aes_key);

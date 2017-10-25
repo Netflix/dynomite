@@ -772,7 +772,7 @@ msg_payload_crc32(struct msg *rsp)
             }
         }
 
-        crc = crc32_sz((char *)start, end - start, crc);
+        crc = crc32_sz((char *)start, (size_t)(end - start), crc);
     }
     return crc;
 
@@ -899,10 +899,9 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     struct mbuf *mbuf;
     size_t msize;
     ssize_t n;
-
-    int expected_fill =
-        ((msg->dyn_parse_state == DYN_DONE || msg->dyn_parse_state == DYN_POST_DONE) &&
-         msg->dmsg->flags & 0x1) ? msg->dmsg->plen : -1;  //used in encryption case only
+    bool encryption_detected = (msg->dyn_parse_state == DYN_DONE ||
+                                 msg->dyn_parse_state == DYN_POST_DONE) &&
+                                (msg->dmsg->flags & 0x1);
 
     mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
     /* This logic is unncessarily complicated. Ideally a connection should read
@@ -933,9 +932,9 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
      *      b) mbuf is full till mbuf->end (mbuf_full) and we just decrypted that buffer.
      */
     if (mbuf == NULL ||
-        ((expected_fill == -1) && mbuf_full(mbuf)) ||
-        (expected_fill != -1 && mbuf->last == mbuf->end_extra) ||
-        (expected_fill != -1 && mbuf_full(mbuf) && (mbuf->flags & MBUF_FLAGS_JUST_DECRYPTED))) {
+        ((!encryption_detected) && mbuf_full(mbuf)) ||
+        (!encryption_detected && mbuf->last == mbuf->end_extra) ||
+        (!encryption_detected && mbuf_full(mbuf) && (mbuf->flags & MBUF_FLAGS_JUST_DECRYPTED))) {
         mbuf = mbuf_get();
         if (mbuf == NULL) {
             return DN_ENOMEM;
@@ -947,12 +946,10 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
 
     ASSERT(mbuf->end_extra - mbuf->last > 0);
 
-    if (expected_fill == -1) {
+    if (!encryption_detected) {
         msize = mbuf_size(mbuf);
     } else {
-        msize = (msg->dmsg->plen <= mbuf->end_extra - mbuf->last) ?
-                                     msg->dmsg->plen :
-                                     mbuf->end_extra - mbuf->last;
+        msize = (size_t)MIN(msg->dmsg->plen, mbuf->end_extra - mbuf->last);
     }
 
     n = conn_recv_data(conn, mbuf->last, msize);
@@ -969,7 +966,7 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
     msg->mlen += (uint32_t)n;
 
     //Only used in encryption case
-    if (expected_fill != -1) {
+    if (encryption_detected) {
         if ( n >=  msg->dmsg->plen  || mbuf->end_extra == mbuf->last) {
             //log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or eligible!");
             struct mbuf *nbuf = NULL;
@@ -982,7 +979,8 @@ msg_recv_chain(struct context *ctx, struct conn *conn, struct msg *msg)
                     return DN_ENOMEM;
                 }
 
-                status = dyn_aes_decrypt(mbuf->start, mbuf->last - mbuf->start, nbuf, msg->owner->aes_key);
+                status = dyn_aes_decrypt(mbuf->start, (size_t)(mbuf->last - mbuf->start),
+                                         nbuf, msg->owner->aes_key);
                 if (status >= DN_OK) {
                     int remain = n - msg->dmsg->plen;
                     uint8_t *pos = mbuf->last - remain;

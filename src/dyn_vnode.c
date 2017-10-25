@@ -60,7 +60,7 @@ vnode_update(struct server_pool *sp)
 {
     ASSERT(array_n(&sp->peers) > 0);
 
-    int i, len;
+    uint32_t i, len;
     for (i = 0, len = array_n(&sp->peers); i < len; i++) {
         struct node *peer = *(struct node **)array_get(&sp->peers, i);
 
@@ -100,7 +100,7 @@ vnode_update(struct server_pool *sp)
         }
         rack->nserver_continuum = new_cnt;
 
-        int j;
+        uint32_t j;
         for (j = 0; j < token_cnt; j++) {
             struct continuum *c = &rack->continuum[orig_cnt + j];
             c->index = i;

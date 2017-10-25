@@ -27,7 +27,7 @@
 #define MURMUR3_SEED 0xc0a1e5ce
 
 rstatus_t
-hash_murmur3(const char *key, size_t length, struct dyn_token *token)
+hash_murmur3(const unsigned char *key, size_t length, struct dyn_token *token)
 {
     rstatus_t status = size_dyn_token(token, 4);
     if (status != DN_OK) {

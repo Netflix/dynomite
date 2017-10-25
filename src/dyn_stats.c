@@ -1423,7 +1423,7 @@ stats_stop_aggregator(struct stats *st)
 }
 
 struct stats *
-stats_create(uint16_t stats_port, struct string pname, int stats_interval,
+stats_create(uint16_t stats_port, struct string pname, msec_t stats_interval,
              char *source, struct server_pool *sp, struct context *ctx)
 {
     rstatus_t status;

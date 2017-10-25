@@ -8,7 +8,7 @@ struct string hash_strings[] = {
 #undef DEFINE_ACTION
 
 // Defines all the hashing functions
-#define DEFINE_ACTION(_hash, _name) rstatus_t hash_##_name(const char *key, size_t length, struct dyn_token *token);
+#define DEFINE_ACTION(_hash, _name) rstatus_t hash_##_name(const unsigned char *key, size_t length, struct dyn_token *token);
 HASH_CODEC( DEFINE_ACTION ) \
 
 #undef DEFINE_ACTION

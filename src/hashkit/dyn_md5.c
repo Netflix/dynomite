@@ -314,7 +314,7 @@ md5_signature(unsigned char *key, unsigned long length, unsigned char *result)
 }
 
 rstatus_t
-hash_md5(const char *key, size_t key_length, struct dyn_token *token)
+hash_md5(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     unsigned char results[16];
 

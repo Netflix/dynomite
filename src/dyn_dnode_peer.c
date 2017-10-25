@@ -586,7 +586,7 @@ dnode_peer_handshake_announcing(void *rmsg)
     mbuf_write_uint8(mbuf, sp->ctx->dyn_state);
     mbuf_write_char(mbuf, ',');
 
-    unsigned char *broadcast_addr = (unsigned char *)get_broadcast_address(sp);
+    unsigned char *broadcast_addr = get_broadcast_address(sp);
     mbuf_write_bytes(mbuf, broadcast_addr, (int)dn_strlen(broadcast_addr));
 
     //for each peer, send a registered msg
@@ -815,7 +815,7 @@ dnode_peer_idx_for_key_on_rack(struct server_pool *pool, struct rack *rack,
                                uint8_t *key, uint32_t keylen)
 {
     struct dyn_token token;
-    pool->key_hash((char *)key, keylen, &token);
+    pool->key_hash(key, keylen, &token);
     return vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
 }
 

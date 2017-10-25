@@ -182,7 +182,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         return DN_ENOMEM;
     }
     c->sd = sd;
-    string_copy_c(&c->pname, dn_unresolve_peer_desc(c->sd));
+    string_copy_c(&c->pname, (unsigned char *)dn_unresolve_peer_desc(c->sd));
 
     stats_pool_incr(ctx, dnode_client_connections);
 
@@ -216,8 +216,6 @@ dnode_accept(struct context *ctx, struct conn *p)
 static rstatus_t
 dnode_recv(struct context *ctx, struct conn *conn)
 {
-    rstatus_t status;
-
     ASSERT(conn->type == CONN_DNODE_PEER_PROXY);
     ASSERT(conn->recv_active);
  

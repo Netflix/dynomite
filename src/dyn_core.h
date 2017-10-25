@@ -124,7 +124,7 @@ typedef int err_t;     /* error type */
 #include "entropy/dyn_entropy.h"
 
 #define ENCRYPTION 1
-typedef rstatus_t (*hash_func_t)(const char *, size_t, struct dyn_token *);
+typedef rstatus_t (*hash_func_t)(const unsigned char *, size_t, struct dyn_token *);
 
 typedef enum dyn_state {
 	INIT        = 0,
@@ -294,7 +294,7 @@ struct server_pool {
     int                backlog;              /* listen backlog */
     uint32_t           client_connections;   /* maximum # client connection */
     msec_t             server_retry_timeout_ms; /* server retry timeout in msec */
-    uint32_t           server_failure_limit; /* server failure limit */
+    uint8_t            server_failure_limit; /* server failure limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */
 
@@ -312,7 +312,7 @@ struct server_pool {
     struct string      rack;                 /* the rack for this node */
     struct array       tokens;               /* the DHT tokens for this server */
 
-    int                g_interval;           /* gossip interval */
+    msec_t             g_interval;           /* gossip interval */
     struct string      dc;                   /* server's dc */
     struct string      env;                  /* aws, network, etc */
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
@@ -321,7 +321,7 @@ struct server_pool {
     struct string      recon_key_file;       /* file with Key encryption in reconciliation */
     struct string      recon_iv_file;        /* file with Initialization Vector encryption in reconciliation */
     struct endpoint    stats_endpoint;       /* stats_listen: socket info for stats */
-    int                stats_interval;       /* stats aggregation interval */
+    msec_t             stats_interval;       /* stats aggregation interval */
     bool               enable_gossip;        /* enable/disable gossip */
     size_t             mbuf_size;            /* mbuf chunk size */
     size_t             alloc_msgs_max;       /* allocated messages buffer size */

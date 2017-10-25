@@ -422,11 +422,6 @@ data_store_parse_req(struct msg *r, const struct string *hash_tag)
 void
 dyn_parse_req(struct msg *r, const struct string *hash_tag)
 {
-	if (log_loggable(LOG_VVERB)) {
-		log_debug(LOG_VVERB, ":::::::::::::::::::::: In dyn_parse_req, start to process request :::::::::::::::::::::: ");
-		msg_dump(LOG_VVERB, r);
-	}
-
 	bool done_parsing = false;
 	struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
 

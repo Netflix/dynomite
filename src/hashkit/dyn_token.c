@@ -95,7 +95,7 @@ add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int)
 
 	/* magick! */
 	uint32_t radix_val = 0x17179149;
-	int i;
+	uint32_t i;
 	for (i = len - 1; i >= 0; i--) {
 		product = radix_val * buf[i] + carry;
 		buf[i] = (uint32_t)product;
@@ -134,7 +134,7 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
 		token->signum = 1;
 	}
 
-	int nwords;
+	uint32_t nwords;
 	/* if (digits < 10) { */
 	nwords = 1;
 	/* } else { */
@@ -163,7 +163,7 @@ parse_dyn_token(uint8_t *start, uint32_t len, struct dyn_token *token)
 }
 
 int32_t 
-cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2)
+cmp_dyn_token(const struct dyn_token *t1, const struct dyn_token *t2)
 {
 	ASSERT(t1 != NULL);
 	ASSERT(t2 != NULL);
@@ -173,8 +173,8 @@ cmp_dyn_token(struct dyn_token *t1, struct dyn_token *t2)
 			return 0;
 		}
 
-		if (t1-> len == t2->len) {
-			int i;
+		if (t1->len == t2->len) {
+			uint32_t i;
 			for (i = 0; i < t1->len; i++) {
 				uint32_t a = t1->mag[i];
 				uint32_t b = t2->mag[i];

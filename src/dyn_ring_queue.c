@@ -29,7 +29,7 @@ create_ring_msg(void)
 
 
 struct ring_msg *
-create_ring_msg_with_data(int capacity)
+create_ring_msg_with_data(uint32_t capacity)
 {
 	struct ring_msg *msg = dn_alloc(sizeof(*msg));
 

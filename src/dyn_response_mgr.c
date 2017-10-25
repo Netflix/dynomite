@@ -9,7 +9,7 @@ init_response_mgr(struct response_mgr *rspmgr, struct msg *req, bool is_read,
     memset(rspmgr, 0, sizeof(struct response_mgr));
     rspmgr->is_read = is_read;
     rspmgr->max_responses = max_responses;
-    rspmgr->quorum_responses = max_responses/2 + 1;
+    rspmgr->quorum_responses = (uint8_t)(max_responses/2 + 1);
     rspmgr->conn = conn;
     rspmgr->msg = req;
     req->awaiting_rsps = max_responses;
@@ -55,9 +55,9 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
 bool
 rspmgr_check_is_done(struct response_mgr *rspmgr)
 {
-    uint8_t pending_responses = rspmgr->max_responses -
+    uint8_t pending_responses = (uint8_t)(rspmgr->max_responses -
                                 rspmgr->good_responses -
-                                rspmgr->error_responses;
+                                rspmgr->error_responses);
     // do the required calculation and tell if we are done here
     if (rspmgr->good_responses >= rspmgr->quorum_responses) {
         // We received enough good responses but do their checksum match?
@@ -102,8 +102,7 @@ rspmgr_get_response(struct response_mgr *rspmgr)
         log_error("req: %lu return non quorum error rsp %p good rsp:%u quorum: %u",
                   rspmgr->msg->id, rspmgr->err_rsp, rspmgr->good_responses,
                   rspmgr->quorum_responses);
-        if (log_loggable(LOG_INFO))
-            msg_dump(LOG_INFO, rspmgr->err_rsp);
+        msg_dump(LOG_DEBUG, rspmgr->err_rsp);
         return rspmgr->err_rsp;
     }
 

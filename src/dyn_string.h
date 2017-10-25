@@ -67,7 +67,7 @@ int string_compare(const struct string *s1, const struct string *s2);
     memchr(_d, _c, (size_t)(_n))
 
 #define dn_strlen(_s)                   \
-    strlen((char *)(_s))
+    (uint32_t)strlen((char *)(_s))
 
 #define dn_strncmp(_s1, _s2, _n)        \
     strncmp((char *)(_s1), (char *)(_s2), (size_t)(_n))

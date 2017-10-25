@@ -102,27 +102,25 @@ dns_get_seeds(struct context * ctx, struct mbuf *seeds_buf)
     int na = ntohs(hdr->ancount);
 
     ns_msg m;
-    int k = ns_initparse(buf, r, &m);
-    if (k == -1) {
+    if (ns_initparse(buf, r, &m) == -1) {
         log_debug(LOG_DEBUG, "ns_initparse error for %s: %s", txtName, strerror(errno));
         return DN_NOOPS;
     }
     int i;
     ns_rr rr;
     for (i = 0; i < na; ++i) {
-        int k = ns_parserr(&m, ns_s_an, i, &rr);
-        if (k == -1) {
+        if (ns_parserr(&m, ns_s_an, i, &rr) == -1) {
             log_debug(LOG_DEBUG, "ns_parserr for %s: %s", txtName, strerror (errno));
             return DN_NOOPS;
         }
         mbuf_rewind(seeds_buf);
-        unsigned char *r = ns_rr_rdata(rr);
-        if (r[0] >= ns_rr_rdlen(rr)) {
-            log_debug(LOG_DEBUG, "invalid TXT length for %s: %d < %d", txtName, r[0], ns_rr_rdlen(rr));
+        unsigned char *s = ns_rr_rdata(rr);
+        if (s[0] >= ns_rr_rdlen(rr)) {
+            log_debug(LOG_DEBUG, "invalid TXT length for %s: %d < %d", txtName, s[0], ns_rr_rdlen(rr));
             return DN_NOOPS;
         }
-        log_debug(LOG_VERB, "seeds for %s: %.*s", txtName, r[0], r +1);
-        mbuf_copy(seeds_buf, r + 1, r[0]);
+        log_debug(LOG_VERB, "seeds for %s: %.*s", txtName, s[0], s +1);
+        mbuf_copy(seeds_buf, s + 1, s[0]);
     }
 
     uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
