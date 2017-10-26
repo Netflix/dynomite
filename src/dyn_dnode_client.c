@@ -448,7 +448,9 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
         if (req->owner->dnode_secured || conn->dnode_secured) {
             if (log_loggable(LOG_VVERB)) {
                 log_debug(LOG_VVERB, "Encrypting response ...");
-                loga("AES encryption key: %s\n", base64_encode(conn->aes_key, AES_KEYLEN));
+				SCOPED_CHARPTR(encoded_aes_key) = base64_encode(conn->aes_key, AES_KEYLEN);
+                if (encoded_aes_key)
+                    loga("AES encryption key: %s\n", (char *)encoded_aes_key);
             }
 
             if (ENCRYPTION) {

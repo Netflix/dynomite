@@ -38,7 +38,7 @@
 #include <dyn_token.h>
 
 rstatus_t
-hash_one_at_a_time(const char *key, size_t key_length, struct dyn_token *token)
+hash_one_at_a_time(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     const char *ptr = key;
     uint32_t value = 0;

@@ -229,7 +229,7 @@ _dn_atoui(uint8_t *line, size_t n)
             return 0;
         }
 
-        value = value * 10 + (*line - '0');
+        value = value * 10 + (uint32_t)(*line - '0');
     }
 
     return value;

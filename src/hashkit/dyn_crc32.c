@@ -103,7 +103,7 @@ static const uint32_t crc32tab[256] = {
  * this implementation does not return CRC-32 as per spec.
  */
 rstatus_t
-hash_crc32(const char *key, size_t key_length, struct dyn_token *token)
+hash_crc32(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint64_t x;
     uint32_t crc = UINT32_MAX;
@@ -120,7 +120,7 @@ hash_crc32(const char *key, size_t key_length, struct dyn_token *token)
 }
 
 uint32_t
-hash_crc32a(const char *key, size_t key_length, struct dyn_token *token)
+hash_crc32a(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     const uint8_t *p = key;
     uint32_t crc;
@@ -142,10 +142,10 @@ hash_crc32a(const char *key, size_t key_length, struct dyn_token *token)
 #define _CRC32_(crc, ch)     ((crc) = ((crc) >> 8) ^ crc32tab[((crc) ^ (ch)) &\
                                                               0xff])
 uint32_t
-crc32_sz(const char *buf, int buf_length, uint32_t in_crc32)
+crc32_sz(const unsigned char *buf, size_t buf_length, uint32_t in_crc32)
 {
     uint32_t crc = ~in_crc32;
-    const char  *p;
+    const unsigned char  *p;
     int         len,
                 nr;
 

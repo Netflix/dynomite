@@ -175,7 +175,7 @@ gossip_ring_msg_to_core(struct server_pool *sp, struct ring_msg *msg, void *cb)
 
 
 static void
-write_char(uint8_t *pos, char ch)
+write_char(uint8_t *pos, unsigned char ch)
 {
    *pos = ch;
    pos += 1;
@@ -185,20 +185,20 @@ static int
 write_number(uint8_t *pos, uint64_t num, int *count)
 {
    if (num < 10) {
-      write_char(pos, '0' + (int) num);
+      write_char(pos, (unsigned char)('0' + num));
       *count = 1;
       return 1;
    }
 
    write_number(pos, num / 10, count);
-   write_char(pos + (*count), '0' + (num % 10));
+   write_char(pos + (*count), (unsigned char)('0' + (num % 10)));
    *count = *count + 1;
    return *count;
 }
 
 
 static void
-string_write_uint32(struct string *str, uint32_t num, int pos)
+string_write_uint32(struct string *str, uint32_t num, uint32_t pos)
 {
     if (num < 10) {
         *(str->data + pos) = '0' + num;
@@ -209,7 +209,7 @@ string_write_uint32(struct string *str, uint32_t num, int pos)
     string_write_uint32(str, num / 10, pos - 1);
 }
 
-static int num_len(uint32_t num) {
+static uint32_t num_len(uint32_t num) {
     if (num < 10) {
         return 1;
     }
@@ -219,7 +219,7 @@ static int num_len(uint32_t num) {
 
 static struct string *token_to_string(struct dyn_token *token) {
     uint32_t num = token->mag[0];
-    int len = num_len(num);
+    uint32_t len = num_len(num);
     struct string *result = dn_alloc(sizeof(*result));
     string_init(result);
 
@@ -244,7 +244,8 @@ gossip_failure_detector(struct gossip_node *node)
         return NORMAL;
 
     uint64_t cur_ts = (uint64_t) time(NULL);
-    uint64_t delta = gn_pool.g_interval/1000 * 40; //g_internal is in milliseconds
+    // Not sure why divide by 1000
+    sec_t delta = gn_pool.g_interval/1000 * 40; //g_internal is in milliseconds
 
     //loga("cur_ts %d", cur_ts);
     //loga("delta %d", delta);
@@ -311,7 +312,7 @@ gossip_forward_state(struct server_pool *sp)
                 //write node token
                 struct string *token_str = dictGetKey(node_de);
                 //log_debug(LOG_VERB, "\tToken string          : '%.*s'", token_str->len, token_str->data);
-                int k;
+                uint32_t k;
                 for(k=0; k<token_str->len;k++, pos++) {
                     *pos = *(token_str->data + k);
                 }
@@ -435,7 +436,7 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
 
     //pname = hostname:port:rack:dc:token
     pname = seeds->data;
-    log_info("pname %s", pname);
+    log_debug(LOG_VERB, "pname %s", pname);
     pnamelen = seeds->len - (tokenlen + racklen + dclen + 3);
     // address = hostname:port
     status = string_copy(address, pname, pnamelen);
@@ -447,7 +448,7 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     //if it is a dns name, convert to IP or otherwise keep that IP
     if (!isdigit( (char) addr[0])) {
         addr[addrlen] = '\0';
-        char *local_ip4 = hostname_to_private_ip4( (char *) addr);
+        unsigned char *local_ip4 = (unsigned char *)hostname_to_private_ip4( (char *) addr);
         if (local_ip4 != NULL) {
             status = string_copy_c(name, local_ip4);
         } else
@@ -455,7 +456,7 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     } else {
         status = string_copy(name, addr, addrlen);
     }
-    log_info("name: %.*s", name->len, name->data);
+    log_debug(LOG_VERB, "name: %.*s", name->len, name->data);
     if (status != DN_OK) {
         return GOS_ERROR;
     }
@@ -583,7 +584,7 @@ gossip_replace_node(struct server_pool *sp, struct gossip_node *node,
 
 
 static rstatus_t
-gossip_update_state(struct server_pool *sp, struct gossip_node *node, uint8_t state, uint64_t timestamp)
+gossip_update_state(struct server_pool *sp, struct gossip_node *node, uint8_t state, const uint64_t timestamp)
 {
     rstatus_t status = DN_OK;
     log_debug(LOG_VVERB, "gossip_update_state : dc[%.*s] rack[%.*s] name[%.*s] token[%d] state[%d]",
@@ -609,9 +610,9 @@ gossip_add_node_if_absent(struct server_pool *sp,
         struct string *port,
         struct dyn_token *token,
         uint8_t state,
-        uint64_t timestamp)
+        const uint64_t timestamp)
 {
-    log_info("gossip_add_node_if_absent          : '%.*s'", address->len, address->data);
+    log_debug(LOG_VERB, "gossip_add_node_if_absent          : '%.*s'", address->len, address->data);
 
     struct gossip_dc * g_dc = dictFetchValue(gn_pool.dict_dc, dc);
     if (g_dc == NULL) {
@@ -620,7 +621,7 @@ gossip_add_node_if_absent(struct server_pool *sp,
         gossip_dc_init(g_dc, dc);
         dictAdd(gn_pool.dict_dc, &g_dc->name, g_dc);
     } else {
-        log_info("We got a datacenter in dict for '%.*s' ", dc->len, dc->data);
+        log_debug(LOG_VERB, "We got a datacenter in dict for '%.*s' ", dc->len, dc->data);
     }
 
     struct gossip_rack *g_rack = dictFetchValue(g_dc->dict_rack, rack);
@@ -630,7 +631,7 @@ gossip_add_node_if_absent(struct server_pool *sp,
         gossip_rack_init(g_rack, dc, rack);
         dictAdd(g_dc->dict_rack, &g_rack->name, g_rack);
     } else {
-        log_info("We got a rack for '%.*s' ", rack->len, rack->data);
+        log_debug(LOG_VERB, "We got a rack for '%.*s' ", rack->len, rack->data);
     }
 
     struct string *token_str = token_to_string(token);
@@ -647,7 +648,7 @@ gossip_add_node_if_absent(struct server_pool *sp,
         //print_dyn_token(token, 6);
         gossip_add_node(sp, dc, g_rack, address, ip, port, token, state);
     } else if (dictFind(g_rack->dict_name_nodes, ip) != NULL) {
-        log_info("Node found");
+        log_debug(LOG_VERB, "Node found");
         if (!g_node->is_local) {  //don't update myself here
             if (string_compare(&g_node->name, ip) != 0) {
                 log_debug(LOG_WARN, "Replacing an existing token with new info");
@@ -704,11 +705,11 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
         //array_init(&tokens, 1, sizeof(struct dyn_token));
         init_dyn_token(&token);
         parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip,  &token);
-        log_info("address          : '%.*s'", address.len, address.data);
-        log_info("rack_name         : '%.*s'", rack_name.len, rack_name.data);
-        log_info("dc_name        : '%.*s'", dc_name.len, dc_name.data);
-        log_info("ip         : '%.*s'", ip.len, ip.data);
-        log_info("port       : '%.*s'", port_str.len, port_str.data);
+        log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
+        log_debug(LOG_VERB, "rack_name         : '%.*s'", rack_name.len, rack_name.data);
+        log_debug(LOG_VERB, "dc_name        : '%.*s'", dc_name.len, dc_name.data);
+        log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
+        log_debug(LOG_VERB, "port       : '%.*s'", port_str.len, port_str.data);
 
         //struct dyn_token *token = array_get(&tokens, 0);
         gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
@@ -785,13 +786,13 @@ static void *
 gossip_loop(void *arg)
 {
     struct server_pool *sp = arg;
-    uint64_t gossip_interval = gn_pool.g_interval * 1000;
+    usec_t gossip_interval = gn_pool.g_interval * 1000;
 
     seeds_buf = mbuf_alloc(SEED_BUF_SIZE);
 
-    log_debug(LOG_VVERB, "gossip_interval : %d msecs", gn_pool.g_interval);
+    log_debug(LOG_VVERB, "gossip_interval : %lu msecs", gn_pool.g_interval);
     for(;;) {
-        usleep(gossip_interval);
+        usleep((useconds_t)gossip_interval);
 
         log_debug(LOG_VERB, "Gossip is running ...");
 
@@ -825,7 +826,7 @@ gossip_loop(void *arg)
             log_debug(LOG_NOTICE, "I am still joining the ring!");
             //aggressively contact all known nodes before changing to state NORMAL
             gossip_announce_joining(sp);
-            usleep(MAX(gn_pool.ctx->timeout, gossip_interval) * 2);
+            usleep((useconds_t)MAX(gn_pool.ctx->timeout, gossip_interval) * 2);
         } else if (gn_pool.ctx->dyn_state == NORMAL) {
             gossip_forward_state(sp);
         }
@@ -950,12 +951,12 @@ gossip_pool_init(struct context *ctx)
             gnode->state = sp->ctx->dyn_state;  //likely it is JOINING state
             gnode->ts = (uint64_t)time(NULL);
             current_node = gnode;
-            char *b_address = get_broadcast_address(sp);
+            unsigned char *b_address = get_broadcast_address(sp);
             string_deinit(&gnode->name);
             string_copy(&gnode->name, b_address, dn_strlen(b_address));
         } else {
 
-            char *local_ip4 = hostname_to_private_ip4( (char *) gnode->name.data);
+            unsigned char *local_ip4 = hostname_to_private_ip4( (char *) gnode->name.data);
             // Use the local_ipv4 instead of the hostname, thats what we use for
             // comparison eventually anyways
             if (local_ip4 != NULL) {
@@ -1047,8 +1048,8 @@ gossip_msg_peer_update(void *rmsg)
     current_node->state = NORMAL;
     sp->ctx->dyn_state = NORMAL;
 
-    int i=0;
-    int n = array_n(&msg->nodes);
+    uint32_t i=0;
+    uint32_t n = array_n(&msg->nodes);
     for(i=0; i<n; i++) {
         struct gossip_node *node = array_get(&msg->nodes, i);
         log_debug(LOG_VVERB, "Processing msg   gossip_msg_peer_update '%.*s'", node->name.len, node->name.data);

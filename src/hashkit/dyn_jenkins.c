@@ -79,7 +79,7 @@
  */
 
 rstatus_t
-hash_jenkins(const char *key, size_t length, struct dyn_token *token)
+hash_jenkins(const unsigned char *key, size_t length, struct dyn_token *token)
 {
   uint32_t a,b,c;                                          /* internal state */
   union { const void *ptr; size_t i; } u;     /* needed for Mac Powerbook G4 */

@@ -402,7 +402,7 @@ conf_dump(struct conf *cf)
     log_debug(LOG_VVERB, "  dyn_write_timeout: %d", cp->dyn_write_timeout);
     log_debug(LOG_VVERB, "  dyn_connections: %d", cp->dyn_connections);
 
-    log_debug(LOG_VVERB, "  gos_interval: %d", cp->gos_interval);
+    log_debug(LOG_VVERB, "  gos_interval: %lu", cp->gos_interval);
     log_debug(LOG_VVERB, "  conn_msg_rate: %d", cp->conn_msg_rate);
 
     log_debug(LOG_VVERB, "  secure_server_option: \"%.*s\"",
@@ -417,7 +417,7 @@ conf_dump(struct conf *cf)
             cp->write_consistency.len,
             cp->write_consistency.data);
 
-    log_debug(LOG_VVERB, "  stats_interval: %d", cp->stats_interval);
+    log_debug(LOG_VVERB, "  stats_interval: %lu", cp->stats_interval);
     log_debug(LOG_VVERB, "  stats_listen: %.*s",
             cp->stats_listen.pname.len, cp->stats_listen.pname.data);
 
@@ -1240,7 +1240,7 @@ static struct command conf_commands[] = {
 	  offsetof(struct conf_pool, stats_listen) },
 
 	{ string("stats_interval"),
-	  conf_set_string,
+	  conf_set_num,
 	  offsetof(struct conf_pool, stats_interval) },
 
     { string("enable_gossip"),

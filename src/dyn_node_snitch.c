@@ -15,7 +15,7 @@
 
 
 
-static char *broadcast_address = NULL;
+static unsigned char *broadcast_address = NULL;
 static char *public_hostname = NULL;
 static char *public_ip4 = NULL;
 static char *private_ip4 = NULL;
@@ -25,7 +25,8 @@ static bool is_aws_env(struct server_pool *sp)
 	return dn_strncmp(&sp->env.data, CONF_DEFAULT_ENV, 3);
 }
 
-static char *hostname_to_ip(char * hostname)
+static unsigned char *
+hostname_to_ip(char * hostname)
 {
     struct hostent *he;
     struct in_addr **addr_list;
@@ -39,7 +40,7 @@ static char *hostname_to_ip(char * hostname)
     addr_list = (struct in_addr **) he->h_addr_list;
     for(i = 0; addr_list[i] != NULL; i++);
 
-    char *ip = dn_alloc(i);
+    unsigned char *ip = dn_alloc(i);
 
     for(i = 0; addr_list[i] != NULL; i++)
     {
@@ -52,7 +53,8 @@ static char *hostname_to_ip(char * hostname)
 }
 
 
-char *get_broadcast_address(struct server_pool *sp)
+unsigned char *
+get_broadcast_address(struct server_pool *sp)
 {
 	if (broadcast_address != NULL)
        return broadcast_address;
@@ -139,7 +141,8 @@ char *get_private_ip4(struct server_pool *sp)
     return NULL;
 }
 
-char *hostname_to_private_ip4(char *hostname)
+unsigned char *
+hostname_to_private_ip4(char *hostname)
 {
    return  hostname_to_ip(hostname);
 }

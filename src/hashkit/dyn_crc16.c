@@ -59,13 +59,13 @@ static const uint16_t crc16tab[256] = {
 };
 
 rstatus_t
-hash_crc16(const char *key, size_t key_length, struct dyn_token *token)
+hash_crc16(const unsigned char *key, size_t key_length, struct dyn_token *token)
 {
     uint64_t x;
     uint32_t crc = 0;
 
     for (x=0; x < key_length; x++) {
-        crc = (crc << 8) ^ crc16tab[((crc >> 8) ^ *key++) & 0x00ff];
+        crc = (crc << 8) ^ crc16tab[((crc >> 8) ^ (uint32_t)*key++) & 0x00ff];
     }
 
     size_dyn_token(token, 1);

@@ -674,6 +674,9 @@ test_server_pool(struct instance *nci)
     struct server_pool *sp = &ctx->pool;
 	sp->mbuf_size = TEST_MBUF_SIZE;
 	sp->alloc_msgs_max = TEST_ALLOC_MSGS_MAX;
+    char *filename = "conf/dynomite.pem";
+    string_copy(&sp->pem_key_file, filename, strlen(filename));
+    sp->secure_server_option = SECURE_OPTION_DC;
 
     mbuf_init(sp->mbuf_size);
     msg_init(sp->alloc_msgs_max);
@@ -703,7 +706,7 @@ init_test(int argc, char **argv)
     test_server_pool(&nci);
 
 
-    crypto_init_for_test();
+    crypto_init(&(nci.ctx->pool));
 }
 
 int

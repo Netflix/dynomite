@@ -99,7 +99,7 @@ struct conf_pool {
     int                dyn_connections;       /* dyn connections */  
     struct string      rack;                  /* this node's logical rack */
     struct array       tokens;                /* this node's token: dyn_token array */
-    int                gos_interval;          /* wake up interval in ms */
+    msec_t             gos_interval;          /* wake up interval in ms */
 
     /* none | datacenter | rack | all in order of increasing number of connections. (default is datacenter) */
     struct string      secure_server_option;
@@ -116,7 +116,7 @@ struct conf_pool {
     size_t             alloc_msgs_max;        /* allocated messages buffer size */
 
     /* stats info */
-    int                stats_interval;        /* stats aggregation interval */
+    msec_t             stats_interval;        /* stats aggregation interval */
     struct conf_listen stats_listen;          /* stats_listen: socket info for stats */
 
     /* connection pool details */

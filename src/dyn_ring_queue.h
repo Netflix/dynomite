@@ -44,7 +44,7 @@ struct ring_msg {
 };
 
 struct ring_msg *create_ring_msg(void);
-struct ring_msg *create_ring_msg_with_data(int capacity);
+struct ring_msg *create_ring_msg_with_data(uint32_t capacity);
 struct ring_msg *create_ring_msg_with_size(uint32_t size, bool init_node);
 rstatus_t ring_msg_init(struct ring_msg *msg, uint32_t size, bool init_node);
 rstatus_t ring_msg_deinit(struct ring_msg *msg);

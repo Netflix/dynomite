@@ -1,4 +1,5 @@
 #include "dyn_types.h"
+#include "stdio.h"
 
 #define OBJECT_MAGIC 0xdead
 

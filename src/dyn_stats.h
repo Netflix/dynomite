@@ -195,7 +195,7 @@ struct stats_buffer {
 struct stats {
     struct context           *ctx;
     uint16_t                  port;           /* stats monitoring port */
-    int                       interval;       /* stats aggregation interval */
+    msec_t                    interval;       /* stats aggregation interval */
     struct string             addr;           /* stats monitoring address */
 
     int64_t                   start_ts;       /* start timestamp of dynomite */
@@ -423,7 +423,7 @@ uint64_t _stats_server_get_ts(struct context *ctx, stats_server_field_t fidx);
 void _stats_server_set_val(struct context *ctx, stats_server_field_t fidx, int64_t val);
 int64_t _stats_server_get_val(struct context *ctx, stats_server_field_t fidx);
 
-struct stats * stats_create(uint16_t stats_port, struct string pname, int stats_interval,
+struct stats * stats_create(uint16_t stats_port, struct string pname, msec_t stats_interval,
              char *source, struct server_pool *sp, struct context *ctx);
 
 void stats_destroy(struct stats *stats);

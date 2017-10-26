@@ -2579,8 +2579,9 @@ redis_pre_coalesce(struct msg *rsp)
          * MSG_RSP_REDIS_MULTIBULK. For an invalid response, we send out -ERR
          * with EINVAL errno
          */
-        msg_dump(LOG_INFO, rsp);
-        msg_dump(LOG_INFO, req);
+        log_warn("Invalid Response type");
+        msg_dump(LOG_WARN, rsp);
+        msg_dump(LOG_WARN, req);
         req->is_error = 1;
         req->error_code = EINVAL;
         break;
@@ -2642,13 +2643,15 @@ redis_post_coalesce_mget(struct msg *request)
     for (i = 0; i < array_n(request->keys); i++) {      /* for each key */
         sub_msg = request->frag_seq[i]->selected_rsp;           /* get it's peer response */
         if (sub_msg == NULL) {
-            log_warn("marking %M as error", response->owner);
+            struct keypos *kpos = array_get(request->keys, i);
+            log_warn("Response missing for key %.*s, %M marking %M as error",
+                     kpos->tag_end - kpos->tag_start, kpos->tag_start, request, response->owner);
             response->owner->err = 1;
             return;
         }
-        msg_dump(LOG_INFO, sub_msg);
         if ((sub_msg->is_error) || redis_copy_bulk(response, sub_msg, false)) {
-            log_warn("marking %M as error", response->owner);
+            log_warn("marking %M as error, %M %M", response->owner, request, response);
+            msg_dump(LOG_INFO, sub_msg);
             response->owner->err = 1;
             return;
         }
@@ -3184,8 +3187,8 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             goto cleanup;
         }
 
-        log_info("response now is %M", selected_rsp);
-        msg_dump(LOG_INFO, selected_rsp);
+        log_debug(LOG_DEBUG, "response now is %M", selected_rsp);
+        msg_dump(LOG_DEBUG, selected_rsp);
         // free the responses in the array
         array_each(&cloned_rsp_fragment_array, free_rsp_each);
         array_reset(&cloned_rsp_fragment_array);
