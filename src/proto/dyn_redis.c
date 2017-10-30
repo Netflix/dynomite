@@ -1061,7 +1061,7 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                 }
                 if (str7icmp(m, 'p', 'f', 'c', 'o', 'u', 'n', 't')) {
                     r->type = MSG_REQ_REDIS_PFCOUNT;
-                    r->is_read = 1;
+                    r->is_read = 0;
                     break;
                 }
 
