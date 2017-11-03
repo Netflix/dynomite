@@ -23,7 +23,7 @@ autoreconf -fvi
 if [ $OS == "Darwin" ] ; then
     ./configure --enable-debug=yes LDFLAGS="-L${SSL_LIBDIR}" CPPFLAGS="-I${SSL_INCLUDEDIR}"
 else
-    ./configure --enable-debug=log
+    ./configure --enable-debug=full
 fi
 
 make
