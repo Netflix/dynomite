@@ -86,6 +86,8 @@ rsp_make_error(struct context *ctx, struct conn *conn, struct msg *req)
 
     rsp = req->selected_rsp;
     if (rsp != NULL) {
+        if (rsp->is_error)
+            return rsp;
         ASSERT(!rsp->is_request && rsp->peer == req);
         req->selected_rsp = NULL;
         rsp->peer = NULL;
@@ -141,7 +143,7 @@ rsp_send_next(struct context *ctx, struct conn *conn)
         }
         rsp->peer = req;
         req->selected_rsp = rsp;
-        log_debug(LOG_VERB, "creating new error rsp %p", rsp);
+        log_debug(LOG_VERB, "creating new error rsp %M", rsp);
         if (conn->dyn_mode) {
       	  stats_pool_incr(ctx, peer_forward_error);
         } else {

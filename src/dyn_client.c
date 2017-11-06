@@ -417,12 +417,8 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
     // an error path its ok with the overhead.
-    struct msg *rsp = msg_get(conn, false, __FUNCTION__);
-    rsp->type = MSG_RSP_REDIS_ERROR;
+    struct msg *rsp = msg_get_error(conn, dyn_error_code, error_code);
     rsp->peer = req;
-    rsp->is_error = 1;
-    rsp->error_code = error_code;
-    rsp->dyn_error_code = dyn_error_code;
     //TODO: Check if this is required in response
     rsp->dmsg = dmsg_get();
     rsp->dmsg->id =  req->id;
