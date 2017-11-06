@@ -504,14 +504,14 @@ msg_clone(struct msg *src, struct mbuf *mbuf_start, struct msg *target)
 
 
 struct msg *
-msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
+msg_get_error(struct conn *conn, dyn_error_t dyn_error_code, err_t error_code)
 {
     struct msg *rsp;
     struct mbuf *mbuf;
     int n;
-    char *errstr = dyn_err ? dn_strerror(dyn_err) : "unknown";
+    char *errstr = dyn_error_code ? dn_strerror(dyn_error_code) : "unknown";
     char *protstr = g_data_store == DATA_REDIS ? "-ERR" : "SERVER_ERROR";
-    char *source = dyn_error_source(dyn_err);
+    char *source = dyn_error_source(dyn_error_code);
 
     rsp = _msg_get(conn, false, __FUNCTION__);
     if (rsp == NULL) {
@@ -519,7 +519,10 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
     }
 
     rsp->state = 0;
-    rsp->type = MSG_RSP_MC_SERVER_ERROR;
+    rsp->is_error = true;
+    rsp->error_code = error_code;
+    rsp->dyn_error_code = dyn_error_code;
+    rsp->type = g_data_store == DATA_REDIS ? MSG_RSP_REDIS_ERROR : MSG_RSP_MC_SERVER_ERROR;
 
     mbuf = mbuf_get();
     if (mbuf == NULL) {
@@ -534,7 +537,7 @@ msg_get_error(struct conn *conn, dyn_error_t dyn_err, err_t err)
 
     if (log_loggable(LOG_VVERB)) {
        log_debug(LOG_VVERB, "get rsp %p id %"PRIu64" len %"PRIu32" err %d error '%s'",
-                 rsp, rsp->id, rsp->mlen, err, errstr);
+                 rsp, rsp->id, rsp->mlen, error_code, errstr);
     }
 
     return rsp;

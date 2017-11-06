@@ -1604,10 +1604,7 @@ memcache_reconcile_responses(struct response_mgr *rspmgr)
         return rspmgr->responses[0];
     } else {
         log_info("none of the responses match, returning error");
-        struct msg *rsp = msg_get(rspmgr->conn, false, __FUNCTION__);
-        rsp->is_error = 1;
-        rsp->error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
-        rsp->dyn_error_code = DYNOMITE_NO_QUORUM_ACHIEVED;
+        struct msg *rsp = msg_get_error(NULL, DYNOMITE_NO_QUORUM_ACHIEVED, 0);
         // There is a case that when 1 out of three nodes are down, the
         // response manager has 1 error response and 2 good responses.
         // We reach here when the two responses differ and we want to return
