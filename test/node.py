@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 class Node(object):
     def __init__(self, host="localhost", ip="127.0.0.1", port=1212):

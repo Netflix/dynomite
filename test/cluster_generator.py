@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from collections import namedtuple
 from signal import SIGINT
 from tempfile import mkdtemp
