@@ -3,7 +3,6 @@ import redis
 from node import Node
 
 class RedisNode(Node):
-
     def __init__(self, host, ip, port):
         super(RedisNode, self).__init__(host, ip, port)
         self.name = "Redis" + self.name
