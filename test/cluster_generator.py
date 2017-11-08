@@ -152,9 +152,8 @@ def main():
     (temp / 'logs').mkdir()
     confdir = (temp / 'conf')
     confdir.mkdir()
-    with (confdir / 'dynomite.pem').open('wb') as dst_fh:
-        with open('conf/dynomite.pem', 'rb') as src_fh:
-            dst_fh.write(src_fh.read())
+
+    LocalPath('../../conf/dynomite.pem').symlink(confdir / 'dynomite.pem')
 
     ips = generate_ips()
     standalone_redis_ip = next(ips)
