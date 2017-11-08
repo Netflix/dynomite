@@ -93,7 +93,7 @@ class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
         conf['listen'] = '{}:{}'.format(self.ip, CLIENT_LISTEN)
 
         # filter out our own seed string
-        conf['dyn_seeds'] = filter(lambda s: s != self.seed_string, seeds_list)
+        conf['dyn_seeds'] = [s for s in seeds_list if s != self.seed_string]
         conf['servers'] = ['{}:{}:0'.format(self.ip, REDIS_PORT)]
         conf['stats_listen'] = '{}:{}'.format(self.ip, STATS_PORT)
         conf['tokens'] = self.token
@@ -179,7 +179,7 @@ def main():
     ips = generate_ips()
     standalone_redis_ip = next(ips)
     nodes = list(generate_nodes(request, ips))
-    seeds_list = list(map(lambda n: n.seed_string, nodes))
+    seeds_list = [n.seed_string for n in nodes]
 
     dynomites = []
     redises = []

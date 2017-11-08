@@ -23,7 +23,7 @@ def create_key(test_name, key_id):
 def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     #Set some
     test_name="KEY_VALUE"
-    print "Running %s tests" % test_name
+    print("Running %s tests" % test_name)
     for x in range(0, max_keys):
         key = create_key(test_name, x)
         c.run_verify("set", key, string_generator(size=random.randint(1, max_payload)))
@@ -39,13 +39,13 @@ def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     # expire a few
     key = create_key(test_name, random.randint(0, max_keys-1))
     c.run_verify("expire", key, 5)
-    time.sleep(7);
+    time.sleep(7)
     c.run_verify("exists", key)
 
 def run_multikey_test(c, max_keys=1000, max_payload=10):
     #Set some
     test_name="MULTIKEY"
-    print "Running %s tests" % test_name
+    print("Running %s tests" % test_name)
     for n in range(0, 100):
         kv_pairs = {}
         len = random.randint(1, 50)
@@ -69,12 +69,12 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
             keyid = random.randint(0, max_keys - 1)
         if fieldid is None:
             fieldid = random.randint(0, max_fields- 1)
-        key = create_key(test_name, keyid);
-        field = create_key("_field", fieldid);
+        key = create_key(test_name, keyid)
+        field = create_key("_field", fieldid)
         return (key, key + field)
 
     test_name="HASH_MAP"
-    print "Running %s tests" % test_name
+    print("Running %s tests" % test_name)
 
     #hset
     for key_iter in range(0, max_keys):
@@ -151,9 +151,9 @@ def main(args):
         run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
         run_multikey_test(c)
         run_hash_tests(c, max_keys=10, max_fields=100)
-        print "All test ran fine"
+        print("All test ran fine")
     except ResultMismatchError as r:
-        print r;
+        print(r)
         return 1
     return 0
 

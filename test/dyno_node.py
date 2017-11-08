@@ -15,5 +15,5 @@ class DynoNode(Node):
 
     def get_connection(self):
         # should return the connection to the dyno port not the redis
-        print "returning connection at %s:%d" % (self.host, self.port)
+        print("returning connection at %s:%d" % (self.host, self.port))
         return redis.StrictRedis(self.host, self.port, db=0)
