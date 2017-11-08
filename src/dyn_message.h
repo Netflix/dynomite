@@ -243,18 +243,24 @@ dn_strerror(dyn_error_t err)
 {
     switch(err)
     {
+        case DYNOMITE_OK:
+            return "Success";
+        case DYNOMITE_UNKNOWN_ERROR:
+            return "Unknow Error";
         case DYNOMITE_INVALID_STATE:
             return "Dynomite's current state does not allow this request";
         case DYNOMITE_INVALID_ADMIN_REQ:
             return "Invalid request in Dynomite's admin mode";
-        case DYNOMITE_NO_QUORUM_ACHIEVED:
-            return "Failed to achieve Quorum";
         case PEER_CONNECTION_REFUSE:
             return "Peer Node refused connection";
         case PEER_HOST_DOWN:
             return "Peer Node is down";
         case PEER_HOST_NOT_CONNECTED:
             return "Peer Node is not connected";
+        case STORAGE_CONNECTION_REFUSE:
+            return "Datastore refused connection";
+        case DYNOMITE_NO_QUORUM_ACHIEVED:
+            return "Failed to achieve Quorum";
         default:
             return strerror(err);
     }
