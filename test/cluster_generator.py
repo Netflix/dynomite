@@ -3,10 +3,11 @@ from collections import namedtuple
 from signal import SIGINT
 from tempfile import mkdtemp
 from time import sleep
-import yaml
+import argparse
 import random
 import socket
 import sys
+import yaml
 
 from plumbum import FG
 from plumbum import BG
@@ -29,8 +30,10 @@ STATS_PORT = 22222
 BASE_IPADDRESS = quad2int('127.0.1.1')
 RING_SIZE = 2**32
 
-redis = local['redis-server']
-dynomite = local['src/dynomite']
+SETTLE_TIME = 5
+
+redis = local.get('./test/_binaries/redis-server', 'redis-server')
+dynomite = local.get('./test/_binaries/dynomite', 'src/dynomite')
 
 def launch_redis(ip):
     logfile = 'logs/redis_{}.log'.format(ip)
@@ -81,7 +84,7 @@ class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
         return super(DynoSpec, cls).__new__(cls, ip, port, rack, dc, token,
             local_connections, remote_connections, seed_string)
 
-    def generate_config(self, seeds_list):
+    def _generate_config(self, seeds_list):
         conf = dict(DYN_O_MITE_DEFAULTS)
         conf['datacenter'] = self.dc
         conf['rack'] = self.rack
@@ -99,7 +102,7 @@ class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
         return dict(dyn_o_mite=conf)
 
     def write_config(self, seeds_list):
-        config = self.generate_config(seeds_list)
+        config = self._generate_config(seeds_list)
         filename = 'conf/{}:{}:{}.yml'.format(self.dc, self.rack, self.token)
         with open(filename, 'w') as fh:
             yaml.dump(config, fh, default_flow_style=False)
@@ -117,6 +120,11 @@ class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
         return dynomite_future, redis_future
 
 def dict_request(request):
+    """Converts the request into an easy to consume dict format.
+
+    We don't ingest the request in this format originally because dict
+    ordering is nondeterministic, and one of our goals is to deterministically
+    generate clusters."""
     return dict(
         (dc['name'], dict(dc['racks']))
         for dc in request
@@ -144,33 +152,46 @@ def generate_nodes(request, ips):
                 yield DynoSpec(ip, INTERNODE_LISTEN, dc, rack, token,
                     local_count, remote_count)
 
-def main():
-    with open('test/request.yaml', 'r') as fh:
-        request = yaml.load(fh)
-
-    temp = LocalPath(mkdtemp(dir='.', prefix='test_run.'))
-    (temp / 'logs').mkdir()
-    confdir = (temp / 'conf')
+def setup_temp_dir():
+    tempdir = LocalPath(mkdtemp(dir='.', prefix='test_run.'))
+    (tempdir / 'logs').mkdir()
+    confdir = (tempdir / 'conf')
     confdir.mkdir()
 
     LocalPath('../../conf/dynomite.pem').symlink(confdir / 'dynomite.pem')
 
+    return tempdir
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Autogenerates a Dynomite cluster and runs functional ' +
+            'tests against it')
+    parser.add_argument('request_file', default='test/request.yaml',
+        help='YAML file describing desired cluster', nargs='?')
+    args = parser.parse_args()
+
+    with open('test/request.yaml', 'r') as fh:
+        request = yaml.load(fh)
+
+    temp = setup_temp_dir()
+
     ips = generate_ips()
     standalone_redis_ip = next(ips)
     nodes = list(generate_nodes(request, ips))
-    seeds_list = map(lambda n: n.seed_string, nodes)
+    seeds_list = list(map(lambda n: n.seed_string, nodes))
 
     dynomites = []
     redises = []
-    with local.cwd(temp):
-        redises.append(launch_redis(standalone_redis_ip))
-        for n in nodes:
-            d, r = n.launch(seeds_list)
-            dynomites.append(d)
-            redises.append(r)
-
-    sleep(5)
     try:
+        with local.cwd(temp):
+            redises.append(launch_redis(standalone_redis_ip))
+            for n in nodes:
+                d, r = n.launch(seeds_list)
+                dynomites.append(d)
+                redises.append(r)
+
+        sleep(SETTLE_TIME)
         local['test/func_test.py'] & FG
         local['test/supplemental.sh'] & FG
     finally:
