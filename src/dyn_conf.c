@@ -2116,19 +2116,24 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         log_debug(LOG_INFO, "setting env to default value:%s", CONF_DEFAULT_ENV);
     }
 
-    if (string_empty(&cp->pem_key_file)) {
-        string_copy_c(&cp->pem_key_file, (const uint8_t *)PEM_KEY_FILE);
-        log_debug(LOG_INFO, "setting pem key file to default value:%s", PEM_KEY_FILE);
-    }
+    /**
+     * if the secure server options is not set, then no need to load KEY files
+     */
+    if (string_compare(&cp->secure_server_option, (const uint8_t *)CONF_STR_NONE) == 0) {
+      if (string_empty(&cp->pem_key_file)) {
+          string_copy_c(&cp->pem_key_file, (const uint8_t *)PEM_KEY_FILE);
+          log_debug(LOG_INFO, "setting pem key file to default value:%s", PEM_KEY_FILE);
+      }
 
-    if (string_empty(&cp->recon_key_file)) {
-        string_copy_c(&cp->recon_key_file, (const uint8_t *)RECON_KEY_FILE);
-        log_debug(LOG_INFO, "setting reconciliation key file to default value:%s", RECON_KEY_FILE);
-    }
+      if (string_empty(&cp->recon_key_file)) {
+         string_copy_c(&cp->recon_key_file, (const uint8_t *)RECON_KEY_FILE);
+         log_debug(LOG_INFO, "setting reconciliation key file to default value:%s", RECON_KEY_FILE);
+      }
 
-    if (string_empty(&cp->recon_iv_file)) {
-        string_copy_c(&cp->recon_iv_file, (const uint8_t *)RECON_IV_FILE);
-        log_debug(LOG_INFO, "setting reconciliation IV file to default value:%s", RECON_IV_FILE);
+      if (string_empty(&cp->recon_iv_file)) {
+         string_copy_c(&cp->recon_iv_file, (const uint8_t *)RECON_IV_FILE);
+         log_debug(LOG_INFO, "setting reconciliation IV file to default value:%s", RECON_IV_FILE);
+      }
     }
 
     if (cp->datastore_connections == CONF_UNSET_NUM) {
