@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ -n "$TRAVIS" ]; then
-    sudo pip install redis plumbum pyyaml
+    sudo pip3 install redis plumbum pyyaml
 fi
 
 

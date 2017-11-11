@@ -1,7 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from optparse import OptionParser
-import ConfigParser
+import configparser
 import logging
 import time
 import os
@@ -40,7 +40,7 @@ class OperationThread (threading.Thread):
         host = self.options.host
         port = self.options.port
 
-        print "Starting thread: " + self.name +  ", filename: " + self.filename
+        print("Starting thread: " + self.name +  ", filename: " + self.filename)
 
         # Get lock to synchronize threads
         #threadLock.acquire()
@@ -69,7 +69,7 @@ def rebalance_ops(filename, host, port, db):
     i = 0
     for line in open(filename,'r').readlines():
         if line != '':
-          print line
+          print(line)
           line = line.strip('\n')
           if line == '':
             continue
@@ -81,7 +81,7 @@ def rebalance_ops(filename, host, port, db):
             if (i % 5000 == 0):
               time.sleep(1)
           except redis.exceptions.ResponseError:
-            print "reconnecting ..."
+            print("reconnecting ...")
             r1 = redis.StrictRedis(host, port, db=0)
 
 
@@ -123,13 +123,13 @@ def main():
 
 
     if len(sys.argv) == 1:
-         print "Learn some usages: " + sys.argv[0] + " -h"
+         print("Learn some usages: " + sys.argv[0] + " -h")
          sys.exit(1)
 
 
     (options, args) = parser.parse_args()
 
-    print options
+    print(options)
 
     num_threads = int(options.th)
 
@@ -147,7 +147,7 @@ def main():
     for t in threads:
        t.join()
 
-    print ""
+    print()
 
 
 if  __name__ == '__main__':

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 '''
 script for generating dynomite yaml files for every node in a cluster.

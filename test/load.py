@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 ##
 # A very simple basic program that will load data in a dynomite/redis server.

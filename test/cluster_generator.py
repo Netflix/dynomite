@@ -1,9 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from collections import namedtuple
+from contextlib import ExitStack
+from contextlib import contextmanager
 from signal import SIGINT
 from tempfile import mkdtemp
 from time import sleep
+from urllib.request import urlopen
 import argparse
+import json
 import random
 import socket
 import sys
@@ -16,6 +20,10 @@ from plumbum import local
 
 from ip_util import quad2int
 from ip_util import int2quad
+from dyno_cluster import DynoCluster
+from dyno_node import DynoNode
+from func_test import comparison_test
+from redis_node import RedisNode
 
 DYN_O_MITE_DEFAULTS = dict(
     secure_server_option='datacenter',
@@ -35,12 +43,18 @@ SETTLE_TIME = 5
 redis = local.get('./test/_binaries/redis-server', 'redis-server')
 dynomite = local.get('./test/_binaries/dynomite', 'src/dynomite')
 
+@contextmanager
 def launch_redis(ip):
     logfile = 'logs/redis_{}.log'.format(ip)
-    return (redis['--bind', ip, '--port', REDIS_PORT] > logfile) & BG
+    f = (redis['--bind', ip, '--port', REDIS_PORT] > logfile) & BG(-9)
+    try:
+        yield RedisNode(ip, REDIS_PORT)
+    finally:
+        f.proc.kill()
+        f.wait()
 
 def pick_tokens(count, start_offset):
-    stride = RING_SIZE / count
+    stride = RING_SIZE // count
     token = start_offset
     for i in range(count):
         yield token % RING_SIZE
@@ -75,8 +89,9 @@ def generate_ips():
         yield int2quad(state)
         state += 1
 
-class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
+class DynoSpec(namedtuple('DynoSpec', 'ip port dc rack token '
     'local_connections remote_connections seed_string')):
+    """Specifies how to launch a dynomite node"""
 
     def __new__(cls, ip, port, rack, dc, token, local_connections,
                 remote_connections):
@@ -93,7 +108,7 @@ class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
         conf['listen'] = '{}:{}'.format(self.ip, CLIENT_LISTEN)
 
         # filter out our own seed string
-        conf['dyn_seeds'] = filter(lambda s: s != self.seed_string, seeds_list)
+        conf['dyn_seeds'] = [s for s in seeds_list if s != self.seed_string]
         conf['servers'] = ['{}:{}:0'.format(self.ip, REDIS_PORT)]
         conf['stats_listen'] = '{}:{}'.format(self.ip, STATS_PORT)
         conf['tokens'] = self.token
@@ -108,16 +123,33 @@ class DynoSpec(namedtuple('DynoNode', 'ip port dc rack token '
             yaml.dump(config, fh, default_flow_style=False)
         return filename
 
+    @contextmanager
     def launch(self, seeds_list):
         config_filename = self.write_config(seeds_list)
 
-        redis_future = launch_redis(self.ip)
+        with launch_redis(self.ip):
+            logfile = 'logs/dynomite_{}.log'.format(self.ip)
+            dynomite_future = dynomite['-o', logfile, '-c', config_filename,
+                '-v6'] & BG(-9)
 
-        logfile = 'logs/dynomite_{}.log'.format(self.ip)
-        # dynomite will exit with status 1 if we SIGINT it
-        dynomite_future = dynomite['-o', logfile, '-c', config_filename,
-            '-v6'] & BG(1)
-        return dynomite_future, redis_future
+            try:
+                yield DynoNode(self.ip)
+            finally:
+                dynomite_future.proc.kill()
+                dynomite_future.wait()
+
+
+@contextmanager
+def launch_dynomite(nodes):
+    seeds_list = [n.seed_string for n in nodes]
+    launched_nodes = [DynoNode(n.ip) for n in nodes]
+    with ExitStack() as stack:
+        launched_nodes = [
+            stack.enter_context(n.launch(seeds_list))
+            for n in nodes
+        ]
+
+        yield DynoCluster(launched_nodes)
 
 def dict_request(request):
     """Converts the request into an easy to consume dict format.
@@ -162,7 +194,6 @@ def setup_temp_dir():
 
     return tempdir
 
-
 def main():
     parser = argparse.ArgumentParser(
         description='Autogenerates a Dynomite cluster and runs functional ' +
@@ -171,7 +202,7 @@ def main():
         help='YAML file describing desired cluster', nargs='?')
     args = parser.parse_args()
 
-    with open('test/request.yaml', 'r') as fh:
+    with open(args.request_file, 'r') as fh:
         request = yaml.load(fh)
 
     temp = setup_temp_dir()
@@ -179,33 +210,18 @@ def main():
     ips = generate_ips()
     standalone_redis_ip = next(ips)
     nodes = list(generate_nodes(request, ips))
-    seeds_list = list(map(lambda n: n.seed_string, nodes))
 
-    dynomites = []
-    redises = []
-    try:
+    with ExitStack() as stack:
         with local.cwd(temp):
-            redises.append(launch_redis(standalone_redis_ip))
-            for n in nodes:
-                d, r = n.launch(seeds_list)
-                dynomites.append(d)
-                redises.append(r)
+            redis_info = stack.enter_context(launch_redis(standalone_redis_ip))
+            dynomite_info = stack.enter_context(launch_dynomite(nodes))
 
-        sleep(SETTLE_TIME)
-        local['test/func_test.py'] & FG
-        local['test/supplemental.sh'] & FG
-    finally:
-        for f in dynomites:
-            f.proc.send_signal(SIGINT)
+            sleep(SETTLE_TIME)
+            comparison_test(redis_info, dynomite_info, False)
 
-        for f in redises:
-            f.proc.send_signal(SIGINT)
-
-        for f in dynomites:
-            f.wait()
-
-        for f in redises:
-            f.wait()
+            random_node = random.choice(dynomite_info.nodes)
+            stats_url = 'http://{}:{}/info'.format(random_node.ip, STATS_PORT)
+            json.loads(urlopen(stats_url).read().decode('ascii'))
 
 if __name__ == '__main__':
     sys.exit(main())

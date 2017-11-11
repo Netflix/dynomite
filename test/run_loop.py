@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import subprocess, time
 
 def run_command(cmd):
@@ -16,14 +16,14 @@ def run_command(cmd):
 def main():
     cmd = "bash travis.sh -n"
     for i in range(0, 50):
-        print"Running loop {}".format(i+1)
+        print("Running loop {}".format(i+1))
         success, proc = run_command(cmd)
         if not success:
             for line in iter(proc.stderr.readline, b''):
-                print("--- " + line.rstrip())
+                print(("--- " + line.rstrip()))
             break
         else:
-            print "...........................Success\n"
+            print("...........................Success\n")
         time.sleep(30)
 
 if __name__ == "__main__":
