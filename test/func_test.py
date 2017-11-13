@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import redis
 import argparse
 import random
@@ -23,7 +23,7 @@ def create_key(test_name, key_id):
 def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     #Set some
     test_name="KEY_VALUE"
-    print "Running %s tests" % test_name
+    print("Running %s tests" % test_name)
     for x in range(0, max_keys):
         key = create_key(test_name, x)
         c.run_verify("set", key, string_generator(size=random.randint(1, max_payload)))
@@ -39,13 +39,13 @@ def run_key_value_tests(c, max_keys=1000, max_payload=1024):
     # expire a few
     key = create_key(test_name, random.randint(0, max_keys-1))
     c.run_verify("expire", key, 5)
-    time.sleep(7);
+    time.sleep(7)
     c.run_verify("exists", key)
 
 def run_multikey_test(c, max_keys=1000, max_payload=10):
     #Set some
     test_name="MULTIKEY"
-    print "Running %s tests" % test_name
+    print("Running %s tests" % test_name)
     for n in range(0, 100):
         kv_pairs = {}
         len = random.randint(1, 50)
@@ -69,12 +69,12 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
             keyid = random.randint(0, max_keys - 1)
         if fieldid is None:
             fieldid = random.randint(0, max_fields- 1)
-        key = create_key(test_name, keyid);
-        field = create_key("_field", fieldid);
+        key = create_key(test_name, keyid)
+        field = create_key("_field", fieldid)
         return (key, key + field)
 
     test_name="HASH_MAP"
-    print "Running %s tests" % test_name
+    print("Running %s tests" % test_name)
 
     #hset
     for key_iter in range(0, max_keys):
@@ -130,30 +130,34 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
         #if next_index == 0:
             #break
 
+def comparison_test(redis, dynomite, debug):
+    r_c = redis.get_connection()
+    d_c = dynomite.get_connection()
+    c = dual_run(r_c, d_c, debug)
+    run_key_value_tests(c)
+
+    # XLarge payloads
+    run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
+    run_multikey_test(c)
+    run_hash_tests(c, max_keys=10, max_fields=100)
+    print("All test ran fine")
+
 def main(args):
     # This test assumes for now that the nodes are running at the given ports.
     # This is done by travis.sh. Please check that file and the corresponding
     # yml files for each dynomite instance there to get an idea of the topology.
-    r = RedisNode(host="localhost", ip="127.0.0.1", port=1212)
-    d1 = DynoNode(host="127.0.0.1", ip="127.0.0.1", data_store_port=22121)
-    d2 = DynoNode(host="127.0.0.2", ip="127.0.0.2", data_store_port=22122)
-    d3 = DynoNode(host="127.0.0.3", ip="127.0.0.3", data_store_port=22123)
-    d4 = DynoNode(host="127.0.0.4", ip="127.0.0.4", data_store_port=22124)
-    d5 = DynoNode(host="127.0.0.5", ip="127.0.0.5", data_store_port=22125)
+    r = RedisNode(ip="127.0.1.1", port=1212)
+    d1 = DynoNode(ip="127.0.1.2", data_store_port=22121)
+    d2 = DynoNode(ip="127.0.1.3", data_store_port=22122)
+    d3 = DynoNode(ip="127.0.1.4", data_store_port=22123)
+    d4 = DynoNode(ip="127.0.1.5", data_store_port=22124)
+    d5 = DynoNode(ip="127.0.1.6", data_store_port=22125)
     dyno_nodes = [d1,d2,d3,d4,d5]
     cluster = DynoCluster(dyno_nodes)
-    r_c = r.get_connection()
-    d_c = cluster.get_connection()
-    c = dual_run(r_c, d_c, args.debug)
     try:
-        run_key_value_tests(c)
-        # XLarge payloads
-        run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
-        run_multikey_test(c)
-        run_hash_tests(c, max_keys=10, max_fields=100)
-        print "All test ran fine"
+        comparison_test(r, cluster, args.debug)
     except ResultMismatchError as r:
-        print r;
+        print(r)
         return 1
     return 0
 

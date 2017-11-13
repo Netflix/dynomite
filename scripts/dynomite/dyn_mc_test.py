@@ -1,7 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from optparse import OptionParser
-import ConfigParser
+import configparser
 import logging
 import time
 import os
@@ -62,7 +62,7 @@ def main():
                       help="Number of keys\n")
 
     if len(sys.argv) == 1:
-         print "Learn some usages: " + sys.argv[0] + " -h"
+         print("Learn some usages: " + sys.argv[0] + " -h")
          sys.exit(1)
 
 
@@ -78,7 +78,7 @@ def main():
     #fh.setFormatter(formatter)
     #logger.addHandler(fh)
 
-    print options
+    print(options)
 
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(levelname)s %(message)s',
@@ -91,7 +91,7 @@ def main():
     numkeys = int(options.numkeys)
     start = int(options.skipkeys)
     end   = int(options.numkeys)
-    print 'start: ' + str(start) + ' and end: ' + str(end)
+    print('start: ' + str(start) + ' and end: ' + str(end))
 
     if 'write' == options.operation :
        for i in range(start, end ) :
@@ -103,14 +103,14 @@ def main():
           value = mc.get('key_' + str(i))
           if value is None:
              error_count = error_count + 1
-             print 'No value for key: ' + 'key_' + str(i)
+             print('No value for key: ' + 'key_' + str(i))
           else :
-             print 'key_' + str(i) + ' has value : ' + value
-       print 'Errour count: ' + str(error_count)
+             print('key_' + str(i) + ' has value : ' + value)
+       print('Errour count: ' + str(error_count))
     elif 'mread' == options.operation :
        n = (end - start) / 10
        n = min(n, 10)
-       print n
+       print(n)
        keys = []
        i = 0
        while (i < n) :
@@ -119,13 +119,13 @@ def main():
            if key not in keys :
               keys.append(key)
               i = i + 1
-       print keys
+       print(keys)
 
       #values = mc.get_multi(['key_1', 'key_2', 'key_3'])
        while (len(keys) > 0) :
          values = mc.get_multi(keys)
-         print values
-         for key in values.keys() :
+         print(values)
+         for key in values.keys():
              keys.remove(key)
 
 
@@ -143,7 +143,7 @@ def main():
            if value != None :
                is_stop = True
 
-         print 'Estimated elapsed time : ' + str(current_milli_time() - int(value))
+         print('Estimated elapsed time : ' + str(current_milli_time() - int(value)))
 
     elif 'sdel' == options.operation :
         mc.delete('key_time')

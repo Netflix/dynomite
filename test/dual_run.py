@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import redis
 
 class ResultMismatchError(Exception):
@@ -33,19 +33,19 @@ class dual_run():
             try:
                 d_result = d_func(*args)
                 if i > 0:
-                    print "\tSucceeded in attempt {}".format(i+1)
+                    print("\tSucceeded in attempt {}".format(i+1))
                 break
-            except redis.exceptions.ResponseError, e:
+            except redis.exceptions.ResponseError as e:
                 if "Peer Node is not connected" in str(e):
                     i = i + 1
-                    print "\tGot error '{}' ... Retry effort {}/{}\n\tQuery '{} {}'".format(e, i, retry_limit, func, str(args))
+                    print("\tGot error '{}' ... Retry effort {}/{}\n\tQuery '{} {}'".format(e, i, retry_limit, func, str(args)))
                     continue
-                print "\tGot error '{}'\n\tQuery '{} {}'".format(e, func, str(args))
+                print("\tGot error '{}'\n\tQuery '{} {}'".format(e, func, str(args)))
                 break
         if self.debug:
-            print "Query: %s %s" % (func, str(args))
-            print "Redis: %s" % str(r_result)
-            print "Dyno : %s" % str(d_result)
+            print("Query: %s %s" % (func, str(args)))
+            print("Redis: %s" % str(r_result))
+            print("Dyno : %s" % str(d_result))
         if r_result != d_result:
             raise ResultMismatchError(r_result, d_result, func, *args)
         return d_result
