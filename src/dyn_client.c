@@ -552,7 +552,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
     }
     ASSERT(s_conn->type == CONN_SERVER);
 
-    log_debug(LOG_DEBUG, "%M FORWARD %M to storage conn %M", c_conn, req, s_conn);
+    log_info("%M FORWARD %M to storage conn %M", c_conn, req, s_conn);
 
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */
@@ -857,6 +857,15 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
     // add the message to the dict
     dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
+    s = g_verify_request(req, pool, server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc));
+    if (s != DN_OK) {
+        if (req->expect_datastore_reply) {
+            conn_enqueue_outq(ctx, c_conn, req);
+        }
+        req_forward_error(ctx, c_conn, req, DN_OK, s);
+        return;
+    }
+
 
     // need to capture the initial mbuf location as once we add in the dynomite
     // headers (as mbufs to the src req), that will bork the request sent to
@@ -948,6 +957,7 @@ req_recv_done(struct context *ctx, struct conn *conn,
             conn_enqueue_outq(ctx, conn, req);
         }
         req_forward_error(ctx, conn, req, DN_OK, status); //TODO: CHeck error code
+        return;
     }
 
     /* if no fragment happened */
@@ -962,6 +972,7 @@ req_recv_done(struct context *ctx, struct conn *conn,
             conn_enqueue_outq(ctx, conn, req);
         }
         req_forward_error(ctx, conn, req, DN_OK, status);
+        return;
     }
 
     struct msg *sub_msg, *tmsg;
