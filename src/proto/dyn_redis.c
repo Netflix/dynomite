@@ -1389,10 +1389,17 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                      }
                      state = SW_ARG1_LEN;
                 } else if (redis_argeval(r)) {
-                    if (r->rnarg == 0) {
+                    r->nkeys--;
+                    if (r->nkeys > 0) {
+                        // if there are more keys pending, parse them
+                        state = SW_KEY_LEN;
+                    } else if (r->rnarg > 0) {
+                        // we finished parsing keys, now start with args
+                        state = SW_ARGN_LEN;
+                    } else {
+                        // no more args left, we are done
                         goto done;
                     }
-                    state = SW_ARGN_LEN;
                 } else {
                     goto error;
                 }
@@ -1492,7 +1499,7 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     state = SW_ARGN_LEN;
                 } else if (redis_argeval(r)) {
                     if (r->rnarg < 2) {
-                    	log_error("Dynomite EVAL/EVALSHA requires at least 1 key");
+                         log_error("Dynomite EVAL/EVALSHA requires at least 1 key");
                         goto error;
                     }
                     state = SW_ARG2_LEN;
@@ -1592,10 +1599,16 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                         goto error;
                     }
                 }
+
                 if (nkey == 0) {
+                    log_error("EVAL/EVALSHA requires atleast 1 key");
                     goto error;
                 }
-
+                if (r->rnarg < nkey) {
+                    log_error("EVAL/EVALSHA Not all keys provided: expecting %u", nkey);
+                    goto error;
+                }
+                r->nkeys = nkey;
                 r->token = NULL;
             }
 
@@ -2936,6 +2949,31 @@ redis_fragment(struct msg *r, struct server_pool *pool, struct rack *rack, struc
     default:
         return DN_OK;
     }
+}
+
+rstatus_t
+redis_verify_request(struct msg *r, struct server_pool *pool, struct rack *rack)
+{
+    if (r->type != MSG_REQ_REDIS_EVAL)
+        return DN_OK;
+
+    // For EVAL based commands, Dynomite wants to restrict all keys used by the
+    // script belong to same node
+    if (1 >= array_n(r->keys)){
+        return DN_OK;
+    }
+    uint32_t prev_idx = 0, i;
+    for (i = 0; i < array_n(r->keys); i++) {        /* for each key */
+        struct keypos *kpos = array_get(r->keys, i);
+        uint32_t idx = dnode_peer_idx_for_key_on_rack(pool, rack, kpos->tag_start,
+                                                      kpos->tag_end - kpos->tag_start);
+        if (i == 0)
+            prev_idx = idx;
+        if (prev_idx != idx) {
+            return DYNOMITE_SCRIPT_SPANS_NODES;
+        }
+    }
+    return DN_OK;
 }
 
 bool
