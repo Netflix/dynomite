@@ -1373,6 +1373,11 @@ memcache_fragment(struct msg *r, struct server_pool *pool, struct rack *rack, st
     return DN_OK;
 }
 
+rstatus_t
+memcache_verify_request(struct msg *r, struct server_pool *pool, struct rack *rack)
+{
+    return DN_OK;
+}
 /*
  * Pre-coalesce handler is invoked when the message is a response to
  * the fragmented multi vector request - 'get' or 'gets' and all the

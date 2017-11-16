@@ -153,6 +153,7 @@ uint8_t g_timeout_factor = 1;
 func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 func_msg_fragment_t  g_fragment;   /* message post-coalesce */
+func_msg_verify_t    g_verify_request;   /* message post-coalesce */
 func_is_multikey_request g_is_multikey_request;
 func_reconcile_responses g_reconcile_responses;
 
@@ -191,6 +192,7 @@ set_datastore_ops(void)
             g_pre_coalesce = redis_pre_coalesce;
             g_post_coalesce = redis_post_coalesce;
             g_fragment = redis_fragment;
+            g_verify_request = redis_verify_request;
             g_is_multikey_request =  redis_is_multikey_request;
             g_reconcile_responses = redis_reconcile_responses;
             break;
@@ -198,6 +200,7 @@ set_datastore_ops(void)
             g_pre_coalesce = memcache_pre_coalesce;
             g_post_coalesce = memcache_post_coalesce;
             g_fragment = memcache_fragment;
+            g_verify_request = memcache_verify_request;
             g_is_multikey_request =  memcache_is_multikey_request;
             g_reconcile_responses = memcache_reconcile_responses;
             break;
@@ -374,6 +377,7 @@ done:
     msg->narg_end = NULL;
     msg->narg = 0;
     msg->rnarg = 0;
+    msg->nkeys = 0;
     msg->rlen = 0;
     msg->integer = 0;
 
@@ -395,7 +399,7 @@ done:
     msg->dmsg = NULL;
     msg->msg_routing = ROUTING_NORMAL;
     msg->dyn_error_code = 0;
-    msg->rsp_handler = msg_cant_handle_response;
+    msg->rsp_handler = msg_local_one_rsp_handler;
     msg->consistency = DC_ONE;
     return msg;
 }

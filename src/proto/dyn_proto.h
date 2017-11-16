@@ -37,6 +37,8 @@ bool memcache_is_multikey_request(struct msg *r);
 struct msg *memcache_reconcile_responses(struct response_mgr *rspmgr);
 rstatus_t memcache_fragment(struct msg *r, struct server_pool *pool, struct rack *rack,
                          struct msg_tqh *frag_msgq);
+rstatus_t memcache_verify_request(struct msg *r, struct server_pool *pool,
+                                  struct rack *rack);
 
 void redis_parse_req(struct msg *r, const struct string *hash_tag);
 void redis_parse_rsp(struct msg *r, const struct string *UNUSED);
@@ -46,5 +48,7 @@ bool redis_is_multikey_request(struct msg *r);
 struct msg *redis_reconcile_responses(struct response_mgr *rspmgr);
 rstatus_t redis_fragment(struct msg *r, struct server_pool *pool, struct rack *rack,
                          struct msg_tqh *frag_msgq);
+rstatus_t redis_verify_request(struct msg *r, struct server_pool *pool,
+                               struct rack *rack);
 
 #endif

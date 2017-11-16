@@ -37,6 +37,8 @@
 typedef void (*func_msg_parse_t)(struct msg *, const struct string *hash_tag);
 typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
                                          struct rack *, struct msg_tqh *);
+typedef rstatus_t (*func_msg_verify_t)(struct msg *, struct server_pool *,
+                                         struct rack *);
 typedef void (*func_msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef bool (*func_msg_failure_t)(struct msg *r);
@@ -46,6 +48,7 @@ typedef struct msg *(*func_reconcile_responses)(struct response_mgr *rspmgr);
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
 extern func_msg_fragment_t  g_fragment;   /* message fragment */
+extern func_msg_verify_t    g_verify_request;  /* message verify */
 extern func_is_multikey_request g_is_multikey_request;
 extern func_reconcile_responses g_reconcile_responses;
 
@@ -236,6 +239,7 @@ typedef enum dyn_error {
     STORAGE_CONNECTION_REFUSE,
     BAD_FORMAT,
     DYNOMITE_NO_QUORUM_ACHIEVED,
+    DYNOMITE_SCRIPT_SPANS_NODES,
 } dyn_error_t;
 
 static inline char *
@@ -261,6 +265,8 @@ dn_strerror(dyn_error_t err)
             return "Datastore refused connection";
         case DYNOMITE_NO_QUORUM_ACHIEVED:
             return "Failed to achieve Quorum";
+        case DYNOMITE_SCRIPT_SPANS_NODES:
+            return "Keys in the script cannot span multiple nodes";
         default:
             return strerror(err);
     }
@@ -274,6 +280,7 @@ dyn_error_source(dyn_error_t err)
         case DYNOMITE_INVALID_ADMIN_REQ:
         case DYNOMITE_INVALID_STATE:
         case DYNOMITE_NO_QUORUM_ACHIEVED:
+        case DYNOMITE_SCRIPT_SPANS_NODES:
             return "Dynomite:";
         case PEER_CONNECTION_REFUSE:
         case PEER_HOST_DOWN:
@@ -377,6 +384,7 @@ struct msg {
     uint8_t              *narg_start;     /* narg start (redis) */
     uint8_t              *narg_end;       /* narg end (redis) */
     uint32_t             narg;            /* # arguments (redis) */
+    uint32_t             nkeys;           /* # keys in script (redis EVAL/EVALSHA) */
     uint32_t             rnarg;           /* running # arg used by parsing fsa (redis) */
     uint32_t             rlen;            /* running length in parsing fsa (redis) */
     uint32_t             integer;         /* integer reply value (redis) */
