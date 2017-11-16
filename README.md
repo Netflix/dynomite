@@ -41,8 +41,7 @@ To build Dynomite in _debug mode_:
 ## Help
 
     Usage: dynomite [-?hVdDt] [-v verbosity level] [-o output file]
-                      [-c conf file] [-s stats port] [-a stats addr]
-                      [-i stats interval] [-p pid file] 
+                      [-c conf file] [-p pid file] 
 
     Options:
       -h, --help              : this help
