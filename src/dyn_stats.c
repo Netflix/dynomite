@@ -1025,9 +1025,6 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 } else if (strcmp(reqline[1], "/ping") == 0) {
                     st_cmd->cmd = CMD_PING;
                     return;
-                } else if (strcmp(reqline[1], "/describe") == 0) {
-                    st_cmd->cmd = CMD_DESCRIBE;
-                    return;
                 } else if (strncmp(reqline[1], "/setloglevel", dn_strlen("/setloglevel")) == 0) {
                     st_cmd->cmd = CMD_SET_LOG_LEVEL;
                     log_notice("Setting loglevel: %s", reqline[1]);
