@@ -1025,9 +1025,6 @@ parse_request(int sd, struct stats_cmd *st_cmd)
                 } else if (strcmp(reqline[1], "/ping") == 0) {
                     st_cmd->cmd = CMD_PING;
                     return;
-                } else if (strcmp(reqline[1], "/describe") == 0) {
-                    st_cmd->cmd = CMD_DESCRIBE;
-                    return;
                 } else if (strncmp(reqline[1], "/setloglevel", dn_strlen("/setloglevel")) == 0) {
                     st_cmd->cmd = CMD_SET_LOG_LEVEL;
                     log_notice("Setting loglevel: %s", reqline[1]);
@@ -1217,11 +1214,11 @@ stats_send_rsp(struct stats *st)
         }
     } else if (cmd == CMD_HELP) {
         char rsp[5120];
-        dn_sprintf(rsp, "/info\n/help\n/ping\n/cluster_describe\n/standby\n"\
-                        "/writes_only\n/setloglevel/<0-11>\n/loglevelup\n/logleveldown\n/historeset\n"\
-                        "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum>\n"\
+        dn_sprintf(rsp, "/info\n/help\n/ping\n/cluster_describe\n"\
+                        "/setloglevel/<0-11>\n/loglevelup\n/logleveldown\n/historeset\n"\
+                        "/get_consistency\n/set_consistency/<read|write>/<dc_one|dc_quorum|dc_safe_quorum>\n"\
                         "/get_timeout_factor\n/set_timeout_factor/<1-10>\n/peer/<up|down|reset>\n"\
-                        "/state/<get_state|writes_only|normal|%s>\n\n", "resuming");
+                        "/state/<get_state|standby|writes_only|normal|%s>\n\n", "resuming");
         return stats_http_rsp(sd, rsp, dn_strlen(rsp));
     } else if (cmd == CMD_NORMAL) {
         core_set_local_state(st->ctx, NORMAL);
