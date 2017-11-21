@@ -89,6 +89,78 @@ For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 Finally, to make writing syntactically correct configuration files easier, dynomite provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
 
+### Configuration YAML Generator
+
+The utility [generate_yams.py](https://github.com/Netflix/dynomite/blob/dev/scripts/dynomite/generate_yamls.py) automates
+.yaml configuration files creation, needed for every node.
+
+The following usage examples show how to create different cluster configuration
+with the command line.
+
+**Usage example 1**: 
+- 2 Datacenters (usa / europe)
+- Each having 1 Rack (usa_rack1 / europe_rack1)
+    - One node per Rack, external ip's should be used (1.1.1.2 / 1.1.1.3)
+
+
+```
+python generate_yamls.py 1.1.1.2:europe_rack1:europe 1.1.1.3:usa_rack1:usa -o mycluster
+``` 
+
+Will generate two yml files outputing the files to 'mycluster' folder
+
+More commands:
+```
+python generate_yamls.py --help
+
+usage:
+        Dynomite Configuration YAML Generator
+
+        Script for generating Dynomite yaml configuration files for distribution with every node.
+        generated yaml files will be outputted for each node, named as {ipaddress}.yml
+        so cluster wide can be easily configured
+
+
+       [-h] [-cp CLIENT_PORT] [-o OUTPUT_DIR] [-sp SERVER_PORT]
+       [-pp PEER_PORT] [-rc {DC_QUORUM,DC_ONE,DC_SAFE_QUORUM}]
+       [-sso {datacenter,none,rack}] [--redis] [--mem]
+       nodes [nodes ...]
+
+positional arguments:
+  nodes                 Usage: <script> publicIp:rack_name:datacenter
+                        publicIp:rack_name:datacenter ... outputs one yaml
+                        file per input node(for a single rack) restrict
+                        generation of the confs for all hosts per rack and not
+                        across rack.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -cp CLIENT_PORT       Client port to use (The client port Dynomite provides
+                        instead of directly accessing redis or memcache)
+                        Default is: 8102 Your redis or memcache clients should
+                        connect to this port
+  -o OUTPUT_DIR         Output directory for the YAML files, if does not exist
+                        will be created, Default is current directory (.)
+  -sp SERVER_PORT       The port your redis or memcache will run locally on
+                        each node, assuming it's uniform, (default is: 6379)
+  -pp PEER_PORT         The port Dynamo clients will use to communicate with
+                        each other, (default is: 8101)
+  -rc {DC_QUORUM,DC_ONE,DC_SAFE_QUORUM}
+                        Sets the read_consistency of the cluster operation
+                        mode (default is: DC_ONLY)
+  -sso {datacenter,none,rack}
+                        Type of communication between Dynomite nodes, Must be
+                        one of 'none', 'rack', 'datacenter', or 'all' (default
+                        is: datacenter)
+  --redis               Sets the data_store property to use redis (0), Default
+                        is 0.
+  --mem                 Sets the data_store property to use memcache (1),
+                        Default is 0.
+
+``` 
+
+
+
 ## License
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
