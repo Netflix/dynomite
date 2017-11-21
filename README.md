@@ -147,7 +147,7 @@ optional arguments:
                         each other, (default is: 8101)
   -rc {DC_QUORUM,DC_ONE,DC_SAFE_QUORUM}
                         Sets the read_consistency of the cluster operation
-                        mode (default is: DC_ONLY)
+                        mode (default is: DC_ONE)
   -sso {datacenter,none,rack}
                         Type of communication between Dynomite nodes, Must be
                         one of 'none', 'rack', 'datacenter', or 'all' (default
