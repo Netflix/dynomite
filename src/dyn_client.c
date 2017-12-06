@@ -504,8 +504,12 @@ req_redis_stats(struct context *ctx, struct msg *req)
     case MSG_REQ_REDIS_ZSCAN:
     case MSG_REQ_REDIS_ZCOUNT:
     case MSG_REQ_REDIS_ZINCRBY:
+    case MSG_REQ_REDIS_ZLEXCOUNT:
+    case MSG_REQ_REDIS_ZRANGEBYLEX:
+    case MSG_REQ_REDIS_ZREMRANGEBYLEX:
     case MSG_REQ_REDIS_ZREMRANGEBYRANK:
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZREVRANGEBYLEX:
         stats_server_incr(ctx, redis_req_sortedsets);
         break;
     case MSG_REQ_REDIS_HINCRBY:

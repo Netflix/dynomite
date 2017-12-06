@@ -176,6 +176,8 @@ redis_arg2(struct msg *r)
 
     case MSG_REQ_REDIS_ZCOUNT:
     case MSG_REQ_REDIS_ZINCRBY:
+    case MSG_REQ_REDIS_ZLEXCOUNT:
+    case MSG_REQ_REDIS_ZREMRANGEBYLEX:
     case MSG_REQ_REDIS_ZREMRANGEBYRANK:
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
 
@@ -246,6 +248,8 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZRANGEBYSCORE:
     case MSG_REQ_REDIS_ZREM:
     case MSG_REQ_REDIS_ZREVRANGE:
+    case MSG_REQ_REDIS_ZRANGEBYLEX:
+    case MSG_REQ_REDIS_ZREVRANGEBYLEX:
     case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
@@ -1125,6 +1129,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     break;
                 }
 
+                if (str9icmp(m, 'z', 'l', 'e', 'x', 'c', 'o', 'u', 'n', 't')) {
+                    r->type = MSG_REQ_REDIS_ZLEXCOUNT;
+                    r->is_read = 1;
+                    break;
+                }
+
                 if (str9icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREVRANGE;
                     r->is_read = 1;
@@ -1173,6 +1183,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     break;
                 }
 
+                if (str11icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
+                    r->type = MSG_REQ_REDIS_ZRANGEBYLEX;
+                    r->is_read = 1;
+                    break;
+                }
+
                 if (str11icmp(m, 'z', 'u', 'n', 'i', 'o', 'n', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZUNIONSTORE;
                     r->is_read = 1;
@@ -1193,6 +1209,21 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
             case 13:
                 if (str13icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZRANGEBYSCORE;
+                    r->is_read = 1;
+                    break;
+                }
+
+                break;
+
+            case 14:
+                if (str14icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
+                    r->type = MSG_REQ_REDIS_ZREMRANGEBYLEX;
+                    r->is_read = 0;
+                    break;
+                }
+
+                if (str14icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
+                    r->type = MSG_REQ_REDIS_ZREVRANGEBYLEX;
                     r->is_read = 1;
                     break;
                 }
