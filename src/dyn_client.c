@@ -76,7 +76,7 @@ client_ref(struct conn *conn, void *owner)
     conn->outstanding_msgs_dict = dictCreate(&msg_table_dict_type, NULL);
     conn->waiting_to_unref = 0;
 
-    log_debug(LOG_VVERB, "%M ref owner %p into pool '%.*s'", conn, pool,
+    log_debug(LOG_VVERB, "%s ref owner %p into pool '%.*s'", print_obj(conn), pool,
               pool->name.len, pool->name.data);
 }
 
@@ -86,12 +86,12 @@ client_unref_internal_try_put(struct conn *conn)
     ASSERT(conn->waiting_to_unref);
     unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
     if (msgs != 0) {
-        log_warn("%M Waiting for %lu outstanding messages", conn, msgs);
+        log_warn("%s Waiting for %lu outstanding messages", print_obj(conn), msgs);
         return;
     }
     ASSERT(conn->owner != NULL);
     conn_event_del_conn(conn);
-    log_warn("%M unref owner %M", conn, conn->owner);
+    log_warn("%s unref owner %s", print_obj(conn), print_obj(conn->owner));
     conn->owner = NULL;
     dictRelease(conn->outstanding_msgs_dict);
     conn->outstanding_msgs_dict = NULL;
@@ -127,21 +127,21 @@ client_active(struct conn *conn)
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
     if (!TAILQ_EMPTY(&conn->omsg_q)) {
-        log_debug(LOG_VVERB, "%M is active", conn);
+        log_debug(LOG_VVERB, "%s is active", print_obj(conn));
         return true;
     }
 
     if (conn->rmsg != NULL) {
-        log_debug(LOG_VVERB, "%M is active", conn);
+        log_debug(LOG_VVERB, "%s is active", print_obj(conn));
         return true;
     }
 
     if (conn->smsg != NULL) {
-        log_debug(LOG_VVERB, "%M is active", conn);
+        log_debug(LOG_VVERB, "%s is active", print_obj(conn));
         return true;
     }
 
-    log_debug(LOG_VVERB, "%M is inactive", conn);
+    log_debug(LOG_VVERB, "%s is inactive", print_obj(conn));
 
     return false;
 }
@@ -195,8 +195,8 @@ client_close(struct context *ctx, struct conn *conn)
         ASSERT(req->selected_rsp == NULL);
         ASSERT(req->is_request && !req->done);
 
-        log_info("%M close, discarding pending %M len %"PRIu32,
-                 conn, req, req->mlen);
+        log_info("%s close, discarding pending %s len %"PRIu32,
+                 print_obj(conn), print_obj(req), req->mlen);
 
         req_put(req);
     }
@@ -211,8 +211,8 @@ client_close(struct context *ctx, struct conn *conn)
         conn_dequeue_outq(ctx, conn, req);
 
         if (req->done || req->selected_rsp) {
-            log_info("%M close, discarding %s %M len %"PRIu32, conn,
-                      req->is_error ? "error": "completed", req, req->mlen);
+            log_info("%s close, discarding %s %s len %"PRIu32, print_obj(conn),
+                      req->is_error ? "error": "completed", print_obj(req), req->mlen);
             req_put(req);
         } else {
             req->swallow = 1;
@@ -220,8 +220,8 @@ client_close(struct context *ctx, struct conn *conn)
             ASSERT(req->is_request);
             ASSERT(req->selected_rsp == NULL);
 
-            log_info("%M close, schedule swallow of %M len %"PRIu32, conn,
-                     req, req->mlen);
+            log_info("%s close, schedule swallow of %s len %"PRIu32, print_obj(conn),
+                     print_obj(req), req->mlen);
         }
 
         stats_pool_incr(ctx, client_dropped_requests);
@@ -230,7 +230,7 @@ client_close(struct context *ctx, struct conn *conn)
 
     status = close(conn->sd);
     if (status < 0) {
-        log_error("close %M failed, ignored: %s", conn, strerror(errno));
+        log_error("close %s failed, ignored: %s", print_obj(conn), strerror(errno));
     }
     conn->sd = -1;
     client_unref(conn);
@@ -261,7 +261,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             return DN_OK;
         // all responses received
         dictDelete(conn->outstanding_msgs_dict, &reqid);
-        log_info("%M Putting %M", conn, req);
+        log_info("%s Putting %s", print_obj(conn), print_obj(req));
         req_put(req);
         client_unref_internal_try_put(conn);
         return DN_OK;
@@ -273,7 +273,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
             // is closed and we are just waiting to drain off the messages.
             if (req->rsp_sent) {
                 dictDelete(conn->outstanding_msgs_dict, &reqid);
-                log_info("%M Putting %M", conn, req);
+                log_info("%s Putting %s", print_obj(conn), print_obj(req));
                 req_put(req);
             }
         }
@@ -316,7 +316,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             ASSERT(req->selected_rsp == NULL);
             ASSERT(req->is_request && !req->done);
 
-            log_error("%M EOF discarding incomplete %M %"PRIu32"", conn, req,
+            log_error("%s EOF discarding incomplete %s %"PRIu32"", print_obj(conn), print_obj(req),
                       req->mlen);
 
             req_put(req);
@@ -331,7 +331,7 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
          */
         if (!conn_active(conn)) {
             conn->done = 1;
-            log_debug(LOG_INFO, "%M DONE", conn);
+            log_debug(LOG_INFO, "%s DONE", print_obj(conn));
         }
 
         return NULL;
@@ -362,7 +362,7 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *req)
 
     if (msg_empty(req)) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "%M filter empty %M", conn, req);
+        log_debug(LOG_VERB, "%s filter empty %s", print_obj(conn), print_obj(req));
         req_put(req);
         return true;
     }
@@ -373,7 +373,7 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *req)
      */
     if (req->quit) {
         ASSERT(conn->rmsg == NULL);
-        log_debug(LOG_VERB, "%M filter quit %M", conn, req);
+        log_debug(LOG_VERB, "%s filter quit %s", print_obj(conn), print_obj(req));
         conn->eof = 1;
         conn->recv_ready = 0;
         req_put(req);
@@ -405,7 +405,7 @@ void
 req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                   err_t error_code, err_t dyn_error_code)
 {
-    log_info("%M FORWARD FAILED %M len %"PRIu32": %d:%s", conn, req, req->mlen,
+    log_info("%s FORWARD FAILED %s len %"PRIu32": %d:%s", print_obj(conn), print_obj(req), req->mlen,
              error_code, dn_strerror(error_code));
 
     // Nothing to do if request is not expecting a reply.
@@ -556,7 +556,7 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
     }
     ASSERT(s_conn->type == CONN_SERVER);
 
-    log_info("%M FORWARD %M to storage conn %M", c_conn, req, s_conn);
+    log_info("%s FORWARD %s to storage conn %s", print_obj(c_conn), print_obj(req), print_obj(s_conn));
 
     if (ctx->dyn_state == NORMAL) {
         /* enqueue the message (request) into server inq */
@@ -601,8 +601,8 @@ local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *req,
     }
 
 
-    log_debug(LOG_VERB, "%M local forward %M to %M len %"PRIu32" key '%.*s'",
-              c_conn, req, s_conn, req->mlen, keylen, key);
+    log_debug(LOG_VERB, "%s local forward %s to %s len %"PRIu32" key '%.*s'",
+              print_obj(c_conn), print_obj(req), print_obj(s_conn), req->mlen, keylen, key);
     *dyn_error_code = 0;
     return DN_OK;
 }
@@ -622,7 +622,7 @@ admin_local_req_forward(struct context *ctx, struct conn *c_conn, struct msg *re
         return DN_ERROR;
     }
 
-    log_debug(LOG_NOTICE, "%M Need to delete [%.*s] ", c_conn, keylen, key);
+    log_debug(LOG_NOTICE, "%s Need to delete [%.*s] ", print_obj(c_conn), keylen, key);
     return local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
 }
 
@@ -662,7 +662,7 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
     uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
     uint8_t rack_index;
     init_response_mgr(&req->rspmgr, req, req->is_read, rack_cnt, c_conn);
-    log_info("%M %M same DC racks:%d expect replies %d", c_conn, req,
+    log_info("%s %s same DC racks:%d expect replies %d", print_obj(c_conn), print_obj(req),
              rack_cnt, req->rspmgr.max_responses);
     for(rack_index = 0; rack_index < rack_cnt; rack_index++) {
 
@@ -696,8 +696,8 @@ req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
             msg_clone(req, orig_mbuf, rack_msg);
             rack_msg->swallow = true;
 
-            log_info("%M forwarding cloned %M to same dc rack '%.*s'",
-                     c_conn, rack_msg, rack->name->len, rack->name->data);
+            log_info("%s forwarding cloned %s to same dc rack '%.*s'",
+                     print_obj(c_conn), print_obj(rack_msg), rack->name->len, rack->name->data);
 
             s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen, &dyn_error_code);
             if (s != DN_OK) {
@@ -772,8 +772,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
     msg_clone(req, orig_mbuf, rack_msg);
     rack_msg->swallow = true;
 
-    log_info("%M forwarding cloned %M on remote dc rack '%.*s'",
-             c_conn, rack_msg, rack->name->len, rack->name->data);
+    log_info("%s forwarding cloned %s on remote dc rack '%.*s'",
+             print_obj(c_conn), print_obj(rack_msg), rack->name->len, rack->name->data);
 
     dyn_error_t dyn_error_code = 0;
     rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
@@ -798,8 +798,8 @@ req_forward_remote_dc(struct context *ctx, struct conn *c_conn, struct msg *req,
         msg_clone(req, orig_mbuf, rack_msg);
         rack_msg->swallow = true;
 
-        log_info("%M FAILOVER forwarding cloned %M to remote dc rack '%.*s'",
-                 c_conn, rack_msg, rack->name->len, rack->name->data);
+        log_info("%s FAILOVER forwarding cloned %s to remote dc rack '%.*s'",
+                 print_obj(c_conn), print_obj(rack_msg), rack->name->len, rack->name->data);
 
         dyn_error_code = DYNOMITE_OK;
         s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
@@ -856,8 +856,8 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
     uint32_t full_keylen = 0;
     uint8_t *full_key = msg_get_full_key(req, 0, &full_keylen);
 
-    log_info(">>>>>>>>>>>>>>>>>>>>>>> %M RECEIVED %M key '%.*s' tagged key '%.*s'",
-             c_conn, req, full_keylen, full_key, keylen, key);
+    log_info(">>>>>>>>>>>>>>>>>>>>>>> %s RECEIVED %s key '%.*s' tagged key '%.*s'",
+             print_obj(c_conn), print_obj(req), full_keylen, full_key, keylen, key);
     // add the message to the dict
     dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
@@ -984,7 +984,7 @@ req_recv_done(struct context *ctx, struct conn *conn,
         tmsg = TAILQ_NEXT(sub_msg, m_tqe);
 
         TAILQ_REMOVE(&frag_msgq, sub_msg, m_tqe);
-        log_info("Forwarding split request %M", sub_msg);
+        log_info("Forwarding split request %s", print_obj(sub_msg));
         req_forward(ctx, conn, sub_msg);
     }
     ASSERT(TAILQ_EMPTY(&frag_msgq));
@@ -1008,23 +1008,23 @@ rstatus_t
 msg_local_one_rsp_handler(struct msg *req, struct msg *rsp)
 {
     ASSERT_LOG(!req->selected_rsp, "Received more than one response for dc_one.\
-               %M prev %M new rsp %M", req, req->selected_rsp, rsp);
+               %s prev %s new rsp %s", print_obj(req), print_obj(req->selected_rsp), print_obj(rsp));
     req->awaiting_rsps = 0;
     rsp->peer = req;
     req->is_error = rsp->is_error;
     req->error_code = rsp->error_code;
     req->dyn_error_code = rsp->dyn_error_code;
     req->selected_rsp = rsp;
-    log_info("%M SELECTED %M", req, rsp);
+    log_info("%d SELECTED %d", print_obj(req), print_obj(rsp));
     return DN_OK;
 }
 
 static rstatus_t
 swallow_extra_rsp(struct msg *req, struct msg *rsp)
 {
-    log_info("%M SWALLOW %M awaiting %d", req, rsp,
+    log_info("%s SWALLOW %s awaiting %d", print_obj(req), print_obj(rsp),
              req->awaiting_rsps);
-    ASSERT_LOG(req->awaiting_rsps, "%M has no awaiting rsps, received %M", req, rsp);
+    ASSERT_LOG(req->awaiting_rsps, "%s has no awaiting rsps, received %s", print_obj(req), print_obj(rsp));
     // drop this response.
     rsp_put(rsp);
     msg_decr_awaiting_rsps(req);
@@ -1059,7 +1059,7 @@ req_client_enqueue_omsgq(struct context *ctx, struct conn *conn, struct msg *req
 
     TAILQ_INSERT_TAIL(&conn->omsg_q, req, c_tqe);
     histo_add(&ctx->stats->client_out_queue, TAILQ_COUNT(&conn->omsg_q));
-    log_debug(LOG_VERB, "%M enqueue outq %M", conn, req);
+    log_debug(LOG_VERB, "%s enqueue outq %s", print_obj(conn), print_obj(req));
 }
 
 static void
@@ -1074,7 +1074,7 @@ req_client_dequeue_omsgq(struct context *ctx, struct conn *conn, struct msg *req
     }
     TAILQ_REMOVE(&conn->omsg_q, req, c_tqe);
     histo_add(&ctx->stats->client_out_queue, TAILQ_COUNT(&conn->omsg_q));
-    log_debug(LOG_VERB, "%M dequeue outq %M", conn, req);
+    log_debug(LOG_VERB, "%s dequeue outq %s", print_obj(conn), print_obj(req));
 }
 
 struct conn_ops client_ops = {

@@ -41,7 +41,7 @@ dnode_client_unref_internal_try_put(struct conn *conn)
     ASSERT(conn->waiting_to_unref);
     unsigned long msgs = dictSize(conn->outstanding_msgs_dict);
     if (msgs != 0) {
-        log_warn("%M Waiting for %lu outstanding messages", conn, msgs);
+        log_warn("%s Waiting for %lu outstanding messages", print_obj(conn), msgs);
         return;
     }
     struct server_pool *pool;
@@ -52,8 +52,8 @@ dnode_client_unref_internal_try_put(struct conn *conn)
     dictRelease(conn->outstanding_msgs_dict);
     conn->outstanding_msgs_dict = NULL;
     conn->waiting_to_unref = 0;
-    log_warn("unref %M owner %p from pool '%.*s'",
-             conn, pool, pool->name.len, pool->name.data);
+    log_warn("unref %s owner %p from pool '%.*s'",
+             print_obj(conn), pool, pool->name.len, pool->name.data);
     conn_put(conn);
 }
 
@@ -230,7 +230,7 @@ dnode_client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     status = msg_handle_response(req, rsp);
     if (conn->waiting_to_unref) {
         dictDelete(conn->outstanding_msgs_dict, &reqid);
-        log_info("Putting %M", req);
+        log_info("Putting %s", print_obj(req));
         req_put(req);
         dnode_client_unref_internal_try_put(conn);
         return DN_OK;
@@ -282,13 +282,13 @@ dnode_req_forward(struct context *ctx, struct conn *conn, struct msg *req)
 {
     struct server_pool *pool;
 
-    log_debug(LOG_DEBUG, "%M DNODE REQ RECEIVED dmsg->id %u", conn, req->dmsg->id);
+    log_debug(LOG_DEBUG, "%s DNODE REQ RECEIVED dmsg->id %u", print_obj(conn), req->dmsg->id);
 
     ASSERT(conn->type == CONN_DNODE_PEER_CLIENT);
 
     pool = conn->owner;
 
-    log_debug(LOG_DEBUG, "%M adding message %d:%d", conn, req->id, req->parent_id);
+    log_debug(LOG_DEBUG, "%s adding message %d:%d", print_obj(conn), req->id, req->parent_id);
     dictAdd(conn->outstanding_msgs_dict, &req->id, req);
 
     uint32_t keylen = 0;
@@ -511,7 +511,7 @@ dnode_rsp_send_done(struct context *ctx, struct conn *conn, struct msg *rsp)
 
     ASSERT(!rsp->is_request && req->is_request);
     ASSERT(req->selected_rsp == rsp);
-    log_debug(LOG_DEBUG, "%M DNODE RSP SENT dmsg->id %u", conn, req->dmsg->id);
+    log_debug(LOG_DEBUG, "%s DNODE RSP SENT dmsg->id %u", print_obj(conn), req->dmsg->id);
 
     /* dequeue request from client outq */
     conn_dequeue_outq(ctx, conn, req);
