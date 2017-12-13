@@ -1,7 +1,6 @@
 #pragma once
 #include <stdint.h>
 #include <stdlib.h>
-#include <printf.h>
 typedef uint64_t msgid_t;
 typedef uint64_t msec_t;
 typedef uint64_t usec_t;
@@ -50,15 +49,17 @@ typedef enum {
     OBJ_LAST
 }object_type_t;
 
+#define PRINT_BUF_SIZE 255
+
 struct object;
-typedef int (*func_print_t)(FILE *stream, const struct object *obj);
+typedef char* (*func_print_t)(const struct object *obj);
 typedef struct object {
     uint16_t    magic;
     object_type_t type;
     func_print_t func_print;
+    char print_buff[PRINT_BUF_SIZE];
 }object_t;
 
 void init_object(object_t *obj, object_type_t type, func_print_t func_print);
 
-int print_obj(FILE *stream, const struct printf_info *info, const void *const *args);
-int print_obj_arginfo(const struct printf_info *info, size_t n, int *argtypes);
+char* print_obj(const void *ptr);

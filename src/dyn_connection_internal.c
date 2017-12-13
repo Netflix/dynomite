@@ -41,32 +41,36 @@ _conn_get_type_string(struct conn *conn)
     return "INVALID";
 }
 
-static int
-_print_conn(FILE *stream, const struct object *obj)
+static char*
+_print_conn(const struct object *obj)
 {
     ASSERT(obj->type == OBJ_CONN);
     struct conn *conn = (struct conn *)obj;
     if ((conn->type == CONN_DNODE_PEER_PROXY) ||
         (conn->type == CONN_PROXY)) {
-        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d listening on '%.*s'>",
                    _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
+        return obj->print_buff;
     }
     if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
         (conn->type == CONN_CLIENT)) {
-        return fprintf(stream, "<%s %p %d from '%.*s'>",
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d from '%.*s'>",
                    _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
+        return obj->print_buff;
     }
     if ((conn->type == CONN_DNODE_PEER_SERVER) ||
         (conn->type == CONN_SERVER)) {
-        return fprintf(stream, "<%s %p %d to '%.*s'>",
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d to '%.*s'>",
                    _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
+        return obj->print_buff;
     }
 
-    return fprintf(stream, "<%s %p %d>",
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d>",
                    _conn_get_type_string(conn), conn, conn->sd);
+    return obj->print_buff;
 }
 
 

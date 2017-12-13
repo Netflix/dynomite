@@ -164,24 +164,26 @@ static struct string msg_type_strings[] = {
 };
 #undef DEFINE_ACTION
 
-static int
-print_req(FILE *stream, const struct object *obj)
+static char*
+print_req(const struct object *obj)
 {
     ASSERT(obj->type == OBJ_REQ);
     struct msg *req = (struct msg *)obj;
     struct string *req_type = msg_type_string(req->type);
-    return fprintf(stream, "<REQ %p %lu:%lu::%lu %.*s, len:%u>", req, req->id, req->parent_id,
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<REQ %p %lu:%lu::%lu %.*s, len:%u>", req, req->id, req->parent_id,
                    req->frag_id, req_type->len, req_type->data, req->mlen);
+    return obj->print_buff;
 }
 
-static int
-print_rsp(FILE *stream, const struct object *obj)
+static char*
+print_rsp(const struct object *obj)
 {
     ASSERT(obj->type == OBJ_RSP);
     struct msg *rsp = (struct msg *)obj;
     struct string *rsp_type = msg_type_string(rsp->type);
-    return fprintf(stream, "<RSP %p %lu:%lu %.*s len:%u>", rsp, rsp->id,
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<RSP %p %lu:%lu %.*s len:%u>", rsp, rsp->id,
                    rsp->parent_id, rsp_type->len, rsp_type->data, rsp->mlen);
+    return obj->print_buff;
 }
 
 void
@@ -315,11 +317,11 @@ _msg_get(struct conn *conn, bool request, const char *const caller)
 
 
     if (alloc_msg_count % 1000 == 0)
-        log_warn("alloc_msg_count: %lu caller: %s %M",
-                 alloc_msg_count, caller, conn);
+        log_warn("alloc_msg_count: %lu caller: %s %s",
+                 alloc_msg_count, caller, print_obj(conn));
     else
-        log_info("alloc_msg_count: %lu caller: %s %M",
-                 alloc_msg_count, caller, conn);
+        log_info("alloc_msg_count: %lu caller: %s %s",
+                 alloc_msg_count, caller, print_obj(conn));
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -731,7 +733,7 @@ msg_get_key(struct msg *req, uint32_t key_index, uint32_t *keylen, bool tagged_o
     *keylen = 0;
     if (array_n(req->keys) == 0)
             return NULL;
-    ASSERT_LOG(key_index < array_n(req->keys), "%M has %u keys", req, array_n(req->keys));
+    ASSERT_LOG(key_index < array_n(req->keys), "%s has %u keys", print_obj(req), array_n(req->keys));
 
     struct keypos *kpos = array_get(req->keys, key_index);
     uint8_t *key_start = tagged_only ? kpos->tag_start : kpos->start;
@@ -1199,7 +1201,7 @@ msg_send(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg;
 
-    ASSERT_LOG(conn->send_active, "%M is not active", conn);
+    ASSERT_LOG(conn->send_active, "%s is not active", print_obj(conn));
 
     conn->send_ready = 1;
     do {
@@ -1217,7 +1219,7 @@ msg_send(struct context *ctx, struct conn *conn)
         if (TAILQ_COUNT(&conn->omsg_q) > MAX_CONN_QUEUE_SIZE) {
             conn->send_ready = 0;
             conn->err = ENOTRECOVERABLE;
-            log_error("%M Setting ENOTRECOVERABLE happens here!", conn);
+            log_error("%s Setting ENOTRECOVERABLE happens here!", print_obj(conn));
         }
 
     } while (conn->send_ready);
