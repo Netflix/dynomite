@@ -2679,7 +2679,7 @@ redis_post_coalesce_mget(struct msg *request)
          * the fragments is still in c_conn->omsg_q, we have to discard all of them,
          * we just close the conn here
          */
-        log_warn("marking %M as error", response->owner);
+        log_warn("marking %s as error", print_obj(response->owner));
         response->owner->err = 1;
         return;
     }
@@ -2688,13 +2688,13 @@ redis_post_coalesce_mget(struct msg *request)
         sub_msg = request->frag_seq[i]->selected_rsp;           /* get it's peer response */
         if (sub_msg == NULL) {
             struct keypos *kpos = array_get(request->keys, i);
-            log_warn("Response missing for key %.*s, %M marking %M as error",
-                     kpos->tag_end - kpos->tag_start, kpos->tag_start, request, response->owner);
+            log_warn("Response missing for key %.*s, %s marking %s as error",
+                     kpos->tag_end - kpos->tag_start, kpos->tag_start, print_obj(request), print_obj(response->owner));
             response->owner->err = 1;
             return;
         }
         if ((sub_msg->is_error) || redis_copy_bulk(response, sub_msg, false)) {
-            log_warn("marking %M as error, %M %M", response->owner, request, response);
+            log_warn("marking %s as error, %s %s", print_obj(response->owner), print_obj(request), print_obj(response));
             msg_dump(LOG_INFO, sub_msg);
             response->owner->err = 1;
             return;
@@ -2720,7 +2720,7 @@ redis_post_coalesce(struct msg *req)
         return;
     }
 
-    //log_notice("Post coalesce %M", req);
+    //log_notice("Post coalesce %s", print_obj(req));
     switch (req->type) {
     case MSG_REQ_REDIS_MGET:
         return redis_post_coalesce_mget(req);
@@ -2925,7 +2925,7 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         }
     }
 
-    log_info("Fragmenting %M", r);
+    log_info("Fragmenting %s", print_obj(r));
     for (i = 0; i < total_peers; i++) {     /* prepend mget header, and forward it */
         struct msg *sub_msg = sub_msgs[i];
         if (sub_msg == NULL) {
@@ -2953,7 +2953,7 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         sub_msg->frag_id = r->frag_id;
         sub_msg->frag_owner = r->frag_owner;
 
-        log_info("Fragment %d) %M", i, sub_msg);
+        log_info("Fragment %d) %s", i, print_obj(sub_msg));
         TAILQ_INSERT_TAIL(frag_msgq, sub_msg, m_tqe);
         r->nfrag++;
     }
@@ -3182,7 +3182,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_info("%M cloned %d good responses", rspmgr->msg, array_n(&cloned_responses));
+    log_info("%s cloned %d good responses", print_obj(rspmgr->msg), array_n(&cloned_responses));
 
     // if number of arguments do not match, return NULL;
     int nargs;
@@ -3206,7 +3206,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_debug(LOG_DEBUG, "%M after appending nargs %M", selected_rsp);
+    log_debug(LOG_DEBUG, "%s after appending nargs", print_obj(selected_rsp));
     msg_dump(LOG_DEBUG, selected_rsp);
 
     // array to hold 1 fragment from each response 
@@ -3227,8 +3227,8 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             if (s != DN_OK) {
                 goto cleanup;
             }
-            log_debug(LOG_DEBUG, "Fragment %d of %d, from response(%d of %d) %M",
-                      arg_iter+1, nargs, response_iter+1, rspmgr->good_responses, cloned_rsp_fragment);
+            log_debug(LOG_DEBUG, "Fragment %d of %d, from response(%d of %d) %s",
+                      arg_iter+1, nargs, response_iter+1, rspmgr->good_responses, print_obj(cloned_rsp_fragment));
             msg_dump(LOG_DEBUG, cloned_rsp_fragment);
 
             struct msg **pdst = (struct msg **)array_push(&cloned_rsp_fragment_array);
@@ -3248,7 +3248,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             }
         }
 
-        log_debug(LOG_DEBUG, "quorum fragment %M", quorum_fragment);
+        log_debug(LOG_DEBUG, "quorum fragment %s", print_obj(quorum_fragment));
         msg_dump(LOG_DEBUG, quorum_fragment);
         // Copy that fragment to the resulting response
         s = redis_copy_bulk(selected_rsp, quorum_fragment, false);
@@ -3256,7 +3256,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             goto cleanup;
         }
 
-        log_debug(LOG_DEBUG, "response now is %M", selected_rsp);
+        log_debug(LOG_DEBUG, "response now is %s", print_obj(selected_rsp));
         msg_dump(LOG_DEBUG, selected_rsp);
         // free the responses in the array
         array_each(&cloned_rsp_fragment_array, free_rsp_each);

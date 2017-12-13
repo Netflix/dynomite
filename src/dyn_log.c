@@ -32,32 +32,6 @@
 
 static struct logger logger;
 
-#ifdef __APPLE__
-
-printf_domain_t pdt = NULL;
-
-int
-log_register_custom_specifier(int spec, printf_function func,
-                              printf_arginfo_function argfunc)
-{
-
-    pdt = new_printf_domain();
-    if (!pdt || register_printf_domain_function(pdt, spec, func, argfunc, NULL))
-        return DN_ERROR;
-    return DN_OK;
-}
-
-#else
-
-int
-log_register_custom_specifier(int spec, printf_function func,
-                              printf_arginfo_function argfunc)
-{
-    return register_printf_function(spec, func, argfunc);
-}
-
-#endif
-
 /**
  * Initialize logging including log level and output target. Logging output may
  * be sent to standard error or to a log file.
