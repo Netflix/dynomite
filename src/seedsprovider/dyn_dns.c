@@ -27,7 +27,9 @@
 #define DNS_TXT_NAME "_dynomite.ec2-internal"
 #endif
 
-static char * txtName  = NULL;
+static char * dnsName  = NULL;
+static char * dnsType  = NULL;
+static int queryType = T_TXT;
 static int64_t last = 0; //storing last time for seeds check
 static uint32_t last_seeds_hash = 0;
 
@@ -74,52 +76,55 @@ dns_get_seeds(struct context * ctx, struct mbuf *seeds_buf)
 
     if (!_env_checked) {
         _env_checked = 1;
-        txtName = getenv("DYNOMITE_DNS_TXT_NAME");
-        if (txtName == NULL)  txtName = DNS_TXT_NAME;
+        dnsName = getenv("DYNOMITE_DNS_NAME");
+        if (dnsName == NULL)  dnsName = DNS_TXT_NAME;
+        dnsType = getenv("DYNOMITE_DNS_TYPE");
+        if (dnsType != NULL) { if (strcmp(dnsType, "A") == 0) queryType = T_A; }
     }
 
-    log_debug(LOG_VVERB, "checking for %s", txtName);
+    log_debug(LOG_VVERB, "checking for %s", dnsName);
 
     if (!seeds_check()) {
         return DN_NOOPS;
     }
 
     unsigned char buf[BUFSIZ];
-    int r = res_query(txtName, C_IN, T_TXT, buf, sizeof(buf));
+
+    int r = res_query(dnsName, C_IN, queryType, buf, sizeof(buf));
     if (r == -1) {
-        log_debug(LOG_DEBUG, "DNS response for %s: %s", txtName, hstrerror(h_errno));
+        log_debug(LOG_DEBUG, "DNS response for %s: %s", dnsName, hstrerror(h_errno));
         return DN_NOOPS;
     }
     if (r >= sizeof(buf)) {
-        log_debug(LOG_DEBUG, "DNS reply is too large for %s: %d, bufsize: %d", txtName, r, sizeof(buf));
+        log_debug(LOG_DEBUG, "DNS reply is too large for %s: %d, bufsize: %d", dnsName, r, sizeof(buf));
         return DN_NOOPS;
     }
     HEADER *hdr = (HEADER*)buf;
     if (hdr->rcode != NOERROR) {
-        log_debug(LOG_DEBUG, "DNS reply code for %s: %d", txtName, hdr->rcode);
+        log_debug(LOG_DEBUG, "DNS reply code for %s: %d", dnsName, hdr->rcode);
         return DN_NOOPS;
     }
     int na = ntohs(hdr->ancount);
 
     ns_msg m;
     if (ns_initparse(buf, r, &m) == -1) {
-        log_debug(LOG_DEBUG, "ns_initparse error for %s: %s", txtName, strerror(errno));
+        log_debug(LOG_DEBUG, "ns_initparse error for %s: %s", dnsName, strerror(errno));
         return DN_NOOPS;
     }
     int i;
     ns_rr rr;
     for (i = 0; i < na; ++i) {
         if (ns_parserr(&m, ns_s_an, i, &rr) == -1) {
-            log_debug(LOG_DEBUG, "ns_parserr for %s: %s", txtName, strerror (errno));
+            log_debug(LOG_DEBUG, "ns_parserr for %s: %s", dnsName, strerror (errno));
             return DN_NOOPS;
         }
         mbuf_rewind(seeds_buf);
         unsigned char *s = ns_rr_rdata(rr);
         if (s[0] >= ns_rr_rdlen(rr)) {
-            log_debug(LOG_DEBUG, "invalid TXT length for %s: %d < %d", txtName, s[0], ns_rr_rdlen(rr));
+            log_debug(LOG_DEBUG, "invalid length for %s: %d < %d", dnsName, s[0], ns_rr_rdlen(rr));
             return DN_NOOPS;
         }
-        log_debug(LOG_VERB, "seeds for %s: %.*s", txtName, s[0], s +1);
+        log_debug(LOG_VERB, "seeds for %s: %.*s", dnsName, s[0], s +1);
         mbuf_copy(seeds_buf, s + 1, s[0]);
     }
 
