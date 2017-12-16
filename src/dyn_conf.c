@@ -185,8 +185,7 @@ conf_datastore_transform(struct datastore *s, struct conf_server *cs)
     s->reconnect_backoff_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
     s->failure_count = 0;
 
-    log_debug(LOG_VERB, "transform to server '%.*s'",
-              s->endpoint.pname.len, s->endpoint.pname.data);
+    log_debug(LOG_NOTICE, "Created %s", print_obj(s));
 
     return DN_OK;
 }
@@ -241,8 +240,7 @@ conf_seed_each_transform(void *elem, void *data)
     s->is_seed = 1;
     s->is_secure = cseed->is_secure;
 
-    log_debug(LOG_VERB, "transform to seed peer %"PRIu32" '%.*s'",
-              s->idx, s->endpoint.pname.len, s->endpoint.pname.data);
+    log_debug(LOG_NOTICE, "Created %s", print_obj(s));
 
     return DN_OK;
 }
@@ -408,6 +406,25 @@ get_secure_server_option(struct string option)
     return SECURE_OPTION_NONE;
 }
 
+static char*
+print_server_pool(const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_POOL);
+    struct server_pool *sp = (struct server_pool *)obj;
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<POOL %p '%.*s'>", sp, sp->name.len, sp->name.data);
+    return obj->print_buff;
+}
+
+static char*
+print_datastore(const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_DATASTORE);
+    struct datastore *ds = (struct datastore *)obj;
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<DATASTORE %p %.*s>", ds, ds->endpoint.pname.len,
+                   ds->endpoint.pname.data);
+    return obj->print_buff;
+}
+
 /**
  * Copy connection pool configuration parsed from dynomite.yaml into the server
  * pool.
@@ -422,7 +439,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     ASSERT(cp->valid);
 
     memset(sp, 0, sizeof(struct server_pool));
-    sp->object_type = OBJ_POOL;
+    init_object(&sp->object, OBJ_POOL, print_server_pool);
     sp->ctx = NULL;
     sp->p_conn = NULL;
     sp->dn_conn_q = 0;
@@ -465,6 +482,7 @@ conf_pool_transform(struct server_pool *sp, struct conf_pool *cp)
     sp->preconnect = cp->preconnect ? 1 : 0;
 
     sp->datastore = dn_zalloc(sizeof(*sp->datastore));
+    init_object(&(sp->datastore->object), OBJ_DATASTORE, print_datastore);
     status = conf_datastore_transform(sp->datastore, cp->conf_datastore);
     if (status != DN_OK) {
         return status;

@@ -155,6 +155,38 @@ conn_to_ctx(struct conn *conn)
     return pool ? pool->ctx : NULL;
 }
 
+static char*
+print_conn(const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_CONN);
+    struct conn *conn = (struct conn *)obj;
+    if ((conn->type == CONN_DNODE_PEER_PROXY) ||
+        (conn->type == CONN_PROXY)) {
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d listening on '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+        return obj->print_buff;
+    }
+    if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
+        (conn->type == CONN_CLIENT)) {
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d from '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+        return obj->print_buff;
+    }
+    if ((conn->type == CONN_DNODE_PEER_SERVER) ||
+        (conn->type == CONN_SERVER)) {
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d to '%.*s'>",
+                   conn_get_type_string(conn), conn, conn->sd,
+                   conn->pname.len, conn->pname.data);
+        return obj->print_buff;
+    }
+
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d>",
+                   conn_get_type_string(conn), conn, conn->sd);
+    return obj->print_buff;
+}
+
 static struct conn *
 _conn_get(void)
 {
@@ -174,7 +206,7 @@ _conn_get(void)
         memset(conn, 0, sizeof(*conn));
     }
 
-    conn->object_type = OBJ_CONN;
+    init_object(&conn->object, OBJ_CONN, print_conn);
     conn->owner = NULL;
 
     conn->sd = -1;
@@ -230,32 +262,6 @@ _conn_get(void)
     strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
 
     return conn;
-}
-
-int
-print_conn(FILE *stream, struct conn *conn)
-{
-    if ((conn->type == CONN_DNODE_PEER_PROXY) ||
-        (conn->type == CONN_PROXY)) {
-        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
-                   conn_get_type_string(conn), conn, conn->sd,
-                   conn->pname.len, conn->pname.data);
-    }
-    if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
-        (conn->type == CONN_CLIENT)) {
-        return fprintf(stream, "<%s %p %d from '%.*s'>",
-                   conn_get_type_string(conn), conn, conn->sd,
-                   conn->pname.len, conn->pname.data);
-    }
-    if ((conn->type == CONN_DNODE_PEER_SERVER) ||
-        (conn->type == CONN_SERVER)) {
-        return fprintf(stream, "<%s %p %d to '%.*s'>",
-                   conn_get_type_string(conn), conn, conn->sd,
-                   conn->pname.len, conn->pname.data);
-    }
-
-    return fprintf(stream, "<%s %p %d>",
-                   conn_get_type_string(conn), conn, conn->sd);
 }
 
 inline void
@@ -467,7 +473,7 @@ conn_put(struct conn *conn)
     ASSERT(conn->sd < 0);
     ASSERT(conn->owner == NULL);
 
-    log_debug(LOG_VVERB, "putting %M", conn);
+    log_debug(LOG_VVERB, "putting %s", print_obj(conn));
 
     nfree_connq++;
     TAILQ_INSERT_HEAD(&free_connq, conn, conn_tqe);
@@ -619,7 +625,7 @@ conn_connect(struct context *ctx, struct conn *conn)
         status = DN_ERROR;
         goto error;
     }
-    log_warn("%M connecting.....", conn);
+    log_warn("%s connecting.....", print_obj(conn));
 
     status = dn_set_nonblocking(conn->sd);
     if (status != DN_OK) {
@@ -673,7 +679,7 @@ conn_connect(struct context *ctx, struct conn *conn)
 
     ASSERT(!conn->connecting);
     conn->connected = 1;
-    log_debug(LOG_WARN, "%M connected to '%.*s'", conn,
+    log_debug(LOG_WARN, "%s connected to '%.*s'", print_obj(conn),
             conn->pname.len, conn->pname.data);
 
     return DN_OK;
@@ -695,7 +701,7 @@ conn_recv_data(struct conn *conn, void *buf, size_t size)
     for (;;) {
         n = dn_read(conn->sd, buf, size);
 
-        log_debug(LOG_VERB, "%M recv %zd of %zu", conn, n, size);
+        log_debug(LOG_VERB, "%s recv %zd of %zu", print_obj(conn), n, size);
 
         if (n > 0) {
             if (n < (ssize_t) size) {
@@ -708,22 +714,22 @@ conn_recv_data(struct conn *conn, void *buf, size_t size)
         if (n == 0) {
             conn->recv_ready = 0;
             conn->eof = 1;
-            log_debug(LOG_NOTICE, "%M recv eof rb %zu sb %zu", conn,
+            log_debug(LOG_NOTICE, "%s recv eof rb %zu sb %zu", print_obj(conn),
                       conn->recv_bytes, conn->send_bytes);
             return n;
         }
 
         if (errno == EINTR) {
-            log_debug(LOG_VERB, "%M recv not ready - eintr", conn);
+            log_debug(LOG_VERB, "%s recv not ready - eintr", print_obj(conn));
             continue;
         } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn->recv_ready = 0;
-            log_debug(LOG_VERB, "%M recv not ready - eagain", conn);
+            log_debug(LOG_VERB, "%s recv not ready - eagain", print_obj(conn));
             return DN_EAGAIN;
         } else {
             conn->recv_ready = 0;
             conn->err = errno;
-            log_error("%M recv failed: %s", conn, strerror(errno));
+            log_error("%s recv failed: %s", print_obj(conn), strerror(errno));
             return DN_ERROR;
         }
     }

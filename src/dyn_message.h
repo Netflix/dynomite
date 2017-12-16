@@ -322,7 +322,7 @@ get_msg_routing_string(msg_routing_t route)
 
 
 struct msg {
-    object_type_t        object_type;
+    object_t             object;
     TAILQ_ENTRY(msg)     c_tqe;           /* link in client q */
     TAILQ_ENTRY(msg)     s_tqe;           /* link in server q */
     TAILQ_ENTRY(msg)     m_tqe;           /* link in send q / free q */
@@ -422,8 +422,6 @@ msg_handle_response(struct msg *req, struct msg *rsp)
     return req->rsp_handler(req, rsp);
 }
 
-int print_req(FILE *stream, struct msg *req);
-int print_rsp(FILE *stream, struct msg *rsp);
 size_t msg_free_queue_size(void);
 
 struct msg *msg_tmo_min(void);

@@ -91,7 +91,7 @@ typedef enum connection_type {
 } connection_type_t;
 
 struct conn {
-    object_type_t      object_type;
+    object_t           object;
     TAILQ_ENTRY(conn)  conn_tqe;      /* link in server_pool / server / free q */
     TAILQ_ENTRY(conn)  ready_tqe;     /* link in ready connection q */
     void               *owner;        /* connection owner - server_pool / server */
@@ -189,7 +189,6 @@ conn_handle_response(struct conn *conn, msgid_t msgid, struct msg *rsp)
         (conn)->ops->dequeue_outq(ctx, conn, msg)
 TAILQ_HEAD(conn_tqh, conn);
 
-int print_conn(FILE *stream, struct conn *conn);
 void conn_set_write_consistency(struct conn *conn, consistency_t cons);
 consistency_t conn_get_write_consistency(struct conn *conn);
 void conn_set_read_consistency(struct conn *conn, consistency_t cons);

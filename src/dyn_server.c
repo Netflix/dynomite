@@ -244,15 +244,15 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
         (req->swallow && (req->consistency == DC_ONE)) ||
         (req->swallow && ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
                       && (!conn->same_dc))) {
-        log_info("%M SWALLOW %M len %"PRIu32, conn, req, req->mlen);
+        log_info("%s SWALLOW %s len %"PRIu32, print_obj(conn), print_obj(req), req->mlen);
         req_put(req);
         return;
     }
     struct conn *c_conn = req->owner;
     // At other connections, these responses would be swallowed.
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
-               (c_conn->type == CONN_DNODE_PEER_CLIENT), "c_conn type %s",
-               conn_get_type_string(c_conn));
+               (c_conn->type == CONN_DNODE_PEER_CLIENT), "c_conn %s",
+               print_obj(c_conn));
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
@@ -268,10 +268,10 @@ server_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     rsp->error_code = req->error_code = conn->err;
     rsp->dyn_error_code = req->dyn_error_code = STORAGE_CONNECTION_REFUSE;
     rsp->dmsg = NULL;
-    log_debug(LOG_DEBUG, "%M <-> %M", req, rsp);
+    log_debug(LOG_DEBUG, "%s <-> %s", print_obj(req), print_obj(rsp));
 
-    log_info("close %M req %M len %"PRIu32" from %M %c %s",
-             conn, req, req->mlen, c_conn, conn->err ? ':' : ' ',
+    log_info("close %s req %s len %"PRIu32" from %s %c %s",
+             print_obj(conn), print_obj(req), req->mlen, print_obj(c_conn), conn->err ? ':' : ' ',
              conn->err ? strerror(conn->err): " ");
     rstatus_t status =
             conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
@@ -324,8 +324,8 @@ server_close(struct context *ctx, struct conn *conn)
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
-    log_warn("close %M Dropped %u outqueue & %u inqueue requests",
-             conn, out_counter, in_counter);
+    log_warn("close %s Dropped %u outqueue & %u inqueue requests",
+             print_obj(conn), out_counter, in_counter);
 
 	struct msg *rsp = conn->rmsg;
 	if (rsp != NULL) {
@@ -336,8 +336,8 @@ server_close(struct context *ctx, struct conn *conn)
 
 		rsp_put(rsp);
 
-		log_info("close %M discarding rsp %M len %"PRIu32" "
-				"in error", conn, rsp, rsp->mlen);
+		log_info("close %s discarding rsp %s len %"PRIu32" "
+				"in error", print_obj(conn), print_obj(rsp), rsp->mlen);
 	}
 
 	ASSERT(conn->smsg == NULL);
@@ -348,7 +348,7 @@ server_close(struct context *ctx, struct conn *conn)
 
 	rstatus_t status = close(conn->sd);
 	if (status < 0) {
-		log_error("close s %M failed, ignored: %s", conn, strerror(errno));
+		log_error("close %s failed, ignored: %s", print_obj(conn), strerror(errno));
 	}
 	conn->sd = -1;
 
@@ -366,7 +366,7 @@ server_connected(struct context *ctx, struct conn *conn)
 	conn->connecting = 0;
 	conn->connected = 1;
 
-    log_notice("%M connected ", conn);
+    log_notice("%s connected ", print_obj(conn));
 }
 
 static void
@@ -667,8 +667,8 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
             ASSERT(rsp->peer == NULL);
             ASSERT(!rsp->is_request);
 
-            log_error("%M EOF discarding incomplete rsp %M len %"PRIu32, conn,
-                      rsp, rsp->mlen);
+            log_error("%s EOF discarding incomplete rsp %s len %"PRIu32, print_obj(conn),
+                      print_obj(rsp), rsp->mlen);
 
             rsp_put(rsp);
         }
@@ -789,7 +789,7 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
     conn_dequeue_outq(ctx, s_conn, req);
 
     c_conn = req->owner;
-    log_info("%M %M RECEIVED %M", c_conn, req, rsp);
+    log_info("%s %s RECEIVED %s", print_obj(c_conn), print_obj(req), print_obj(rsp));
     
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
