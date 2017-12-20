@@ -615,7 +615,6 @@ main(int argc, char **argv)
 
     dn_coredump_init();
     dn_set_default_options(&nci);
-    core_register_printf_function();
 
     status = dn_get_options(argc, argv, &nci);
     if (status != DN_OK) {

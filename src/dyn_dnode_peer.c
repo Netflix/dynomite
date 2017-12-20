@@ -129,6 +129,24 @@ dnode_peer_active(struct conn *conn)
     return false;
 }
 
+static char*
+_print_node(const struct object *obj)
+{
+    ASSERT(obj->type == OBJ_NODE);
+    struct node *node = (struct node *)obj;
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<NODE %p %.*s %.*s %.*s secured:%d>",
+            node, node->name.len, node->name.data, node->dc.len, node->dc.data,
+            node->rack.len, node->rack.data, node->is_secure);
+    return obj->print_buff;
+}
+
+static void
+_init_peer_struct(struct node *node)
+{
+    memset(node, 0, sizeof(*node));
+    init_object(&node->object, OBJ_NODE, _print_node);
+}
+
 static rstatus_t
 dnode_peer_each_set_owner(void *elem, void *data)
 {
@@ -144,6 +162,8 @@ static rstatus_t
 dnode_peer_add_local(struct server_pool *pool, struct node *self)
 {
     ASSERT(self != NULL);
+
+    _init_peer_struct(self);
     self->idx = 0; /* this might be psychotic, trying it for now */
 
     struct string *p_pname = &pool->dnode_proxy_endpoint.pname;
@@ -365,9 +385,8 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
                       && (!conn->same_dc)) ||
         (req->owner == conn)) // a gossip message that originated on this conn
     {
-        log_info("close %s %d swallow req %u:%u len %"PRIu32
-                 " type %d", conn_get_type_string(conn), conn->sd, req->id,
-                 req->parent_id, req->mlen, req->type);
+        log_info("%s Closing, swallow req %u:%u len %"PRIu32" type %d",
+                 print_obj(conn), req->id, req->parent_id, req->mlen, req->type);
         req_put(req);
         return;
     }
@@ -375,8 +394,7 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     // At other connections, these responses would be swallowed.
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
                (c_conn->type == CONN_DNODE_PEER_CLIENT),
-               "conn:%s c_conn:%s, req %d:%d", conn_get_type_string(conn),
-               conn_get_type_string(c_conn), req->id, req->parent_id);
+               "conn:%s c_conn:%s, req %d:%d", print_obj(conn), print_obj(c_conn), req->id, req->parent_id);
 
     // Create an appropriate response for the request so its propagated up;
     // This response gets dropped in rsp_make_error anyways. But since this is
@@ -390,11 +408,9 @@ dnode_peer_ack_err(struct context *ctx, struct conn *conn, struct msg *req)
     rsp->dmsg = dmsg_get();
     rsp->dmsg->id =  req->id;
 
-    log_info("close %s %d req %u:%u "
-             "len %"PRIu32" type %d from c %d%c %s", conn_get_type_string(conn),
-             conn->sd, req->id, req->parent_id, req->mlen, req->type,
-             c_conn->sd, conn->err ? ':' : ' ',
-             conn->err ? strerror(conn->err): " ");
+    log_info("%s Closing req %u:%u len %"PRIu32" type %d %c %s", print_obj(conn),
+             req->id, req->parent_id, req->mlen, req->type,
+             conn->err ? ':' : ' ', conn->err ? strerror(conn->err): " ");
     rstatus_t status =
             conn_handle_response(c_conn, req->parent_id ? req->parent_id : req->id,
                                  rsp);
@@ -533,9 +549,8 @@ dnode_peer_close(struct context *ctx, struct conn *conn)
 
     ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
-    log_warn("close %s %d '%.*s' Dropped %u outqueue & %u inqueue requests",
-             conn_get_type_string(conn), conn->sd, peer->endpoint.pname.len,
-            peer->endpoint.pname.data, out_counter, in_counter);
+    log_warn("%s Closing, Dropped %u outqueue & %u inqueue requests",
+             print_obj(conn), out_counter, in_counter);
 
     struct msg *rsp = conn->rmsg;
     if (rsp != NULL) {
@@ -993,7 +1008,7 @@ dnode_peer_connected(struct context *ctx, struct conn *conn)
     conn->connected = 1;
     peer->state = NORMAL;
 
-    log_notice("%M connected", conn);
+    log_notice("%s connected", print_obj(conn));
 }
 
 static void
@@ -1299,8 +1314,8 @@ dnode_rsp_swallow(struct context *ctx, struct conn *peer_conn,
     req->done = 1;
     log_debug(LOG_VERB, "conn %p swallow %p", peer_conn, req);
     if (rsp) {
-        log_debug(LOG_INFO, "%M %M SWALLOW %M len %"PRIu32,
-                  peer_conn, req, rsp, rsp->mlen);
+        log_debug(LOG_INFO, "%s %s SWALLOW %s len %"PRIu32,
+                  print_obj(peer_conn), print_obj(req), print_obj(rsp), rsp->mlen);
         rsp_put(rsp);
     }
     req_put(req);
@@ -1340,29 +1355,26 @@ dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn, struct msg 
         }
     }
 
-    log_debug(LOG_DEBUG, "DNODE RSP RECEIVED %s %d dmsg->id %u req %u:%u rsp %u:%u, ",
-              conn_get_type_string(peer_conn),
-              peer_conn->sd, rsp->dmsg->id,
-              req->id, req->parent_id, rsp->id, rsp->parent_id);
+    log_debug(LOG_DEBUG, "%s DNODE RSP RECEIVED dmsg->id %u req %u:%u rsp %u:%u, ",
+              print_obj(peer_conn), rsp->dmsg->id, req->id, req->parent_id, rsp->id, rsp->parent_id);
     ASSERT(req != NULL);
     ASSERT(req->is_request);
 
     if (log_loggable(LOG_VVERB)) {
-        loga("%M Dumping content:", rsp);
+        loga("%s Dumping content:", print_obj(rsp));
         msg_dump(rsp);
 
-        loga("%M Dumping content:", req);
+        loga("%d Dumping content:", print_obj(req));
         msg_dump(req);
     }
 
     conn_dequeue_outq(ctx, peer_conn, req);
     req->done = 1;
 
-    log_info("%M %M RECEIVED %M", c_conn, req, rsp);
+    log_info("%s %s RECEIVED %s", print_obj(c_conn), print_obj(req), print_obj(rsp));
 
     ASSERT_LOG((c_conn->type == CONN_CLIENT) ||
-               (c_conn->type == CONN_DNODE_PEER_CLIENT),
-               "c_conn type %s", conn_get_type_string(c_conn));
+               (c_conn->type == CONN_DNODE_PEER_CLIENT), "c_conn %s", print_obj(c_conn));
 
     dnode_rsp_forward_stats(ctx, rsp);
     // c_conn owns respnse now

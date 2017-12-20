@@ -106,8 +106,8 @@ dnode_init(struct context *ctx)
     	log_datastore = "memcache";
     }
 
-    log_debug(LOG_NOTICE, "%M inited in %s %M",
-              p, log_datastore, pool);
+    log_debug(LOG_NOTICE, "%s inited in %s %s",
+              print_obj(p), log_datastore, print_obj(pool));
     return DN_OK;
 }
 
@@ -141,7 +141,7 @@ dnode_accept(struct context *ctx, struct conn *p)
         sd = accept(p->sd, (struct sockaddr *)&client_address, &client_len);
         if (sd < 0) {
             if (errno == EINTR) {
-                log_warn("accept on %M not ready - eintr", p);
+                log_warn("accept on %s not ready - eintr", print_obj(p));
                 continue;
             }
 
@@ -155,7 +155,7 @@ dnode_accept(struct context *ctx, struct conn *p)
              * it back in when some existing connection gets closed
              */
 
-            log_error("accept on %M failed: %s", p, strerror(errno));
+            log_error("accept on %s failed: %s", print_obj(p), strerror(errno));
             return DN_ERROR;
         }
 
@@ -172,7 +172,7 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     c = conn_get_peer(p->owner, true);
     if (c == NULL) {
-        log_error("get conn for PEER_CLIENT %d from %M failed: %s", sd, p,
+        log_error("get conn for PEER_CLIENT %d from %s failed: %s", sd, print_obj(p),
                   strerror(errno));
         status = close(sd);
         if (status < 0) {
@@ -187,7 +187,7 @@ dnode_accept(struct context *ctx, struct conn *p)
 
     status = dn_set_nonblocking(c->sd);
     if (status < 0) {
-        log_error("%M Failed to set nonblock on %M: %s", p, c, strerror(errno));
+        log_error("%s Failed to set nonblock on %s: %s", print_obj(p), print_obj(c), strerror(errno));
         conn_close(ctx, c);
         return status;
     }
@@ -195,19 +195,19 @@ dnode_accept(struct context *ctx, struct conn *p)
     if (p->family == AF_INET || p->family == AF_INET6) {
         status = dn_set_tcpnodelay(c->sd);
         if (status < 0) {
-            log_warn("%M Failed to set tcpnodelay on %M: %s",
-                     p, strerror(errno));
+            log_warn("%s Failed to set tcpnodelay on %s: %s",
+                     print_obj(p), print_obj(c), strerror(errno));
         }
     }
 
     status = conn_event_add_conn(c);
     if (status < 0) {
-        log_error("%M Failed to add %M to event loop: %s", p, c, strerror(errno));
+        log_error("%s Failed to add %s to event loop: %s", print_obj(p), print_obj(c), strerror(errno));
         conn_close(ctx, c);
         return status;
     }
 
-    log_notice("%M accepted %M", p, c);
+    log_notice("%s accepted %s", print_obj(p), print_obj(c));
 
     return DN_OK;
 }
@@ -223,7 +223,7 @@ dnode_recv(struct context *ctx, struct conn *conn)
     conn->recv_ready = 1;
     do {
         if (dnode_accept(ctx, conn) != DN_OK) {
-            log_error("%M Failed to accept a connection. Continuing", conn);
+            log_error("%s Failed to accept a connection. Continuing", print_obj(conn));
             continue;
         }
     } while (conn->recv_ready);

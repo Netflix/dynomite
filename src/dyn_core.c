@@ -22,7 +22,6 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <printf.h>
 
 #include "dyn_core.h"
 #include "dyn_conf.h"
@@ -349,60 +348,6 @@ core_start(struct instance *nci)
     return status;
 }
 
-static int
-print_server_pool(FILE *stream, struct server_pool *sp)
-{
-    return fprintf(stream, "<POOL %p '%.*s'>", sp, sp->name.len, sp->name.data);
-}
-
-static int
-print_obj_arginfo(const struct printf_info *info, size_t n,
-                  int *argtypes)
-{
-      /* We always take exactly one argument and this is a pointer to the
-       *      structure.. */
-    if (n > 0)
-        argtypes[0] = PA_POINTER;
-    return 1;
-}
-
-static int
-print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
-{
-    const object_type_t *obj_type;
-    const struct msg *msg;
-    const struct conn *conn;
-    const struct server_pool *sp;
-
-    obj_type = *((const object_type_t **) (args[0]));
-    if (obj_type == NULL) {
-        return fprintf(stream, "<NULL>");
-    }
-
-    switch (*obj_type) {
-        case OBJ_REQ:
-            msg = *((const struct msg **) (args[0]));
-            return print_req(stream, msg);
-        case OBJ_RSP:
-            msg = *((const struct msg **) (args[0]));
-            return print_rsp(stream, msg);
-        case OBJ_CONN:
-            conn = *((const struct conn **) (args[0]));
-            return print_conn(stream, conn);
-        case OBJ_POOL:
-            sp = *((const struct server_pool **) (args[0]));
-            return print_server_pool(stream, sp);
-        default:
-            return fprintf(stream, "<unknown %p>", obj_type);
-    }
-}
-
-int
-core_register_printf_function(void)
-{
-    return log_register_custom_specifier('M', print_obj, print_obj_arginfo);
-}
-
 /**
  * Deinitialize connections, message queue, memory buffers and destroy the
  * context.
@@ -425,7 +370,7 @@ core_recv(struct context *ctx, struct conn *conn)
 
 	status = conn_recv(ctx, conn);
 	if (status != DN_OK) {
-		log_info("%M recv failed: %s", conn, strerror(errno));
+		log_info("%s recv failed: %s", print_obj(conn), strerror(errno));
 	}
 
 	return status;
@@ -438,7 +383,7 @@ core_send(struct context *ctx, struct conn *conn)
 
 	status = conn_send(ctx, conn);
 	if (status != DN_OK) {
-		log_info("%M send failed: %s", conn, strerror(errno));
+		log_info("%s send failed: %s", print_obj(conn), strerror(errno));
 	}
 
 	return status;
@@ -454,8 +399,8 @@ core_close_log(struct conn *conn)
 	} else {
 		addrstr = dn_unresolve_addr(conn->addr, conn->addrlen);
 	}
-	log_debug(LOG_NOTICE, "close %M on event %04"PRIX32" eof %d done "
-			  "%d rb %zu sb %zu%c %s", conn, 
+	log_debug(LOG_NOTICE, "close %s on event %04"PRIX32" eof %d done "
+			  "%d rb %zu sb %zu%c %s", print_obj(conn), 
               conn->events, conn->eof, conn->done, conn->recv_bytes,
               conn->send_bytes,
               conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : "");
@@ -487,8 +432,7 @@ core_error(struct context *ctx, struct conn *conn)
 
 	status = dn_get_soerror(conn->sd);
 	if (status < 0) {
-	log_warn("get soerr on %s client %d failed, ignored: %s",
-             conn_get_type_string(conn), conn->sd, strerror(errno));
+	log_warn("get soerr on %s failed, ignored: %s", print_obj(conn), strerror(errno));
 	}
 	conn->err = errno;
 
@@ -531,7 +475,7 @@ core_timeout(struct context *ctx)
 			return;
 		}
 
-        log_warn("%M on %M timedout, timeout was %d", req, conn, req->tmo_rbe.timeout);
+        log_warn("%s on %s timedout, timeout was %d", print_obj(req), print_obj(conn), req->tmo_rbe.timeout);
 
 		msg_tmo_delete(req);
 
@@ -561,8 +505,7 @@ core_core(void *arg, uint32_t events)
 	struct conn *conn = arg;
 	struct context *ctx = conn_to_ctx(conn);
 
-    log_debug(LOG_VVERB, "event %04"PRIX32" on %s %d", events,
-              conn_get_type_string(conn), conn->sd);
+    log_debug(LOG_VVERB, "event %04"PRIX32" on %s", events, print_obj(conn));
 
 	conn->events = events;
 
@@ -714,7 +657,7 @@ core_loop(struct context *ctx)
     TAILQ_FOREACH_SAFE(conn, &sp->ready_conn_q, ready_tqe, nconn) {
 		rstatus_t status = core_send(ctx, conn);
         if (status == DN_OK) {
-            log_debug(LOG_VVERB, "Flushing writes on %s %d", conn_get_type_string(conn), conn->sd);
+            log_debug(LOG_VVERB, "Flushing writes on %s", print_obj(conn));
             conn_event_del_out(conn);
         } else {
             TAILQ_REMOVE(&sp->ready_conn_q, conn, ready_tqe);

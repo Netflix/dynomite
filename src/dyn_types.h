@@ -33,11 +33,7 @@ struct datacenter;
 struct rack;
 struct dyn_ring;
 
-static void
-cleanup_charptr(char **ptr) {
-    if (*ptr)
-        free(*ptr);
-}
+extern void cleanup_charptr(char **ptr);
 
 #define SCOPED_CHARPTR(var) \
     char * var __attribute__ ((__cleanup__(cleanup_charptr))) 
@@ -46,5 +42,23 @@ typedef enum {
     OBJ_REQ,
     OBJ_RSP,
     OBJ_CONN,
-    OBJ_POOL
+    OBJ_POOL,
+    OBJ_DATASTORE,
+    OBJ_NODE,
+    OBJ_LAST
 }object_type_t;
+
+#define PRINT_BUF_SIZE 255
+
+struct object;
+typedef char* (*func_print_t)(const struct object *obj);
+typedef struct object {
+    uint16_t    magic;
+    object_type_t type;
+    func_print_t func_print;
+    char print_buff[PRINT_BUF_SIZE];
+}object_t;
+
+void init_object(object_t *obj, object_type_t type, func_print_t func_print);
+
+char* print_obj(const void *ptr);

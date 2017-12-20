@@ -61,6 +61,7 @@ dynomite_SOURCES =			                          \
         dyn_stats.c dyn_stats.h		                          \
         dyn_string.c dyn_string.h		                  \
         dyn_token.c dyn_token.h                                   \
+        dyn_types.c dyn_types.h                                   \
         dyn_log.c dyn_log.h		                          \
         dyn_util.c dyn_util.h		                          \
         dyn_vnode.c dyn_vnode.h                                   \
@@ -105,6 +106,7 @@ dynomite_test_SOURCES =                                           \
         dyn_stats.c dyn_stats.h                                   \
         dyn_signal.c dyn_signal.h                                 \
         dyn_token.c dyn_token.h                                   \
+        dyn_types.c dyn_types.h                                   \
         dyn_rbtree.c dyn_rbtree.h                                 \
         dyn_log.c dyn_log.h                                       \
         dyn_string.c dyn_string.h                                 \

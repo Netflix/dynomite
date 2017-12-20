@@ -162,18 +162,26 @@ static struct string msg_type_strings[] = {
 };
 #undef DEFINE_ACTION
 
-int
-print_req(FILE *stream, struct msg *req)
+static char*
+print_req(const struct object *obj)
 {
+    ASSERT(obj->type == OBJ_REQ);
+    struct msg *req = (struct msg *)obj;
     struct string *req_type = msg_type_string(req->type);
-    return fprintf(stream, "<REQ %p %lu:%lu::%lu %.*s len:%u>", req, req->id, req->parent_id,
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<REQ %p %lu:%lu::%lu %.*s, len:%u>", req, req->id, req->parent_id,
                    req->frag_id, req_type->len, req_type->data, req->mlen);
+    return obj->print_buff;
 }
 
-int
-print_rsp(FILE *stream, struct msg *rsp)
+static char*
+print_rsp(const struct object *obj)
 {
-    return fprintf(stream, "<RSP %p %lu:%lu>", rsp, rsp->id, rsp->parent_id);
+    ASSERT(obj->type == OBJ_RSP);
+    struct msg *rsp = (struct msg *)obj;
+    struct string *rsp_type = msg_type_string(rsp->type);
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<RSP %p %lu:%lu %.*s len:%u>", rsp, rsp->id,
+                   rsp->parent_id, rsp_type->len, rsp_type->data, rsp->mlen);
+    return obj->print_buff;
 }
 
 void
@@ -304,11 +312,11 @@ _msg_get(struct conn *conn, bool request, const char *const caller)
 
 
     if (alloc_msg_count % 1000 == 0)
-        log_warn("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
-                 alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
+        log_warn("alloc_msg_count: %lu caller: %s %s",
+                 alloc_msg_count, caller, print_obj(conn));
     else
-        log_info("alloc_msg_count: %lu caller: %s conn: %s sd: %d",
-                 alloc_msg_count, caller, conn_get_type_string(conn), conn->sd);
+        log_info("alloc_msg_count: %lu caller: %s %s",
+                 alloc_msg_count, caller, print_obj(conn));
 
     msg = dn_alloc(sizeof(*msg));
     if (msg == NULL) {
@@ -317,7 +325,12 @@ _msg_get(struct conn *conn, bool request, const char *const caller)
 
 done:
     /* c_tqe, s_tqe, and m_tqe are left uninitialized */
-    msg->object_type = request ? OBJ_REQ : OBJ_RSP;
+    if (request) {
+        init_object(&msg->object, OBJ_REQ, print_req);
+    } else {
+        init_object(&msg->object, OBJ_RSP, print_rsp);
+    }
+
     msg->id = ++msg_id;
     msg->parent_id = 0;
     msg->peer = NULL;
@@ -1275,7 +1288,7 @@ msg_send(struct context *ctx, struct conn *conn)
     rstatus_t status;
     struct msg *msg;
 
-    ASSERT_LOG(conn->send_active, "%M is not active", conn);
+    ASSERT_LOG(conn->send_active, "%s is not active", print_obj(conn));
 
     conn->send_ready = 1;
     do {
@@ -1293,7 +1306,7 @@ msg_send(struct context *ctx, struct conn *conn)
         if (conn->omsg_count > MAX_CONN_QUEUE_SIZE) {
             conn->send_ready = 0;
             conn->err = ENOTRECOVERABLE;
-            log_error("%M Setting ENOTRECOVERABLE happens here!", conn);
+            log_error("%s Setting ENOTRECOVERABLE happens here!", print_obj(conn));
         }
 
     } while (conn->send_ready);

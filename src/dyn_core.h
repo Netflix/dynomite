@@ -226,6 +226,7 @@ struct endpoint {
 };
 
 struct datastore {
+    object_t           object;
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint     endpoint;
@@ -242,6 +243,7 @@ struct datastore {
  * @brief Dynomite server node.
  */
 struct node {
+    object_t           object;
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
     struct endpoint    endpoint;
@@ -273,7 +275,7 @@ struct node {
  * information such as dc, rack, node token and runtime environment.
  */
 struct server_pool {
-    object_type_t        object_type;
+    object_t           object;
     struct context     *ctx;                 /* owner context */
     struct conf_pool   *conf_pool;           /* back reference to conf_pool */
 
@@ -352,7 +354,6 @@ struct context {
 
 
 
-int core_register_printf_function(void);
 rstatus_t core_start(struct instance *nci);
 void core_stop(struct context *ctx);
 rstatus_t core_core(void *arg, uint32_t events);
