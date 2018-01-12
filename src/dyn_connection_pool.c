@@ -142,11 +142,6 @@ conn_pool_get(conn_pool_t *cp, int tag)
 rstatus_t
 conn_pool_destroy(conn_pool_t *cp)
 {
-    if (cp->scheduled_reconnect_task) {
-        log_info("%s %s Cancelling task %p", print_obj(cp->owner), print_obj(cp),
-                 cp->scheduled_reconnect_task);
-        cancel_task(cp->scheduled_reconnect_task);
-    }
     cp->scheduled_reconnect_task = NULL;
     uint8_t idx = 0;
     uint32_t count = array_n(&cp->active_connections);
@@ -159,6 +154,11 @@ conn_pool_destroy(conn_pool_t *cp)
         log_notice("%s Closing %s", print_obj(cp), print_obj(conn));
         conn_close(cp->ctx, conn);
         *pconn = NULL;
+    }
+    if (cp->scheduled_reconnect_task) {
+        log_info("%s %s Cancelling task %p", print_obj(cp->owner), print_obj(cp),
+                 cp->scheduled_reconnect_task);
+        cancel_task(cp->scheduled_reconnect_task);
     }
     log_notice("%s Destroying", print_obj(cp));
     dn_free(cp);
