@@ -179,6 +179,11 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
     close(sock);
     dn_free(remote);
 
+    if (mbuf_length(seeds_buf) == 0) {
+        log_error("No seeds were found in Florida response (htmlstart %u)", htmlstart);
+        return DN_ERROR;
+    }
+
     uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
 
     if (last_seeds_hash != seeds_hash) {
