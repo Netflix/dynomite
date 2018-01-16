@@ -156,8 +156,8 @@ conn_pool_destroy(conn_pool_t *cp)
         *pconn = NULL;
     }
     if (cp->scheduled_reconnect_task) {
-        log_info("%s %s Cancelling task %p", print_obj(cp->owner), print_obj(cp),
-                 cp->scheduled_reconnect_task);
+        log_notice("%s %s Cancelling task %p", print_obj(cp->owner), print_obj(cp),
+                   cp->scheduled_reconnect_task);
         cancel_task(cp->scheduled_reconnect_task);
     }
     log_notice("%s Destroying", print_obj(cp));
@@ -207,11 +207,11 @@ conn_pool_notify_conn_errored(conn_pool_t *cp)
     if (cp->current_timeout_sec < (MIN_WAIT_BEFORE_RECONNECT_IN_SECS))
         cp->current_timeout_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 
-    log_notice("%s %s Scheduling reconnect task after %u secs", print_obj(cp->owner), print_obj(cp),
-               cp->current_timeout_sec);
     cp->scheduled_reconnect_task = schedule_task_1(_conn_pool_reconnect_task,
                                                    cp, cp->current_timeout_sec * 1000);
-    log_info("%s %s Scheduled %p", print_obj(cp->owner), print_obj(cp), cp->scheduled_reconnect_task);
+    log_notice("%s %s Scheduled reconnect task %p after %u secs",
+               print_obj(cp->owner), print_obj(cp), cp->scheduled_reconnect_task,
+               cp->current_timeout_sec);
 
     cp->current_timeout_sec = 2 * cp->current_timeout_sec;
     if (cp->current_timeout_sec > cp->max_timeout_sec)
