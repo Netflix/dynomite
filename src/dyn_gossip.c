@@ -409,21 +409,33 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
         case 0:
             token = q + 1;
             tokenlen = (uint32_t)(p - token + 1);
+            if (tokenlen == 0) {
+                return GOS_ERROR;
+            }
             break;
         case 1:
             dc = q + 1;
             dclen = (uint32_t)(p - dc + 1);
+            if (dclen == 0) {
+                return GOS_ERROR;
+            }
             string_copy(dc_name, dc, dclen);
             break;
         case 2:
             rack = q + 1;
             racklen = (uint32_t)(p - rack + 1);
+            if (racklen == 0) {
+                return GOS_ERROR;
+            }
             string_copy(rack_name, rack, racklen);
             break;
 
         case 3:
             port = q + 1;
             portlen = (uint32_t)(p - port + 1);
+            if (portlen == 0) {
+                return GOS_ERROR;
+            }
             string_copy(port_str, port, portlen);
             break;
 
@@ -442,6 +454,9 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     pname = seeds->data;
     log_debug(LOG_VERB, "pname %s", pname);
     pnamelen = seeds->len - (tokenlen + racklen + dclen + 3);
+    if (pnamelen == 0) {
+        return GOS_ERROR;
+    }
     // address = hostname:port
     status = string_copy(address, pname, pnamelen);
 
@@ -449,6 +464,9 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     //addr = hostname or ip only
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
+    if (addrlen == 0) {
+        return GOS_ERROR;
+    }
     //if it is a dns name, convert to IP or otherwise keep that IP
     if (!isdigit( (char) addr[0])) {
         addr[addrlen] = '\0';
@@ -711,11 +729,11 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
         //array_init(&tokens, 1, sizeof(struct dyn_token));
         init_dyn_token(&token);
         parse_status = parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip,  &token);
-        log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
-        log_debug(LOG_VERB, "rack_name         : '%.*s'", rack_name.len, rack_name.data);
-        log_debug(LOG_VERB, "dc_name        : '%.*s'", dc_name.len, dc_name.data);
-        log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
-        log_debug(LOG_VERB, "port       : '%.*s'", port_str.len, port_str.data);
+        log_debug(LOG_VERB, "address   : '%.*s'", address.len, address.data);
+        log_debug(LOG_VERB, "rack_name : '%.*s'", rack_name.len, rack_name.data);
+        log_debug(LOG_VERB, "dc_name   : '%.*s'", dc_name.len, dc_name.data);
+        log_debug(LOG_VERB, "ip        : '%.*s'", ip.len, ip.data);
+        log_debug(LOG_VERB, "port      : '%.*s'", port_str.len, port_str.data);
 
         //struct dyn_token *token = array_get(&tokens, 0);
         if (parse_status == GOS_OK) {
@@ -742,6 +760,11 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
         //array_init(&tokens, 1, sizeof(struct dyn_token));
         init_dyn_token(&token);
         parse_status = parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip, &token);
+        log_debug(LOG_VERB, "address   : '%.*s'", address.len, address.data);
+        log_debug(LOG_VERB, "rack_name : '%.*s'", rack_name.len, rack_name.data);
+        log_debug(LOG_VERB, "dc_name   : '%.*s'", dc_name.len, dc_name.data);
+        log_debug(LOG_VERB, "ip        : '%.*s'", ip.len, ip.data);
+        log_debug(LOG_VERB, "port      : '%.*s'", port_str.len, port_str.data);
 
         //struct dyn_token *token = array_get(&tokens, 0);
         if (parse_status == GOS_OK) {
