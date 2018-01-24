@@ -137,25 +137,27 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
     uint8_t * htmlcontent;
     uint8_t *ok = NULL;
 
-    //assume that the respsone payload is under BUF_SIZE
-    while ((tmpres = recv(sock, buf, BUFSIZ, 0)) > 0) {
+    bool socket_has_data = true;
+    uint32_t rx_total = 0;
 
-        // Look for a OK response  in the first buffer output.
+    while (socket_has_data) {
+        // Read socket data until we get them all or RX buffer becomes full
+        while ((rx_total < BUFSIZ) && (tmpres = recv(sock, buf + rx_total, BUFSIZ - rx_total, 0)) > 0) {
+            rx_total += tmpres;
+        }
+
+        // Look for a OK response in the first buffer output.
         if (!ok)
             ok = (uint8_t *) strstr((char *)buf, "200 OK\r\n");
         if (ok == NULL) {
             log_error("Received Error from Florida while getting seeds");
-            loga_hexdump(buf, tmpres, "Florida Response with %ld bytes of data", tmpres);
+            loga_hexdump(buf, rx_total, "Florida Response with %ld bytes of data", rx_total);
             close(sock);
             dn_free(remote);
             return DN_ERROR;
         }
 
         if (htmlstart == 0) {
-            /* Under certain conditions this will not work.
-             * If the \r\n\r\n part is splitted into two messages
-             * it will fail to detect the beginning of HTML content
-             */
             htmlcontent = (uint8_t *) strstr((char *)buf, "\r\n\r\n");
             if(htmlcontent != NULL) {
                 htmlstart = 1;
@@ -165,11 +167,27 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
             htmlcontent = buf;
         }
 
-        if(htmlstart) {
-            mbuf_copy(seeds_buf, htmlcontent, tmpres - (htmlcontent - buf));
+        if (htmlstart) {
+            mbuf_copy(seeds_buf, htmlcontent, rx_total - (htmlcontent - buf));
         }
 
-        memset(buf, 0, tmpres);
+        // If socket still has data for reading
+        if (tmpres > 0) {
+            if ((htmlstart == 0) && (rx_total >= 3)) {
+                /* Under certain conditions \r\n\r\n part might by splitted into two
+                 * messages, so copy last 3 received bytes to the buf start to be able
+                 * to detect HTML content beginning on the next parser iteration.
+                 */
+                memcpy(buf, buf + (rx_total - 3) , 3);
+                memset(buf + 3, 0, rx_total - 3);
+                rx_total = 3;
+            } else {
+                memset(buf, 0, rx_total);
+                rx_total = 0;
+            }
+        } else {
+            socket_has_data = false;
+        }
     }
 
     if(tmpres < 0) {
