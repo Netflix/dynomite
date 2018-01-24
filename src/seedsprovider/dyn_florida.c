@@ -92,7 +92,7 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
 
     struct sockaddr_in *remote;
     uint32_t sock;
-    uint32_t tmpres;
+    int32_t tmpres;
     uint8_t buf[BUFSIZ + 1];
 
     log_debug(LOG_VVERB, "Running florida_get_seeds!");
