@@ -148,6 +148,17 @@ redis_arg1(struct msg *r)
     return false;
 }
 
+static bool
+redis_arg_upto1(struct msg *r)
+{
+    switch (r->type) {
+        case MSG_REQ_REDIS_INFO:
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
 /*
  * Return true, if the redis command accepts exactly 2 arguments, otherwise
  * return false
@@ -638,9 +649,8 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                 if (str4icmp(m, 'i', 'n', 'f', 'o')) {
                     r->type = MSG_REQ_REDIS_INFO;
                     r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
-                    p = p + 1;
                     r->is_read = 1;
-                    goto done;
+                    break;
                 }
 
                 if (str4icmp(m, 'l', 'l', 'e', 'n')) {
@@ -1273,10 +1283,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
        case SW_REQ_TYPE_LF:
            switch (ch) {
                 case LF:
-                    if (redis_argz(r)) {
+                    if (redis_argz(r) && (r->rnarg == 0)) {
                         goto done;
-                    } else if (r->narg == 1) {
-                        goto error;
+                    } else if (redis_arg_upto1(r) && r->rnarg == 0) {
+                        goto done;
+                    } else if (redis_arg_upto1(r) && r->rnarg == 1) {
+                        state = SW_ARG1_LEN;
                     } else if (redis_argeval(r)) {
                         state = SW_ARG1_LEN;
                     } else {
@@ -1508,7 +1520,7 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
         case SW_ARG1_LF:
             switch (ch) {
             case LF:
-                if (redis_arg1(r)) {
+                if (redis_arg_upto1(r) || redis_arg1(r)) {
                     if (r->rnarg != 0) {
                         goto error;
                     }
