@@ -143,8 +143,12 @@ _conn_get(void)
     conn_set_write_consistency(conn, g_write_consistency);
     conn->type = CONN_UNSPECIFIED;
 
+    // Generate a new key for each connection
     unsigned char *aes_key = generate_aes_key();
-    strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
+    if (aes_key == NULL) {
+        return NULL;
+    }
+    memcpy(conn->aes_key, aes_key, AES_KEYLEN);
 
     return conn;
 }
