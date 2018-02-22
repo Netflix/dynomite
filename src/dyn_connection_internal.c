@@ -146,6 +146,7 @@ _conn_get(void)
     // Generate a new key for each connection
     unsigned char *aes_key = generate_aes_key();
     if (aes_key == NULL) {
+        dn_free(conn);
         return NULL;
     }
     memcpy(conn->aes_key, aes_key, AES_KEYLEN);
