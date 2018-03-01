@@ -401,25 +401,41 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     for (k = 0; k < sizeof(delim)-1; k++) {
         q = dn_strrchr(p, start, delim[k]);
 
+        if (q == NULL) {
+            break;
+        }
+
         switch (k) {
         case 0:
             token = q + 1;
             tokenlen = (uint32_t)(p - token + 1);
+            if (tokenlen == 0) {
+                return GOS_ERROR;
+            }
             break;
         case 1:
             dc = q + 1;
             dclen = (uint32_t)(p - dc + 1);
+            if (dclen == 0) {
+                return GOS_ERROR;
+            }
             string_copy(dc_name, dc, dclen);
             break;
         case 2:
             rack = q + 1;
             racklen = (uint32_t)(p - rack + 1);
+            if (racklen == 0) {
+                return GOS_ERROR;
+            }
             string_copy(rack_name, rack, racklen);
             break;
 
         case 3:
             port = q + 1;
             portlen = (uint32_t)(p - port + 1);
+            if (portlen == 0) {
+                return GOS_ERROR;
+            }
             string_copy(port_str, port, portlen);
             break;
 
@@ -438,6 +454,9 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     pname = seeds->data;
     log_debug(LOG_VERB, "pname %s", pname);
     pnamelen = seeds->len - (tokenlen + racklen + dclen + 3);
+    if (pnamelen == 0) {
+        return GOS_ERROR;
+    }
     // address = hostname:port
     status = string_copy(address, pname, pnamelen);
 
@@ -445,6 +464,9 @@ parse_seeds(struct string *seeds, struct string *dc_name, struct string *rack_na
     //addr = hostname or ip only
     addr = start;
     addrlen = (uint32_t)(p - start + 1);
+    if (addrlen == 0) {
+        return GOS_ERROR;
+    }
     //if it is a dns name, convert to IP or otherwise keep that IP
     if (!isdigit( (char) addr[0])) {
         addr[addrlen] = '\0';
@@ -683,6 +705,8 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
 
     struct string temp;
 
+    rstatus_t parse_status;
+
     string_init(&rack_name);
     string_init(&dc_name);
     string_init(&port_str);
@@ -698,21 +722,23 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
     uint8_t *seed_node;
     uint32_t seed_node_len;
 
-    while (q > start) {
+    while (q != NULL && q > start) {
         seed_node = q + 1;
         seed_node_len = (uint32_t)(p - seed_node + 1);
         string_copy(&temp, seed_node, seed_node_len);
         //array_init(&tokens, 1, sizeof(struct dyn_token));
         init_dyn_token(&token);
-        parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip,  &token);
-        log_debug(LOG_VERB, "address          : '%.*s'", address.len, address.data);
-        log_debug(LOG_VERB, "rack_name         : '%.*s'", rack_name.len, rack_name.data);
-        log_debug(LOG_VERB, "dc_name        : '%.*s'", dc_name.len, dc_name.data);
-        log_debug(LOG_VERB, "ip         : '%.*s'", ip.len, ip.data);
-        log_debug(LOG_VERB, "port       : '%.*s'", port_str.len, port_str.data);
+        parse_status = parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip,  &token);
+        log_debug(LOG_VERB, "address   : '%.*s'", address.len, address.data);
+        log_debug(LOG_VERB, "rack_name : '%.*s'", rack_name.len, rack_name.data);
+        log_debug(LOG_VERB, "dc_name   : '%.*s'", dc_name.len, dc_name.data);
+        log_debug(LOG_VERB, "ip        : '%.*s'", ip.len, ip.data);
+        log_debug(LOG_VERB, "port      : '%.*s'", port_str.len, port_str.data);
 
         //struct dyn_token *token = array_get(&tokens, 0);
-        gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
+        if (parse_status == GOS_OK) {
+            gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
+        }
 
         p = q - 1;
         q = dn_strrchr(p, start, '|');
@@ -733,10 +759,17 @@ gossip_update_seeds(struct server_pool *sp, struct mbuf *seeds)
         string_copy(&temp, seed_node, seed_node_len);
         //array_init(&tokens, 1, sizeof(struct dyn_token));
         init_dyn_token(&token);
-        parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip, &token);
+        parse_status = parse_seeds(&temp, &dc_name, &rack_name, &port_str, &address, &ip, &token);
+        log_debug(LOG_VERB, "address   : '%.*s'", address.len, address.data);
+        log_debug(LOG_VERB, "rack_name : '%.*s'", rack_name.len, rack_name.data);
+        log_debug(LOG_VERB, "dc_name   : '%.*s'", dc_name.len, dc_name.data);
+        log_debug(LOG_VERB, "ip        : '%.*s'", ip.len, ip.data);
+        log_debug(LOG_VERB, "port      : '%.*s'", port_str.len, port_str.data);
 
         //struct dyn_token *token = array_get(&tokens, 0);
-        gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
+        if (parse_status == GOS_OK) {
+            gossip_add_node_if_absent(sp, &dc_name, &rack_name, &address, &ip, &port_str, &token, NORMAL, (uint64_t) time(NULL));
+        }
     }
 
     string_deinit(&temp);
