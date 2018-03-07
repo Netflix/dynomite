@@ -2952,7 +2952,7 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         } else if (r->type == MSG_REQ_REDIS_DEL) {
             status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
                                         sub_msg->narg + 1);
-        } if (r->type == MSG_REQ_REDIS_EXISTS) {
+        } else if (r->type == MSG_REQ_REDIS_EXISTS) {
             status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
                                         sub_msg->narg + 1);
         } else if (r->type == MSG_REQ_REDIS_MSET) {
