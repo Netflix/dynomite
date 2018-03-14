@@ -63,7 +63,6 @@ static bool
 redis_arg0(struct msg *r)
 {
     switch (r->type) {
-    case MSG_REQ_REDIS_EXISTS:
     case MSG_REQ_REDIS_PERSIST:
     case MSG_REQ_REDIS_PTTL:
     case MSG_REQ_REDIS_TTL:
@@ -284,6 +283,7 @@ redis_argx(struct msg *r)
     switch (r->type) {
     case MSG_REQ_REDIS_MGET:
     case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_EXISTS:
         return true;
 
     default:
@@ -2576,7 +2576,8 @@ redis_pre_coalesce(struct msg *rsp)
     switch (rsp->type) {
     case MSG_RSP_REDIS_INTEGER:
         /* only redis 'del' fragmented request sends back integer reply */
-        ASSERT(req->type == MSG_REQ_REDIS_DEL);
+        ASSERT((req->type == MSG_REQ_REDIS_DEL) ||
+               (req->type == MSG_REQ_REDIS_EXISTS));
 
         mbuf = STAILQ_FIRST(&rsp->mhdr);
         /*
@@ -2664,7 +2665,7 @@ redis_post_coalesce_mset(struct msg *request)
 }
 
 void
-redis_post_coalesce_del(struct msg *request)
+redis_post_coalesce_num(struct msg *request)
 {
     struct msg *response = request->selected_rsp;
     rstatus_t status;
@@ -2738,7 +2739,8 @@ redis_post_coalesce(struct msg *req)
         return redis_post_coalesce_mget(req);
 
     case MSG_REQ_REDIS_DEL:
-        return redis_post_coalesce_del(req);
+    case MSG_REQ_REDIS_EXISTS:
+        return redis_post_coalesce_num(req);
 
     case MSG_REQ_REDIS_MSET:
         return redis_post_coalesce_mset(req);
@@ -2950,6 +2952,9 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         } else if (r->type == MSG_REQ_REDIS_DEL) {
             status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
                                         sub_msg->narg + 1);
+        } else if (r->type == MSG_REQ_REDIS_EXISTS) {
+            status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
+                                        sub_msg->narg + 1);
         } else if (r->type == MSG_REQ_REDIS_MSET) {
             status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n",
                                         sub_msg->narg + 1);
@@ -2984,6 +2989,7 @@ redis_fragment(struct msg *r, struct server_pool *pool, struct rack *rack, struc
     switch (r->type) {
     case MSG_REQ_REDIS_MGET:
     case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_EXISTS:
         return redis_fragment_argx(r, pool, rack, frag_msgq, 1);
 
     case MSG_REQ_REDIS_MSET:
@@ -3026,6 +3032,7 @@ redis_is_multikey_request(struct msg *req)
     switch (req->type) {
     case MSG_REQ_REDIS_MGET:
     case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_EXISTS:
     case MSG_REQ_REDIS_MSET:
         return true;
     default:
