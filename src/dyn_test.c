@@ -402,7 +402,7 @@ aes_test(void)
     unsigned char msg[MAX_MSG_LEN+1];
     print_banner("AES");
     unsigned char* aes_key = generate_aes_key();
-    SCOPED_CHARPTR(aes_key_print) = base64_encode(aes_key, strlen((char*)aes_key));
+    SCOPED_CHARPTR(aes_key_print) = base64_encode(aes_key, AES_KEYLEN);
     loga("aesKey is '%s'", aes_key_print);
 
     size_t i=0;

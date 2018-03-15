@@ -79,6 +79,12 @@ _conn_get(void)
 {
     struct conn *conn;
 
+    // Generate a new key for each connection
+    unsigned char *aes_key = generate_aes_key();
+    if (aes_key == NULL) {
+        return NULL;
+    }
+
     if (!TAILQ_EMPTY(&free_connq)) {
         ASSERT(nfree_connq > 0);
 
@@ -96,6 +102,9 @@ _conn_get(void)
     init_object(&conn->object, OBJ_CONN, _print_conn);
     conn->owner = NULL;
     conn->conn_pool = NULL;
+
+    // Save a key generated earlier within the connection
+    memcpy(conn->aes_key, aes_key, AES_KEYLEN);
 
     conn->sd = -1;
     string_init(&conn->pname);
@@ -142,9 +151,6 @@ _conn_get(void)
     conn_set_read_consistency(conn, g_read_consistency);
     conn_set_write_consistency(conn, g_write_consistency);
     conn->type = CONN_UNSPECIFIED;
-
-    unsigned char *aes_key = generate_aes_key();
-    strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
 
     return conn;
 }
