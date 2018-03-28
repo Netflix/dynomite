@@ -174,9 +174,14 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
         // If socket still has data for reading
         if (tmpres > 0) {
             if ((htmlstart == 0) && (rx_total >= 3)) {
-                /* Under certain conditions \r\n\r\n part might by splitted into two
-                 * messages, so copy last 3 received bytes to the buf start to be able
-                 * to detect HTML content beginning on the next parser iteration.
+                /* In some corner cases (eg. when the read buffer size is near to the
+                 * response header size) we can get into a situations when 4-bytes html
+                 * content start sequence '\r\n\r\n' splits between two read iterations.
+                 * To deal with this case the easiest way to restore splitted sequence
+                 * before the next read iteration by move 3 last bytes (3 is enought to
+                 * cover all split variants) from the current read iteration to the buffer
+                 * head.
+                 * Please notice, we repeat this step until html content is found.
                  */
                 memcpy(buf, buf + (rx_total - 3) , 3);
                 memset(buf + 3, 0, rx_total - 3);
