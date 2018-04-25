@@ -63,7 +63,6 @@ static bool
 redis_arg0(struct msg *r)
 {
     switch (r->type) {
-    case MSG_REQ_REDIS_EXISTS:
     case MSG_REQ_REDIS_PERSIST:
     case MSG_REQ_REDIS_PTTL:
     case MSG_REQ_REDIS_TTL:
@@ -86,7 +85,6 @@ redis_arg0(struct msg *r)
 
     case MSG_REQ_REDIS_SCARD:
     case MSG_REQ_REDIS_SMEMBERS:
-    case MSG_REQ_REDIS_SPOP:
     case MSG_REQ_REDIS_SRANDMEMBER:
 
     case MSG_REQ_REDIS_ZCARD:
@@ -148,6 +146,17 @@ redis_arg1(struct msg *r)
     return false;
 }
 
+static bool
+redis_arg_upto1(struct msg *r)
+{
+    switch (r->type) {
+        case MSG_REQ_REDIS_INFO:
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
 /*
  * Return true, if the redis command accepts exactly 2 arguments, otherwise
  * return false
@@ -176,6 +185,8 @@ redis_arg2(struct msg *r)
 
     case MSG_REQ_REDIS_ZCOUNT:
     case MSG_REQ_REDIS_ZINCRBY:
+    case MSG_REQ_REDIS_ZLEXCOUNT:
+    case MSG_REQ_REDIS_ZREMRANGEBYLEX:
     case MSG_REQ_REDIS_ZREMRANGEBYRANK:
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
 
@@ -239,6 +250,7 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_SUNION:
     case MSG_REQ_REDIS_SUNIONSTORE:
     case MSG_REQ_REDIS_SSCAN:
+    case MSG_REQ_REDIS_SPOP:
 
     case MSG_REQ_REDIS_ZADD:
     case MSG_REQ_REDIS_ZINTERSTORE:
@@ -246,6 +258,8 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZRANGEBYSCORE:
     case MSG_REQ_REDIS_ZREM:
     case MSG_REQ_REDIS_ZREVRANGE:
+    case MSG_REQ_REDIS_ZRANGEBYLEX:
+    case MSG_REQ_REDIS_ZREVRANGEBYLEX:
     case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
@@ -269,6 +283,7 @@ redis_argx(struct msg *r)
     switch (r->type) {
     case MSG_REQ_REDIS_MGET:
     case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_EXISTS:
         return true;
 
     default:
@@ -634,9 +649,8 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                 if (str4icmp(m, 'i', 'n', 'f', 'o')) {
                     r->type = MSG_REQ_REDIS_INFO;
                     r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
-                    p = p + 1;
                     r->is_read = 1;
-                    goto done;
+                    break;
                 }
 
                 if (str4icmp(m, 'l', 'l', 'e', 'n')) {
@@ -1125,6 +1139,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     break;
                 }
 
+                if (str9icmp(m, 'z', 'l', 'e', 'x', 'c', 'o', 'u', 'n', 't')) {
+                    r->type = MSG_REQ_REDIS_ZLEXCOUNT;
+                    r->is_read = 1;
+                    break;
+                }
+
                 if (str9icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREVRANGE;
                     r->is_read = 1;
@@ -1173,6 +1193,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     break;
                 }
 
+                if (str11icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
+                    r->type = MSG_REQ_REDIS_ZRANGEBYLEX;
+                    r->is_read = 1;
+                    break;
+                }
+
                 if (str11icmp(m, 'z', 'u', 'n', 'i', 'o', 'n', 's', 't', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZUNIONSTORE;
                     r->is_read = 1;
@@ -1193,6 +1219,21 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
             case 13:
                 if (str13icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
                     r->type = MSG_REQ_REDIS_ZRANGEBYSCORE;
+                    r->is_read = 1;
+                    break;
+                }
+
+                break;
+
+            case 14:
+                if (str14icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
+                    r->type = MSG_REQ_REDIS_ZREMRANGEBYLEX;
+                    r->is_read = 0;
+                    break;
+                }
+
+                if (str14icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
+                    r->type = MSG_REQ_REDIS_ZREVRANGEBYLEX;
                     r->is_read = 1;
                     break;
                 }
@@ -1242,10 +1283,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
        case SW_REQ_TYPE_LF:
            switch (ch) {
                 case LF:
-                    if (redis_argz(r)) {
+                    if (redis_argz(r) && (r->rnarg == 0)) {
                         goto done;
-                    } else if (r->narg == 1) {
-                        goto error;
+                    } else if (redis_arg_upto1(r) && r->rnarg == 0) {
+                        goto done;
+                    } else if (redis_arg_upto1(r) && r->rnarg == 1) {
+                        state = SW_ARG1_LEN;
                     } else if (redis_argeval(r)) {
                         state = SW_ARG1_LEN;
                     } else {
@@ -1477,7 +1520,7 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
         case SW_ARG1_LF:
             switch (ch) {
             case LF:
-                if (redis_arg1(r)) {
+                if (redis_arg_upto1(r) || redis_arg1(r)) {
                     if (r->rnarg != 0) {
                         goto error;
                     }
@@ -2533,7 +2576,8 @@ redis_pre_coalesce(struct msg *rsp)
     switch (rsp->type) {
     case MSG_RSP_REDIS_INTEGER:
         /* only redis 'del' fragmented request sends back integer reply */
-        ASSERT(req->type == MSG_REQ_REDIS_DEL);
+        ASSERT((req->type == MSG_REQ_REDIS_DEL) ||
+               (req->type == MSG_REQ_REDIS_EXISTS));
 
         mbuf = STAILQ_FIRST(&rsp->mhdr);
         /*
@@ -2621,7 +2665,7 @@ redis_post_coalesce_mset(struct msg *request)
 }
 
 void
-redis_post_coalesce_del(struct msg *request)
+redis_post_coalesce_num(struct msg *request)
 {
     struct msg *response = request->selected_rsp;
     rstatus_t status;
@@ -2648,7 +2692,7 @@ redis_post_coalesce_mget(struct msg *request)
          * the fragments is still in c_conn->omsg_q, we have to discard all of them,
          * we just close the conn here
          */
-        log_warn("marking %M as error", response->owner);
+        log_warn("marking %s as error", print_obj(response->owner));
         response->owner->err = 1;
         return;
     }
@@ -2657,13 +2701,13 @@ redis_post_coalesce_mget(struct msg *request)
         sub_msg = request->frag_seq[i]->selected_rsp;           /* get it's peer response */
         if (sub_msg == NULL) {
             struct keypos *kpos = array_get(request->keys, i);
-            log_warn("Response missing for key %.*s, %M marking %M as error",
-                     kpos->tag_end - kpos->tag_start, kpos->tag_start, request, response->owner);
+            log_warn("Response missing for key %.*s, %s marking %s as error",
+                     kpos->tag_end - kpos->tag_start, kpos->tag_start, print_obj(request), print_obj(response->owner));
             response->owner->err = 1;
             return;
         }
         if ((sub_msg->is_error) || redis_copy_bulk(response, sub_msg, false)) {
-            log_warn("marking %M as error, %M %M", response->owner, request, response);
+            log_warn("marking %s as error, %s %s", print_obj(response->owner), print_obj(request), print_obj(response));
             msg_dump(LOG_INFO, sub_msg);
             response->owner->err = 1;
             return;
@@ -2689,13 +2733,14 @@ redis_post_coalesce(struct msg *req)
         return;
     }
 
-    //log_notice("Post coalesce %M", req);
+    //log_notice("Post coalesce %s", print_obj(req));
     switch (req->type) {
     case MSG_REQ_REDIS_MGET:
         return redis_post_coalesce_mget(req);
 
     case MSG_REQ_REDIS_DEL:
-        return redis_post_coalesce_del(req);
+    case MSG_REQ_REDIS_EXISTS:
+        return redis_post_coalesce_num(req);
 
     case MSG_REQ_REDIS_MSET:
         return redis_post_coalesce_mset(req);
@@ -2894,7 +2939,7 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         }
     }
 
-    log_info("Fragmenting %M", r);
+    log_info("Fragmenting %s", print_obj(r));
     for (i = 0; i < total_peers; i++) {     /* prepend mget header, and forward it */
         struct msg *sub_msg = sub_msgs[i];
         if (sub_msg == NULL) {
@@ -2906,6 +2951,9 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
                                         sub_msg->narg + 1);
         } else if (r->type == MSG_REQ_REDIS_DEL) {
             status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
+                                        sub_msg->narg + 1);
+        } else if (r->type == MSG_REQ_REDIS_EXISTS) {
+            status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
                                         sub_msg->narg + 1);
         } else if (r->type == MSG_REQ_REDIS_MSET) {
             status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n",
@@ -2922,7 +2970,7 @@ redis_fragment_argx(struct msg *r, struct server_pool *pool, struct rack *rack,
         sub_msg->frag_id = r->frag_id;
         sub_msg->frag_owner = r->frag_owner;
 
-        log_info("Fragment %d) %M", i, sub_msg);
+        log_info("Fragment %d) %s", i, print_obj(sub_msg));
         TAILQ_INSERT_TAIL(frag_msgq, sub_msg, m_tqe);
         r->nfrag++;
     }
@@ -2941,6 +2989,7 @@ redis_fragment(struct msg *r, struct server_pool *pool, struct rack *rack, struc
     switch (r->type) {
     case MSG_REQ_REDIS_MGET:
     case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_EXISTS:
         return redis_fragment_argx(r, pool, rack, frag_msgq, 1);
 
     case MSG_REQ_REDIS_MSET:
@@ -2983,6 +3032,7 @@ redis_is_multikey_request(struct msg *req)
     switch (req->type) {
     case MSG_REQ_REDIS_MGET:
     case MSG_REQ_REDIS_DEL:
+    case MSG_REQ_REDIS_EXISTS:
     case MSG_REQ_REDIS_MSET:
         return true;
     default:
@@ -3151,7 +3201,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_info("%M cloned %d good responses", rspmgr->msg, array_n(&cloned_responses));
+    log_info("%s cloned %d good responses", print_obj(rspmgr->msg), array_n(&cloned_responses));
 
     // if number of arguments do not match, return NULL;
     int nargs;
@@ -3175,7 +3225,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
     if (s != DN_OK)
         goto cleanup;
 
-    log_debug(LOG_DEBUG, "%M after appending nargs %M", selected_rsp);
+    log_debug(LOG_DEBUG, "%s after appending nargs", print_obj(selected_rsp));
     msg_dump(LOG_DEBUG, selected_rsp);
 
     // array to hold 1 fragment from each response 
@@ -3196,8 +3246,8 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             if (s != DN_OK) {
                 goto cleanup;
             }
-            log_debug(LOG_DEBUG, "Fragment %d of %d, from response(%d of %d) %M",
-                      arg_iter+1, nargs, response_iter+1, rspmgr->good_responses, cloned_rsp_fragment);
+            log_debug(LOG_DEBUG, "Fragment %d of %d, from response(%d of %d) %s",
+                      arg_iter+1, nargs, response_iter+1, rspmgr->good_responses, print_obj(cloned_rsp_fragment));
             msg_dump(LOG_DEBUG, cloned_rsp_fragment);
 
             struct msg **pdst = (struct msg **)array_push(&cloned_rsp_fragment_array);
@@ -3217,7 +3267,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             }
         }
 
-        log_debug(LOG_DEBUG, "quorum fragment %M", quorum_fragment);
+        log_debug(LOG_DEBUG, "quorum fragment %s", print_obj(quorum_fragment));
         msg_dump(LOG_DEBUG, quorum_fragment);
         // Copy that fragment to the resulting response
         s = redis_copy_bulk(selected_rsp, quorum_fragment, false);
@@ -3225,7 +3275,7 @@ redis_reconcile_multikey_responses(struct response_mgr *rspmgr)
             goto cleanup;
         }
 
-        log_debug(LOG_DEBUG, "response now is %M", selected_rsp);
+        log_debug(LOG_DEBUG, "response now is %s", print_obj(selected_rsp));
         msg_dump(LOG_DEBUG, selected_rsp);
         // free the responses in the array
         array_each(&cloned_rsp_fragment_array, free_rsp_each);

@@ -357,6 +357,6 @@ rstatus_t core_core(void *arg, uint32_t events);
 rstatus_t core_loop(struct context *ctx);
 void core_debug(struct context *ctx);
 void core_set_local_state(struct context *ctx, dyn_state_t state);
-int print_server_pool(FILE *stream, const struct object *obj);
+char* print_server_pool(const struct object *obj);
 
 #endif

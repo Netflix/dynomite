@@ -17,30 +17,23 @@ init_object(struct object *obj, object_type_t type, func_print_t print)
     obj->func_print = print;
 }
 
-int
-print_obj_arginfo(const struct printf_info *info, size_t n, int *argtypes)
+char*
+print_obj(const void *ptr)
 {
-      /* We always take exactly one argument and this is a pointer to the
-       *      structure.. */
-    if (n > 0)
-        argtypes[0] = PA_POINTER;
-    return 1;
-}
-
-int
-print_obj(FILE *stream, const struct printf_info *info, const void *const *args)
-{
-    const object_t *obj;
-
-    obj = *((const object_t **) (args[0]));
+    const object_t *obj = (const object_t *)ptr;
+    static char buffer[PRINT_BUF_SIZE];
     if (obj == NULL) {
-        return fprintf(stream, "<NULL>");
+        snprintf(buffer, PRINT_BUF_SIZE, "<NULL>");
+        return buffer;
     }
     if (obj->magic != OBJECT_MAGIC) {
-        return fprintf(stream, "addr:%p <CORRUPTION> MAGIC NUMBER 0x%x", obj, obj->magic);
+        snprintf(buffer, PRINT_BUF_SIZE, "addr:%p <CORRUPTION> MAGIC NUMBER 0x%x", obj, obj->magic);
+        return buffer;
     }
-    if ((obj->type >= 0) && (obj->type < OBJ_LAST))
-       return obj->func_print(stream, obj);
-    else
-        return fprintf(stream, "addr:%p <CORRUPTION> INVALID TYPE %d", obj, obj->type);
+    if ((obj->type >= 0) && (obj->type < OBJ_LAST)) {
+        return obj->func_print(obj);
+    } else {
+        snprintf(buffer, PRINT_BUF_SIZE, "addr:%p <CORRUPTION> INVALID TYPE %d", obj, obj->type);
+        return buffer;
+    }
 }

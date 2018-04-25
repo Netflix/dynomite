@@ -24,13 +24,14 @@ struct conn_pool {
     struct task         *scheduled_reconnect_task;
 };
 
-static int
-_print_conn_pool(FILE *stream, const struct object *obj)
+static char*
+_print_conn_pool(const struct object *obj)
 {
     ASSERT(obj->type == OBJ_CONN_POOL);
     conn_pool_t *cp = (conn_pool_t *)obj;
-    return fprintf(stream, "<CONN_POOL %p active_conn:%u in array %u max %u>", cp,
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<CONN_POOL %p active_conn:%u in array %u max %u>", cp,
                    cp->active_conn_count, array_n(&cp->active_connections), cp->max_connections);
+    return obj->print_buff;
 }
 
 static void
@@ -48,7 +49,7 @@ _create_missing_connections(conn_pool_t *cp)
         struct conn *conn = conn_get(cp->owner, cp->func_conn_init);
         if (conn != NULL) {
             conn->conn_pool = cp;
-            log_notice("%M %M created %M", cp->owner, cp, conn);
+            log_notice("%s %s created %s", print_obj(cp->owner), print_obj(cp), print_obj(conn));
             *pconn = conn; // set that in the array
             cp->active_conn_count++;
             idx++;
@@ -78,7 +79,7 @@ conn_pool_create(struct context *ctx, void *owner, uint8_t max_connections,
     if (array_init(&cp->active_connections, max_connections, sizeof(struct conn *))
             != DN_OK)
     {
-        log_notice("%M Failed to initialize conn array", owner);
+        log_notice("%s Failed to initialize conn array", print_obj(owner));
         dn_free(cp);
         return NULL;
     }
@@ -88,7 +89,7 @@ conn_pool_create(struct context *ctx, void *owner, uint8_t max_connections,
     cp->max_timeout_sec = max_timeout;
     cp->scheduled_reconnect_task = NULL;
 
-    log_notice("%M Creating %M", cp->owner, cp);
+    log_notice("%s Creating %s", print_obj(cp->owner), print_obj(cp));
     uint8_t idx = 0;
     for (idx = 0; idx < max_connections; idx++) {
         struct conn **pconn = array_push(&cp->active_connections);
@@ -101,7 +102,7 @@ conn_pool_create(struct context *ctx, void *owner, uint8_t max_connections,
 rstatus_t
 conn_pool_preconnect(conn_pool_t *cp)
 {
-    log_notice("%M %M Preconnecting", cp->owner, cp);
+    log_notice("%s %s Preconnecting", print_obj(cp->owner), print_obj(cp));
     _create_missing_connections(cp);
     // for each conn in array, call conn_connect
     rstatus_t overall_status = DN_OK;
@@ -141,12 +142,6 @@ conn_pool_get(conn_pool_t *cp, int tag)
 rstatus_t
 conn_pool_destroy(conn_pool_t *cp)
 {
-    if (cp->scheduled_reconnect_task) {
-        log_info("%M %M Cancelling task %p", cp->owner, cp,
-                 cp->scheduled_reconnect_task);
-        cancel_task(cp->scheduled_reconnect_task);
-    }
-    cp->scheduled_reconnect_task = NULL;
     uint8_t idx = 0;
     uint32_t count = array_n(&cp->active_connections);
     for (idx = 0; idx < count; idx++) {
@@ -155,11 +150,17 @@ conn_pool_destroy(conn_pool_t *cp)
             continue;
         }
         struct conn *conn = *pconn;
-        log_notice("%M Closing %M", cp, conn);
+        log_notice("%s Closing %s", print_obj(cp), print_obj(conn));
         conn_close(cp->ctx, conn);
         *pconn = NULL;
     }
-    log_notice("%M Destroying", cp);
+    if (cp->scheduled_reconnect_task) {
+        log_notice("%s %s Cancelling task %p", print_obj(cp->owner), print_obj(cp),
+                   cp->scheduled_reconnect_task);
+        cancel_task(cp->scheduled_reconnect_task);
+        cp->scheduled_reconnect_task = NULL;
+    }
+    log_notice("%s Destroying", print_obj(cp));
     dn_free(cp);
     return DN_OK;
 }
@@ -167,7 +168,7 @@ conn_pool_destroy(conn_pool_t *cp)
 void
 conn_pool_notify_conn_close(conn_pool_t *cp, struct conn *conn)
 {
-    log_notice("%M Removing %M", cp, conn);
+    log_notice("%s Removing %s", print_obj(cp), print_obj(conn));
     if (conn == NULL)
         return;
 
@@ -181,7 +182,7 @@ conn_pool_notify_conn_close(conn_pool_t *cp, struct conn *conn)
             return;
         }
     }
-    log_warn("%M did not find %M", cp, conn);
+    log_warn("%s did not find %s", print_obj(cp), print_obj(conn));
 }
 
 static void
@@ -198,6 +199,7 @@ conn_pool_notify_conn_errored(conn_pool_t *cp)
     // check if reconnect task is active
     // if so , never mind
     if (cp->scheduled_reconnect_task) {
+        log_notice("%s already have a reconnect task %p", print_obj(cp), cp->scheduled_reconnect_task);
         return;
     }
     // else increase error count, and schedule a task after the backoff wait
@@ -206,11 +208,11 @@ conn_pool_notify_conn_errored(conn_pool_t *cp)
     if (cp->current_timeout_sec < (MIN_WAIT_BEFORE_RECONNECT_IN_SECS))
         cp->current_timeout_sec = MIN_WAIT_BEFORE_RECONNECT_IN_SECS;
 
-    log_notice("%M %M Scheduling reconnect task after %u secs", cp->owner, cp,
-               cp->current_timeout_sec);
     cp->scheduled_reconnect_task = schedule_task_1(_conn_pool_reconnect_task,
                                                    cp, cp->current_timeout_sec * 1000);
-    log_info("%M %M Scheduled %p", cp->owner, cp, cp->scheduled_reconnect_task);
+    log_notice("%s %s Scheduled reconnect task %p after %u secs",
+               print_obj(cp->owner), print_obj(cp), cp->scheduled_reconnect_task,
+               cp->current_timeout_sec);
 
     cp->current_timeout_sec = 2 * cp->current_timeout_sec;
     if (cp->current_timeout_sec > cp->max_timeout_sec)

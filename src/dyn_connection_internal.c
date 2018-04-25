@@ -41,32 +41,36 @@ _conn_get_type_string(struct conn *conn)
     return "INVALID";
 }
 
-static int
-_print_conn(FILE *stream, const struct object *obj)
+static char*
+_print_conn(const struct object *obj)
 {
     ASSERT(obj->type == OBJ_CONN);
     struct conn *conn = (struct conn *)obj;
     if ((conn->type == CONN_DNODE_PEER_PROXY) ||
         (conn->type == CONN_PROXY)) {
-        return fprintf(stream, "<%s %p %d listening on '%.*s'>",
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d listening on '%.*s'>",
                    _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
+        return obj->print_buff;
     }
     if ((conn->type == CONN_DNODE_PEER_CLIENT) ||
         (conn->type == CONN_CLIENT)) {
-        return fprintf(stream, "<%s %p %d from '%.*s'>",
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d from '%.*s'>",
                    _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
+        return obj->print_buff;
     }
     if ((conn->type == CONN_DNODE_PEER_SERVER) ||
         (conn->type == CONN_SERVER)) {
-        return fprintf(stream, "<%s %p %d to '%.*s'>",
+        snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d to '%.*s'>",
                    _conn_get_type_string(conn), conn, conn->sd,
                    conn->pname.len, conn->pname.data);
+        return obj->print_buff;
     }
 
-    return fprintf(stream, "<%s %p %d>",
+    snprintf(obj->print_buff, PRINT_BUF_SIZE, "<%s %p %d>",
                    _conn_get_type_string(conn), conn, conn->sd);
+    return obj->print_buff;
 }
 
 
@@ -74,6 +78,12 @@ struct conn *
 _conn_get(void)
 {
     struct conn *conn;
+
+    // Generate a new key for each connection
+    unsigned char *aes_key = generate_aes_key();
+    if (aes_key == NULL) {
+        return NULL;
+    }
 
     if (!TAILQ_EMPTY(&free_connq)) {
         ASSERT(nfree_connq > 0);
@@ -92,6 +102,9 @@ _conn_get(void)
     init_object(&conn->object, OBJ_CONN, _print_conn);
     conn->owner = NULL;
     conn->conn_pool = NULL;
+
+    // Save a key generated earlier within the connection
+    memcpy(conn->aes_key, aes_key, AES_KEYLEN);
 
     conn->sd = -1;
     string_init(&conn->pname);
@@ -138,9 +151,6 @@ _conn_get(void)
     conn_set_read_consistency(conn, g_read_consistency);
     conn_set_write_consistency(conn, g_write_consistency);
     conn->type = CONN_UNSPECIFIED;
-
-    unsigned char *aes_key = generate_aes_key();
-    strncpy((char *)conn->aes_key, (char *)aes_key, strlen((char *)aes_key)); //generate a new key for each connection
 
     return conn;
 }

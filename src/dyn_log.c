@@ -32,32 +32,6 @@
 
 static struct logger logger;
 
-#ifdef __APPLE__
-
-printf_domain_t pdt = NULL;
-
-int
-log_register_custom_specifier(int spec, printf_function func,
-                              printf_arginfo_function argfunc)
-{
-
-    pdt = new_printf_domain();
-    if (!pdt || register_printf_domain_function(pdt, spec, func, argfunc, NULL))
-        return DN_ERROR;
-    return DN_OK;
-}
-
-#else
-
-int
-log_register_custom_specifier(int spec, printf_function func,
-                              printf_arginfo_function argfunc)
-{
-    return register_printf_function(spec, func, argfunc);
-}
-
-#endif
-
 /**
  * Initialize logging including log level and output target. Logging output may
  * be sent to standard error or to a log file.
@@ -183,22 +157,14 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
     strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", localtime(&curTime.tv_sec));
 
     // May be not the perfect place to fix this
-#ifdef __APPLE__
-    len += sxprintf(buf + len, size - len, pdt, NULL,
-#else
     len += dn_scnprintf(buf + len, size - len,
-#endif
                     "[%.*s.%03d] %s:%d ",
                     strlen(buffer), buffer, (int64_t)curTime.tv_usec / 1000,
                     file, line);
 
     va_start(args, fmt);
 
-#ifdef __APPLE__
-    len += vsxprintf(buf + len, size - len, pdt, NULL, fmt, args);
-#else
     len += dn_vscnprintf(buf + len, size - len, fmt, args);
-#endif
 
     va_end(args);
 
