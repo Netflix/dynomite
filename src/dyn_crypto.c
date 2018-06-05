@@ -126,15 +126,23 @@ static rstatus_t
 aes_init(void)
 {
     // Initialize contexts
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
     aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
 
     EVP_CIPHER_CTX_init(aes_encrypt_ctx);
+    EVP_CIPHER_CTX_init(aes_decrypt_ctx);
+#else
+
+    aes_encrypt_ctx = EVP_CIPHER_CTX_new();
+    aes_decrypt_ctx = EVP_CIPHER_CTX_new();
+
+    EVP_CIPHER_CTX_reset(aes_encrypt_ctx);
+    EVP_CIPHER_CTX_reset(aes_decrypt_ctx);
+#endif
 
     //EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_PKCS1_PADDING);
     EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING);
-
-    EVP_CIPHER_CTX_init(aes_decrypt_ctx);
 
     //EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_PKCS1_PADDING);
     EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING);
@@ -173,10 +181,17 @@ crypto_init(struct server_pool *sp)
 rstatus_t
 crypto_deinit(void)
 {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
     EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
     free(aes_encrypt_ctx);
     free(aes_decrypt_ctx);
+#else
+
+    EVP_CIPHER_CTX_free(aes_encrypt_ctx);
+    EVP_CIPHER_CTX_free(aes_decrypt_ctx);
+#endif
+
     return DN_OK;
 }
 
@@ -309,7 +324,11 @@ dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, uns
         return DN_ERROR;
     }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+#else
+    EVP_CIPHER_CTX_reset(aes_encrypt_ctx);
+#endif
 
     //for encrypt, we allow to use up to the extra space
     if (enc_msg_len + block_len > mbuf->end_extra - mbuf->last) {
@@ -351,7 +370,11 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
         dec_len += block_len;
         mbuf->last = mbuf->pos + dec_len;
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
         EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+#else
+        EVP_CIPHER_CTX_reset(aes_decrypt_ctx);
+#endif
 
         return (int) dec_len;
     }
@@ -472,7 +495,9 @@ rstatus_t
 dyn_rsa_encrypt(unsigned char *plain_msg, unsigned char *encrypted_buf)
 {
     if(RSA_public_encrypt(AES_KEYLEN, plain_msg, encrypted_buf, rsa, RSA_PKCS1_OAEP_PADDING) != RSA_size(rsa)) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
         ERR_load_crypto_strings();
+#endif
         char  err[130];
         ERR_error_string(ERR_get_error(), err);
         log_debug(LOG_VERB, "Error in encrypting message: %s\n", err);
@@ -488,7 +513,9 @@ dyn_rsa_decrypt(unsigned char *encrypted_msg, unsigned char *decrypted_buf)
             encrypted_msg,
             decrypted_buf,
             rsa, RSA_PKCS1_OAEP_PADDING) != AES_KEYLEN) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
         ERR_load_crypto_strings();
+#endif
         char  err[130];
         ERR_error_string(ERR_get_error(), err);
         log_debug(LOG_VERB, "Error in decrypting message: %s\n", err);
