@@ -43,7 +43,7 @@
  *            +        +            .
  *            |        |            .
  *            /        \            .
- *         Request    Response      .../ dyn_mbuf.[ch]  (mesage buffers)
+ *         Request    Response      .../ dyn_mbuf.[ch]  (message buffers)
  *      dyn_request.c  dyn_response.c .../ dyn_memcache.c; dyn_redis.c (message parser)
  *
  * Messages in dynomite are manipulated by a chain of processing handlers,
@@ -757,7 +757,7 @@ uint32_t
 msg_payload_crc32(struct msg *rsp)
 {
     ASSERT(rsp != NULL);
-    // take a continous buffer crc
+    // take a continuous buffer crc
     uint32_t crc = 0;
     struct mbuf *mbuf;
     /* Since we want to checksum only the payload, we have to start from the
