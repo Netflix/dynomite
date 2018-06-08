@@ -458,7 +458,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
               if (status == DN_ERROR) {
                     loga("OOM to obtain an mbuf for encryption!");
                     mbuf_put(header_buf);
-                    req_put(rsp);
+                    rsp_put(rsp);
                     return NULL;
               }
 
