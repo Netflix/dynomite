@@ -21,8 +21,8 @@
 *
 *   It requires that the circular buffer size be a power of two, and the
 *   size of the buffer needs to smaller than the index. So an 8 bit index
-*   supports a circular buffer upto ( 1 << 7 ) = 128 entries, and a 16 bit index
-*   supports a circular buffer upto ( 1 << 15 ) = 32768 entries.
+*   supports a circular buffer up to ( 1 << 7 ) = 128 entries, and a 16 bit
+*   index supports a circular buffer up to ( 1 << 15 ) = 32768 entries.
 *
 *   The basis for these routines came from an article in Jack Ganssle's
 *   Embedded Muse: http://www.ganssle.com/tem/tem110.pdf

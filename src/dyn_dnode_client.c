@@ -388,7 +388,7 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
     //
     // Every time a message is sent to a peer within dynomite, a DNODE header is
     // prepended which is created using dmsg_write. A message remembers this case
-    // in dnode_header_prepended, so that if the messsage is sent in parts, the
+    // in dnode_header_prepended, so that if the message is sent in parts, the
     // header is not prepended again for the subsequent parts.
     //
     // Like I said earlier there is a pos pointer in mbuf. If a message is sent

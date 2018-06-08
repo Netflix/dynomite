@@ -22,7 +22,7 @@ msec_t time_to_next_task(void);
 
 /* Execute expired tasks one after other calling individual handlers */
 /* limit = 0 (execute all expired tasks)
- *       > 0 (upto limit tasks)
+ *       > 0 (up to limit tasks)
  */
 void execute_expired_tasks(uint32_t limit);
 

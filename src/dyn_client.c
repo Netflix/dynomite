@@ -256,7 +256,7 @@ client_handle_response(struct conn *conn, msgid_t reqid, struct msg *rsp)
     // we have to submit the response irrespective of the unref status.
     rstatus_t status = msg_handle_response(req, rsp);
     if (conn->waiting_to_unref) {
-        // dont care about the status.
+        // don't care about the status.
         if (req->awaiting_rsps)
             return DN_OK;
         // all responses received

@@ -479,7 +479,7 @@ dyn_parse_req(struct msg *r, const struct string *hash_tag)
 
 			}
 
-			//substract alraedy received bytes
+			//substract already received bytes
 			dmsg->plen -= (uint32_t)(b->last - b->pos);
 
 			return;
