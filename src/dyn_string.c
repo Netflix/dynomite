@@ -30,7 +30,7 @@
  * by the null character '\0'. The length of the string is pre-computed and
  * made available explicitly as an additional field. This means that we don't
  * have to walk the entire character sequence until the null terminating
- * character everytime that the length of the String is requested
+ * character every time that the length of the String is requested
  *
  * The only way to create a String is to initialize it using, string_init()
  * and duplicate an existing String - string_duplicate() or copy an existing

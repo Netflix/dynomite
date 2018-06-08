@@ -178,7 +178,7 @@ florida_get_seeds(struct context * ctx, struct mbuf *seeds_buf) {
                  * response header size) we can get into a situations when 4-bytes html
                  * content start sequence '\r\n\r\n' splits between two read iterations.
                  * To deal with this case the easiest way to restore splitted sequence
-                 * before the next read iteration by move 3 last bytes (3 is enought to
+                 * before the next read iteration by move 3 last bytes (3 is enough to
                  * cover all split variants) from the current read iteration to the buffer
                  * head.
                  * Please notice, we repeat this step until html content is found.

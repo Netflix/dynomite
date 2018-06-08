@@ -1208,7 +1208,7 @@ dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn, struct msg *msg)
 
     //ASSERT(p_conn->type == CONN_DNODE_PEER_CLIENT);
 
-    //add messsage
+    //add message
     struct mbuf *nbuf = mbuf_get();
     if (nbuf == NULL) {
         log_debug(LOG_ERR, "Error happened in calling mbuf_get");

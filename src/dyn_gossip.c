@@ -347,7 +347,7 @@ gossip_forward_state(struct server_pool *sp)
                 *pos = ',';
                 pos += 1;
 
-                //write addresss
+                //write address
                 for(k=0; k<gnode->name.len; k++, pos++) {
                     *pos = *(gnode->name.data + k);
                 }
@@ -990,7 +990,7 @@ gossip_pool_init(struct context *ctx)
         } else {
 
             unsigned char *local_ip4 = hostname_to_private_ip4( (char *) gnode->name.data);
-            // Use the local_ipv4 instead of the hostname, thats what we use for
+            // Use the local_ipv4 instead of the hostname, that's what we use for
             // comparison eventually anyways
             if (local_ip4 != NULL) {
                 string_deinit(&gnode->name);
