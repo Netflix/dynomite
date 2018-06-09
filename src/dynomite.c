@@ -561,7 +561,7 @@ dn_post_run(struct instance *nci)
 
 /**
  * Call method to initialize buffers, messages and connections. Then start the
- * core dynomite loop to process messsages. When dynomite is shutting down, call
+ * core dynomite loop to process messages. When dynomite is shutting down, call
  * method to deinitialize buffers, messages and connections.
  * @param[in] nci Dynomite instance.
  * @return rstatus_t Return status code.

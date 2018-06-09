@@ -391,7 +391,7 @@ stats_create_bufs(struct stats *st)
 
     /* footer */
     size += 2;
-    // Accomodate for new fields that are directly added using stats_add_num_str
+    // Accommodate for new fields that are directly added using stats_add_num_str
     size += 1024;
 
     size = DN_ALIGN(size, DN_ALIGNMENT);

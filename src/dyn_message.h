@@ -251,7 +251,7 @@ dn_strerror(dyn_error_t err)
         case DYNOMITE_OK:
             return "Success";
         case DYNOMITE_UNKNOWN_ERROR:
-            return "Unknow Error";
+            return "Unknown Error";
         case DYNOMITE_INVALID_STATE:
             return "Dynomite's current state does not allow this request";
         case DYNOMITE_INVALID_ADMIN_REQ:

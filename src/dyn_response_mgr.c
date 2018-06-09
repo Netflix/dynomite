@@ -65,7 +65,7 @@ rspmgr_check_is_done(struct response_mgr *rspmgr)
             log_info("req %lu quorum achieved", rspmgr->msg->id);
             rspmgr->done = true;
         } else if (pending_responses) {
-            // Theres a mismatch in checksum. Wait for any pending responses
+            // There's a mismatch in checksum. Wait for any pending responses
             rspmgr->done = false;
         } else {
             // no pending responses, and the checksum do not match.

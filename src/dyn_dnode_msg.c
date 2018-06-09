@@ -447,7 +447,7 @@ dyn_parse_req(struct msg *r, const struct string *hash_tag)
 			if (dmsg->mlen > 1) {
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-				strncpy((char*)r->owner->aes_key, (char*)aes_decrypted_buf, strlen((char*)aes_decrypted_buf));
+				memcpy(r->owner->aes_key, aes_decrypted_buf, AES_KEYLEN);
 				SCOPED_CHARPTR(encoded_aes_key) = base64_encode(r->owner->aes_key, AES_KEYLEN);
 				if (encoded_aes_key)
 				    loga("AES decryption key: %s\n", (char*)encoded_aes_key);
@@ -479,7 +479,7 @@ dyn_parse_req(struct msg *r, const struct string *hash_tag)
 
 			}
 
-			//substract alraedy received bytes
+			//substract already received bytes
 			dmsg->plen -= (uint32_t)(b->last - b->pos);
 
 			return;
@@ -563,8 +563,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED)
 			if (dmsg->mlen > 1) {
 				//Decrypt AES key
 				dyn_rsa_decrypt(dmsg->data, aes_decrypted_buf);
-				strncpy((char *)r->owner->aes_key, (char *)aes_decrypted_buf,
-                        strlen((char *)aes_decrypted_buf));
+				memcpy(r->owner->aes_key, aes_decrypted_buf, AES_KEYLEN);
 			}
 
 			// we have received all the remaining ecrypted data
