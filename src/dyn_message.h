@@ -196,7 +196,7 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_ZSCAN)                                                                        \
     ACTION( REQ_REDIS_EVAL )                   /* redis requests - eval */                          \
     ACTION( REQ_REDIS_EVALSHA )                                                                     \
-    /* ACTION( REQ_REDIS_AUTH) */                                                                   \
+    ACTION( REQ_REDIS_AUTH)                                                                         \
     /* ACTION( REQ_REDIS_SELECT)*/             /* only during init */                               \
     ACTION( REQ_REDIS_PFADD )                  /* redis requests - hyperloglog */                   \
     ACTION( REQ_REDIS_PFCOUNT )                                                                     \

@@ -299,6 +299,7 @@ struct server_pool {
     unsigned           preconnect:1;         /* preconnect? */
 
     /* dynomite */
+    struct string      redis_requirepass;
     struct string      seed_provider;
     struct array       peers;
     struct conn        *d_conn;              /* dnode connection (listener) */
