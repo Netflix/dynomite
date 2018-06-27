@@ -189,12 +189,19 @@ conn_event_del_out(struct conn *conn)
 struct conn *
 conn_get(void *owner, func_conn_init_t func_conn_init)
 {
+    int auth = 0;
     struct conn *conn;
+
+    struct server_pool *pool = (struct server_pool *)owner;
+    if (pool->redis_requirepass.len > 0) {
+        auth = 1;
+    }
 
     conn = _conn_get();
     if (conn == NULL) {
         return NULL;
     }
+    conn->authenticated = auth;
 
     /* connection handles the data store messages (redis, memcached or other) */
 

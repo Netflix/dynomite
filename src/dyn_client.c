@@ -355,15 +355,150 @@ req_recv_next(struct context *ctx, struct conn *conn, bool alloc)
     return req;
 }
 
+static struct mbuf *
+get_mbuf(struct msg *msg)
+{
+    struct mbuf *mbuf;
+    mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+    if (mbuf == NULL || mbuf_full(mbuf)) {
+        mbuf = mbuf_get();
+        if (mbuf == NULL) {
+            return NULL;
+        }
+        mbuf_insert(&msg->mhdr, mbuf);
+        msg->pos = mbuf->pos;
+    }
+
+    return mbuf;
+}
+
+static void
+auth_reply(struct context *ctx, struct conn *conn, struct msg *smsg, const char *usr_msg)
+{
+    int n;
+    struct mbuf *mbuf;
+    struct msg *msg = msg_get(conn, false, __FUNCTION__);
+    if (msg == NULL) {
+        return;
+    }
+
+    mbuf = get_mbuf(msg);
+    if (mbuf == NULL) {
+        msg_put(msg);
+        return;
+    }
+
+    smsg->peer = msg;
+    smsg->selected_rsp = msg;
+    msg->peer = smsg;
+
+    n = (int)strlen(usr_msg);
+    memcpy(mbuf->last, usr_msg, (size_t)n);
+    mbuf->last += n;
+    msg->mlen += (uint32_t)n;
+    msg->done = 1;
+
+    conn_event_add_out(conn);
+    TAILQ_INSERT_TAIL(&conn->omsg_q, smsg, c_tqe);
+}
+
+static int
+get_password(unsigned char *string, unsigned int len, char *passwd, uint32_t *passwd_len)
+{
+    char *p;
+    char *pos;
+    char buff[128];
+    int cmdlen, nargc;
+    size_t l;
+
+    p = (char *)string;
+    if (p[0] != '*') {
+        return -1;
+    }
+
+    /* deal with nargc */
+    pos = strstr(p + 1, CRLF);
+    if (!pos) return -1;
+    l = pos - (p + 1);
+    memcpy(buff, p + 1, l);
+    buff[l] = '\0';
+    nargc = atoi(buff);
+    if (nargc != 2) return -1;
+
+    /* deal with cmd */
+    p = pos + 2;
+    if (*p != '$') return -1;
+    pos = strstr(p + 1, CRLF);
+    if (!pos) return -1;
+    l = pos - (p + 1);
+    memcpy(buff, p + 1, l);
+    buff[l] = '\0';
+    cmdlen = atoi(buff);
+    p = pos + 2;
+    pos = strstr(p, CRLF);
+    if (!pos) return -1;
+    l = pos - p;
+    if (l != cmdlen) return -1;
+    memcpy(buff, p, l);
+    buff[l] = '\0';
+    if (strcasecmp("AUTH", buff) != 0) return -1;
+
+    /* password */
+    p = pos + 2;
+    if (*p != '$') return -1;
+    pos = strstr(p + 1, CRLF);
+    if (!pos) return -1;
+    l = pos - (p + 1);
+    memcpy(buff, p + 1, l);
+    buff[l] = '\0';
+    *passwd_len = atoi(buff);
+    p = pos + 2;
+    pos = strstr(p, CRLF);
+    if (!pos) return -1;
+    l = pos - p;
+    memcpy(passwd, p, l);
+    passwd[l] = '\0';
+    return 0;
+}
+
 static bool
 req_filter(struct context *ctx, struct conn *conn, struct msg *req)
 {
+    struct server_pool *pool;
+
     ASSERT(conn->type == CONN_CLIENT);
 
     if (msg_empty(req)) {
         ASSERT(conn->rmsg == NULL);
         log_debug(LOG_VERB, "%s filter empty %s", print_obj(conn), print_obj(req));
         req_put(req);
+        return true;
+    }
+
+    /*
+     * Handle "AUTH requirepass\r\n"
+     */
+    if (conn->authenticated) {
+        if (req->type == MSG_REQ_REDIS_AUTH) {
+            pool = &ctx->pool;
+            char passwd[128];
+            uint32_t passwd_len;
+            if (get_password(req->mhdr.stqh_first->start,
+                             req->mlen, passwd, &passwd_len) != 0) {
+                auth_reply(ctx, conn, req, "-Unknown cmd");
+                return true;
+            }
+            if (passwd_len == pool->redis_requirepass.len) {
+                if (memcmp(pool->redis_requirepass.data, passwd, passwd_len) == 0) {
+                    auth_reply(ctx, conn, req, "+OK\r\n");
+                    conn->authenticated = 0;
+                    return true;
+                }
+            }
+            auth_reply(ctx, conn, req, "-ERR invalid password\r\n");
+        } else {
+            auth_reply(ctx, conn, req, "-NOAUTH Authentication required\r\n");
+        }
         return true;
     }
 

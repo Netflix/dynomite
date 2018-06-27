@@ -232,6 +232,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->stats_listen.name);
     string_init(&cp->dc);
     string_init(&cp->env);
+    string_init(&cp->redis_requirepass);
     cp->dyn_listen.port = 0;
     memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
     cp->dyn_listen.valid = 0;
@@ -313,6 +314,9 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->stats_listen.name);
     string_deinit(&cp->dc);
     string_deinit(&cp->env);
+    if (cp->redis_requirepass.len > 0) {
+        string_deinit(&cp->redis_requirepass);
+    }
 
     if (array_n(&cp->dyn_seeds) != 0)
        array_deinit(&cp->dyn_seeds);
@@ -1158,6 +1162,10 @@ static struct command conf_commands[] = {
     { string("servers"),
       conf_add_server,
       offsetof(struct conf_pool, conf_datastore) },
+
+    { string("redis_requirepass"),
+      conf_set_string,
+      offsetof(struct conf_pool, redis_requirepass) },
 
     { string("dyn_read_timeout"),
       conf_set_num,

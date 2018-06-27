@@ -297,16 +297,52 @@ server_close(struct context *ctx, struct conn *conn)
 }
 
 static void
+redis_auth(struct context *ctx, struct conn *conn)
+{
+#define REDIS_AUTH_CMD "*2\r\n$4\r\nAUTH\r\n"
+    struct server_pool *pool;
+    struct msg *msg;
+    struct mbuf *mbuf;
+    int n;
+    char auth[1024];
+
+    pool = &ctx->pool;
+    if (pool->redis_requirepass.len > 0) {
+        msg = msg_get(conn, true, __FUNCTION__);
+        if (msg == NULL) {
+            return;
+        }
+
+        mbuf = mbuf_get();
+        if (mbuf == NULL) {
+            return;
+        }
+
+        n = snprintf(auth, sizeof(auth), REDIS_AUTH_CMD "$%d\r\n%s\r\n",
+                     pool->redis_requirepass.len, pool->redis_requirepass.data);
+
+        memcpy(mbuf->last, auth, (size_t)n);
+        mbuf->last += n;
+        mbuf_insert(&msg->mhdr, mbuf);
+        msg->pos = mbuf->pos;
+        msg->mlen = (uint32_t)n;
+        TAILQ_INSERT_TAIL(&conn->imsg_q, msg, s_tqe);
+    }
+#undef REDIS_AUTH_CMD
+}
+
+static void
 server_connected(struct context *ctx, struct conn *conn)
 {
     ASSERT(conn->type == CONN_SERVER);
-	ASSERT(conn->connecting && !conn->connected);
+    ASSERT(conn->connecting && !conn->connected);
 
-	conn->connecting = 0;
-	conn->connected = 1;
+    conn->connecting = 0;
+    conn->connected = 1;
     conn_pool_connected(conn->conn_pool, conn);
 
     log_notice("%s connected ", print_obj(conn));
+    redis_auth(ctx, conn);
 }
 
 static void
@@ -419,6 +455,7 @@ server_pool_init(struct server_pool *sp, struct conf_pool *cp, struct context *c
     /* sp->continuum = NULL; */
     sp->next_rebuild = 0ULL;
 
+    sp->redis_requirepass = cp->redis_requirepass;
     sp->name = cp->name;
     sp->proxy_endpoint.pname = cp->listen.pname;
     sp->proxy_endpoint.port = (uint16_t)cp->listen.port;
@@ -832,7 +869,19 @@ server_rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *rsp)
 
     c_conn = req->owner;
     log_info("%s %s RECEIVED %s", print_obj(c_conn), print_obj(req), print_obj(rsp));
-    
+
+    if (c_conn->type == CONN_SERVER) {
+        static const char *AUTH_OK = "+OK\r\n";
+        int ret = memcmp(AUTH_OK, rsp->mhdr.stqh_first->start, rsp->mlen);
+        if (ret == 0) {
+            log_debug(LOG_INFO, "AUTH requirepass OK");
+	    return;
+        } else {
+            log_debug(LOG_ERR, "%s", rsp->mhdr.stqh_first->start);
+            ASSERT(ret == 0);
+        }
+    }
+
     ASSERT((c_conn->type == CONN_CLIENT) ||
            (c_conn->type == CONN_DNODE_PEER_CLIENT));
 
