@@ -113,6 +113,7 @@ dns_get_seeds(struct context * ctx, struct mbuf *seeds_buf)
     }
     int i;
     ns_rr rr;
+       
     for (i = 0; i < na; ++i) {
         if (ns_parserr(&m, ns_s_an, i, &rr) == -1) {
             log_debug(LOG_DEBUG, "ns_parserr for %s: %s", dnsName, strerror (errno));
@@ -120,13 +121,16 @@ dns_get_seeds(struct context * ctx, struct mbuf *seeds_buf)
         }
         mbuf_rewind(seeds_buf);
         unsigned char *s = ns_rr_rdata(rr);
-        if (s[0] >= ns_rr_rdlen(rr)) {
+        // The following check is broken for "A" dnsTypes, so skip it for them
+        if (s[0] >= ns_rr_rdlen(rr) && (strcmp(dnsType, "A") != 0)) {
             log_debug(LOG_DEBUG, "invalid length for %s: %d < %d", dnsName, s[0], ns_rr_rdlen(rr));
             return DN_NOOPS;
         }
-        log_debug(LOG_VERB, "seeds for %s: %.*s", dnsName, s[0], s +1);
-        mbuf_copy(seeds_buf, s + 1, s[0]);
+        // Currently commented out, should be updated to support "A" records
+        //log_debug(LOG_VERB, "seeds for %s: %.*s", dnsName, s[0], s +1);
+        mbuf_copy(seeds_buf, ns_rr_rdata(rr), ns_rr_rdlen(rr));
     }
+
 
     uint32_t seeds_hash = hash_seeds(seeds_buf->pos, mbuf_length(seeds_buf));
     if (last_seeds_hash != seeds_hash) {
