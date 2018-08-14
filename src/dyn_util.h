@@ -342,6 +342,10 @@ ssize_t _dn_recvn(int sd, void *vptr, size_t n);
     (str15icmp(m, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14) &&       \
      (m[15] == c15 || m[15] == (c15 ^ 0x20)))
 
+#define str17icmp(m, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)  \
+    (str16icmp(m, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15) &&       \
+     (m[16] == c16 || m[16] == (c16 ^ 0x20)))
+
 
 
 

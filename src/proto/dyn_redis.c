@@ -264,6 +264,12 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
     case MSG_REQ_REDIS_PFADD:
+    case MSG_REQ_REDIS_GEOADD:
+    case MSG_REQ_REDIS_GEORADIUS: 
+    case MSG_REQ_REDIS_GEODIST:
+    case MSG_REQ_REDIS_GEOHASH:
+    case MSG_REQ_REDIS_GEOPOS:
+    case MSG_REQ_REDIS_GEORADIUSBYMEMBER:
         return true;
 
     default:
@@ -1008,6 +1014,16 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                 	r->is_read = 1;
                 	break;
                 }
+		if (str6icmp(m, 'g', 'e', 'o', 'a', 'd', 'd')) {
+                    r->type = MSG_REQ_REDIS_GEOADD;
+                    r->is_read = 0;
+                    break;
+                }
+		if (str6icmp(m, 'g', 'e', 'o', 'p', 'o', 's')) {
+                    r->type = MSG_REQ_REDIS_GEOPOS;
+                    r->is_read = 1;
+                    break;
+                }
 
                 break;
 
@@ -1078,7 +1094,17 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     r->is_read = 0;
                     break;
                 }
-
+		if (str7icmp(m, 'g', 'e', 'o', 'h', 'a', 's', 'h')) {
+                    r->type = MSG_REQ_REDIS_GEOHASH;
+                    r->is_read = 1;
+                    break;
+                }
+		if (str7icmp(m, 'g', 'e', 'o', 'd', 'i', 's', 't')) {
+                    r->type = MSG_REQ_REDIS_GEODIST;
+                    r->is_read = 1;
+                    break;
+                }
+		
                 break;
 
             case 8:
@@ -1147,6 +1173,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
 
                 if (str9icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREVRANGE;
+                    r->is_read = 1;
+                    break;
+                }
+
+		if (str9icmp(m, 'g', 'e', 'o', 'r', 'a', 'd', 'i', 'u', 's')) {
+                    r->type = MSG_REQ_REDIS_GEORADIUS;
                     r->is_read = 1;
                     break;
                 }
@@ -1264,6 +1296,14 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
 
                 break;
 
+	    case 17:
+                if (str17icmp(m, 'g', 'e', 'o', 'r', 'a', 'd', 'i', 'u', 's', 'b', 'y', 'm', 'e', 'm', 'b','e','r')) {
+                    r->type = MSG_REQ_REDIS_GEORADIUSBYMEMBER;
+                    r->is_read = 1;
+                    break;
+                }
+
+                break;	
             default:
             	r->is_read = 1;
                 break;
