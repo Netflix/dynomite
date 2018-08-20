@@ -1787,6 +1787,8 @@ stats_server_to_metric(struct context *ctx,
                        stats_server_field_t fidx)
 {
    struct stats *st = ctx->stats;
+   ASSERT(st != NULL);
+
    struct stats_pool *stp = &st->current;
    struct stats_server *sts = &stp->server;
    struct stats_metric *stm = array_get(&sts->metric, fidx);
