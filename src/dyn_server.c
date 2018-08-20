@@ -144,8 +144,10 @@ static void
 server_failure(struct context *ctx, struct datastore *server)
 {
     conn_pool_notify_conn_errored(server->conn_pool);
-    stats_server_set_ts(ctx, server_ejected_at, dn_msec_now());
-    stats_pool_incr(ctx, server_ejects);
+    if (ctx->stats) {
+        stats_server_set_ts(ctx, server_ejected_at, dn_msec_now());
+        stats_pool_incr(ctx, server_ejects);
+    }
 }
 
 static void
@@ -230,7 +232,9 @@ server_close(struct context *ctx, struct conn *conn)
     ASSERT(conn->type == CONN_SERVER);
     struct datastore *datastore = conn->owner;
 
-    server_close_stats(ctx, datastore, conn->err, conn->eof, conn->connected);
+    if (ctx->stats) {
+        server_close_stats(ctx, datastore, conn->err, conn->eof, conn->connected);
+    }
 
 	if (conn->sd < 0) {
 		conn_unref(conn);
@@ -261,7 +265,7 @@ server_close(struct context *ctx, struct conn *conn)
         server_ack_err(ctx, conn, req);
         in_counter++;
 
-		stats_server_incr(ctx, server_dropped_requests);
+		if (ctx->stats) stats_server_incr(ctx, server_dropped_requests);
 	}
 	ASSERT(TAILQ_EMPTY(&conn->imsg_q));
 
