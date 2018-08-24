@@ -195,13 +195,15 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
 
     if (msg == NULL) {
         log_debug(LOG_DEBUG, "Unable to obtain a msg");
+        mbuf_put(data_buf);
         return;
     }
 
     struct mbuf *header_buf = mbuf_get();
     if (header_buf == NULL) {
-        log_debug(LOG_DEBUG, "Unable to obtain a data_buf");
+        log_debug(LOG_DEBUG, "Unable to obtain a header_buf");
         rsp_put(msg);
+        mbuf_put(data_buf);
         return;
     }
 
@@ -218,8 +220,11 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
         if (ENCRYPTION) {
             struct mbuf *encrypted_buf = mbuf_get();
             if (encrypted_buf == NULL) {
-                loga("Unable to obtain an data_buf for encryption!");
-                return; //TODOs: need to clean up
+                loga("Unable to obtain an encrypted_buf for encryption!");
+                rsp_put(msg);
+                mbuf_put(data_buf);
+                mbuf_put(header_buf);
+                return; 
             }
 
             status = dyn_aes_encrypt(data_buf->pos, mbuf_length(data_buf), encrypted_buf, conn->aes_key);
@@ -235,7 +240,7 @@ dnode_peer_gossip_forward(struct context *ctx, struct conn *conn, struct mbuf *d
                 log_hexdump(LOG_VVERB, encrypted_buf->pos, mbuf_length(encrypted_buf), "dyn message encrypted payload: ");
             }
 
-            mbuf_remove(&msg->mhdr, data_buf);
+            //mbuf_remove(&msg->mhdr, data_buf); 
             mbuf_insert(&msg->mhdr, encrypted_buf);
             //free data_buf as no one will need it again
             mbuf_put(data_buf);  //TODOS: need to remove this from the msg->mhdr as in the other method
