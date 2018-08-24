@@ -388,12 +388,13 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
  *
  */
 rstatus_t
-dyn_aes_encrypt_msg(struct msg *msg, unsigned char *arg_aes_key)
+dyn_aes_encrypt_msg(struct msg *msg, unsigned char *arg_aes_key, size_t* outlen)
 {
     struct mhdr mhdr_tem;
     int count = 0;
 
     if (STAILQ_EMPTY(&msg->mhdr)) {
+        // 'msg' is empty. Nothing to encrypt.
         return DN_ERROR;
     }
 
@@ -409,8 +410,9 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *arg_aes_key)
 
         struct mbuf *nbuf = mbuf_get();
         if (nbuf == NULL) {
+            // Unable to obtain an 'mbuf'.
             mbuf_put(mbuf);
-            return DN_ERROR;
+            return DN_ENOMEM;
         }
 
         int n = dyn_aes_encrypt(mbuf->pos, mbuf_length(mbuf), nbuf, arg_aes_key);
@@ -438,7 +440,8 @@ dyn_aes_encrypt_msg(struct msg *msg, unsigned char *arg_aes_key)
         }
     }
 
-    return count;
+    *outlen = count;
+    return DN_OK;
 }
 
 

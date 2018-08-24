@@ -454,16 +454,21 @@ dnode_rsp_send_next(struct context *ctx, struct conn *conn)
             }
 
             if (ENCRYPTION) {
-              status = dyn_aes_encrypt_msg(rsp, conn->aes_key);
-              if (status == DN_ERROR) {
-                    loga("OOM to obtain an mbuf for encryption!");
-                    mbuf_put(header_buf);
-                    rsp_put(rsp);
-                    return NULL;
+              size_t encrypted_bytes;
+              status = dyn_aes_encrypt_msg(rsp, conn->aes_key, &encrypted_bytes);
+              if (status != DN_OK) {
+                  if (status == DN_ENOMEM) {
+                      loga("OOM to obtain an mbuf for encryption!");
+                  } else if (status == DN_ERROR) {
+                      loga("Encryption failed: Empty message");
+                  }
+                  mbuf_put(header_buf);
+                  rsp_put(rsp);
+                  return NULL;
               }
 
               if (log_loggable(LOG_VVERB)) {
-                   log_debug(LOG_VERB, "#encrypted bytes : %d", status);
+                   log_debug(LOG_VERB, "#encrypted bytes : %d", encrypted_bytes);
               }
 
               dmsg_write(header_buf, msg_id, msg_type, conn, msg_length(rsp));
