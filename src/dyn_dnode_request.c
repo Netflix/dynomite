@@ -102,15 +102,20 @@ dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 
         //write dnode header
         if (ENCRYPTION) {
-            status = dyn_aes_encrypt_msg(req, p_conn->aes_key);
-            if (status == DN_ERROR) {
-                loga("OOM to obtain an mbuf for encryption!");
+            size_t encrypted_bytes;
+            status = dyn_aes_encrypt_msg(req, p_conn->aes_key, &encrypted_bytes);
+            if (status != DN_OK) {
+                if (status == DN_ENOMEM) {
+                    loga("OOM to obtain an mbuf for encryption!");
+                } else if (status == DN_ERROR) {
+                    loga("Encryption failed: Empty message");
+                }
+                *dyn_error_code = status;
                 mbuf_put(header_buf);
-                *dyn_error_code = DN_ENOMEM;
                 return status;
             }
 
-            log_debug(LOG_VVERB, "#encrypted bytes : %d", status);
+            log_debug(LOG_VVERB, "#encrypted bytes : %d", encrypted_bytes);
 
             dmsg_write(header_buf, req->id, msg_type, p_conn, msg_length(req));
         } else {
