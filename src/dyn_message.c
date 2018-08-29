@@ -156,6 +156,7 @@ func_msg_fragment_t  g_fragment;   /* message post-coalesce */
 func_msg_verify_t    g_verify_request;   /* message post-coalesce */
 func_is_multikey_request g_is_multikey_request;
 func_reconcile_responses g_reconcile_responses;
+func_msg_rewrite_t g_rewrite_query;            /* rewrite query in a msg if necessary */
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {
@@ -197,6 +198,7 @@ set_datastore_ops(void)
             g_verify_request = redis_verify_request;
             g_is_multikey_request =  redis_is_multikey_request;
             g_reconcile_responses = redis_reconcile_responses;
+            g_rewrite_query = redis_rewrite_query;
             break;
         case DATA_MEMCACHE:
             g_pre_coalesce = memcache_pre_coalesce;
@@ -205,6 +207,7 @@ set_datastore_ops(void)
             g_verify_request = memcache_verify_request;
             g_is_multikey_request =  memcache_is_multikey_request;
             g_reconcile_responses = memcache_reconcile_responses;
+            g_rewrite_query = memcache_rewrite_query;
             break;
         default:
             return;
@@ -751,6 +754,29 @@ uint8_t *
 msg_get_tagged_key(struct msg *req, uint32_t key_index, uint32_t *keylen)
 {
     return msg_get_key(req, key_index, keylen, true);
+}
+
+/*
+ * Returns the 'idx' key in 'msg'.
+ *
+ * Transfers ownership of returned buffer to the caller, so the caller must
+ * take the responsibility of freeing it.
+ *
+ * Returns NULL if key does not exist or if we're unable to allocate memory.
+ */
+uint8_t* msg_get_full_key_copy(struct msg* msg, int idx, uint32_t *keylen) {
+    // Get a pointer to the required key in 'msg'.
+    uint8_t* key_ptr = msg_get_full_key(msg, idx, keylen);
+
+    // Allocate a new buffer for the key.
+    uint8_t* copied_key = dn_alloc((size_t) (*keylen + 1));
+    if (copied_key == NULL) return NULL;
+
+    // Copy contents of the key from 'msg' to our new buffer.
+    dn_memcpy(copied_key, key_ptr, *keylen);
+    copied_key[*keylen] = '\0';
+
+    return copied_key;
 }
 
 uint32_t
