@@ -229,8 +229,9 @@ core_crypto_init(struct context *ctx)
     /* crypto init */
     THROW_STATUS(crypto_init(&ctx->pool));
     rstatus_t status = core_stats_create(ctx);
-    if (status != DN_OK)
-	stats_destroy(ctx->stats);
+    if (status != DN_OK) {
+        if (ctx->stats) stats_destroy(ctx->stats);
+    }
     
     return status;
 }
@@ -267,6 +268,7 @@ core_ctx_create(struct instance *nci)
         loga("Failed to create context!!!");
         return DN_ERROR;
     }
+
     nci->ctx = ctx;
     ctx->instance = nci;
     ctx->cf = NULL;

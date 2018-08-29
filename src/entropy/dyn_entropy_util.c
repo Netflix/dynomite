@@ -112,8 +112,10 @@ static unsigned char *theIv = (unsigned char*)"0123456789012345";
 void
 entropy_crypto_init()
 {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	    ERR_load_crypto_strings();
 	    OpenSSL_add_all_algorithms();
+#endif
 	    OPENSSL_config(NULL);
 }
 
@@ -126,8 +128,10 @@ entropy_crypto_init()
 void
 entropy_crypto_deinit()
 {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	EVP_cleanup();
 	ERR_free_strings();
+#endif
 }
 
 

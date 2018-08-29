@@ -44,6 +44,8 @@ typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
 typedef bool (*func_msg_failure_t)(struct msg *r);
 typedef bool (*func_is_multikey_request)(struct msg *r);
 typedef struct msg *(*func_reconcile_responses)(struct response_mgr *rspmgr);
+typedef rstatus_t (*func_msg_rewrite_t)(struct msg *orig_msg, struct context* ctx,
+        bool* did_rewrite, struct msg** new_msg_ptr);
 
 extern func_msg_coalesce_t  g_pre_coalesce;    /* message pre-coalesce */
 extern func_msg_coalesce_t  g_post_coalesce;   /* message post-coalesce */
@@ -51,6 +53,7 @@ extern func_msg_fragment_t  g_fragment;   /* message fragment */
 extern func_msg_verify_t    g_verify_request;  /* message verify */
 extern func_is_multikey_request g_is_multikey_request;
 extern func_reconcile_responses g_reconcile_responses;
+extern func_msg_rewrite_t g_rewrite_query;            /* rewrite query in a msg if necessary */
 
 void set_datastore_ops(void);
 
@@ -196,6 +199,12 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_ZSCAN)                                                                        \
     ACTION( REQ_REDIS_EVAL )                   /* redis requests - eval */                          \
     ACTION( REQ_REDIS_EVALSHA )                                                                     \
+    ACTION( REQ_REDIS_GEOADD )		 	/* redis geo requests */		            \
+    ACTION( REQ_REDIS_GEORADIUS ) 						                    \
+    ACTION( REQ_REDIS_GEODIST )									    \
+    ACTION( REQ_REDIS_GEOHASH )									    \
+    ACTION( REQ_REDIS_GEOPOS )									    \
+    ACTION( REQ_REDIS_GEORADIUSBYMEMBER )							    \			
     /* ACTION( REQ_REDIS_AUTH) */                                                                   \
     /* ACTION( REQ_REDIS_SELECT)*/             /* only during init */                               \
     ACTION( REQ_REDIS_PFADD )                  /* redis requests - hyperloglog */                   \
@@ -478,6 +487,7 @@ rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
 
 uint8_t *msg_get_tagged_key(struct msg *req, uint32_t key_index, uint32_t *keylen);
 uint8_t *msg_get_full_key(struct msg *req, uint32_t key_index, uint32_t *keylen);
+uint8_t* msg_get_full_key_copy(struct msg* msg, int idx, uint32_t *keylen);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);

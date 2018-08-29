@@ -264,6 +264,12 @@ redis_argn(struct msg *r)
     case MSG_REQ_REDIS_ZUNIONSTORE:
     case MSG_REQ_REDIS_ZSCAN:
     case MSG_REQ_REDIS_PFADD:
+    case MSG_REQ_REDIS_GEOADD:
+    case MSG_REQ_REDIS_GEORADIUS: 
+    case MSG_REQ_REDIS_GEODIST:
+    case MSG_REQ_REDIS_GEOHASH:
+    case MSG_REQ_REDIS_GEOPOS:
+    case MSG_REQ_REDIS_GEORADIUSBYMEMBER:
         return true;
 
     default:
@@ -360,6 +366,99 @@ redis_error(struct msg *r)
         break;
     }
     return false;
+}
+
+/*
+ * Detects the query and does a rewrite if applicable.
+ *
+ * Currently the following queries are rewritten:
+ * 1) SMEMBERS <set> -> SORT <myset> ALPHA (only when DC_SAFE_QUORUM=true)
+ *    We rewrite this query this way since when DC_SAFE_QUORUM is enabled,
+ *    we run this query on multiple nodes and take checksums and compare that
+ *    they're the same. Since SMEMBERS offers no ordering guarantee, even though
+ *    the elements are the same, the order of elements in the set might be
+ *    different causing the checksums to be different and hence causing the
+ *    query to fail. Rewriting it to a SORT query ensures ordering and thus
+ *    ensures that the checksum comparison succeeds.
+ *
+ * * Sets *did_rewrite='true' if a rewrite occured and 'false' if not.
+ * * Does not modify 'orig_msg' and sets 'new_msg_ptr' to point to the new 'msg' struct with the
+ *   rewritten query if 'did_rewrite' is true.
+ * * Caller must take ownership of the newly allocated msg '*new_msg_ptr'.
+ */
+rstatus_t redis_rewrite_query(struct msg* orig_msg, struct context* ctx, bool* did_rewrite,
+        struct msg** new_msg_ptr) {
+    const char* SMEMBERS_REWRITE_FMT_STRING = "*3\r\n$4\r\nsort\r\n$%d\r\n%s\r\n$5\r\nalpha\r\n";
+
+    ASSERT(orig_msg != NULL);
+    ASSERT(orig_msg->is_request);
+    ASSERT(did_rewrite != NULL);
+
+    *did_rewrite = false;
+
+    struct msg* new_msg = NULL;
+    uint8_t* key = NULL;
+    rstatus_t ret_status = DN_OK;
+    switch (orig_msg->type) {
+        case MSG_REQ_REDIS_SMEMBERS:
+
+            if (orig_msg->owner->read_consistency == DC_SAFE_QUORUM) {
+                // SMEMBERS should have only one key.
+                ASSERT(orig_msg->nkeys == 1);
+
+                // Get a new 'msg' structure.
+                new_msg = msg_get(orig_msg->owner, true, __FUNCTION__);
+                if (new_msg == NULL) {
+                    ret_status = DN_ENOMEM;
+                    goto error;
+                }
+
+                uint32_t keylen;
+                // Get a copy of the key from 'orig_msg'.
+                key = msg_get_full_key_copy(orig_msg, 0, &keylen);
+                if (key == NULL) {
+                    ret_status = DN_ENOMEM;
+                    goto error;
+                }
+
+                // Write the new command into 'new_msg'
+                rstatus_t prepend_status = msg_prepend_format(new_msg, SMEMBERS_REWRITE_FMT_STRING, keylen, key);
+                if (prepend_status != DN_OK) {
+                    ret_status = prepend_status;
+                    goto error;
+                }
+
+                {
+                    // Point the 'pos' pointer in 'new_msg' to the mbuf we've added.
+                    struct mbuf* new_mbuf = STAILQ_LAST(&new_msg->mhdr, mbuf, next);
+                    new_msg->pos = new_mbuf->pos;
+                }
+                // Parse the message 'new_msg' to populate all of its appropriate fields.
+                new_msg->parser(new_msg, &ctx->pool.hash_tag);
+                // Check if 'new_msg' was parsed successfully.
+                if (new_msg->result != MSG_PARSE_OK) {
+                    ret_status = DN_ERROR;
+                    goto error;
+                }
+
+                *new_msg_ptr = new_msg;
+                *did_rewrite = true;
+                goto done;
+            }
+            break;
+        default:
+            return DN_OK;
+    }
+
+error:
+    if (key != NULL) dn_free(key);
+    // Return the newly allocated message back to the free message queue.
+    if (new_msg != NULL) msg_put(new_msg);
+    return ret_status;
+
+done:
+    if (key != NULL) dn_free(key);
+    return DN_OK;
 }
 
 /*
@@ -1008,6 +1107,16 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                 	r->is_read = 1;
                 	break;
                 }
+		if (str6icmp(m, 'g', 'e', 'o', 'a', 'd', 'd')) {
+                    r->type = MSG_REQ_REDIS_GEOADD;
+                    r->is_read = 0;
+                    break;
+                }
+		if (str6icmp(m, 'g', 'e', 'o', 'p', 'o', 's')) {
+                    r->type = MSG_REQ_REDIS_GEOPOS;
+                    r->is_read = 1;
+                    break;
+                }
 
                 break;
 
@@ -1078,7 +1187,17 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
                     r->is_read = 0;
                     break;
                 }
-
+		if (str7icmp(m, 'g', 'e', 'o', 'h', 'a', 's', 'h')) {
+                    r->type = MSG_REQ_REDIS_GEOHASH;
+                    r->is_read = 1;
+                    break;
+                }
+		if (str7icmp(m, 'g', 'e', 'o', 'd', 'i', 's', 't')) {
+                    r->type = MSG_REQ_REDIS_GEODIST;
+                    r->is_read = 1;
+                    break;
+                }
+		
                 break;
 
             case 8:
@@ -1147,6 +1266,12 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
 
                 if (str9icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
                     r->type = MSG_REQ_REDIS_ZREVRANGE;
+                    r->is_read = 1;
+                    break;
+                }
+
+		if (str9icmp(m, 'g', 'e', 'o', 'r', 'a', 'd', 'i', 'u', 's')) {
+                    r->type = MSG_REQ_REDIS_GEORADIUS;
                     r->is_read = 1;
                     break;
                 }
@@ -1264,6 +1389,14 @@ redis_parse_req(struct msg *r, const struct string *hash_tag)
 
                 break;
 
+	    case 17:
+                if (str17icmp(m, 'g', 'e', 'o', 'r', 'a', 'd', 'i', 'u', 's', 'b', 'y', 'm', 'e', 'm', 'b','e','r')) {
+                    r->type = MSG_REQ_REDIS_GEORADIUSBYMEMBER;
+                    r->is_read = 1;
+                    break;
+                }
+
+                break;	
             default:
             	r->is_read = 1;
                 break;
