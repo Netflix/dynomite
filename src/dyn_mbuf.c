@@ -417,14 +417,16 @@ mbuf_write_uint64(struct mbuf *mbuf, uint64_t num)
 struct mbuf *
 mbuf_alloc(const size_t size)
 {
-   uint8_t *buf = dn_alloc(size + MBUF_HSIZE);
+   size_t mbuf_chunk_size = size + MBUF_HSIZE;
+
+   uint8_t *buf = dn_alloc(mbuf_chunk_size);
    if (buf == NULL) {
        return NULL;
    }
 
    struct mbuf *mbuf = (struct mbuf *)(buf + size);
    mbuf->magic = MBUF_MAGIC;
-   mbuf->chunk_size = size;
+   mbuf->chunk_size = mbuf_chunk_size;
 
    STAILQ_NEXT(mbuf, next) = NULL;
 
