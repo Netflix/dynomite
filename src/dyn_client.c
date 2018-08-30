@@ -51,6 +51,9 @@
 static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
 
+static rstatus_t rewrite_query_if_necessary(struct msg** req, struct context* ctx);
+static rstatus_t fragment_query_if_necessary(struct msg* req, struct conn* conn,
+        struct msg_tqh* frag_msgq);
 
 static void
 client_ref(struct conn *conn, void *owner)
@@ -928,6 +931,37 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *req)
     }
 }
 
+/*
+ * Rewrites a query if necessary.
+ *
+ * If a rewrite occured, it will replace '*req' with the new 'msg' that contains the new query
+ * and free up the original msg.
+ *
+ */
+rstatus_t rewrite_query_if_necessary(struct msg** req, struct context* ctx) {
+    bool did_rewrite = false;
+    struct msg* new_req = NULL;
+    rstatus_t ret_status = g_rewrite_query(*req, ctx, &did_rewrite, &new_req);
+    THROW_STATUS(ret_status);
+
+    if (did_rewrite) {
+        // If we successfully did a rewrite, we need to recycle the memory used by the original
+        // request and point it to the 'new_req'.
+        msg_put(*req);
+        *req = new_req;
+    }
+    return DN_OK;
+}
+
+/*
+ * Fragments a query if applicable.
+ * 'frag_msgq' will be non-empty if the query is fragmented.
+ */
+rstatus_t fragment_query_if_necessary(struct msg* req, struct conn* conn, struct msg_tqh* frag_msgq) {
+    struct server_pool *pool = conn->owner;
+    struct rack *rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+    return g_fragment(req, pool, rack, frag_msgq);
+}
 
 void
 req_recv_done(struct context *ctx, struct conn *conn,
@@ -953,16 +987,11 @@ req_recv_done(struct context *ctx, struct conn *conn,
     struct msg_tqh frag_msgq;
     TAILQ_INIT(&frag_msgq);
 
-    struct server_pool *pool = conn->owner;
-    struct rack *rack = server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
-    rstatus_t status = g_fragment(req, pool, rack, &frag_msgq);
-    if (status != DN_OK) {
-        if (req->expect_datastore_reply) {
-            conn_enqueue_outq(ctx, conn, req);
-        }
-        req_forward_error(ctx, conn, req, DN_OK, status); //TODO: CHeck error code
-        return;
-    }
+    rstatus_t status = rewrite_query_if_necessary(&req, ctx);
+    if (status != DN_OK) goto error;
+
+    status = fragment_query_if_necessary(req, conn, &frag_msgq);
+    if (status != DN_OK) goto error;
 
     /* if no fragment happened */
     if (TAILQ_EMPTY(&frag_msgq)) {
@@ -971,13 +1000,7 @@ req_recv_done(struct context *ctx, struct conn *conn,
     }
 
     status = req_make_reply(ctx, conn, req);
-    if (status != DN_OK) {
-        if (req->expect_datastore_reply) {
-            conn_enqueue_outq(ctx, conn, req);
-        }
-        req_forward_error(ctx, conn, req, DN_OK, status);
-        return;
-    }
+    if (status != DN_OK) goto error;
 
     struct msg *sub_msg, *tmsg;
     for (sub_msg = TAILQ_FIRST(&frag_msgq); sub_msg != NULL; sub_msg = tmsg) {
@@ -989,7 +1012,15 @@ req_recv_done(struct context *ctx, struct conn *conn,
     }
     ASSERT(TAILQ_EMPTY(&frag_msgq));
     return;
+
+error:
+    if (req->expect_datastore_reply) {
+        conn_enqueue_outq(ctx, conn, req);
+    }
+    req_forward_error(ctx, conn, req, DN_OK, status); //TODO: CHeck error code
+    return;
 }
+
 
 static msg_response_handler_t 
 msg_get_rsp_handler(struct msg *req)

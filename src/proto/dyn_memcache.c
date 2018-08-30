@@ -1623,3 +1623,12 @@ memcache_reconcile_responses(struct response_mgr *rspmgr)
         return rsp;
     }
 }
+
+/*
+ * Placeholder function for memcache query rewrites.
+ * No rewrites implemented toady.
+ */
+rstatus_t memcache_rewrite_query(struct msg* orig_msg, struct context* ctx, bool* did_rewrite,
+        struct msg** new_msg_ptr) {
+    return DN_OK;
+}
