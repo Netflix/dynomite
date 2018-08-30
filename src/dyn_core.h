@@ -63,68 +63,46 @@
 # define DN_HAVE_BACKTRACE 1
 #endif
 
-#define DN_NOOPS     1
-#define DN_OK        0
-#define DN_ERROR    -1
-#define DN_EAGAIN   -2
-#define DN_ENOMEM   -3
-#define DN_ENO_IMPL -4
-
-
-typedef int rstatus_t; /* return type */
-typedef int err_t;     /* error type */
-
-#define THROW_STATUS(s)                                             \
-                {                                                   \
-                    rstatus_t __ret = (s);                          \
-                    if (__ret != DN_OK) {                           \
-                        log_debug(LOG_WARN, "failed "#s);           \
-                        return __ret;                               \
-                    }                                               \
-                }
-
-#define IGNORE_RET_VAL(x) x;
-
+#include <errno.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include <inttypes.h>
 #include <string.h>
-#include <errno.h>
-#include <limits.h>
 #include <time.h>
 #include <unistd.h>
-#include <pthread.h>
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/time.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/un.h>
 
-#include "dyn_types.h"
 #include "dyn_array.h"
-#include "dyn_dict.h"
-#include "dyn_string.h"
-#include "dyn_queue.h"
-#include "dyn_rbtree.h"
-#include "dyn_log.h"
-#include "dyn_util.h"
-#include "dyn_stats.h"
-#include "dyn_mbuf.h"
-#include "dyn_message.h"
+#include "dyn_cbuf.h"
 #include "dyn_connection.h"
 #include "dyn_connection_pool.h"
-#include "dyn_cbuf.h"
-#include "dyn_ring_queue.h"
 #include "dyn_crypto.h"
+#include "dyn_dict.h"
+#include "dyn_log.h"
+#include "dyn_mbuf.h"
+#include "dyn_message.h"
+#include "dyn_queue.h"
+#include "dyn_rbtree.h"
+#include "dyn_ring_queue.h"
 #include "dyn_setting.h"
+#include "dyn_stats.h"
+#include "dyn_string.h"
+#include "dyn_types.h"
+#include "dyn_util.h"
+#include "hashkit/dyn_hashkit.h"
 
 #include "entropy/dyn_entropy.h"
 
 #define ENCRYPTION 1
-typedef rstatus_t (*hash_func_t)(const unsigned char *, size_t, struct dyn_token *);
 
 typedef enum dyn_state {
 	INIT        = 0,

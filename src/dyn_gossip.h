@@ -1,9 +1,10 @@
-#include "hashkit/dyn_token.h"
-#include "dyn_core.h"
-#include "dyn_dict.h"
-
 #ifndef DYN_GOSSIP_H_
 #define DYN_GOSSIP_H_
+
+#include "hashkit/dyn_token.h"
+#include "dyn_array.h"
+#include "dyn_dict.h"
+#include "dyn_string.h"
 
 
 #define GOS_NOOPS     1

@@ -23,7 +23,11 @@
 #ifndef _DYN_UTIL_H_
 #define _DYN_UTIL_H_
 
+#include <netinet/in.h>
+#include <stdbool.h>
 #include <stdarg.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 #define LF                  (uint8_t) 10
 #define CR                  (uint8_t) 13

@@ -36,7 +36,13 @@
  
 #ifndef _DYN_CONNECTION_H_
 #define _DYN_CONNECTION_H_
-#include "dyn_core.h"
+
+#include <sys/socket.h>
+
+#include "dyn_message.h"
+#include "dyn_queue.h"
+#include "dyn_string.h"
+#include "dyn_types.h"
 
 #define MAX_CONN_QUEUE_SIZE           20000
 #define MAX_CONN_ALLOWABLE_NON_RECV   5

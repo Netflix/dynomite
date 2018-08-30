@@ -1,5 +1,7 @@
 #include "dyn_hashkit.h"
 
+#include "../dyn_string.h"
+
 #define DEFINE_ACTION(_hash, _name) string(#_name),
 struct string hash_strings[] = {
     HASH_CODEC( DEFINE_ACTION )

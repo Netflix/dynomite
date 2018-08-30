@@ -20,12 +20,10 @@
  * limitations under the License.
  */
 
-#include "dyn_core.h"
-
-
 #ifndef _DYN_ARRAY_H_
 #define _DYN_ARRAY_H_
 
+#include "dyn_types.h"
 
 typedef int (*array_compare_t)(const void *, const void *);
 typedef rstatus_t (*array_each_t)(void *elem);

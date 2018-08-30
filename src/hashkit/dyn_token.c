@@ -23,6 +23,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "dyn_token.h"
+#include "../dyn_array.h"
+#include "../dyn_log.h"
+#include "../dyn_string.h"
+#include "../dyn_util.h"
 
 /* bitsPerDigit radix of 10 multiplied by 1024, rounded up to avoid underallocation */
 #define BITS_PER_DIGIT 3402

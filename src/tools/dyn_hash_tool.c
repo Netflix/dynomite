@@ -1,6 +1,11 @@
-#include<stdio.h>
+#include <errno.h>
 #include <getopt.h>
-#include <dyn_token.h>
+#include <stdbool.h>
+#include <stdio.h>
+
+#include "../dyn_log.h"
+#include "../hashkit/dyn_token.h"
+
 static struct option long_options[] = {
     { "help",                 no_argument,        NULL,   'h' },
     { "outputkey",           no_argument,        NULL,   'k' },

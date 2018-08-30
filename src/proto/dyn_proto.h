@@ -20,13 +20,21 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-
-
 #ifndef _DN_PROTO_H_
 #define _DN_PROTO_H_
 
+#include <stdbool.h>
 
+#include "../dyn_types.h"
+
+// Forward declarations
+struct context;
+struct msg;
+struct msg_tqh;
+struct rack;
+struct response_mgr;
+struct server_pool;
+struct string;
 
 
 void memcache_parse_req(struct msg *r, const struct string *hash_tag);

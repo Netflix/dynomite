@@ -19,12 +19,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "dyn_core.h"
 
 #ifndef _DYN_MBUF_H_
 #define _DYN_MBUF_H_
 
+#include <stdio.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
+#include "dyn_queue.h"
 
 typedef void (*func_mbuf_copy_t)(struct mbuf *, void *);
 
