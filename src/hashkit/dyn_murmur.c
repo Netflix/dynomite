@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -40,69 +40,67 @@
 #include <dyn_core.h>
 #include <dyn_token.h>
 
-rstatus_t 
-hash_murmur(const unsigned char *key, size_t length, struct dyn_token *token)
-{
-    /*
-     * 'm' and 'r' are mixing constants generated offline.  They're not
-     * really 'magic', they just happen to work well.
-     */
+rstatus_t hash_murmur(const unsigned char *key, size_t length,
+                      struct dyn_token *token) {
+  /*
+   * 'm' and 'r' are mixing constants generated offline.  They're not
+   * really 'magic', they just happen to work well.
+   */
 
-    const unsigned int m = 0x5bd1e995;
-    const uint32_t seed = (0xdeadbeef * (uint32_t)length);
-    const int r = 24;
+  const unsigned int m = 0x5bd1e995;
+  const uint32_t seed = (0xdeadbeef * (uint32_t)length);
+  const int r = 24;
 
+  /* Initialize the hash to a 'random' value */
 
-    /* Initialize the hash to a 'random' value */
+  uint32_t h = seed ^ (uint32_t)length;
 
-    uint32_t h = seed ^ (uint32_t)length;
+  /* Mix 4 bytes at a time into the hash */
 
-    /* Mix 4 bytes at a time into the hash */
+  const unsigned char *data = (const unsigned char *)key;
 
-    const unsigned char * data = (const unsigned char *)key;
+  while (length >= 4) {
+    unsigned int k = *(unsigned int *)data;
 
-    while (length >= 4) {
-        unsigned int k = *(unsigned int *)data;
+    k *= m;
+    k ^= k >> r;
+    k *= m;
 
-        k *= m;
-        k ^= k >> r;
-        k *= m;
+    h *= m;
+    h ^= k;
 
-        h *= m;
-        h ^= k;
+    data += 4;
+    length -= 4;
+  }
 
-        data += 4;
-        length -= 4;
-    }
+  /* Handle the last few bytes of the input array */
 
-    /* Handle the last few bytes of the input array */
-
-    switch(length) {
+  switch (length) {
     case 3:
-        h ^= ((uint32_t)data[2]) << 16;
+      h ^= ((uint32_t)data[2]) << 16;
 
     case 2:
-        h ^= ((uint32_t)data[1]) << 8;
+      h ^= ((uint32_t)data[1]) << 8;
 
     case 1:
-        h ^= data[0];
-        h *= m;
+      h ^= data[0];
+      h *= m;
 
     default:
-        break;
-    };
+      break;
+  };
 
-    /*
-     * Do a few final mixes of the hash to ensure the last few bytes are
-     * well-incorporated.
-     */
+  /*
+   * Do a few final mixes of the hash to ensure the last few bytes are
+   * well-incorporated.
+   */
 
-    h ^= h >> 13;
-    h *= m;
-    h ^= h >> 15;
+  h ^= h >> 13;
+  h *= m;
+  h ^= h >> 15;
 
-    size_dyn_token(token, 1);
-    set_int_dyn_token(token, h);
+  size_dyn_token(token, 1);
+  set_int_dyn_token(token, h);
 
-    return DN_OK;
+  return DN_OK;
 }

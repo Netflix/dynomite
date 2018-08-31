@@ -17,7 +17,8 @@ rstatus_t task_mgr_init(void);
  * arg1 : the argument that will be sent back to handler1
  * timeout : time in msec after which this task should get fired
  */
-struct task *schedule_task_1(task_handler_1 handler1, void *arg1, msec_t timeout);
+struct task *schedule_task_1(task_handler_1 handler1, void *arg1,
+                             msec_t timeout);
 
 /* Returns the time in msec to the next task */
 msec_t time_to_next_task(void);

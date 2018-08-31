@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -37,24 +37,23 @@
 #include <dyn_core.h>
 #include <dyn_token.h>
 
-rstatus_t
-hash_one_at_a_time(const unsigned char *key, size_t key_length, struct dyn_token *token)
-{
-    const char *ptr = key;
-    uint32_t value = 0;
+rstatus_t hash_one_at_a_time(const unsigned char *key, size_t key_length,
+                             struct dyn_token *token) {
+  const char *ptr = key;
+  uint32_t value = 0;
 
-    while (key_length--) {
-        uint32_t val = (uint32_t) *ptr++;
-        value += val;
-        value += (value << 10);
-        value ^= (value >> 6);
-    }
-    value += (value << 3);
-    value ^= (value >> 11);
-    value += (value << 15);
+  while (key_length--) {
+    uint32_t val = (uint32_t)*ptr++;
+    value += val;
+    value += (value << 10);
+    value ^= (value >> 6);
+  }
+  value += (value << 3);
+  value ^= (value >> 11);
+  value += (value << 15);
 
-    size_dyn_token(token, 1);
-    set_int_dyn_token(token, value);
+  size_dyn_token(token, 1);
+  set_int_dyn_token(token, value);
 
-    return DN_OK;
+  return DN_OK;
 }

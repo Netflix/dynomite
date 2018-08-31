@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -30,43 +30,33 @@ typedef rstatus_t (*array_each_t)(void *elem);
 typedef rstatus_t (*array_each_2_t)(void *elem, void *data1, void *data2);
 
 struct array {
-    uint32_t nelem;  /* # element */
-    void     *elem;  /* element */
-    size_t   size;   /* element size */
-    uint32_t nalloc; /* # allocated element */
+  uint32_t nelem;  /* # element */
+  void *elem;      /* element */
+  size_t size;     /* element size */
+  uint32_t nalloc; /* # allocated element */
 };
 
-#define null_array { 0, NULL, 0, 0 }
+#define null_array \
+  { 0, NULL, 0, 0 }
 
-static inline void
-array_null(struct array *a)
-{
-    a->nelem = 0;
-    a->elem = NULL;
-    a->size = 0;
-    a->nalloc = 0;
+static inline void array_null(struct array *a) {
+  a->nelem = 0;
+  a->elem = NULL;
+  a->size = 0;
+  a->nalloc = 0;
 }
 
-static inline void
-array_set(struct array *a, void *elem, size_t size, uint32_t nalloc)
-{
-    a->nelem = 0;
-    a->elem = elem;
-    a->size = size;
-    a->nalloc = nalloc;
+static inline void array_set(struct array *a, void *elem, size_t size,
+                             uint32_t nalloc) {
+  a->nelem = 0;
+  a->elem = elem;
+  a->size = size;
+  a->nalloc = nalloc;
 }
 
-static inline uint32_t
-array_n(const struct array *a)
-{
-    return a->nelem;
-}
+static inline uint32_t array_n(const struct array *a) { return a->nelem; }
 
-static inline void
-array_reset(struct array *a)
-{
-    a->nelem = 0;
-}
+static inline void array_reset(struct array *a) { a->nelem = 0; }
 
 struct array *array_create(uint32_t n, size_t size);
 void array_destroy(struct array *a);
@@ -81,6 +71,7 @@ void *array_top(struct array *a);
 void array_swap(struct array *a, struct array *b);
 void array_sort(struct array *a, array_compare_t compare);
 rstatus_t array_each(struct array *a, array_each_t func);
-rstatus_t array_each_2(struct array *a, array_each_2_t func, void *data1, void *data2);
+rstatus_t array_each_2(struct array *a, array_each_2_t func, void *data1,
+                       void *data2);
 
 #endif
