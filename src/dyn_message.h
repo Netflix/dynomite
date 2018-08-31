@@ -23,8 +23,13 @@
 #ifndef _DYN_MESSAGE_H_
 #define _DYN_MESSAGE_H_
 
-#include "dyn_core.h"
+#include <string.h>
+
+#include "dyn_dict.h"
 #include "dyn_dnode_msg.h"
+#include "dyn_queue.h"
+#include "dyn_mbuf.h"
+#include "dyn_rbtree.h"
 #include "dyn_response_mgr.h"
 #include "dyn_types.h"
 

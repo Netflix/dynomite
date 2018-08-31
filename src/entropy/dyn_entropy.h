@@ -16,8 +16,11 @@
  */
 
 
+#ifndef _DYN_ENTROPY_H_
+#define _DYN_ENTROPY_H_
 
-#include "dyn_core.h"
+#include "../dyn_string.h"
+#include "../dyn_types.h"
 
 #define ENTROPY_ADDR      "127.0.0.1"
 #define ENTROPY_PORT      8105
@@ -57,4 +60,4 @@ rstatus_t entropy_key_iv_load(struct context *ctx);
 rstatus_t entropy_snd_start(int peer_socket, int header_size, int buffer_size, int cipher_size);
 rstatus_t entropy_rcv_start(int peer_socket, int header_size, int buffer_size, int cipher_size);
 
-
+#endif /* _DYN_ENTROPY_H_ */

@@ -19,12 +19,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <dyn_core.h>
-#include <dyn_server.h>
-
 
 #ifndef _DYN_HASHKIT_H_
 #define _DYN_HASHKIT_H_
+
+#include "../dyn_types.h"
+
+// Forward declarations
+struct dyn_token;
+struct string;
+
+typedef rstatus_t (*hash_func_t)(const unsigned char *, size_t, struct dyn_token *);
 
 void md5_signature(const unsigned char *key, unsigned int length, unsigned char *result);
 

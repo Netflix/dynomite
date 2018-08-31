@@ -5,9 +5,10 @@
 
 #include <ctype.h>
 
+#include "dyn_dnode_msg.h"
+
 #include "dyn_core.h"
 #include "dyn_crypto.h"
-#include "dyn_dnode_msg.h"
 #include "dyn_server.h"
 #include "proto/dyn_proto.h"
 

@@ -19,6 +19,9 @@
 
 #include "dyn_connection_internal.h"
 #include "dyn_connection_pool.h"
+#include "dyn_core.h"
+#include "dyn_setting.h"
+#include "dyn_util.h"
 #include "event/dyn_event.h"
 
 static uint32_t nfree_connq;       /* # free conn q */

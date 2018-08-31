@@ -27,17 +27,18 @@
  * Set default configuration values, parse dynomite.yaml, and update the various
  * configuration structs including connections and server pool.
  */
+#ifndef _DYN_CONF_H_
+#define _DYN_CONF_H_
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <yaml.h>
 
-#include "dyn_core.h"
+#include "dyn_array.h"
+#include "dyn_string.h"
+#include "dyn_util.h"
 #include "hashkit/dyn_hashkit.h"
-
-
-#ifndef _DYN_CONF_H_
-#define _DYN_CONF_H_
 
 #define CONF_DEFAULT_PEERS                   200
 #define CONF_DEFAULT_ENV                     "aws"
