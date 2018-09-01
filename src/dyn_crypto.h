@@ -21,11 +21,15 @@
 #include <openssl/rand.h>
 
 
-#include "dyn_core.h"
+#include "dyn_types.h"
 
 
 #define AES_KEYLEN 32
 
+// Forward declarations
+struct mbuf;
+struct msg;
+struct server_pool;
 
 rstatus_t crypto_init(struct server_pool *sp);
 rstatus_t crypto_deinit(void);

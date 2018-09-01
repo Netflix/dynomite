@@ -3,12 +3,13 @@
  * Copyright (C) 2014 Netflix, Inc.
  */ 
 
-#include "dyn_core.h"
-
-
 #ifndef _DYN_DNODE_MSG_H_
 #define _DYN_DNODE_MSG_H_
 
+#include <stdbool.h>
+
+#include "dyn_queue.h"
+#include "dyn_types.h"
 
 typedef enum dmsg_version {
     VERSION_10 = 1

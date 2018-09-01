@@ -23,9 +23,10 @@
 #ifndef _DYN_STRING_H_
 #define _DYN_STRING_H_
 
+#include <stdbool.h>
 #include <string.h>
 
-#include "dyn_core.h"
+#include "dyn_types.h"
 
 struct string {
     uint32_t len;   /* string length */

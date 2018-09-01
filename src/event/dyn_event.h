@@ -20,11 +20,11 @@
  * limitations under the License.
  */
 
-#include <dyn_core.h>
-
 #ifndef _DN_EVENT_H_
 #define _DN_EVENT_H_
 
+// Forward declarations
+struct conn;
 
 #define EVENT_SIZE  1024
 

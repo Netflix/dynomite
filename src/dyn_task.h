@@ -1,6 +1,8 @@
+#ifndef _DYN_TASK_H_
+#define _DYN_TASK_H_
+
 #include "dyn_rbtree.h"
 #include "dyn_types.h"
-#include "dyn_core.h"
 
 struct task;
 
@@ -29,3 +31,5 @@ void execute_expired_tasks(uint32_t limit);
 /* Cancel the provided task. The caller should keep track of the tasks scheduled
  * and use it to cancel */
 void cancel_task(struct task *task);
+
+#endif /* _DYN_TASK_H_ */

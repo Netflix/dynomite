@@ -23,8 +23,14 @@
 #ifndef _DYN_SERVER_H_
 #define _DYN_SERVER_H_
 
-#include "dyn_core.h"
 #include "dyn_dict.h"
+#include "dyn_types.h"
+
+// Forward declarations
+struct conf_pool;
+struct context;
+struct datastore;
+struct server_pool;
 
 /*
  * server_pool is a collection of servers and their continuum. Each

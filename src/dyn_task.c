@@ -1,5 +1,9 @@
 #include "dyn_task.h"
 
+#include <stdbool.h>
+
+#include "dyn_util.h"
+
 /**
  * This is a generic task manager. There was a increasing demand in Dynomite to
  * create a module to schedule task a specific times. For example reconnecting

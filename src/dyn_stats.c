@@ -980,7 +980,7 @@ stats_make_cl_desc_rsp(struct stats *st)
 static void
 parse_request(int sd, struct stats_cmd *st_cmd)
 {
-    size_t max_buf_size = 99999;
+    size_t max_buf_size = 65535;
     char mesg[max_buf_size], *reqline[3];
     int rcvd;
 

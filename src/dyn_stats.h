@@ -20,14 +20,16 @@
  * limitations under the License.
  */
 
-#include "dyn_core.h"
-#include "dyn_histogram.h"
-
-
 #ifndef _DYN_STATS_H_
 #define _DYN_STATS_H_
 
+#include "dyn_array.h"
+#include "dyn_histogram.h"
+#include "dyn_string.h"
 
+// Forward declarations
+struct context;
+struct server_pool;
 
 #define STATS_POOL_CODEC(ACTION)                                                                                          \
     /* client behavior */                                                                                                 \
