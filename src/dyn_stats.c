@@ -801,11 +801,16 @@ stats_make_info_rsp(struct stats *st)
     /* copy pool metric from sum(c) to buffer */
     THROW_STATUS(stats_copy_metric(st, &stp->metric, false));
 
+    struct string stats_servers_list;
+    string_set_text(&stats_servers_list, "servers")
+
     struct stats_server *sts = &stp->server;
 
+    THROW_STATUS(stats_begin_nesting(&st->buf, &stats_servers_list, false));
     THROW_STATUS(stats_begin_nesting(&st->buf, &sts->name, false));
     /* copy server metric from sum(c) to buffer */
     THROW_STATUS(stats_copy_metric(st, &sts->metric, true));
+    THROW_STATUS(stats_end_nesting(&st->buf, false));
     THROW_STATUS(stats_end_nesting(&st->buf, false));
 
     THROW_STATUS(stats_end_nesting(&st->buf, false));
