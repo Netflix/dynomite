@@ -529,12 +529,14 @@ dnode_peer_forward_state(void *rmsg)
     if (conn == NULL) {
         //running out of connection due to memory exhaust
         log_debug(LOG_ERR, "Unable to obtain a connection object");
+        mbuf_put(mbuf);
         return DN_ERROR;
     }
 
     status = conn_connect(sp->ctx, conn);
     if (status != DN_OK ) {
         conn_close(sp->ctx, conn);
+        mbuf_put(mbuf);
         log_debug(LOG_ERR, "Error happened in connecting on conn %d", conn->sd);
         return DN_ERROR;
     }
@@ -602,6 +604,7 @@ dnode_peer_handshake_announcing(void *rmsg)
         if (conn == NULL) {
             //running out of connection due to memory exhaust
             log_debug(LOG_DEBUG, "Unable to obtain a connection object");
+            mbuf_put(mbuf);
             return DN_ERROR;
         }
 
@@ -609,18 +612,20 @@ dnode_peer_handshake_announcing(void *rmsg)
         status = conn_connect(sp->ctx, conn);
         if (status != DN_OK ) {
             conn_close(sp->ctx, conn);
+            mbuf_put(mbuf);
             log_debug(LOG_DEBUG, "Error happened in connecting on conn %d", conn->sd);
             return DN_ERROR;
         }
 
-        //conn->
-
-        dnode_peer_gossip_forward(sp->ctx, conn, mbuf);
+    	struct mbuf *peer_mbuf = mbuf_get();
+	mbuf_write_mbuf(peer_mbuf, mbuf);
+	
+        dnode_peer_gossip_forward(sp->ctx, conn, peer_mbuf);
         //peer_gossip_forward1(sp->ctx, conn, sp->data_store, &data);
     }
 
     //free this as nobody else will do
-    //mbuf_put(mbuf);
+    mbuf_put(mbuf);
 
     return DN_OK;
 }
