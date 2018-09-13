@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -20,21 +20,20 @@
  * limitations under the License.
  */
 
-#include <dyn_token.h>
 #include <dyn_core.h>
+#include <dyn_token.h>
 #include <murmur3.h>
 
 #define MURMUR3_SEED 0xc0a1e5ce
 
-rstatus_t
-hash_murmur3(const unsigned char *key, size_t length, struct dyn_token *token)
-{
-    rstatus_t status = size_dyn_token(token, 4);
-    if (status != DN_OK) {
-        return status;
-    }
+rstatus_t hash_murmur3(const unsigned char *key, size_t length,
+                       struct dyn_token *token) {
+  rstatus_t status = size_dyn_token(token, 4);
+  if (status != DN_OK) {
+    return status;
+  }
 
-//    MurmurHash3_x86_128(key, length, MURMUR3_SEED, token->mag);
+  //    MurmurHash3_x86_128(key, length, MURMUR3_SEED, token->mag);
 
-    return DN_OK;
+  return DN_OK;
 }

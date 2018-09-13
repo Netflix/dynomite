@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -26,78 +26,77 @@
  * See: http://www.azillionmonkeys.com/qed/weblicense.html for license
  * details.
  * http://www.azillionmonkeys.com/qed/hash.html
-*/
+ */
 
-#include <dyn_token.h>
 #include <dyn_core.h>
+#include <dyn_token.h>
 
 #undef get16bits
 #if (defined(__GNUC__) && defined(__i386__))
-#define get16bits(d) (*((const uint16_t *) (d)))
+#define get16bits(d) (*((const uint16_t *)(d)))
 #endif
 
-#if !defined (get16bits)
-#define get16bits(d) ((((uint32_t)(((const uint8_t *)(d))[1])) << 8)\
-                      +(uint32_t)(((const uint8_t *)(d))[0]) )
+#if !defined(get16bits)
+#define get16bits(d)                                \
+  ((((uint32_t)(((const uint8_t *)(d))[1])) << 8) + \
+   (uint32_t)(((const uint8_t *)(d))[0]))
 #endif
 
-rstatus_t
-hash_hsieh(const unsigned char *key, size_t key_length, struct dyn_token *token)
-{
-    uint32_t hash = 0, tmp;
-    int rem;
+rstatus_t hash_hsieh(const unsigned char *key, size_t key_length,
+                     struct dyn_token *token) {
+  uint32_t hash = 0, tmp;
+  int rem;
 
-    if (key_length <= 0 || key == NULL) {
-        return 0;
-    }
+  if (key_length <= 0 || key == NULL) {
+    return 0;
+  }
 
-    rem = key_length & 3;
-    key_length >>= 2;
+  rem = key_length & 3;
+  key_length >>= 2;
 
-    /* Main loop */
-    for (;key_length > 0; key_length--) {
-        hash += get16bits (key);
-        tmp = (get16bits (key+2) << 11) ^ hash;
-        hash = (hash << 16) ^ tmp;
-        key += 2*sizeof (uint16_t);
-        hash += hash >> 11;
-    }
+  /* Main loop */
+  for (; key_length > 0; key_length--) {
+    hash += get16bits(key);
+    tmp = (get16bits(key + 2) << 11) ^ hash;
+    hash = (hash << 16) ^ tmp;
+    key += 2 * sizeof(uint16_t);
+    hash += hash >> 11;
+  }
 
-    /* Handle end cases */
-    switch (rem) {
+  /* Handle end cases */
+  switch (rem) {
     case 3:
-        hash += get16bits (key);
-        hash ^= hash << 16;
-        hash ^= (uint32_t)key[sizeof (uint16_t)] << 18;
-        hash += hash >> 11;
-        break;
+      hash += get16bits(key);
+      hash ^= hash << 16;
+      hash ^= (uint32_t)key[sizeof(uint16_t)] << 18;
+      hash += hash >> 11;
+      break;
 
     case 2:
-        hash += get16bits (key);
-        hash ^= hash << 11;
-        hash += hash >> 17;
-        break;
+      hash += get16bits(key);
+      hash ^= hash << 11;
+      hash += hash >> 17;
+      break;
 
     case 1:
-        hash += (unsigned char)(*key);
-        hash ^= hash << 10;
-        hash += hash >> 1;
+      hash += (unsigned char)(*key);
+      hash ^= hash << 10;
+      hash += hash >> 1;
 
     default:
-        break;
-    }
+      break;
+  }
 
-    /* Force "avalanching" of final 127 bits */
-    hash ^= hash << 3;
-    hash += hash >> 5;
-    hash ^= hash << 4;
-    hash += hash >> 17;
-    hash ^= hash << 25;
-    hash += hash >> 6;
+  /* Force "avalanching" of final 127 bits */
+  hash ^= hash << 3;
+  hash += hash >> 5;
+  hash ^= hash << 4;
+  hash += hash >> 17;
+  hash ^= hash << 25;
+  hash += hash >> 6;
 
-    size_dyn_token(token, 1);
-    set_int_dyn_token(token, hash);
+  size_dyn_token(token, 1);
+  set_int_dyn_token(token, hash);
 
-    return DN_OK;
-
+  return DN_OK;
 }

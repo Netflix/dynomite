@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -42,78 +42,65 @@
  * to be freed.
  */
 
-void
-string_init(struct string *str)
-{
-    str->len = 0;
-    str->data = NULL;
+void string_init(struct string *str) {
+  str->len = 0;
+  str->data = NULL;
 }
 
-void
-string_deinit(struct string *str)
-{
-    ASSERT((str->len == 0 && str->data == NULL) ||
-           (str->len != 0 && str->data != NULL));
+void string_deinit(struct string *str) {
+  ASSERT((str->len == 0 && str->data == NULL) ||
+         (str->len != 0 && str->data != NULL));
 
-    if (str->data != NULL) {
-        dn_free(str->data);
-        string_init(str);
-    }
+  if (str->data != NULL) {
+    dn_free(str->data);
+    string_init(str);
+  }
 }
 
-bool
-string_empty(const struct string *str)
-{
-    ASSERT((str->len == 0 && str->data == NULL) ||
-           (str->len != 0 && str->data != NULL));
-    return str->len == 0 ? true : false;
+bool string_empty(const struct string *str) {
+  ASSERT((str->len == 0 && str->data == NULL) ||
+         (str->len != 0 && str->data != NULL));
+  return str->len == 0 ? true : false;
 }
 
-rstatus_t
-string_duplicate(struct string *dst, const struct string *src)
-{
-    ASSERT(dst->len == 0 && dst->data == NULL);
-    ASSERT(src->len != 0 && src->data != NULL);
+rstatus_t string_duplicate(struct string *dst, const struct string *src) {
+  ASSERT(dst->len == 0 && dst->data == NULL);
+  ASSERT(src->len != 0 && src->data != NULL);
 
-    dst->data = dn_strndup(src->data, src->len);
-    if (dst->data == NULL) {
-        return DN_ENOMEM;
-    }
+  dst->data = dn_strndup(src->data, src->len);
+  if (dst->data == NULL) {
+    return DN_ENOMEM;
+  }
 
-    dst->len = dn_strlen(dst->data);
-    return DN_OK;
+  dst->len = dn_strlen(dst->data);
+  return DN_OK;
 }
 
-rstatus_t
-string_copy(struct string *dst, const uint8_t *src, uint32_t srclen)
-{
-    //ASSERT(dst->len == 0 && dst->data == NULL);
-    ASSERT(src != NULL && srclen != 0);
+rstatus_t string_copy(struct string *dst, const uint8_t *src, uint32_t srclen) {
+  // ASSERT(dst->len == 0 && dst->data == NULL);
+  ASSERT(src != NULL && srclen != 0);
 
-    dst->data = dn_strndup(src, srclen);
-    if (dst->data == NULL) {
-        return DN_ENOMEM;
-    }
+  dst->data = dn_strndup(src, srclen);
+  if (dst->data == NULL) {
+    return DN_ENOMEM;
+  }
 
-    dst->len = dn_strlen(dst->data);
+  dst->len = dn_strlen(dst->data);
 
-    return DN_OK;
+  return DN_OK;
 }
 
 /* For copying constant string into dst */
-rstatus_t string_copy_c(struct string *dst, const uint8_t *src)
-{
-    return string_copy(dst, src, (uint32_t) dn_strlen(src));
+rstatus_t string_copy_c(struct string *dst, const uint8_t *src) {
+  return string_copy(dst, src, (uint32_t)dn_strlen(src));
 }
 
-int
-string_compare(const struct string *s1, const struct string *s2)
-{
-    if (s1->len != s2->len) {
-        return s1->len - s2->len > 0 ? 1 : -1;
-    }
+int string_compare(const struct string *s1, const struct string *s2) {
+  if (s1->len != s2->len) {
+    return s1->len - s2->len > 0 ? 1 : -1;
+  }
 
-    return dn_strncmp(s1->data, s2->data, s1->len);
+  return dn_strncmp(s1->data, s2->data, s1->len);
 }
 
 /*

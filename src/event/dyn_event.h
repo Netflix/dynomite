@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -26,11 +26,11 @@
 // Forward declarations
 struct conn;
 
-#define EVENT_SIZE  1024
+#define EVENT_SIZE 1024
 
-#define EVENT_READ  0x0000ff
+#define EVENT_READ 0x0000ff
 #define EVENT_WRITE 0x00ff00
-#define EVENT_ERR   0xff0000
+#define EVENT_ERR 0xff0000
 
 typedef int (*event_cb_t)(void *, uint32_t);
 typedef void (*event_stats_cb_t)(void *, void *);
@@ -39,63 +39,51 @@ typedef void (*event_entropy_cb_t)(void *, void *);
 #ifdef DN_HAVE_KQUEUE
 
 struct event_base {
-    int           kq;          /* kernel event queue descriptor */
+  int kq; /* kernel event queue descriptor */
 
-    struct kevent *change;     /* change[] - events we want to monitor */
-    int           nchange;     /* # change */
+  struct kevent *change; /* change[] - events we want to monitor */
+  int nchange;           /* # change */
 
-    struct kevent *event;      /* event[] - events that were triggered */
-    int           nevent;      /* # event */
-    int           nreturned;   /* # event placed in event[] */
-    int           nprocessed;  /* # event processed from event[] */
+  struct kevent *event; /* event[] - events that were triggered */
+  int nevent;           /* # event */
+  int nreturned;        /* # event placed in event[] */
+  int nprocessed;       /* # event processed from event[] */
 
-    event_cb_t    cb;          /* event callback */
+  event_cb_t cb; /* event callback */
 };
 
-static inline int
-event_fd(struct event_base *evb)
-{
-    return evb->kq;
-}
+static inline int event_fd(struct event_base *evb) { return evb->kq; }
 
 #elif DN_HAVE_EPOLL
 
 struct event_base {
-    int                ep;      /* epoll descriptor */
+  int ep; /* epoll descriptor */
 
-    struct epoll_event *event;  /* event[] - events that were triggered */
-    int                nevent;  /* # event */
+  struct epoll_event *event; /* event[] - events that were triggered */
+  int nevent;                /* # event */
 
-    event_cb_t         cb;      /* event callback */
+  event_cb_t cb; /* event callback */
 };
 
-static inline int
-event_fd(struct event_base *evb)
-{
-    return evb->ep;
-}
+static inline int event_fd(struct event_base *evb) { return evb->ep; }
 
 #elif DN_HAVE_EVENT_PORTS
 
 #include <port.h>
 
 struct event_base {
-    int          evp;     /* event port descriptor */
+  int evp; /* event port descriptor */
 
-    port_event_t *event;  /* event[] - events that were triggered */
-    int          nevent;  /* # event */
+  port_event_t *event; /* event[] - events that were triggered */
+  int nevent;          /* # event */
 
-    event_cb_t   cb;      /* event callback */
+  event_cb_t cb; /* event callback */
 };
 
-static inline int
-event_fd(struct event_base *evb)
-{
-    return evb->evp;
-}
+static inline int event_fd(struct event_base *evb) { return evb->evp; }
 
 #else
-# error missing scalable I/O event notification mechanism
+#error missing scalable I/O event notification mechanism
 #endif
 
 struct event_base *event_base_create(int size, event_cb_t cb);
