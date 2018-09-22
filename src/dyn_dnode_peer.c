@@ -302,7 +302,13 @@ static void dnode_peer_ack_err(struct context *ctx, struct conn *conn,
   // Create an appropriate response for the request so its propagated up;
   // This response gets dropped in rsp_make_error anyways. But since this is
   // an error path its ok with the overhead.
-  struct msg *rsp = msg_get(conn, false, __FUNCTION__);
+  struct msg *rsp = msg_get_error(conn, PEER_CONNECTION_REFUSE, conn->err);
+  if (rsp == NULL) {
+    // TODO: It's not clear how the peer should behave if we hit this error
+    // condition. Return an appropriate error instead.
+    log_warn("Could not allocate msg for notifying an error to peer");
+    return;
+  }
   req->done = 1;
   rsp->peer = req;
   rsp->is_error = req->is_error = 1;
