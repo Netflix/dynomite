@@ -1,9 +1,8 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc. Licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,19 +13,14 @@
  * limitations under the License.
  */
 
-
-#include "dyn_core.h"
 #include "dyn_conf.h"
+#include "dyn_core.h"
 
-static uint32_t conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;           //conn msgs per sec
+static uint32_t conn_msg_rate = CONF_DEFAULT_CONN_MSG_RATE;  // conn msgs per
+                                                             // sec
 
+uint32_t msgs_per_sec(void) { return conn_msg_rate; }
 
-uint32_t msgs_per_sec(void)
-{
-   return conn_msg_rate;
-}
-
-void set_msgs_per_sec(uint32_t tokens_per_sec)
-{
-	conn_msg_rate = tokens_per_sec;
+void set_msgs_per_sec(uint32_t tokens_per_sec) {
+  conn_msg_rate = tokens_per_sec;
 }

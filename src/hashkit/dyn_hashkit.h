@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -19,37 +19,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <dyn_core.h>
-#include <dyn_server.h>
-
 
 #ifndef _DYN_HASHKIT_H_
 #define _DYN_HASHKIT_H_
 
-void md5_signature(const unsigned char *key, unsigned int length, unsigned char *result);
+#include "../dyn_types.h"
+
+// Forward declarations
+struct dyn_token;
+struct string;
+
+typedef rstatus_t (*hash_func_t)(const unsigned char *, size_t,
+                                 struct dyn_token *);
+
+void md5_signature(const unsigned char *key, unsigned int length,
+                   unsigned char *result);
 
 uint32_t crc32_sz(const char *buf, size_t length, uint32_t in_crc32);
 
-#define HASH_CODEC(ACTION)                      \
-    ACTION( HASH_ONE_AT_A_TIME, one_at_a_time ) \
-    ACTION( HASH_MD5,           md5           ) \
-    ACTION( HASH_CRC16,         crc16         ) \
-    ACTION( HASH_CRC32,         crc32         ) \
-    ACTION( HASH_CRC32A,        crc32a        ) \
-    ACTION( HASH_FNV1_64,       fnv1_64       ) \
-    ACTION( HASH_FNV1A_64,      fnv1a_64      ) \
-    ACTION( HASH_FNV1_32,       fnv1_32       ) \
-    ACTION( HASH_FNV1A_32,      fnv1a_32      ) \
-    ACTION( HASH_HSIEH,         hsieh         ) \
-    ACTION( HASH_MURMUR,        murmur        ) \
-    ACTION( HASH_JENKINS,       jenkins       ) \
-    ACTION( HASH_MURMUR3,       murmur3       ) \
+#define HASH_CODEC(ACTION)                  \
+  ACTION(HASH_ONE_AT_A_TIME, one_at_a_time) \
+  ACTION(HASH_MD5, md5)                     \
+  ACTION(HASH_CRC16, crc16)                 \
+  ACTION(HASH_CRC32, crc32)                 \
+  ACTION(HASH_CRC32A, crc32a)               \
+  ACTION(HASH_FNV1_64, fnv1_64)             \
+  ACTION(HASH_FNV1A_64, fnv1a_64)           \
+  ACTION(HASH_FNV1_32, fnv1_32)             \
+  ACTION(HASH_FNV1A_32, fnv1a_32)           \
+  ACTION(HASH_HSIEH, hsieh)                 \
+  ACTION(HASH_MURMUR, murmur)               \
+  ACTION(HASH_JENKINS, jenkins)             \
+  ACTION(HASH_MURMUR3, murmur3)
 
 #define DEFINE_ACTION(_hash, _name) _hash,
-typedef enum hash_type {
-    HASH_CODEC( DEFINE_ACTION )
-    HASH_INVALID
-} hash_type_t;
+typedef enum hash_type { HASH_CODEC(DEFINE_ACTION) HASH_INVALID } hash_type_t;
 #undef DEFINE_ACTION
 
 hash_func_t get_hash_func(hash_type_t hash_type);

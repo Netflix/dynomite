@@ -1,30 +1,38 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
-#include "dyn_core.h"
-#include "dyn_server.h"
-
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 #ifndef _DYN_DNODE_PEER_H_
 #define _DYN_DNODE_PEER_H_
 
-#define MAX_WAIT_BEFORE_RECONNECT_IN_SECS    10
-#define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS   30000
+#include "dyn_message.h"
+#include "dyn_types.h"
+
+#define MAX_WAIT_BEFORE_RECONNECT_IN_SECS 10
+#define WAIT_BEFORE_UPDATE_PEERS_IN_MILLIS 30000
+
+// Forward declarations
+struct context;
+struct msg;
+struct rack;
 
 msec_t dnode_peer_timeout(struct msg *msg, struct conn *conn);
 rstatus_t dnode_initialize_peers(struct context *ctx);
 void dnode_peer_deinit(struct array *nodes);
 void dnode_peer_connected(struct context *ctx, struct conn *conn);
 
-struct node *dnode_peer_pool_server(struct context *ctx, struct server_pool *pool,
-                                    struct rack *rack, uint8_t *key, uint32_t keylen,
+struct node *dnode_peer_pool_server(struct context *ctx,
+                                    struct server_pool *pool, struct rack *rack,
+                                    uint8_t *key, uint32_t keylen,
                                     msg_routing_t msg_routing);
-struct conn *dnode_peer_get_conn(struct context *ctx, struct node *server, int tag);
+struct conn *dnode_peer_get_conn(struct context *ctx, struct node *server,
+                                 int tag);
 rstatus_t dnode_peer_pool_preconnect(struct context *ctx);
 void dnode_peer_pool_disconnect(struct context *ctx);
-uint32_t dnode_peer_idx_for_key_on_rack(struct server_pool *pool, struct rack *rack,
-                                        uint8_t *key, uint32_t keylen);
+uint32_t dnode_peer_idx_for_key_on_rack(struct server_pool *pool,
+                                        struct rack *rack, uint8_t *key,
+                                        uint32_t keylen);
 rstatus_t dnode_peer_forward_state(void *rmsg);
 rstatus_t dnode_peer_add(void *rmsg);
 rstatus_t dnode_peer_replace(void *rmsg);
@@ -32,4 +40,4 @@ rstatus_t dnode_peer_handshake_announcing(void *rmsg);
 
 void init_dnode_peer_conn(struct conn *conn);
 void preselect_remote_rack_for_replication(struct context *ctx);
-#endif 
+#endif

@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -19,11 +19,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "dyn_core.h"
-
 
 #ifndef _DYN_PROXY_H_
 #define _DYN_PROXY_H_
+
+#include "dyn_types.h"
+
+// Forward declarations
+struct conn;
+struct context;
 
 rstatus_t proxy_init(struct context *ctx);
 void proxy_deinit(struct context *ctx);

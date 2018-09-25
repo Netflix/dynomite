@@ -1,10 +1,9 @@
 
-#include "dyn_core.h"
-
-
 #ifndef _DYN_SNITCH_H_
 #define _DYN_SNITCH_H_
 
+// Forward declarations
+struct server_pool;
 
 unsigned char *get_broadcast_address(struct server_pool *sp);
 char *get_public_hostname(struct server_pool *sp);

@@ -1,5 +1,11 @@
 #pragma once
-#include "dyn_core.h"
+
+#include "dyn_types.h"
+
+// Forward declarations.
+struct conn;
+struct context;
+
 extern void _conn_deinit(void);
 extern void _conn_init(void);
 extern struct conn *_conn_get(void);

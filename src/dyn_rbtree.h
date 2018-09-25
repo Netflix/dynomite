@@ -1,7 +1,7 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- */ 
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc.
+ */
 
 /*
  * twemproxy - A fast and lightweight proxy for memcached protocol.
@@ -24,25 +24,25 @@
 #define _DYN_RBTREE_
 #include "dyn_types.h"
 
-#define rbtree_red(_node)           ((_node)->color = 1)
-#define rbtree_black(_node)         ((_node)->color = 0)
-#define rbtree_is_red(_node)        ((_node)->color)
-#define rbtree_is_black(_node)      (!rbtree_is_red(_node))
+#define rbtree_red(_node) ((_node)->color = 1)
+#define rbtree_black(_node) ((_node)->color = 0)
+#define rbtree_is_red(_node) ((_node)->color)
+#define rbtree_is_black(_node) (!rbtree_is_red(_node))
 #define rbtree_copy_color(_n1, _n2) ((_n1)->color = (_n2)->color)
 
 struct rbnode {
-    struct rbnode *left;     /* left link */
-    struct rbnode *right;    /* right link */
-    struct rbnode *parent;   /* parent link */
-    msec_t        key;       /* key for ordering */
-    msec_t        timeout;   /* timeout */
-    void          *data;     /* opaque data */
-    uint8_t       color;     /* red | black */
+  struct rbnode *left;   /* left link */
+  struct rbnode *right;  /* right link */
+  struct rbnode *parent; /* parent link */
+  msec_t key;            /* key for ordering */
+  msec_t timeout;        /* timeout */
+  void *data;            /* opaque data */
+  uint8_t color;         /* red | black */
 };
 
 struct rbtree {
-    struct rbnode *root;     /* root node */
-    struct rbnode *sentinel; /* nil node */
+  struct rbnode *root;     /* root node */
+  struct rbnode *sentinel; /* nil node */
 };
 
 void rbtree_node_init(struct rbnode *node);

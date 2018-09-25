@@ -1,9 +1,8 @@
 /*
- * Dynomite - A thin, distributed replication layer for multi non-distributed storages.
- * Copyright (C) 2014 Netflix, Inc.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2014 Netflix, Inc. Licensed under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +13,10 @@
  * limitations under the License.
  */
 
-
-
 #ifndef _DYN_SETTING_H_
 #define _DYN_SETTING_H_
 
-
 uint32_t msgs_per_sec(void);
 void set_msgs_per_sec(uint32_t tokens_per_sec);
-
 
 #endif
