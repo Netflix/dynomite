@@ -1,6 +1,63 @@
 #pragma once
-#include <stdint.h>
+
+#include <errno.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <pthread.h>
 #include <stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/un.h>
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#ifdef HAVE_DEBUG_LOG
+#define DN_DEBUG_LOG 1
+#endif
+
+#ifdef HAVE_ASSERT_PANIC
+#define DN_ASSERT_PANIC 1
+#endif
+
+#ifdef HAVE_ASSERT_LOG
+#define DN_ASSERT_LOG 1
+#endif
+
+#ifdef HAVE_STATS
+#define DN_STATS 1
+#else
+#define DN_STATS 0
+#endif
+
+#ifdef HAVE_EPOLL
+#define DN_HAVE_EPOLL 1
+#elif HAVE_KQUEUE
+#define DN_HAVE_KQUEUE 1
+#elif HAVE_EVENT_PORTS
+#define DN_HAVE_EVENT_PORTS 1
+#else
+#error missing scalable I/O event notification mechanism
+#endif
+
+#ifdef HAVE_LITTLE_ENDIAN
+#define DN_LITTLE_ENDIAN 1
+#endif
+
+#ifdef HAVE_BACKTRACE
+#define DN_HAVE_BACKTRACE 1
+#endif
+
 
 #define DN_NOOPS 1
 #define DN_OK 0
