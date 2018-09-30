@@ -16,6 +16,9 @@
 #include "dyn_crypto.h"
 #include "dyn_server.h"
 
+#define CRYPTOGRAPHY_OPENSSL_110_OR_GREATER \
+    (OPENSSL_VERSION_NUMBER >= 0x10100000 && !CRYPTOGRAPHY_IS_LIBRESSL)
+
 static const EVP_CIPHER *aes_cipher;
 static RSA *rsa;
 static int rsa_size = 0;
@@ -126,15 +129,19 @@ static rstatus_t
 aes_init(void)
 {
     // Initialize contexts
-    aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
-    aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(EVP_CIPHER_CTX));
-
+#if CRYPTOGRAPHY_OPENSSL_110_OR_GREATER
+    aes_encrypt_ctx = EVP_CIPHER_CTX_new();
+    aes_decrypt_ctx = EVP_CIPHER_CTX_new();
+#else
+    aes_encrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(*aes_encrypt_ctx));
     EVP_CIPHER_CTX_init(aes_encrypt_ctx);
+
+    aes_decrypt_ctx = (EVP_CIPHER_CTX*) malloc(sizeof(*aes_decrypt_ctx));
+    EVP_CIPHER_CTX_init(aes_decrypt_ctx);
+#endif
 
     //EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_PKCS1_PADDING);
     EVP_CIPHER_CTX_set_padding(aes_encrypt_ctx, RSA_NO_PADDING);
-
-    EVP_CIPHER_CTX_init(aes_decrypt_ctx);
 
     //EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_PKCS1_PADDING);
     EVP_CIPHER_CTX_set_padding(aes_decrypt_ctx, RSA_NO_PADDING);
@@ -173,10 +180,15 @@ crypto_init(struct server_pool *sp)
 rstatus_t
 crypto_deinit(void)
 {
+#if CRYPTOGRAPHY_OPENSSL_110_OR_GREATER
+    EVP_CIPHER_CTX_free(aes_encrypt_ctx);
+    EVP_CIPHER_CTX_free(aes_decrypt_ctx);
+#else
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
     EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
     free(aes_encrypt_ctx);
     free(aes_decrypt_ctx);
+#endif
     return DN_OK;
 }
 
@@ -309,7 +321,11 @@ dyn_aes_encrypt(const unsigned char *msg, size_t msg_len, struct mbuf *mbuf, uns
         return DN_ERROR;
     }
 
+#if CRYPTOGRAPHY_OPENSSL_110_OR_GREATER
+    EVP_CIPHER_CTX_reset(aes_encrypt_ctx);
+#else
     EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+#endif
 
     //for encrypt, we allow to use up to the extra space
     if (enc_msg_len + block_len > mbuf->end_extra - mbuf->last) {
@@ -351,7 +367,11 @@ dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len, struct mbuf *mbuf, u
         dec_len += block_len;
         mbuf->last = mbuf->pos + dec_len;
 
-        EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+#if CRYPTOGRAPHY_OPENSSL_110_OR_GREATER
+    	EVP_CIPHER_CTX_reset(aes_encrypt_ctx);
+#else
+    	EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+#endif
 
         return (int) dec_len;
     }
