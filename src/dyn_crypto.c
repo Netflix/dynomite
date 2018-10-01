@@ -260,7 +260,7 @@ rstatus_t aes_encrypt(const unsigned char *msg, size_t msg_len,
   int enc_msg_len = 0;
 
   *enc_msg = (unsigned char *)malloc(msg_len + AES_BLOCK_SIZE);
-  if (enc_msg == NULL) return DN_ERROR;
+  if (*enc_msg == NULL) return DN_ERROR;
 
   // if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, arg_aes_key,
   // aes_iv)) {

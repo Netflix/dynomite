@@ -44,11 +44,11 @@ static bool dyn_parse_core(struct msg *r) {
   if (dmsg == NULL) {
     r->dmsg = dmsg_get();
     dmsg = r->dmsg;
-    dmsg->owner = r;
     if (dmsg == NULL) {  // should track this as a dropped message
       loga("unable to create a new dmsg");
       goto error;  // should count as OOM error
     }
+    dmsg->owner = r;
   }
 
   token = NULL;
