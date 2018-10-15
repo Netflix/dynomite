@@ -84,24 +84,18 @@ static rstatus_t core_gossip_pool_init(struct context *ctx) {
   CBUF_Init(C2G_OutQ);
 
   THROW_STATUS(gossip_pool_init(ctx));
-  THROW_STATUS(core_init_last(ctx));
   return DN_OK;
 }
 
 static rstatus_t core_dnode_peer_pool_preconnect(struct context *ctx) {
   rstatus_t status = dnode_peer_pool_preconnect(ctx);
   IGNORE_RET_VAL(status);
-  status = core_gossip_pool_init(ctx);
-  // if (status != DN_OK)
-  //  gossip_pool_deinit(ctx);
   return status;
 }
 static rstatus_t core_dnode_peer_init(struct context *ctx) {
   /* initialize peers */
   THROW_STATUS(dnode_initialize_peers(ctx));
-  rstatus_t status = core_dnode_peer_pool_preconnect(ctx);
-  if (status != DN_OK) dnode_peer_pool_disconnect(ctx);
-  return status;
+  return DN_OK;
 }
 
 static rstatus_t core_dnode_proxy_init(struct context *ctx) {
@@ -109,28 +103,20 @@ static rstatus_t core_dnode_proxy_init(struct context *ctx) {
   THROW_STATUS(dnode_proxy_init(ctx));
 
   ctx->dyn_state = JOINING;  // TODOS: change this to JOINING
-  rstatus_t status = core_dnode_peer_init(ctx);
-  if (status != DN_OK) {
-    dnode_peer_deinit(&ctx->pool.peers);
-  }
-  return status;
+  return DN_OK;
 }
 
 static rstatus_t core_proxy_init(struct context *ctx) {
   /* initialize proxy per server pool */
   THROW_STATUS(proxy_init(ctx));
-  rstatus_t status = core_dnode_proxy_init(ctx);
-  if (status != DN_OK) dnode_proxy_deinit(ctx);
-  return status;
+  return DN_OK;
 }
 
 static rstatus_t core_server_pool_preconnect(struct context *ctx) {
   rstatus_t status = server_pool_preconnect(ctx);
   IGNORE_RET_VAL(status);
 
-  status = core_proxy_init(ctx);
-  if (status != DN_OK) proxy_deinit(ctx);
-  return status;
+  return DN_OK;
 }
 
 static rstatus_t core_event_base_create(struct context *ctx) {
@@ -140,9 +126,7 @@ static rstatus_t core_event_base_create(struct context *ctx) {
     log_error("Failed to create socket event handling!!!");
     return DN_ERROR;
   }
-  rstatus_t status = core_server_pool_preconnect(ctx);
-  if (status != DN_OK) server_pool_disconnect(ctx);
-  return status;
+  return DN_OK;
 }
 
 /**
@@ -158,10 +142,7 @@ static rstatus_t core_entropy_init(struct context *ctx) {
     log_error("Failed to create entropy!!!");
   }
 
-  rstatus_t status = core_event_base_create(ctx);
-  if (status != DN_OK) event_base_destroy(ctx->evb);
-
-  return status;
+  return DN_OK;
 }
 
 /**
@@ -181,10 +162,7 @@ static rstatus_t core_stats_create(struct context *ctx) {
     return DN_ERROR;
   }
 
-  rstatus_t status = core_entropy_init(ctx);
-  if (status != DN_OK) entropy_conn_destroy(ctx->entropy);
-
-  return status;
+  return DN_OK;
 }
 
 /**
@@ -195,12 +173,7 @@ static rstatus_t core_stats_create(struct context *ctx) {
 static rstatus_t core_crypto_init(struct context *ctx) {
   /* crypto init */
   THROW_STATUS(crypto_init(&ctx->pool));
-  rstatus_t status = core_stats_create(ctx);
-  if (status != DN_OK) {
-    if (ctx->stats) stats_destroy(ctx->stats);
-  }
-
-  return status;
+  return DN_OK;
 }
 
 /**
@@ -210,9 +183,7 @@ static rstatus_t core_crypto_init(struct context *ctx) {
  */
 static rstatus_t core_server_pool_init(struct context *ctx) {
   THROW_STATUS(server_pool_init(&ctx->pool, &ctx->cf->pool, ctx));
-  rstatus_t status = core_crypto_init(ctx);
-  if (status != DN_OK) crypto_deinit();
-  return status;
+  return DN_OK;
 }
 
 /**
@@ -251,14 +222,7 @@ static rstatus_t core_ctx_create(struct instance *nci) {
   ctx->max_timeout = cp->stats_interval;
   ctx->timeout = ctx->max_timeout;
 
-  rstatus_t status = core_server_pool_init(ctx);
-  if (status != DN_OK) {
-    server_pool_deinit(&ctx->pool);
-    conf_destroy(ctx->cf);
-    dn_free(ctx);
-    return DN_ERROR;
-  }
-  return status;
+  return DN_OK;
 }
 
 static void core_ctx_destroy(struct context *ctx) {
@@ -282,9 +246,68 @@ rstatus_t core_start(struct instance *nci) {
 
   rstatus_t status = core_ctx_create(nci);
   if (status != DN_OK) {
-    conn_deinit();
-    return status;
+    goto error;
   }
+
+  struct context *ctx = nci->ctx;
+  ASSERT(ctx != NULL);
+
+  status = core_server_pool_init(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_crypto_init(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_stats_create(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_entropy_init(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_event_base_create(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_server_pool_preconnect(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_proxy_init(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_dnode_proxy_init(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_dnode_peer_init(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_dnode_peer_pool_preconnect(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+
+  status = core_init_last(ctx);
+  if (status != DN_OK) {
+    goto error;
+  }
+  // XXX: Gossip is currently not maintained actively, so ignore any failures.
+  IGNORE_RET_VAL(core_gossip_pool_init(ctx));
 
   /**
    * Providing mbuf_size and alloc_msgs through the command line
@@ -292,7 +315,6 @@ rstatus_t core_start(struct instance *nci) {
    * we support both ways here: One through nci (command line)
    * and one through the YAML file (server_pool).
    */
-  struct context *ctx = nci->ctx;
   struct server_pool *sp = &ctx->pool;
 
   if (sp->mbuf_size == UNSET_NUM) {
@@ -311,6 +333,27 @@ rstatus_t core_start(struct instance *nci) {
     msg_init(sp->alloc_msgs_max);
   }
 
+  return DN_OK;
+
+error:
+  // If we hit an error, undo everything in the reverse order as it was setup to maintain
+  // symmetric setup/teardown semantics.
+  if (ctx != NULL) {
+    //gossip_pool_deinit(ctx);   // XXX: Gossip not actively maintained.
+    dnode_peer_pool_disconnect(ctx);
+    dnode_peer_deinit(&ctx->pool.peers);
+    dnode_proxy_deinit(ctx);
+    proxy_deinit(ctx);
+    server_pool_disconnect(ctx);
+    if (ctx->evb) event_base_destroy(ctx->evb);
+    if (ctx->entropy) entropy_conn_destroy(ctx->entropy);
+    if (ctx->stats) stats_destroy(ctx->stats);
+    crypto_deinit();
+    server_pool_deinit(&ctx->pool);
+    if (ctx->cf) conf_destroy(ctx->cf);
+    dn_free(ctx);
+  }
+  conn_deinit();
   return status;
 }
 

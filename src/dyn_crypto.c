@@ -124,6 +124,10 @@ static rstatus_t aes_init(void) {
   aes_encrypt_ctx = (EVP_CIPHER_CTX *)malloc(sizeof(EVP_CIPHER_CTX));
   aes_decrypt_ctx = (EVP_CIPHER_CTX *)malloc(sizeof(EVP_CIPHER_CTX));
 
+  if (aes_encrypt_ctx == NULL || aes_decrypt_ctx == NULL) {
+    return DN_ENOMEM;
+  }
+
   EVP_CIPHER_CTX_init(aes_encrypt_ctx);
   EVP_CIPHER_CTX_init(aes_decrypt_ctx);
 #else
@@ -171,17 +175,23 @@ rstatus_t crypto_init(struct server_pool *sp) {
 }
 
 rstatus_t crypto_deinit(void) {
+  if (aes_encrypt_ctx != NULL) {
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
-  EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
-  EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
-  free(aes_encrypt_ctx);
-  free(aes_decrypt_ctx);
+    EVP_CIPHER_CTX_cleanup(aes_encrypt_ctx);
+    free(aes_encrypt_ctx);
 #else
-
-  EVP_CIPHER_CTX_free(aes_encrypt_ctx);
-  EVP_CIPHER_CTX_free(aes_decrypt_ctx);
+    EVP_CIPHER_CTX_free(aes_encrypt_ctx);
 #endif
+  }
 
+  if (aes_decrypt_ctx != NULL) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    EVP_CIPHER_CTX_cleanup(aes_decrypt_ctx);
+    free(aes_decrypt_ctx);
+#else
+    EVP_CIPHER_CTX_free(aes_decrypt_ctx);
+#endif
+  }
   return DN_OK;
 }
 
