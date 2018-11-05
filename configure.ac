@@ -194,19 +194,6 @@ AS_IF([test "x$disable_stats" = xyes],
   [AC_DEFINE([HAVE_STATS], [1], [Define to 1 if stats is not disabled])])
 AC_MSG_RESULT($disable_stats)
 
-AC_ARG_ENABLE([packaging],
-  [AS_HELP_STRING(
-    [--enable-packaging],
-    [apply packaging standards])
-  ],
-  [enable_packaging=yes],
-  [enable_packaging=no])
-AS_IF(
-  [test "x$enable_packaging" = xyes],
-  [AC_DEFINE([PACKAGING], [1], [Define to 1 if packaging is enabled])],
-  [])
-AC_MSG_RESULT($enable_packaging)
-
 # Untar the yaml-0.1.4 in contrib/ before config.status is rerun
 AC_CONFIG_COMMANDS_PRE([tar xvfz contrib/yaml-0.1.4.tar.gz -C contrib])
 

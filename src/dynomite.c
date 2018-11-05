@@ -35,10 +35,10 @@
 #include "dyn_core.h"
 #include "dyn_signal.h"
 
-#if !defined(PACKAGING)
-#define DN_CONF_PATH "conf/dynomite.yml"
-#else
+#if defined(SYSCONFDIR)
 #define DN_CONF_PATH SYSCONFDIR "/dynomite.yml"
+#else
+#define DN_CONF_PATH "conf/dynomite.yml"
 #endif
 
 #define DN_LOG_DEFAULT LOG_NOTICE
