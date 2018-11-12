@@ -10,6 +10,7 @@
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "dyn_core.h"
 #include "dyn_crypto.h"
@@ -264,20 +265,39 @@ base64_decode(const char *b64message, const size_t length, unsigned char
 }
 */
 
-rstatus_t aes_encrypt(const unsigned char *msg, size_t msg_len,
-                      unsigned char **enc_msg, unsigned char *arg_aes_key) {
+rstatus_t aes_encrypt(const unsigned char *original_msg,
+                      size_t original_msg_len, unsigned char **enc_msg,
+                      unsigned char *arg_aes_key) {
   int block_len = 0;
   int enc_msg_len = 0;
 
+  // Create a new plaintext, with an additional block of randomness prepended
+  // as an explicit initialization vector.
+  size_t msg_len = original_msg_len + AES_BLOCK_SIZE;
+  unsigned char *msg = malloc(msg_len);
+
+  if (RAND_bytes(msg, AES_BLOCK_SIZE) == 0) {
+    log_debug(LOG_VERB,
+        "RAND_bytes failed to generate an explicit iv for : '%.*s':",
+        original_msg_len,
+        original_msg);
+    return DN_ERROR;
+  }
+
+  int i;
+  for (i = 0; i < original_msg_len; i++) {
+    msg[i+AES_BLOCK_SIZE] = original_msg[i];
+  }
+
+  // Malloc enough room for the new plaintext and the final block of padding.
   *enc_msg = (unsigned char *)malloc(msg_len + AES_BLOCK_SIZE);
   if (*enc_msg == NULL) return DN_ERROR;
 
-  // if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, arg_aes_key,
-  // aes_iv)) {
   if (!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, arg_aes_key,
                           arg_aes_key)) {
     log_debug(LOG_VERB, "This is bad data in EVP_EncryptInit_ex : '%.*s'",
               msg_len, msg);
+    free(msg);
     return DN_ERROR;
   }
 
@@ -285,6 +305,7 @@ rstatus_t aes_encrypt(const unsigned char *msg, size_t msg_len,
                          (unsigned char *)msg, (int)msg_len)) {
     log_debug(LOG_VERB, "This is bad data in EVP_EncryptUpdate : '%.*s'",
               msg_len, msg);
+    free(msg);
     return DN_ERROR;
   }
   enc_msg_len += block_len;
@@ -293,8 +314,11 @@ rstatus_t aes_encrypt(const unsigned char *msg, size_t msg_len,
                            &block_len)) {
     log_debug(LOG_VERB, "This is bad data in EVP_EncryptFinal_ex : '%.*s'",
               msg_len, msg);
+    free(msg);
     return DN_ERROR;
   }
+
+  free(msg);
 
   // EVP_CIPHER_CTX_cleanup(aesEncryptCtx);
 
@@ -308,8 +332,6 @@ rstatus_t dyn_aes_encrypt(const unsigned char *msg, size_t msg_len,
 
   ASSERT(mbuf != NULL && mbuf->last == mbuf->pos);
 
-  // if(!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, arg_aes_key,
-  // aes_iv)) {
   if (!EVP_EncryptInit_ex(aes_encrypt_ctx, aes_cipher, NULL, arg_aes_key,
                           arg_aes_key)) {
     loga_hexdump(
@@ -362,8 +384,6 @@ rstatus_t dyn_aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len,
 
     ASSERT(mbuf != NULL && mbuf->start == mbuf->pos);
 
-    // if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, arg_aes_key,
-    // aes_iv)) {
     if (!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, arg_aes_key,
                             arg_aes_key)) {
       loga_hexdump(
@@ -475,8 +495,6 @@ rstatus_t aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len,
   *dec_msg = (unsigned char *)malloc(enc_msg_len);
   if (*dec_msg == NULL) return DN_ERROR;
 
-  // if(!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, arg_aes_key,
-  // aes_iv)) {
   if (!EVP_DecryptInit_ex(aes_decrypt_ctx, aes_cipher, NULL, arg_aes_key,
                           arg_aes_key)) {
     log_debug(LOG_VERB, "This is bad data in EVP_DecryptInit_ex : '%.*s'",
@@ -499,6 +517,12 @@ rstatus_t aes_decrypt(unsigned char *enc_msg, size_t enc_msg_len,
     return DN_ERROR;
   }
   dec_len += block_len;
+
+  // Drop the first block of random plaintext by shifting dec_msg over
+  // by one block.
+  dec_len -= AES_BLOCK_SIZE;
+  memmove(*dec_msg, *dec_msg + AES_BLOCK_SIZE, dec_len);
+  (*dec_msg)[dec_len] = '\0';
 
   // EVP_CIPHER_CTX_cleanup(aesDecryptCtx);
 
