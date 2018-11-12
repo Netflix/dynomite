@@ -381,7 +381,7 @@ static rstatus_t aes_test(void) {
   loga("aesKey is '%s'", aes_key_print);
 
   size_t i = 0;
-  size_t count = 10000;
+  size_t count = 10000000;
   loga("Running %lu encryption/decryption messages", count);
   for (; i < count; i++) {
     gen_random(msg, rand() % MAX_MSG_LEN);
