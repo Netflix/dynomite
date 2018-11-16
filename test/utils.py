@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 import random
+import os
+import signal
 import string
+import yaml
 
 from ip_util import int2quad
 from ip_util import quad2int
+from pathlib import Path
+from plumbum import LocalPath
+from tempfile import mkdtemp
 
 from itertools import count
 
@@ -17,7 +23,7 @@ def string_generator(size=6, chars=string.ascii_letters + string.digits):
 def number_generator(size=4, chars=string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
-def dict_request(request):
+def dict_request(request, key1, key2):
     """Converts the request into an easy to consume dict format."""
 
     # We don't ingest the request in this format originally because dict
@@ -26,9 +32,40 @@ def dict_request(request):
     # TODO: Python 3.6+ has ordered dicts, so the above doesn't hold true from that
     # version.
     return dict(
-        (dc['name'], dict(dc['racks']))
-        for dc in request
+        (elem[key1], dict(elem[key2]))
+        for elem in request
     )
+
+def teardown_running_cluster(cluster_desc_filepath, delete_test_dir=False):
+    """Checks if there is a cluster already running based on 'cluster_desc_filepath'
+        and tears it down"""
+    running_cluster_file = Path(cluster_desc_filepath)
+    if running_cluster_file.is_file():
+        with open(cluster_desc_filepath, 'r') as fh:
+            yaml_desc = yaml.load(fh)
+            for cluster in yaml_desc['cluster_desc']:
+                print("Killing existing '{}'".format(cluster['name']))
+                for pid in cluster['pids']:
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except ProcessLookupError as e:
+                        print("PID: {} | Cause: {}".format(pid, e))
+            if delete_test_dir:
+                print("Deleting test directory of cluster:{}".format(
+                    yaml_desc['test_dir']))
+                # Delete the test directory of this cluster.
+                shutil.rmtree(yaml_desc['test_dir'])
+        os.remove(cluster_desc_filepath)
+
+def setup_temp_dir():
+    tempdir = LocalPath(mkdtemp(dir='.', prefix='test_run.'))
+    (tempdir / 'logs').mkdir()
+    confdir = (tempdir / 'conf')
+    confdir.mkdir()
+
+    LocalPath('../../conf/dynomite.pem').symlink(confdir / 'dynomite.pem')
+
+    return tempdir
 
 def sum_racks(dcs):
     return dict(
