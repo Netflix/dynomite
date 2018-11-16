@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 from collections import namedtuple
+from plumbum import local
+import os
 import redis
 import random
+import shutil
+import signal
 import yaml
 
 from dyno_node import DynoNode
 from utils import *
 
+# TODO: Make this path absolute based on param instead of relative.
+CLUSTER_DESC_FILEPATH='../running_cluster.yaml'
 DYN_O_MITE_DEFAULTS = dict(
     secure_server_option='datacenter',
     pem_key_file='conf/dynomite.pem',
@@ -63,6 +69,7 @@ class DynoCluster(object):
         # Load the YAML file describing the cluster.
         with open(request_file, 'r') as fh:
             self.request = yaml.load(fh)
+
         self.ips = ips
         # Generate the specification for each node to be started in the cluster.
         self.specs = list(self._generate_dynomite_specs())
@@ -70,7 +77,7 @@ class DynoCluster(object):
 
     def _generate_dynomite_specs(self):
         tokens = tokens_for_cluster(self.request, None)
-        counts_by_rack = dict_request(self.request)
+        counts_by_rack = dict_request(self.request, 'name', 'racks')
         counts_by_dc = sum_racks(counts_by_rack)
         total_nodes = sum(counts_by_dc.values())
         for dc, racks in tokens:
@@ -84,7 +91,32 @@ class DynoCluster(object):
                     yield DynoSpec(ip, CLIENT_LISTEN, dc, rack, token,
                         local_count, remote_count)
 
+    def _get_cluster_desc_yaml(self):
+        yaml_desc = dict(test_dir=str(local.cwd))
+        cluster_desc = [dict(name='dyno_nodes')]
+        cluster_desc.append(dict(name='redis_nodes'))
+        cluster_desc[0]['pids']=[]
+        cluster_desc[1]['pids']=[]
+        for node in self.nodes:
+            cluster_desc[0]['pids'].append(node.get_dyno_node_pid())
+            cluster_desc[1]['pids'].append(node.get_storage_node_pid())
+        yaml_desc['cluster_desc'] = cluster_desc
+        return yaml_desc
+
+    def _pre_launch_sanity_check(self):
+        """Checks if there is a cluster already running and tears it down"""
+        teardown_running_cluster(CLUSTER_DESC_FILEPATH)
+
+    def _write_running_cluster_file(self):
+        yaml_cluster_desc = self._get_cluster_desc_yaml()
+        with open(CLUSTER_DESC_FILEPATH, 'w') as outfile:
+            yaml.dump(yaml_cluster_desc, outfile, default_flow_style=False)
+
+    def _delete_running_cluster_file(self):
+        os.remove(CLUSTER_DESC_FILEPATH)
+
     def launch(self):
+        self._pre_launch_sanity_check()
         # Get the list of seeds from the specification for each node.
         seeds_list = [spec.seed_string for spec in self.specs]
         # Launch each individual Dyno node.
@@ -92,9 +124,15 @@ class DynoCluster(object):
         for n in self.nodes:
             n.launch()
 
+        # Now that the cluster is up, write its description to a file.
+        self._write_running_cluster_file()
+
     def teardown(self):
         for n in self.nodes:
             n.teardown()
+
+        # Delete the cluster description file if it exists.
+        self._delete_running_cluster_file()
 
     def __enter__(self):
         self.launch()

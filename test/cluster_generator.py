@@ -1,34 +1,23 @@
 #!/usr/bin/env python3
 from contextlib import ExitStack
-from tempfile import mkdtemp
 from time import sleep
 from urllib.request import urlopen
 import argparse
 import json
 import random
 import sys
+import yaml
 
-from plumbum import LocalPath
 from plumbum import local
 
 from dyno_cluster import DynoCluster
 from func_test import comparison_test
-from utils import generate_ips
+from utils import generate_ips, setup_temp_dir
 from redis_node import RedisNode
 
 REDIS_PORT = 1212
 STATS_PORT = 22222
 SETTLE_TIME = 5
-
-def setup_temp_dir():
-    tempdir = LocalPath(mkdtemp(dir='.', prefix='test_run.'))
-    (tempdir / 'logs').mkdir()
-    confdir = (tempdir / 'conf')
-    confdir.mkdir()
-
-    LocalPath('../../conf/dynomite.pem').symlink(confdir / 'dynomite.pem')
-
-    return tempdir
 
 def main():
     parser = argparse.ArgumentParser(

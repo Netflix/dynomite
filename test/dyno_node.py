@@ -46,6 +46,12 @@ class DynoNode(Node):
     def __exit__(self, type_, value, traceback):
         self.teardown()
 
+    def get_dyno_node_pid(self):
+        return self.proc_future.proc.pid
+
+    def get_storage_node_pid(self):
+        return self.data_store_node.get_pid()
+
     def get_connection(self):
         # should return the connection to the dyno port not the redis
         print("returning connection at %s:%d" % (self.ip, self.port))
