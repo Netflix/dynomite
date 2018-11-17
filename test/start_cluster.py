@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Autogenerates a Dynomite cluster and runs functional ' +
             'tests against it')
-    parser.add_argument('request_file', default='test/request.yaml',
+    parser.add_argument('request_file', default='test/safe_quorum_request.yaml',
         help='YAML file describing desired cluster', nargs='?')
     args = parser.parse_args()
 

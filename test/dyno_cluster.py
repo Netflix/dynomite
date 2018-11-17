@@ -25,17 +25,17 @@ REDIS_PORT = 1212
 STATS_PORT = 22222
 
 class DynoSpec(namedtuple('DynoSpec', 'ip port dc rack token '
-    'local_connections remote_connections seed_string')):
+    'local_connections remote_connections seed_string req_conf')):
     """Specifies how to launch a dynomite node"""
 
     def __new__(cls, ip, port, rack, dc, token, local_connections,
-                remote_connections):
+                remote_connections, req_conf):
         seed_string = '{}:{}:{}:{}:{}'.format(ip, port, rack, dc, token)
         return super(DynoSpec, cls).__new__(cls, ip, port, rack, dc, token,
-            local_connections, remote_connections, seed_string)
+            local_connections, remote_connections, seed_string, req_conf)
 
     def __init__(self, ip, port, rack, dc, token, local_connections,
-                 remote_connections):
+                 remote_connections, req_conf):
         self.dnode_port = INTERNODE_LISTEN
         self.data_store_port = REDIS_PORT
         self.stats_port = STATS_PORT
@@ -55,6 +55,10 @@ class DynoSpec(namedtuple('DynoSpec', 'ip port dc rack token '
         conf['tokens'] = self.token
         conf['local_peer_connections'] = self.local_connections
         conf['remote_peer_connections'] = self.remote_connections
+
+        # Add configurations based on the request.
+        for conf_key, conf_value in self.req_conf.items():
+            conf[conf_key] = conf_value
         return dict(dyn_o_mite=conf)
 
     def write_config(self, seeds_list):
@@ -76,8 +80,8 @@ class DynoCluster(object):
         self.nodes = []
 
     def _generate_dynomite_specs(self):
-        tokens = tokens_for_cluster(self.request, None)
-        counts_by_rack = dict_request(self.request, 'name', 'racks')
+        tokens = tokens_for_cluster(self.request['cluster_desc'], None)
+        counts_by_rack = dict_request(self.request['cluster_desc'], 'name', 'racks')
         counts_by_dc = sum_racks(counts_by_rack)
         total_nodes = sum(counts_by_dc.values())
         for dc, racks in tokens:
@@ -89,7 +93,7 @@ class DynoCluster(object):
                 for token in tokens:
                     ip = next(self.ips)
                     yield DynoSpec(ip, CLIENT_LISTEN, dc, rack, token,
-                        local_count, remote_count)
+                        local_count, remote_count, self.request['conf'])
 
     def _get_cluster_desc_yaml(self):
         yaml_desc = dict(test_dir=str(local.cwd))
