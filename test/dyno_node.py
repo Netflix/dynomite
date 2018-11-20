@@ -11,7 +11,7 @@ dynomite_bin = local.get('./test/_binaries/dynomite', 'src/dynomite')
 class DynoNode(Node):
     #TODO: Decouple from Redis and make it more generic
     def __init__(self, spec, seeds_list):
-        super(DynoNode, self).__init__(spec.ip, spec.port)
+        super(DynoNode, self).__init__(spec.ip, spec.client_port)
         self.name="Dyno" + self.name
         self.conf_file = None
         self.spec = spec
