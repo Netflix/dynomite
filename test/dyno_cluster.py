@@ -24,19 +24,18 @@ CLIENT_LISTEN = 8102
 REDIS_PORT = 1212
 STATS_PORT = 22222
 
-class DynoSpec(namedtuple('DynoSpec', 'ip port dc rack token '
+class DynoSpec(namedtuple('DynoSpec', 'ip dnode_port client_port rack dc token '
     'local_connections remote_connections seed_string req_conf')):
     """Specifies how to launch a dynomite node"""
 
-    def __new__(cls, ip, port, rack, dc, token, local_connections,
+    def __new__(cls, ip, dnode_port, client_port, rack, dc, token, local_connections,
                 remote_connections, req_conf):
-        seed_string = '{}:{}:{}:{}:{}'.format(ip, port, rack, dc, token)
-        return super(DynoSpec, cls).__new__(cls, ip, port, rack, dc, token,
-            local_connections, remote_connections, seed_string, req_conf)
+        seed_string = '{}:{}:{}:{}:{}'.format(ip, dnode_port, rack, dc, token)
+        return super(DynoSpec, cls).__new__(cls, ip, dnode_port, client_port, rack,
+            dc, token, local_connections, remote_connections, seed_string, req_conf)
 
-    def __init__(self, ip, port, rack, dc, token, local_connections,
+    def __init__(self, ip, dnode_port, client_port, rack, dc, token, local_connections,
                  remote_connections, req_conf):
-        self.dnode_port = INTERNODE_LISTEN
         self.data_store_port = REDIS_PORT
         self.stats_port = STATS_PORT
 
@@ -46,7 +45,7 @@ class DynoSpec(namedtuple('DynoSpec', 'ip port dc rack token '
         conf['rack'] = self.rack
         dyn_listen = '{}:{}'.format(self.ip, self.dnode_port)
         conf['dyn_listen'] = dyn_listen
-        conf['listen'] = '{}:{}'.format(self.ip, self.port)
+        conf['listen'] = '{}:{}'.format(self.ip, self.client_port)
 
         # filter out our own seed string
         conf['dyn_seeds'] = [s for s in seeds_list if s != self.seed_string]
@@ -92,7 +91,7 @@ class DynoCluster(object):
                 local_count = rack_count[rack] - 1
                 for token in tokens:
                     ip = next(self.ips)
-                    yield DynoSpec(ip, CLIENT_LISTEN, dc, rack, token,
+                    yield DynoSpec(ip, INTERNODE_LISTEN, CLIENT_LISTEN, rack, dc, token,
                         local_count, remote_count, self.request['conf'])
 
     def _get_cluster_desc_yaml(self):
