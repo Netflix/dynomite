@@ -25,16 +25,18 @@ FROM ubuntu
 MAINTAINER Ioannis Papapanagiotou - dynomite@netflix.com
 
 # Update the repository sources list and Install package Build Essential
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+	export DEBIAN_FRONTEND=noninteractive && \
+    apt-get install -y \
 	autoconf \
 	build-essential \
 	dh-autoreconf \
 	git \
 	libssl-dev \
 	libtool \
-	python-software-properties \
+	software-properties-common \
 	redis-server \
-	tcl8.5
+	tcl8.5 
 
 # Clone the Dynomite Git
 RUN git clone https://github.com/Netflix/dynomite.git
