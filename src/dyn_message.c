@@ -908,8 +908,8 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
    * buffer.
    */
   if (mbuf == NULL || ((!encryption_detected) && mbuf_full(mbuf)) ||
-      (!encryption_detected && mbuf->last == mbuf->end_extra) ||
-      (!encryption_detected && mbuf_full(mbuf) &&
+      (encryption_detected && mbuf->last == mbuf->end_extra) ||
+      (encryption_detected && mbuf_full(mbuf) &&
        (mbuf->flags & MBUF_FLAGS_JUST_DECRYPTED))) {
     mbuf = mbuf_get();
     if (mbuf == NULL) {
