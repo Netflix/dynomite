@@ -83,6 +83,15 @@ rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
   dmsg_type_t msg_type =
       (string_compare(&pool->dc, dc) != 0) ? DMSG_REQ_FORWARD : DMSG_REQ;
 
+  if (req->msg_routing == ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS) {
+    // If the routing type is 'ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS', the server that
+    // initiated the request will forward the request to all the nodes in the cluster
+    // globally. So, here we pretend as though the request is coming from the same DC,
+    // to avoid having the receiving DNODE from forwarding the request again to its
+    // peers in its local AZs.
+    // TODO: Prefer a 2 hop mechanism for cross-DC traffic.
+    msg_type = DMSG_REQ;
+  }
   // SMB: THere is some non trivial business happening here. Better refer to the
   // comment in dnode_rsp_send_next to understand the stuff here.
   // Note: THere MIGHT BE A NEED TO PORT THE dnode_header_prepended FIX FROM
