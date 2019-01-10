@@ -247,7 +247,11 @@ typedef enum msg_parse_result {
   ACTION(RSP_REDIS_ERROR_EXECABORT)                                            \
   ACTION(RSP_REDIS_ERROR_MASTERDOWN)                                           \
   ACTION(RSP_REDIS_ERROR_NOREPLICAS)                                           \
-  ACTION(SENTINEL)
+  ACTION(SENTINEL)                                                             \
+  ACTION(REQ_REDIS_SCRIPT)                                                     \
+  ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
+  /* ACTION( REQ_REDIS_AUTH) */                                                \
+  /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
 
 #define DEFINE_ACTION(_name) MSG_##_name,
 typedef enum msg_type { MSG_TYPE_CODEC(DEFINE_ACTION) } msg_type_t;
@@ -340,11 +344,14 @@ extern uint8_t g_timeout_factor;
 
 typedef enum msg_routing {
   ROUTING_NORMAL = 0,
-  ROUTING_LOCAL_NODE_ONLY = 1, /* Ignore the key hashing */
-  ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY =
-      2, /* apply key hashing, but local rack only */
-  ROUTING_ALL_NODES_LOCAL_RACK_ONLY =
-      3, /* Ignore key hashing, local rack only */
+  // Ignore the key hashing
+  ROUTING_LOCAL_NODE_ONLY = 1,
+  // Apply key hashing, but only for the local rack.
+  ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY = 2,
+  // Ignore key hashing, but only for the local rack.
+  ROUTING_ALL_NODES_LOCAL_RACK_ONLY = 3,
+  // Ignore key hashing, and send to all nodes in all racks in all DCs.
+  ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS = 4,
 } msg_routing_t;
 
 static inline char *get_msg_routing_string(msg_routing_t route) {
@@ -357,6 +364,8 @@ static inline char *get_msg_routing_string(msg_routing_t route) {
       return "ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY";
     case ROUTING_ALL_NODES_LOCAL_RACK_ONLY:
       return "ROUTING_ALL_NODES_LOCAL_RACK_ONLY";
+    case ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS:
+      return "ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS";
   }
   return "INVALID MSG ROUTING TYPE";
 }
