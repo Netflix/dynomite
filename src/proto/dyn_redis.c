@@ -44,6 +44,8 @@ static bool redis_argz(struct msg *r) {
   switch (r->type) {
     case MSG_REQ_REDIS_PING:
     case MSG_REQ_REDIS_QUIT:
+    case MSG_REQ_REDIS_SCRIPT_FLUSH:
+    case MSG_REQ_REDIS_SCRIPT_KILL:
       return true;
 
     default:
@@ -131,6 +133,7 @@ static bool redis_arg1(struct msg *r) {
     case MSG_REQ_REDIS_SLAVEOF:
     case MSG_REQ_REDIS_CONFIG:
     case MSG_REQ_REDIS_SCRIPT_LOAD:
+    case MSG_REQ_REDIS_SCRIPT_EXISTS:
 
       return true;
 
@@ -863,6 +866,15 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 0;
               break;
             }
+            if (str4icmp(m, 'k', 'i', 'l', 'l')) {
+              // A command called 'KILL' does not exist. This is the second half of the
+              // command 'SCRIPT KILL'.
+              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
+              r->type = MSG_REQ_REDIS_SCRIPT_KILL;
+              r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
+              r->is_read = 0;
+              break;
+            }
 
 
             break;
@@ -979,6 +991,15 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 0;
               break;
             }
+            if (str5icmp(m, 'f', 'l', 'u', 's', 'h')) {
+              // A command called 'FLUSH' does not exist. This is the second half of the
+              // command 'SCRIPT FLUSH'.
+              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
+              r->type = MSG_REQ_REDIS_SCRIPT_FLUSH;
+              r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
+              r->is_read = 0;
+              break;
+            }
 
             break;
 
@@ -995,11 +1016,21 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               break;
             }
 
-            if (str6icmp(m, 'e', 'x', 'i', 's', 't', 's')) {
+            if (str6icmp(m, 'e', 'x', 'i', 's', 't', 's')
+                && r->type != MSG_REQ_REDIS_SCRIPT) {
               r->type = MSG_REQ_REDIS_EXISTS;
               r->is_read = 1;
               break;
             }
+            if (str6icmp(m, 'e', 'x', 'i', 's', 't', 's')
+                && r->type == MSG_REQ_REDIS_SCRIPT) {
+              // This is not to be confused with 'EXISTS'. This is the second half of the
+              // command 'SCRIPT EXISTS'.
+              r->type = MSG_REQ_REDIS_SCRIPT_EXISTS;
+              r->is_read = 1;
+              break;
+            }
+
 
             if (str6icmp(m, 'e', 'x', 'p', 'i', 'r', 'e')) {
               r->type = MSG_REQ_REDIS_EXPIRE;
@@ -1127,8 +1158,8 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str6icmp(m, 's', 'c', 'r', 'i', 'p', 't')) {
               r->type = MSG_REQ_REDIS_SCRIPT;
               r->is_read = 0;
+              break;
             }
-
             break;
 
           case 7:
@@ -1528,7 +1559,8 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               goto done;
             } else if (redis_arg_upto1(r) && r->rnarg == 1) {
               state = SW_ARG1_LEN;
-            } else if (r->type == MSG_REQ_REDIS_SCRIPT_LOAD) {
+            } else if (r->type == MSG_REQ_REDIS_SCRIPT_LOAD ||
+                  r->type == MSG_REQ_REDIS_SCRIPT_EXISTS) {
               // TODO: Find a way to do this without special casing for SCRIPT.
               state = SW_ARG1_LEN;
             } else if (redis_argeval(r)) {

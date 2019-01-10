@@ -69,15 +69,31 @@ def run_script_tests(c):
 
     # This script basically executes 'GET <key>'.
     SCRIPT_BODY='{}'.format("return redis.call('get', KEYS[1])")
+    EXPECTED_VALUE = "value1"
 
+    # Load a simple script.
     script_hash = c.run_verify("script_load", SCRIPT_BODY)
+
+    # Make sure that the script exists.
+    assert c.run_verify("script_exists", script_hash)[0] == True
 
     # Create a key to test with.
     key = create_key(TEST_NAME, "key1")
-    c.run_verify("set", key, "value1")
+    c.run_verify("set", key, EXPECTED_VALUE)
 
-    # Verify that the result of the script is the same in both Dynomite and Redis.
-    c.run_verify("evalsha", script_hash, 1, key)
+    # Verify that the result of the script is the same in both Dynomite and Redis using
+    # EVALSHA.
+    evalsha_result = c.run_verify("evalsha", script_hash, 1, key)
+
+    # Decode from UTF-8 before comparing the result.
+    assert str(evalsha_result, 'utf-8') == EXPECTED_VALUE
+
+    # Flush the Redis script cache through Dynomite.
+    c.run_dynomite_only("script_flush")
+
+    # Verify that the script no longer exists.
+    assert c.run_dynomite_only("evalsha", script_hash, 1, key) == None
+
 
 def run_hash_tests(c, max_keys=10, max_fields=1000):
     def create_key_field(keyid=None, fieldid=None):

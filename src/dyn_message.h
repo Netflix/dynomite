@@ -250,6 +250,9 @@ typedef enum msg_parse_result {
   ACTION(SENTINEL)                                                             \
   ACTION(REQ_REDIS_SCRIPT)                                                     \
   ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
+  ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
+  ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
+  ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
   /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
 
