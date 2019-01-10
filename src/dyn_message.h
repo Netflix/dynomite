@@ -149,6 +149,7 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_HSETNX)                                                     \
   ACTION(REQ_REDIS_HSCAN)                                                      \
   ACTION(REQ_REDIS_HVALS)                                                      \
+  ACTION(REQ_REDIS_HSTRLEN)                                                    \
   ACTION(REQ_REDIS_KEYS)                                                       \
   ACTION(REQ_REDIS_INFO)                                                       \
   ACTION(REQ_REDIS_LINDEX) /* redis requests - lists */                        \
@@ -211,7 +212,20 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_GEODIST)                                                    \
   ACTION(REQ_REDIS_GEOHASH)                                                    \
   ACTION(REQ_REDIS_GEOPOS)                                                     \
-  ACTION(REQ_REDIS_GEORADIUSBYMEMBER)							                             \
+  ACTION(REQ_REDIS_GEORADIUSBYMEMBER)                                          \
+  ACTION(REQ_REDIS_UNLINK)                                                     \
+  ACTION(REQ_REDIS_JSONSET)                                                    \
+  ACTION(REQ_REDIS_JSONGET)                                                    \
+  ACTION(REQ_REDIS_JSONDEL)                                                    \
+  ACTION(REQ_REDIS_JSONTYPE)                                                   \
+  ACTION(REQ_REDIS_JSONMGET)                                                   \
+  ACTION(REQ_REDIS_JSONARRAPPEND)                                              \
+  ACTION(REQ_REDIS_JSONARRINSERT)                                              \
+  ACTION(REQ_REDIS_JSONARRLEN)                                                 \
+  ACTION(REQ_REDIS_JSONOBJKEYS)                                                \
+  ACTION(REQ_REDIS_JSONOBJLEN)                                                 \
+  /* ACTION(REQ_REDIS_AUTH) */                                                 \
+  /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
   ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
   ACTION(REQ_REDIS_PFCOUNT)                                                    \
   ACTION(RSP_REDIS_STATUS) /* redis response */                                \

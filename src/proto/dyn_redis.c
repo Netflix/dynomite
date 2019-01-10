@@ -257,6 +257,17 @@ static bool redis_argn(struct msg *r) {
     case MSG_REQ_REDIS_GEOHASH:
     case MSG_REQ_REDIS_GEOPOS:
     case MSG_REQ_REDIS_GEORADIUSBYMEMBER:
+
+    case MSG_REQ_REDIS_JSONSET:
+    case MSG_REQ_REDIS_JSONGET:
+    case MSG_REQ_REDIS_JSONDEL:
+    case MSG_REQ_REDIS_JSONTYPE:
+    case MSG_REQ_REDIS_JSONMGET:
+    case MSG_REQ_REDIS_JSONARRAPPEND:
+    case MSG_REQ_REDIS_JSONARRINSERT:
+    case MSG_REQ_REDIS_JSONARRLEN:
+    case MSG_REQ_REDIS_JSONOBJKEYS:
+    case MSG_REQ_REDIS_JSONOBJLEN:
       return true;
 
     default:
@@ -1108,6 +1119,11 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+            if (str6icmp(m, 'u', 'n', 'l', 'i', 'n', 'k')) {
+              r->type = MSG_REQ_REDIS_UNLINK;
+              r->is_read = 0;
+              break;
+            }
             if (str6icmp(m, 's', 'c', 'r', 'i', 'p', 't')) {
               r->type = MSG_REQ_REDIS_SCRIPT;
               r->is_read = 0;
@@ -1192,6 +1208,11 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+            if (str7icmp(m, 'h', 's', 't', 'r', 'l', 'e', 'n')) {
+              r->type = MSG_REQ_REDIS_HSTRLEN;
+              r->is_read = 1;
+              break;
+            }
 
             break;
 
@@ -1231,6 +1252,23 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+            if (str8icmp(m, 'j', 's', 'o', 'n', '.', 's', 'e', 't')) {
+              r->type = MSG_REQ_REDIS_JSONSET;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str8icmp(m, 'j', 's', 'o', 'n', '.', 'g', 'e', 't')) {
+              r->type = MSG_REQ_REDIS_JSONGET;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str8icmp(m, 'j', 's', 'o', 'n', '.', 'd', 'e', 'l')) {
+              r->type = MSG_REQ_REDIS_JSONDEL;
+              r->is_read = 0;
+              break;
+            }
 
             break;
 
@@ -1267,6 +1305,17 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
 
             if (str9icmp(m, 'g', 'e', 'o', 'r', 'a', 'd', 'i', 'u', 's')) {
               r->type = MSG_REQ_REDIS_GEORADIUS;
+              r->is_read = 1;
+              break;
+            }
+            if (str9icmp(m, 'j', 's', 'o', 'n', '.', 't', 'y', 'p', 'e')) {
+              r->type = MSG_REQ_REDIS_JSONTYPE;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str9icmp(m, 'j', 's', 'o', 'n', '.', 'm', 'g', 'e', 't')) {
+              r->type = MSG_REQ_REDIS_JSONMGET;
               r->is_read = 1;
               break;
             }
@@ -1333,6 +1382,20 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               break;
             }
 
+            if (str11icmp(m, 'j', 's', 'o', 'n', '.', 'a', 'r', 'r', 'l', 'e',
+                          'n')) {
+              r->type = MSG_REQ_REDIS_JSONARRLEN;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str11icmp(m, 'j', 's', 'o', 'n', '.', 'o', 'b', 'j', 'l', 'e',
+                          'n')) {
+              r->type = MSG_REQ_REDIS_JSONOBJLEN;
+              r->is_read = 1;
+              break;
+            }
+
             break;
 
           case 12:
@@ -1340,6 +1403,13 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                           'a', 't')) {
               r->type = MSG_REQ_REDIS_HINCRBYFLOAT;
               r->is_read = 0;
+              break;
+            }
+
+            if (str12icmp(m, 'j', 's', 'o', 'n', '.', 'o', 'b', 'j', 'k', 'e',
+                          'y', 's')) {
+              r->type = MSG_REQ_REDIS_JSONOBJKEYS;
+              r->is_read = 1;
               break;
             }
 
@@ -1367,6 +1437,20 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                           'y', 'l', 'e', 'x')) {
               r->type = MSG_REQ_REDIS_ZREVRANGEBYLEX;
               r->is_read = 1;
+              break;
+            }
+
+            if (str14icmp(m, 'j', 's', 'o', 'n', '.', 'a', 'r', 'r', 'a', 'p',
+                          'p', 'e', 'n', 'd')) {
+              r->type = MSG_REQ_REDIS_JSONARRAPPEND;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str14icmp(m, 'j', 's', 'o', 'n', '.', 'a', 'r', 'r', 'i', 'n',
+                          's', 'e', 'r', 't')) {
+              r->type = MSG_REQ_REDIS_JSONARRINSERT;
+              r->is_read = 0;
               break;
             }
 
