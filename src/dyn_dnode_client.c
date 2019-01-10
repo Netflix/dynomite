@@ -291,6 +291,7 @@ static void dnode_req_forward(struct context *ctx, struct conn *conn,
     conn_enqueue_outq(ctx, conn, req);
     req->rsp_handler = msg_local_one_rsp_handler;
   }
+
   if (req->dmsg->type == DMSG_REQ) {
     // This is a request received from a peer rack in the same DC, just forward
     // it to the local datastore

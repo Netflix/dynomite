@@ -130,6 +130,7 @@ static bool redis_arg1(struct msg *r) {
     case MSG_REQ_REDIS_ZSCORE:
     case MSG_REQ_REDIS_SLAVEOF:
     case MSG_REQ_REDIS_CONFIG:
+    case MSG_REQ_REDIS_SCRIPT_LOAD:
 
       return true;
 
@@ -463,6 +464,7 @@ done:
  * 2). Bulk commands: bulk commands are exactly like inline commands, but
  *     the last argument is handled in a special way in order to allow for
  *     a binary-safe last argument.
+ * 3). Single command that contains a space. Eg: "SCRIPT LOAD"
  *
  * Dynomite supports the Redis unified protocol for requests and inline ping.
  * The inline ping is being utilized by redis-benchmark
@@ -841,6 +843,16 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->quit = 1;
               break;
             }
+            if (str4icmp(m, 'l', 'o', 'a', 'd')) {
+              // A command called 'LOAD' does not exist. This is the second half of the
+              // command 'SCRIPT LOAD'.
+              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
+              r->type = MSG_REQ_REDIS_SCRIPT_LOAD;
+              r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
+              r->is_read = 0;
+              break;
+            }
+
 
             break;
 
@@ -1095,6 +1107,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->type = MSG_REQ_REDIS_GEOPOS;
               r->is_read = 1;
               break;
+            }
+            if (str6icmp(m, 's', 'c', 'r', 'i', 'p', 't')) {
+              r->type = MSG_REQ_REDIS_SCRIPT;
+              r->is_read = 0;
             }
 
             break;
@@ -1408,6 +1424,18 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         break;
 
       case SW_REQ_TYPE_LF:
+        if (r->type == MSG_REQ_REDIS_SCRIPT) {
+          // Parsing "SCRIPT <LOAD/KILL/FLUSH/EXISTS>" is a special case since there is a
+          // space between the keyword SCRIPT and the following keyword. To deal with
+          // this, we reset the state machine to a previous state to allow parsing of the
+          // second keyword as well.
+          // Set 'state' back to 'SW_REQ_TYPE_LEN' to parse the second half of the command
+          // the space in 'SCRIPT <LOAD/KILL/FLUSH/EXISTS>'.
+          state = SW_REQ_TYPE_LEN;
+          log_debug(LOG_VERB, "parsed partial command '%.*s'. Continuing to parse" \
+              "remainaing part of command", p - m, m);
+          break;
+        }
         switch (ch) {
           case LF:
             if (redis_argz(r) && (r->rnarg == 0)) {
@@ -1415,6 +1443,9 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             } else if (redis_arg_upto1(r) && r->rnarg == 0) {
               goto done;
             } else if (redis_arg_upto1(r) && r->rnarg == 1) {
+              state = SW_ARG1_LEN;
+            } else if (r->type == MSG_REQ_REDIS_SCRIPT_LOAD) {
+              // TODO: Find a way to do this without special casing for SCRIPT.
               state = SW_ARG1_LEN;
             } else if (redis_argeval(r)) {
               state = SW_ARG1_LEN;
@@ -1670,7 +1701,8 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               state = SW_ARGN_LEN;
             } else if (redis_argeval(r)) {
               if (r->rnarg < 2) {
-                log_error("Dynomite EVAL/EVALSHA requires at least 1 key");
+                log_error("Dynomite EVAL/EVALSHA requires at least 1 key. "\
+                    "Currently have %d keys", r->rnarg - 1);
                 goto error;
               }
               state = SW_ARG2_LEN;

@@ -719,6 +719,65 @@ static bool request_send_to_all_local_racks(struct msg *req) {
   return false;
 }
 
+/**
+ * Forward 'req' to all DCs, racks and nodes.
+ *
+ */
+static rstatus_t req_forward_all_dcs_all_racks_all_nodes(struct context *ctx,
+    struct conn *c_conn, struct msg *req, struct mbuf *orig_mbuf, uint8_t *key,
+    uint32_t keylen, dyn_error_t *dyn_error_code) {
+  rstatus_t status = DN_OK;
+  struct server_pool *pool = c_conn->owner;
+  uint8_t peer_cnt = array_n(&pool->peers);
+
+  // Ennumerate every node (or 'peer') in the cluster and send 'req' to each of them.
+  int peer_idx = 0;
+  for (peer_idx = 0; peer_idx < peer_cnt; ++peer_idx) {
+    struct node *peer = *(struct node **)array_get(&pool->peers, peer_idx);
+
+    if (peer->is_local) {
+      // If the peer is pointing to the current node itself, forward it directly to the
+      // datastore.
+      status = local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
+      if (status != DN_OK) {
+        log_error("Failed to forward request to local datastore.");
+      }
+      continue;
+    }
+
+    // Make a copy of the message.
+    struct msg *rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
+    if (rack_msg == NULL) {
+      log_error("Failed to allocate memory for inter-node message.");
+      if (req->consistency != DC_ONE) {
+        // expecting a reply to form a quorum
+        *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
+        status = DN_ENOMEM;
+        req_forward_error(ctx, c_conn, rack_msg, status, *dyn_error_code);
+      }
+      continue;
+    }
+    msg_clone(req, orig_mbuf, rack_msg);
+
+    // Get a connection to the node.
+    struct conn *p_conn = dnode_peer_get_conn(ctx, peer, c_conn->sd);
+    // We pass in a dummy rack. It doesn't matter which rack we pass since we're
+    // targeting the node directly.
+    // TODO: Fix this.
+    struct rack *rack =
+        server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+    status = dnode_peer_req_forward(
+        ctx, c_conn, p_conn, rack_msg, rack, key, keylen, dyn_error_code);
+    if (status != DN_OK) {
+      log_error("Oh no, failure in forwarding a ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS"\
+                " request to a node");
+      req_forward_error(ctx, c_conn, rack_msg, status, *dyn_error_code);
+    }
+  }
+
+  return status;
+}
+
 static void req_forward_remote_dc(struct context *ctx, struct conn *c_conn,
                                   struct msg *req, struct mbuf *orig_mbuf,
                                   uint8_t *key, uint32_t keylen,
@@ -815,10 +874,10 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
   ASSERT(c_conn->type == CONN_CLIENT);
 
   if (req->is_read) {
-    if (req->type != MSG_REQ_REDIS_PING)
-      stats_pool_incr(ctx, client_read_requests);
-  } else
+    if (req->type != MSG_REQ_REDIS_PING) stats_pool_incr(ctx, client_read_requests);
+  } else {
     stats_pool_incr(ctx, client_write_requests);
+  }
 
   uint32_t keylen = 0;
   uint8_t *key = msg_get_tagged_key(req, 0, &keylen);
@@ -864,6 +923,9 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
     }
   }
 
+  req->consistency = req->is_read ? conn_get_read_consistency(c_conn)
+                                  : conn_get_write_consistency(c_conn);
+
   if (req->msg_routing == ROUTING_LOCAL_NODE_ONLY) {
     // Strictly local host only
     req->consistency = DC_ONE;
@@ -876,10 +938,20 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
     return;
   }
 
-  req->consistency = req->is_read ? conn_get_read_consistency(c_conn)
-                                  : conn_get_write_consistency(c_conn);
+  if (req->msg_routing == ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS) {
+    // Send 'req' to every node in the cluster.
+    s = req_forward_all_dcs_all_racks_all_nodes(ctx, c_conn, req, orig_mbuf, key, keylen,
+        &dyn_error_code);
+    if (s != DN_OK) {
+      log_error("Failure in forwarding a ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS "\
+                "request to one or more nodes");
+      // Errors would have already been forwarded by callee so we do nothing else here.
+    }
 
-  /* forward the request */
+    return;
+  }
+
+  /* forward the request based on other 'msg_routing' policies. */
   uint32_t dc_cnt = array_n(&pool->datacenters);
   uint32_t dc_index;
 
@@ -890,9 +962,9 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
       return;
     }
 
-    if (string_compare(dc->name, &pool->dc) == 0)
+    if (string_compare(dc->name, &pool->dc) == 0) {
       req_forward_local_dc(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
-    else if (request_send_to_all_dcs(req)) {
+    } else if (request_send_to_all_dcs(req)) {
       req_forward_remote_dc(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
     }
   }
