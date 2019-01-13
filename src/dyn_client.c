@@ -512,7 +512,7 @@ static void req_forward_stats(struct context *ctx, struct msg *req) {
   }
 }
 
-rstatus_t local_req_forward(struct context *ctx, struct conn *c_conn,
+rstatus_t req_forward_local_datastore(struct context *ctx, struct conn *c_conn,
                             struct msg *req, uint8_t *key, uint32_t keylen,
                             dyn_error_t *dyn_error_code) {
   rstatus_t status;
@@ -583,7 +583,7 @@ rstatus_t local_req_forward(struct context *ctx, struct conn *c_conn,
   return DN_OK;
 }
 
-static rstatus_t admin_local_req_forward(struct context *ctx,
+static rstatus_t admin_req_forward_local_datastore(struct context *ctx,
                                          struct conn *c_conn, struct msg *req,
                                          struct rack *rack, uint8_t *key,
                                          uint32_t keylen,
@@ -600,34 +600,95 @@ static rstatus_t admin_local_req_forward(struct context *ctx,
 
   log_debug(LOG_NOTICE, "%s Need to delete [%.*s] ", print_obj(c_conn), keylen,
             key);
-  return local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
+  return req_forward_local_datastore(ctx, c_conn, req, key, keylen, dyn_error_code);
 }
 
-/* On Success, the request is placed in the other connection's inq. Otherwise
- * it is the caller's responsibility to take care of freeing it.
- */
-rstatus_t remote_req_forward(struct context *ctx, struct conn *c_conn,
-                             struct msg *req, struct rack *rack, uint8_t *key,
-                             uint32_t keylen, dyn_error_t *dyn_error_code) {
-  ASSERT((c_conn->type == CONN_CLIENT) ||
-         (c_conn->type == CONN_DNODE_PEER_CLIENT));
+static rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
+    struct msg *req, struct node *peer, uint8_t* key, uint32_t keylen,
+    struct mbuf *orig_mbuf, bool force_copy, dyn_error_t *dyn_error_code) {
 
-  struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
-                                             keylen, req->msg_routing);
+  rstatus_t status;
+
+  bool same_dc = false;
+  bool same_rack = false;
+  struct msg *rack_msg = NULL;
+
   if (peer->is_local) {
-    return local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
+    // Since the peer is the same as this node, it's the same DC and rack.
+    same_dc = same_rack = true;
+    // If the peer is pointing to the current node itself, forward it directly to the
+    // datastore.
+    status = req_forward_local_datastore(ctx, c_conn, req, key, keylen, dyn_error_code);
+    if (status != DN_OK) {
+      log_error("Failed to forward request to local datastore.");
+      goto error;
+    }
+    return status;
   }
 
-  // now get a peer connection
+  struct server_pool *pool = c_conn->owner;
+  ASSERT(pool != NULL);
+
+  // Figure out if the peer is in the same DC or rack.
+  same_dc = peer->is_same_dc;
+  same_rack = !(string_compare(&peer->rack, &pool->rack)) && same_dc;
+  if (force_copy || !same_rack) {
+    // Make a copy of the message if forced or if the peer is not on the same rack or DC.
+    rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
+    if (rack_msg == NULL) {
+      log_error("Failed to allocate memory for inter-node message.");
+      *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
+      status = DN_ENOMEM;
+      goto error;
+    }
+    msg_clone(req, orig_mbuf, rack_msg);
+  } else {
+    rack_msg = req;
+  }
+
+  if (!(same_dc && same_rack)) {
+    // Swallow responses from remote racks or DCs.
+    rack_msg->swallow = true;
+  }
+
+  // Get a connection to the node.
   struct conn *p_conn = dnode_peer_get_conn(ctx, peer, c_conn->sd);
-  if (!p_conn) {
-    // No active connection. return error
+  if (p_conn == NULL) {
+    // Assume that this peer is in a local rack to satisfy the conditions to forward an
+    // error.
+    same_dc = same_rack = true;
+    status = DN_ERROR;
     *dyn_error_code = PEER_HOST_NOT_CONNECTED;
-    return DN_ERROR;
+    goto error;
   }
 
-  return dnode_peer_req_forward(ctx, c_conn, p_conn, req, rack, key, keylen,
-                                dyn_error_code);
+  // Finally, forward the message to a peer DNODE.
+  status = dnode_peer_req_forward(
+      ctx, c_conn, p_conn, rack_msg, key, keylen, dyn_error_code);
+  if (status != DN_OK) {
+    log_error("Failure in forwarding a request to a dnode");
+    goto error;
+  }
+
+  return status;
+
+ error:
+  // Forward errors only if we failed to talk to the same DC. We currently ignore cross-DC
+  // errors.
+  if (same_dc) {
+    // We forward the error if the target was in the same rack, or if it was in a remote
+    // rack and we're expecting a quorum response.
+    if ((!same_rack && req->consistency != DC_ONE) || same_rack) {
+      req_forward_error(ctx, c_conn,
+          (rack_msg ? rack_msg : req),
+          status, *dyn_error_code);
+    }
+  }
+  // Release the copy if we made one above..
+  if (rack_msg != NULL && (force_copy || !same_rack)) {
+    req_put(rack_msg);
+  }
+  return status;
 }
 
 void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
@@ -639,53 +700,20 @@ void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
   init_response_mgr(&req->rspmgr, req, req->is_read, rack_cnt, c_conn);
   log_info("%s %s same DC racks:%d expect replies %d", print_obj(c_conn),
            print_obj(req), rack_cnt, req->rspmgr.max_responses);
-  for (rack_index = 0; rack_index < rack_cnt; rack_index++) {
+
+  for (rack_index = 0; rack_index < rack_cnt; ++rack_index) {
     struct rack *rack = array_get(&dc->racks, rack_index);
-    struct server_pool *pool = c_conn->owner;
-    dyn_error_t dyn_error_code = 0;
-    rstatus_t s = DN_OK;
+    // Pick the token owner peer from the selected rack.
+    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
+                                               keylen, req->msg_routing);
+    dyn_error_t dyn_error_code = DYNOMITE_OK;
 
-    if (string_compare(rack->name, &pool->rack) == 0) {
-      // Local Rack
-      s = remote_req_forward(ctx, c_conn, req, rack, key, keylen,
-                             &dyn_error_code);
-      if (s != DN_OK) {
-        req_forward_error(ctx, c_conn, req, s, dyn_error_code);
-      }
+    // Forward the message to the peer.
+    rstatus_t status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
+        orig_mbuf, false /* force_copy? */, &dyn_error_code);
 
-    } else {
-      // Remote Rack
-      struct msg *rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
-      if (rack_msg == NULL) {
-        log_error(
-            "whelp, looks like yer screwed "
-            "now, buddy. no inter-rack messages for you!");
-        if (req->consistency != DC_ONE) {
-          // expecting a reply to form a quorum
-          req_forward_error(ctx, c_conn, req, DN_ENOMEM,
-                            DYNOMITE_UNKNOWN_ERROR);
-        }
-        continue;
-      }
-
-      msg_clone(req, orig_mbuf, rack_msg);
-      rack_msg->swallow = true;
-
-      log_info("%s forwarding cloned %s to same dc rack '%.*s'",
-               print_obj(c_conn), print_obj(rack_msg), rack->name->len,
-               rack->name->data);
-
-      s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
-                             &dyn_error_code);
-      if (s != DN_OK) {
-        if (req->consistency != DC_ONE) {
-          // expecting a reply to form a quorum
-          req_forward_error(ctx, c_conn, rack_msg, s, dyn_error_code);
-        }
-        req_put(rack_msg);
-        continue;
-      }
-    }
+    // We ignore the return value since the callee will take care of forwarding errors.
+    IGNORE_RET_VAL(status);
   }
 }
 
@@ -728,51 +756,16 @@ static rstatus_t req_forward_all_dcs_all_racks_all_nodes(struct context *ctx,
     uint32_t keylen, dyn_error_t *dyn_error_code) {
   rstatus_t status = DN_OK;
   struct server_pool *pool = c_conn->owner;
-  uint8_t peer_cnt = array_n(&pool->peers);
+  uint32_t peer_cnt = array_n(&pool->peers);
 
   // Ennumerate every node (or 'peer') in the cluster and send 'req' to each of them.
-  int peer_idx = 0;
+  uint32_t peer_idx = 0;
   for (peer_idx = 0; peer_idx < peer_cnt; ++peer_idx) {
     struct node *peer = *(struct node **)array_get(&pool->peers, peer_idx);
-
-    if (peer->is_local) {
-      // If the peer is pointing to the current node itself, forward it directly to the
-      // datastore.
-      status = local_req_forward(ctx, c_conn, req, key, keylen, dyn_error_code);
-      if (status != DN_OK) {
-        log_error("Failed to forward request to local datastore.");
-      }
-      continue;
-    }
-
-    // Make a copy of the message.
-    struct msg *rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
-    if (rack_msg == NULL) {
-      log_error("Failed to allocate memory for inter-node message.");
-      if (req->consistency != DC_ONE) {
-        // expecting a reply to form a quorum
-        *dyn_error_code = DYNOMITE_UNKNOWN_ERROR;
-        status = DN_ENOMEM;
-        req_forward_error(ctx, c_conn, rack_msg, status, *dyn_error_code);
-      }
-      continue;
-    }
-    msg_clone(req, orig_mbuf, rack_msg);
-
-    // Get a connection to the node.
-    struct conn *p_conn = dnode_peer_get_conn(ctx, peer, c_conn->sd);
-    // We pass in a dummy rack. It doesn't matter which rack we pass since we're
-    // targeting the node directly.
-    // TODO: Fix this.
-    struct rack *rack =
-        server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
-    status = dnode_peer_req_forward(
-        ctx, c_conn, p_conn, rack_msg, rack, key, keylen, dyn_error_code);
-    if (status != DN_OK) {
-      log_error("Oh no, failure in forwarding a ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS"\
-                " request to a node");
-      req_forward_error(ctx, c_conn, rack_msg, status, *dyn_error_code);
-    }
+    status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
+        orig_mbuf, true /* force_copy */, dyn_error_code);
+    // We ignore the return value since the callee will take care of forwarding errors.
+    IGNORE_RET_VAL(status);
   }
 
   return status;
@@ -785,60 +778,44 @@ static void req_forward_remote_dc(struct context *ctx, struct conn *c_conn,
   const uint32_t rack_cnt = array_n(&dc->racks);
   if (rack_cnt == 0) return;
 
+  // Pick the preferred pre-selected rack for this DC.
   struct rack *rack = dc->preselected_rack_for_replication;
   if (rack == NULL) rack = array_get(&dc->racks, 0);
 
-  struct msg *rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
-  if (rack_msg == NULL) {
-    log_debug(LOG_VERB,
-              "whelp, looks like yer screwed now, buddy. no inter-rack "
-              "messages for you!");
-    return;
-  }
+  log_info("%s %s Forwarding to remote DC; rack name:%.*s", print_obj(c_conn),
+           print_obj(req), rack->name->len, rack->name->data);
 
-  msg_clone(req, orig_mbuf, rack_msg);
-  rack_msg->swallow = true;
+  // Pick the token owner peer from the selected rack.
+  struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
+                                             keylen, req->msg_routing);
 
-  log_info("%s forwarding cloned %s on remote dc rack '%.*s'",
-           print_obj(c_conn), print_obj(rack_msg), rack->name->len,
-           rack->name->data);
+  dyn_error_t dyn_error_code = DYNOMITE_OK;
+  // Forward the message to the peer.
+  rstatus_t status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
+      orig_mbuf, true /* force_copy */, &dyn_error_code);
 
-  dyn_error_t dyn_error_code = 0;
-  rstatus_t s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
-                                   &dyn_error_code);
-  if (s == DN_OK) {
-    return;
-  }
-  req_put(rack_msg);
+  // If we succeeded in sending it to the preselected rack in the preferred remote DC,
+  // then we return, else we go ahead to try other racks in the remote DC.
+  if (status == DN_OK) return;
+
   // Start over with another rack.
   uint8_t rack_index;
   for (rack_index = 0; rack_index < rack_cnt; rack_index++) {
     rack = array_get(&dc->racks, rack_index);
+    peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
+                                  keylen, req->msg_routing);
 
     if (rack == dc->preselected_rack_for_replication) continue;
-    rack_msg = msg_get(c_conn, req->is_request, __FUNCTION__);
-    if (rack_msg == NULL) {
-      log_debug(LOG_VERB,
-                "whelp, looks like yer screwed now, buddy. no inter-rack "
-                "messages for you!");
-      return;
-    }
-
-    msg_clone(req, orig_mbuf, rack_msg);
-    rack_msg->swallow = true;
-
-    log_info("%s FAILOVER forwarding cloned %s to remote dc rack '%.*s'",
-             print_obj(c_conn), print_obj(rack_msg), rack->name->len,
+    log_info("%s FAILOVER forwarding msg %s to remote dc rack '%.*s'",
+             print_obj(c_conn), print_obj(req), rack->name->len,
              rack->name->data);
 
-    dyn_error_code = DYNOMITE_OK;
-    s = remote_req_forward(ctx, c_conn, rack_msg, rack, key, keylen,
-                           &dyn_error_code);
-    if (s == DN_OK) {
+    status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
+        orig_mbuf, true /* force_copy */, &dyn_error_code);
+    if (status == DN_OK) {
       stats_pool_incr(ctx, remote_peer_failover_requests);
       return;
     }
-    req_put(rack_msg);
   }
   stats_pool_incr(ctx, remote_peer_dropped_requests);
 }
@@ -856,12 +833,15 @@ static void req_forward_local_dc(struct context *ctx, struct conn *c_conn,
     // send request to only local token owner
     struct rack *rack =
         server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
+    // Pick the token owner peer from the selected rack.
+    struct node *peer = dnode_peer_pool_server(ctx, c_conn->owner, rack, key,
+                                               keylen, req->msg_routing);
+
     dyn_error_t dyn_error_code = 0;
-    rstatus_t s = remote_req_forward(ctx, c_conn, req, rack, key, keylen,
-                                     &dyn_error_code);
-    if (s != DN_OK) {
-      req_forward_error(ctx, c_conn, req, s, dyn_error_code);
-    }
+    // Forward the message to the peer.
+    rstatus_t status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
+        orig_mbuf, false /* force_copy? */, &dyn_error_code);
+    IGNORE_RET_VAL(status);
   }
 }
 
@@ -890,31 +870,30 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
   // add the message to the dict
   dictAdd(c_conn->outstanding_msgs_dict, &req->id, req);
 
-  s = g_verify_request(
-      req, pool, server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc));
-  if (s != DN_OK) {
-    if (req->expect_datastore_reply) {
-      conn_enqueue_outq(ctx, c_conn, req);
-    }
-    req_forward_error(ctx, c_conn, req, DN_OK, s);
-    return;
-  }
-
   // need to capture the initial mbuf location as once we add in the dynomite
   // headers (as mbufs to the src req), that will bork the request sent to
   // secondary racks
   struct mbuf *orig_mbuf = STAILQ_FIRST(&req->mhdr);
 
-  /* enqueue message (request) into client outq, if response is expected */
+  // Enqueue message 'req' into the client outq, if a response is expected.
   if (req->expect_datastore_reply) {
     conn_enqueue_outq(ctx, c_conn, req);
+  }
+
+  // Make sure that this is a valid request according to Dynomite.
+  s = g_verify_request(
+      req, pool, server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc));
+  if (s != DN_OK) {
+    // If this was an invalid request, we forward an error.
+    req_forward_error(ctx, c_conn, req, DN_OK, s);
+    return;
   }
 
   if (ctx->admin_opt == 1) {
     if (req->type == MSG_REQ_REDIS_DEL || req->type == MSG_REQ_MC_DELETE) {
       struct rack *rack =
           server_get_rack_by_dc_rack(pool, &pool->rack, &pool->dc);
-      s = admin_local_req_forward(ctx, c_conn, req, rack, key, keylen,
+      s = admin_req_forward_local_datastore(ctx, c_conn, req, rack, key, keylen,
                                   &dyn_error_code);
       if (s != DN_OK) {
         req_forward_error(ctx, c_conn, req, s, dyn_error_code);
@@ -931,7 +910,7 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
     req->consistency = DC_ONE;
     req->rsp_handler = msg_local_one_rsp_handler;
 
-    s = local_req_forward(ctx, c_conn, req, key, keylen, &dyn_error_code);
+    s = req_forward_local_datastore(ctx, c_conn, req, key, keylen, &dyn_error_code);
     if (s != DN_OK) {
       req_forward_error(ctx, c_conn, req, s, dyn_error_code);
     }
@@ -947,18 +926,16 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
                 "request to one or more nodes");
       // Errors would have already been forwarded by callee so we do nothing else here.
     }
-
     return;
   }
 
   /* forward the request based on other 'msg_routing' policies. */
   uint32_t dc_cnt = array_n(&pool->datacenters);
   uint32_t dc_index;
-
   for (dc_index = 0; dc_index < dc_cnt; dc_index++) {
     struct datacenter *dc = array_get(&pool->datacenters, dc_index);
     if (dc == NULL) {
-      log_error("Wow, this is very bad, dc is NULL");
+      log_error("FATAL ERROR: Server pool lost track of existing DCs.");
       return;
     }
 
