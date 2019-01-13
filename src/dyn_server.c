@@ -32,10 +32,11 @@
 static char *_print_datastore(const struct object *obj) {
   ASSERT(obj->type == OBJ_DATASTORE);
   struct datastore *ds = (struct datastore *)obj;
-  snprintf(obj->print_buff, PRINT_BUF_SIZE, "<DATASTORE %p %.*s>", ds,
+  snprintf((char*)obj->print_buff, PRINT_BUF_SIZE, "<DATASTORE %p %.*s>", ds,
            ds->endpoint.pname.len, ds->endpoint.pname.data);
-  return obj->print_buff;
+  return (char*)obj->print_buff;
 }
+
 static void server_ref(struct conn *conn, void *owner) {
   struct datastore *datastore = owner;
 
@@ -831,6 +832,7 @@ struct msg *req_send_next(struct context *ctx, struct conn *conn) {
   }
 
   req = conn->smsg;
+
   if (req != NULL) {
     ASSERT(req->is_request && !req->done);
     nmsg = TAILQ_NEXT(req, s_tqe);

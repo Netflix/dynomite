@@ -540,20 +540,17 @@ void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn,
 
 void req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                        err_t error_code, err_t dyn_error_code);
-rstatus_t remote_req_forward(struct context *ctx, struct conn *c_conn,
-                             struct msg *msg, struct rack *rack, uint8_t *key,
-                             uint32_t keylen, dyn_error_t *dyn_error_code);
 void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
                                  struct msg *req, struct mbuf *orig_mbuf,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc);
-rstatus_t local_req_forward(struct context *ctx, struct conn *c_conn,
+rstatus_t req_forward_local_datastore(struct context *ctx, struct conn *c_conn,
                             struct msg *msg, uint8_t *key, uint32_t keylen,
                             dyn_error_t *dyn_error_code);
 rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                                  struct conn *p_conn, struct msg *msg,
-                                 struct rack *rack, uint8_t *key,
-                                 uint32_t keylen, dyn_error_t *dyn_error_code);
+                                 uint8_t *key, uint32_t keylen,
+                                 dyn_error_t *dyn_error_code);
 
 // void peer_gossip_forward(struct context *ctx, struct conn *conn, struct
 // string *data);
