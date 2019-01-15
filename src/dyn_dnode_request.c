@@ -50,14 +50,13 @@ static void dnode_peer_req_forward_stats(struct context *ctx,
 /* Forward a client request over to a peer */
 rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                                  struct conn *p_conn, struct msg *req,
-                                 struct rack *rack, uint8_t *key,
-                                 uint32_t keylen, dyn_error_t *dyn_error_code) {
+                                 uint8_t *key, uint32_t keylen,
+                                 dyn_error_t *dyn_error_code) {
   struct node *server = p_conn->owner;
   log_info("%s FORWARD %s to peer %s on rack '%.*s' dc '%.*s' ",
            print_obj(c_conn), print_obj(req), print_obj(p_conn),
-           rack->name->len, rack->name->data, server->dc.len, server->dc.data);
+           server->rack.len, server->rack.data, server->dc.len, server->dc.data);
 
-  struct string *dc = rack->dc;
   rstatus_t status;
 
   ASSERT(p_conn->type == CONN_DNODE_PEER_SERVER);
@@ -80,8 +79,8 @@ rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
   }
 
   struct server_pool *pool = c_conn->owner;
-  dmsg_type_t msg_type =
-      (string_compare(&pool->dc, dc) != 0) ? DMSG_REQ_FORWARD : DMSG_REQ;
+  dmsg_type_t msg_type = (string_compare(&pool->dc, &server->dc) != 0) ?
+      DMSG_REQ_FORWARD : DMSG_REQ;
 
   if (req->msg_routing == ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS) {
     // If the routing type is 'ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS', the server that

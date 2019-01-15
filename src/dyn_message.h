@@ -149,6 +149,7 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_HSETNX)                                                     \
   ACTION(REQ_REDIS_HSCAN)                                                      \
   ACTION(REQ_REDIS_HVALS)                                                      \
+  ACTION(REQ_REDIS_HSTRLEN)                                                    \
   ACTION(REQ_REDIS_KEYS)                                                       \
   ACTION(REQ_REDIS_INFO)                                                       \
   ACTION(REQ_REDIS_LINDEX) /* redis requests - lists */                        \
@@ -211,7 +212,20 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_GEODIST)                                                    \
   ACTION(REQ_REDIS_GEOHASH)                                                    \
   ACTION(REQ_REDIS_GEOPOS)                                                     \
-  ACTION(REQ_REDIS_GEORADIUSBYMEMBER)							                             \
+  ACTION(REQ_REDIS_GEORADIUSBYMEMBER)                                          \
+  ACTION(REQ_REDIS_UNLINK)                                                     \
+  ACTION(REQ_REDIS_JSONSET)                                                    \
+  ACTION(REQ_REDIS_JSONGET)                                                    \
+  ACTION(REQ_REDIS_JSONDEL)                                                    \
+  ACTION(REQ_REDIS_JSONTYPE)                                                   \
+  ACTION(REQ_REDIS_JSONMGET)                                                   \
+  ACTION(REQ_REDIS_JSONARRAPPEND)                                              \
+  ACTION(REQ_REDIS_JSONARRINSERT)                                              \
+  ACTION(REQ_REDIS_JSONARRLEN)                                                 \
+  ACTION(REQ_REDIS_JSONOBJKEYS)                                                \
+  ACTION(REQ_REDIS_JSONOBJLEN)                                                 \
+  /* ACTION(REQ_REDIS_AUTH) */                                                 \
+  /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
   ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
   ACTION(REQ_REDIS_PFCOUNT)                                                    \
   ACTION(RSP_REDIS_STATUS) /* redis response */                                \
@@ -236,6 +250,9 @@ typedef enum msg_parse_result {
   ACTION(SENTINEL)                                                             \
   ACTION(REQ_REDIS_SCRIPT)                                                     \
   ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
+  ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
+  ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
+  ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
   /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
 
@@ -523,20 +540,17 @@ void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn,
 
 void req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                        err_t error_code, err_t dyn_error_code);
-rstatus_t remote_req_forward(struct context *ctx, struct conn *c_conn,
-                             struct msg *msg, struct rack *rack, uint8_t *key,
-                             uint32_t keylen, dyn_error_t *dyn_error_code);
 void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
                                  struct msg *req, struct mbuf *orig_mbuf,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc);
-rstatus_t local_req_forward(struct context *ctx, struct conn *c_conn,
+rstatus_t req_forward_local_datastore(struct context *ctx, struct conn *c_conn,
                             struct msg *msg, uint8_t *key, uint32_t keylen,
                             dyn_error_t *dyn_error_code);
 rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                                  struct conn *p_conn, struct msg *msg,
-                                 struct rack *rack, uint8_t *key,
-                                 uint32_t keylen, dyn_error_t *dyn_error_code);
+                                 uint8_t *key, uint32_t keylen,
+                                 dyn_error_t *dyn_error_code);
 
 // void peer_gossip_forward(struct context *ctx, struct conn *conn, struct
 // string *data);
