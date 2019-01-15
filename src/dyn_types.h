@@ -75,7 +75,7 @@
     }                                    \
   }
 
-#define IGNORE_RET_VAL(x) x;
+#define IGNORE_RET_VAL(x) (void)x;
 
 typedef uint64_t msgid_t;
 typedef uint64_t msec_t;

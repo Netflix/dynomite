@@ -467,6 +467,7 @@ rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start,
   target->vlen = src->vlen;
   target->is_read = src->is_read;
   target->consistency = src->consistency;
+  target->msg_routing = src->msg_routing;
 
   struct mbuf *mbuf, *nbuf;
   bool started = false;
