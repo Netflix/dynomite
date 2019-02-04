@@ -1,5 +1,6 @@
 #include "dyn_core.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_message.h"
 #include "dyn_server.h"
 
 void init_response_mgr(struct response_mgr *rspmgr, struct msg *req,
@@ -77,7 +78,75 @@ static void rspmgr_incr_non_quorum_responses_stats(
     stats_pool_incr(conn_to_ctx(rspmgr->conn), client_non_quorum_w_responses);
 }
 
-struct msg *rspmgr_get_response(struct response_mgr *rspmgr) {
+void perform_repairs_if_necessary(struct context *ctx, struct response_mgr *rspmgr) {
+  // Find the 'rsp' with the largest timestamp.
+  int i;
+  struct msg* most_updated_rsp = rspmgr->responses[0];
+  uint64_t biggest_ts = most_updated_rsp->timestamp;
+  for (i = 1 ; i < rspmgr->good_responses; ++i) {
+    if (rspmgr->responses[i]->timestamp > biggest_ts) {
+      most_updated_rsp = rspmgr->responses[i];
+      biggest_ts = rspmgr->responses[i]->timestamp;
+    }
+  }
+
+  struct conn *c_conn = rspmgr->msg->owner;
+  // Mark messages in need of repair
+  for (i = 0; i < rspmgr->good_responses; ++i) {
+    if (biggest_ts > rspmgr->responses[i]->timestamp) {
+      log_debug(LOG_VERB, "%.*s needs repair", rspmgr->responses[i]->owner->pname.len,
+          rspmgr->responses[i]->owner->pname.data);
+      struct keypos *key_pos = (struct keypos*)array_get(rspmgr->msg->keys, 0);
+      uint32_t keylen = key_pos->end - key_pos->start;
+      struct msg* repair_msg;
+      rstatus_t repair_create_status = g_make_repair_query(ctx,
+          rspmgr->msg->owner, biggest_ts, keylen, key_pos->start, most_updated_rsp,
+          &repair_msg);
+      if (repair_create_status != DN_OK) {
+        log_error("Cannot create a repair message to repair %.*s",
+            rspmgr->responses[i]->owner->pname.len,
+            rspmgr->responses[i]->owner->pname.data);
+        continue;
+      }
+      struct node *target_peer = (struct node*)rspmgr->responses[i]->owner->owner;
+      ASSERT(target_peer != NULL);
+
+      rstatus_t status;
+      dyn_error_t dyn_error_code;
+
+      // Forward the repair msg.
+      if (target_peer->is_local == true) {
+        log_debug(LOG_VERB, "Peer %.*s is local, so repairing using local path",
+            rspmgr->responses[i]->owner->pname.len,
+            rspmgr->responses[i]->owner->pname.data);
+        status = req_forward_local_datastore(ctx, c_conn, repair_msg,
+            key_pos->start, keylen, &dyn_error_code);
+      } else {
+        struct conn *p_conn = dnode_peer_get_conn(ctx, target_peer, c_conn->sd);
+        if (p_conn == NULL) {
+          log_error("Cannot get a connection to %.*s to repair",
+              rspmgr->responses[i]->owner->pname.len,
+              rspmgr->responses[i]->owner->pname.data);
+          continue;
+        }
+
+        status = dnode_peer_req_forward(
+            ctx, c_conn, p_conn, repair_msg, key_pos->start, keylen, &dyn_error_code);
+        if (status == DN_OK) {
+          loga("Repair msg successfully sent to %.*s",
+              rspmgr->responses[i]->owner->pname.len,
+              rspmgr->responses[i]->owner->pname.data);
+        } else {
+          log_error("Repair FAILED to send to %.*s",
+              rspmgr->responses[i]->owner->pname.len,
+              rspmgr->responses[i]->owner->pname.data);
+        }
+      }
+    }
+  }
+}
+
+struct msg *rspmgr_get_response(struct context *ctx, struct response_mgr *rspmgr) {
   // no quorum possible
   if (rspmgr->good_responses < rspmgr->quorum_responses) {
     ASSERT(rspmgr->err_rsp);
@@ -88,6 +157,8 @@ struct msg *rspmgr_get_response(struct response_mgr *rspmgr) {
     msg_dump(LOG_DEBUG, rspmgr->err_rsp);
     return rspmgr->err_rsp;
   }
+
+  perform_repairs_if_necessary(ctx, rspmgr);
 
   uint32_t chk0, chk1, chk2;
   chk0 = rspmgr->checksums[0];

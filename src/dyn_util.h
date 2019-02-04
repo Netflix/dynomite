@@ -380,4 +380,14 @@ unsigned int dict_string_hash(const void *key);
 int dict_string_key_compare(void *privdata, const void *key1, const void *key2);
 void dict_string_destructor(void *privdata, void *val);
 
+/*
+ * Counts the total number of digits in 'arg'.
+ */
+int count_digits(uint64_t arg);
+
+/*
+ * Returns the current timestamp in milliseconds.
+ */
+uint64_t current_timestamp_in_millis(void);
+
 #endif

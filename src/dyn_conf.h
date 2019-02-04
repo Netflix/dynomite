@@ -131,6 +131,9 @@ struct conf_pool {
   uint8_t datastore_connections;
   uint8_t local_peer_connections;
   uint8_t remote_peer_connections;
+
+  /* repairs enabled */
+  bool repairs_enabled;
 };
 
 struct conf {

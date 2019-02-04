@@ -25,6 +25,7 @@
 
 #include "../dyn_core.h"
 #include "../dyn_dnode_peer.h"
+#include "../dyn_util.h"
 #include "dyn_proto.h"
 
 #define RSP_STRING(ACTION) ACTION(ok, "+OK\r\n")
@@ -35,6 +36,35 @@
   static struct string rsp_##_var = string(_str);
 RSP_STRING(DEFINE_ACTION)
 #undef DEFINE_ACTION
+
+#define ADD_SET_STR "._add-set"
+#define REM_SET_STR "._rem-set"
+
+struct cmd_info {
+  char cmd_str[20];
+  uint32_t num_args;
+  bool is_delete;
+};
+
+struct cmd_info redis_cmd_info[MSG_END_IDX];
+
+void redis_init_datastore() {
+  strcpy(redis_cmd_info[MSG_REQ_REDIS_SET].cmd_str, "SET");
+  redis_cmd_info[MSG_REQ_REDIS_SET].num_args = 1;
+  redis_cmd_info[MSG_REQ_REDIS_SET].is_delete = false;
+
+  strcpy(redis_cmd_info[MSG_REQ_REDIS_APPEND].cmd_str, "APPEND");
+  redis_cmd_info[MSG_REQ_REDIS_APPEND].num_args = 1;
+  redis_cmd_info[MSG_REQ_REDIS_APPEND].is_delete = false;
+
+  strcpy(redis_cmd_info[MSG_REQ_REDIS_DEL].cmd_str, "DEL");
+  redis_cmd_info[MSG_REQ_REDIS_DEL].num_args = 0;
+  redis_cmd_info[MSG_REQ_REDIS_DEL].is_delete = true;
+
+  strcpy(redis_cmd_info[MSG_REQ_REDIS_GET].cmd_str, "GET");
+  redis_cmd_info[MSG_REQ_REDIS_GET].num_args = 0;
+  redis_cmd_info[MSG_REQ_REDIS_GET].is_delete = false;
+}
 
 /*
  * Return true, if the redis command take no key, otherwise
@@ -376,6 +406,170 @@ rstatus_t record_arg(uint8_t* start_pos, uint8_t* end_pos, struct array *target_
 }
 
 /*
+ * This is a generic script for writes to primary keys (SET, APPEND, DEL, etc.)
+ * The string is formatted to take arguments in the order specified below.
+ *
+ * FMT String order:-
+ * %d       %s    %s     %s     %d       %u   %d       %s   %d         %d      %d        %s
+ * <keylen> <key> <+set> <-set> <ts_len> <ts> <op_len> <op> <narg_len> <nargs> <val_len> <val>
+ */
+const char* REPAIR_WRITE_SCRIPT_FMT_STRING = "*10\r\n$4\r\nEVAL\r\n$720\r\n"
+  "local key = KEYS[1]\nlocal add_set = KEYS[2]\nlocal rem_set = KEYS[3]\n"
+  "local cur_ts = ARGV[1]\nlocal orig_op = ARGV[2]\nlocal num_orig_args = ARGV[3]\n"
+  "local arg1_for_op = ARGV[4]\n\nlocal last_seen_ts_in_add = "
+  "redis.call('ZSCORE', add_set, key)\nlocal last_seen_ts_in_rem = "
+  "redis.call('ZSCORE', rem_set, key)\nif (last_seen_ts_in_rem) "
+  "then\n  assert(not last_seen_ts_in_add)\n  if (tonumber(cur_ts) < "
+  "tonumber(last_seen_ts_in_rem)) then\n    return -1\n  end\n  "
+  "redis.call('ZREM', rem_set, key)\nelseif (last_seen_ts_in_add) then\n  "
+  "assert(not last_seen_ts_in_rem)\n  if (tonumber(cur_ts) < "
+  "tonumber(last_seen_ts_in_add)) then\n    return -1\n  end\nend\n\n"
+  "redis.call('ZADD', add_set, cur_ts, key)\n"
+  "return redis.call(orig_op, key, arg1_for_op)\n\r\n$1\r\n3\r\n"
+  "$%d\r\n%s\r\n$9\r\n%s\r\n$9\r\n%s\r\n$%d\r\n%llu\r\n"
+  "$%d\r\n%s\r\n$%d\r\n%d\r\n$%d\r\n%s\r\n";
+
+/*
+ * This is a generic script for reads from primary keys (GET, etc.)
+ * The string is formatted to take arguments in the order specified below.
+ *
+ * FMT String order:-
+ * %d       %s    %s     %s     %d       %u   %d       %s   %d         %d
+ * <keylen> <key> <+set> <-set> <ts_len> <ts> <op_len> <op> <narg_len> <nargs>
+ */
+const char *REPAIR_READ_SCRIPT_FMT_STRING =
+    "*9\r\n$4\r\nEVAL\r\n$532\r\nlocal key = KEYS[1]\nlocal add_set = KEYS[2]\nlocal "
+    "rem_set = KEYS[3]\nlocal cur_ts = ARGV[1]\nlocal orig_op = ARGV[2]\nlocal "
+    "num_orig_args = ARGV[3]\n\nlocal value = redis.call(orig_op, key)\nlocal "
+    "last_seen_ts_in_add = redis.call('ZSCORE', add_set, key)\nlocal "
+    "last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, key)\nif (last_seen_ts_in_rem)"
+    " then\n  assert(not last_seen_ts_in_add)\n  return {'N', value, last_seen_ts_in_rem}\n"
+    "elseif (last_seen_ts_in_add) then\n  assert(not last_seen_ts_in_rem)\nend\n\n"
+    "return {'E', value, last_seen_ts_in_add}\n\r\n$1\r\n3\r\n$%d\r\n%s\r\n"
+    "$9\r\n%s\r\n$9\r\n%s\r\n$%d\r\n%llu\r\n$%d\r\n%s\r\n$%d\r\n%d\r\n";
+
+rstatus_t create_custom_script(struct context *ctx, struct conn *conn,
+    const char *script_fmt, uint64_t timestamp, uint32_t keylen, uint8_t *key,
+    struct msg *orig_msg, msg_type_t cmd_type, bool is_repair,
+    struct msg **result_msg_ptr) {
+
+  rstatus_t ret_status;
+  char *add_set_key;
+  char *rem_set_key;
+  struct msg *new_msg = NULL;
+
+  char *op_str = (char*)redis_cmd_info[cmd_type].cmd_str;
+  uint32_t num_args = redis_cmd_info[cmd_type].num_args;
+  bool is_delete = redis_cmd_info[cmd_type].is_delete;
+
+  uint32_t arg_idx = 0;
+  if (is_repair) {
+    ++arg_idx;
+  }
+
+  // If 'num_args' defaults to 0, the values will point to an empty string.
+  uint8_t empty_str[1] = "";
+  uint8_t *value = (uint8_t*)&empty_str;
+  uint32_t valuelen = 0;
+
+  if (num_args == 1) {
+    value = msg_get_arg_copy(orig_msg, arg_idx, &valuelen);
+    if (value == NULL) {
+      ret_status = DN_ENOMEM;
+      goto error;
+    }
+  }
+
+  // Swap the add and remove sets if this is a delete command.
+  if (is_delete) {
+    add_set_key = REM_SET_STR;
+    rem_set_key = ADD_SET_STR;
+  } else {
+    add_set_key = ADD_SET_STR;
+    rem_set_key = REM_SET_STR;
+  }
+  // Get a new 'msg' structure.
+  new_msg = msg_get(conn, true, __FUNCTION__);
+  if (new_msg == NULL) {
+    ret_status = DN_ENOMEM;
+    goto error;
+  }
+
+  uint32_t timestamp_len = count_digits(timestamp);
+  uint32_t num_arg_len = count_digits(num_args);
+  // Write the new command into 'new_msg'
+  rstatus_t prepend_status = msg_prepend_format(
+      new_msg, script_fmt, keylen, key, add_set_key,
+      rem_set_key, timestamp_len, timestamp /* TODO: CHANGE */,
+      strlen(op_str), op_str, num_arg_len, num_args, valuelen, value);
+  if (prepend_status != DN_OK) {
+    ret_status = prepend_status;
+    goto error;
+  }
+
+  {
+    // Point the 'pos' pointer in 'new_msg' to the mbuf we've added.
+    struct mbuf *new_mbuf = STAILQ_LAST(&new_msg->mhdr, mbuf, next);
+    new_msg->pos = new_mbuf->pos;
+  }
+  // Parse the message 'new_msg' to populate all of its appropriate
+  // fields.
+  new_msg->parser(new_msg, &ctx->pool.hash_tag);
+  // Check if 'new_msg' was parsed successfully.
+  if (new_msg->result != MSG_PARSE_OK) {
+    ret_status = DN_ERROR;
+    goto error;
+  }
+
+  *result_msg_ptr = new_msg;
+  goto done;
+
+ error:
+  // Return the newly allocated message back to the free message queue.
+  if (new_msg != NULL) msg_put(new_msg);
+  return ret_status;
+
+ done:
+  return DN_OK;
+}
+
+rstatus_t redis_make_repair_query(struct context *ctx, struct conn *conn,
+    uint64_t timestamp, uint32_t keylen, uint8_t *key, struct msg *orig_msg,
+    struct msg **new_msg_ptr) {
+
+  loga("In redis_make_repair_query. Biggest timestamp: %u", timestamp);
+  if (ctx->repairs_enabled == 0) return DN_OK;
+
+  struct msg *new_msg = NULL;
+  rstatus_t ret_status = DN_OK;
+
+  // Make a copy of the key.
+  uint8_t *key_copy;
+  key_copy = (uint8_t*)strndup((char*)key, keylen);
+  key_copy[keylen] = '\0';
+
+  struct argpos *exists_pos = (struct argpos*)array_get(orig_msg->args, 0);
+  msg_type_t msg_type = (*(char*)exists_pos->start == 'E') ? MSG_REQ_REDIS_SET : MSG_REQ_REDIS_DEL;
+  switch(msg_type) {
+    case MSG_REQ_REDIS_SET:
+    case MSG_REQ_REDIS_DEL:
+      ret_status = create_custom_script(ctx, conn, REPAIR_WRITE_SCRIPT_FMT_STRING,
+          timestamp, keylen, key_copy, orig_msg, msg_type, true, new_msg_ptr);
+      if (ret_status != DN_OK) goto error;
+      goto done;
+      default:
+        break;
+    }
+ error:
+  // Return the newly allocated message back to the free message queue.
+  if (new_msg != NULL) msg_put(new_msg);
+  return ret_status;
+
+ done:
+  return DN_OK;
+}
+
+/*
  * Detects the query and does a rewrite if applicable.
  *
  * Currently the following queries are rewritten:
@@ -407,6 +601,7 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
   struct msg *new_msg = NULL;
   uint8_t *key = NULL;
   rstatus_t ret_status = DN_OK;
+
   switch (orig_msg->type) {
     case MSG_REQ_REDIS_SMEMBERS:
 
@@ -458,6 +653,67 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
       break;
     default:
       return DN_OK;
+  }
+
+error:
+  if (key != NULL) dn_free(key);
+  // Return the newly allocated message back to the free message queue.
+  if (new_msg != NULL) msg_put(new_msg);
+  return ret_status;
+
+done:
+  if (key != NULL) dn_free(key);
+  return DN_OK;
+}
+
+rstatus_t redis_rewrite_query_with_timestamp_md(struct msg *orig_msg, struct context *ctx,
+    bool *did_rewrite, struct msg **new_msg_ptr) {
+
+  ASSERT(orig_msg != NULL);
+  ASSERT(orig_msg->is_request);
+  ASSERT(did_rewrite != NULL);
+
+  *did_rewrite = false;
+
+  struct msg *new_msg = NULL;
+  uint8_t *key = NULL;
+  rstatus_t ret_status = DN_OK;
+
+  uint32_t req_key_len;
+  // Get a copy of the key from 'orig_msg'.
+  uint8_t *req_key = msg_get_full_key_copy(orig_msg, 0, &req_key_len);
+  if (req_key == NULL) {
+    ret_status = DN_ENOMEM;
+    goto error;
+  }
+
+  if (orig_msg->is_read == 0) {
+
+    switch(orig_msg->type) {
+      case MSG_REQ_REDIS_APPEND:
+      case MSG_REQ_REDIS_DEL:
+      case MSG_REQ_REDIS_SET:
+        ret_status = create_custom_script(ctx, orig_msg->owner,
+            REPAIR_WRITE_SCRIPT_FMT_STRING, orig_msg->timestamp, req_key_len, req_key,
+            orig_msg, orig_msg->type, false, new_msg_ptr);
+        if (ret_status != DN_OK) goto error;
+        *did_rewrite = true;
+        return ret_status;
+      default:
+        break;
+    }
+  } else if (orig_msg->is_read == 1) {
+    switch(orig_msg->type) {
+      case MSG_REQ_REDIS_GET:
+        ret_status = create_custom_script(ctx, orig_msg->owner,
+            REPAIR_READ_SCRIPT_FMT_STRING, orig_msg->timestamp, req_key_len, req_key,
+            orig_msg, orig_msg->type, false, new_msg_ptr);
+        if (ret_status != DN_OK) goto error;
+        *did_rewrite = true;
+        return ret_status;
+      default:
+        break;
+    }
   }
 
 error:
@@ -2738,6 +2994,16 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           goto error;
         }
 
+        {
+          // Record all args.
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
+
         p += r->rlen; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -2798,12 +3064,43 @@ done:
   r->result = MSG_PARSE_OK;
   r->is_error = redis_error(r);
 
+  // If repairs are enabled, we will get back a timestamp with all MULTIBULK requests.
+  // TODO: Find a more direct way to check if repairs are enabled. Now we rely on the
+  // fact that the 'timestamp' field will be non-zero only if repairs are enabled.
+  if (r->timestamp != 0) {
+    if (r->type == MSG_RSP_REDIS_MULTIBULK) {
+      r->timestamp = 0;
+      // Record the timestamp which will be present in the last position in 'args'.
+      uint32_t num_args = array_n(r->args);
+      if (num_args >= 1) {
+        struct argpos* timestamp_str_arg = array_get(r->args, num_args - 1);
+        ASSERT(timestamp_str_arg);
+        uint8_t *i;
+        for (i = timestamp_str_arg->start; i < timestamp_str_arg->end; ++i) {
+          char digit_ch = *i;
+          ASSERT(isdigit(digit_ch));
+          r->timestamp = r->timestamp * 10 + (uint64_t)(digit_ch - '0');
+        }
+      }
+    }
+  }
+
   log_hexdump(LOG_VERB, b->pos, mbuf_length(b),
               "parsed rsp %" PRIu64
               " res %d "
               "type %d state %d rpos %d of %d",
               r->id, r->result, r->type, r->state, r->pos - b->pos,
               b->last - b->pos);
+  return;
+
+enomem:
+  r->result = MSG_PARSE_ERROR;
+  r->state = state;
+  log_hexdump(LOG_ERR, b->pos, mbuf_length(b),
+              "out of memory on parse req %" PRIu64
+              " "
+              "res %d type %d state %d",
+              r->id, r->result, r->type, r->state);
   return;
 
 error:

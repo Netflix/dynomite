@@ -151,13 +151,17 @@ static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max; /* maximum number of allowed allocated messages */
 uint8_t g_timeout_factor = 1;
 
-func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
-func_msg_coalesce_t g_post_coalesce; /* message post-coalesce */
-func_msg_fragment_t g_fragment;      /* message post-coalesce */
-func_msg_verify_t g_verify_request;  /* message post-coalesce */
+func_msg_coalesce_t g_pre_coalesce;     /* message pre-coalesce */
+func_msg_coalesce_t g_post_coalesce;    /* message post-coalesce */
+func_msg_fragment_t g_fragment;         /* message post-coalesce */
+func_msg_verify_t g_verify_request;     /* message post-coalesce */
 func_is_multikey_request g_is_multikey_request;
 func_reconcile_responses g_reconcile_responses;
-func_msg_rewrite_t g_rewrite_query; /* rewrite query in a msg if necessary */
+func_msg_rewrite_t g_rewrite_query;     /* rewrite query in a msg if necessary */
+/* rewrite query as script that updates both data and metadata */
+func_msg_rewrite_t g_rewrite_query_with_timestamp_md;
+func_msg_repair_t g_make_repair_query;  /* Send a repair msg. */
+func_init_datastore_t g_init_datastore; /* Initialize the datastore */
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {MSG_TYPE_CODEC(DEFINE_ACTION)
@@ -193,6 +197,9 @@ void set_datastore_ops(void) {
       g_is_multikey_request = redis_is_multikey_request;
       g_reconcile_responses = redis_reconcile_responses;
       g_rewrite_query = redis_rewrite_query;
+      g_rewrite_query_with_timestamp_md = redis_rewrite_query_with_timestamp_md;
+      g_make_repair_query = redis_make_repair_query;
+      g_init_datastore = redis_init_datastore;
       break;
     case DATA_MEMCACHE:
       g_pre_coalesce = memcache_pre_coalesce;
@@ -202,6 +209,9 @@ void set_datastore_ops(void) {
       g_is_multikey_request = memcache_is_multikey_request;
       g_reconcile_responses = memcache_reconcile_responses;
       g_rewrite_query = memcache_rewrite_query;
+      g_rewrite_query_with_timestamp_md = memcache_rewrite_query_with_timestamp_md;
+      g_make_repair_query = memcache_make_repair_query;
+      g_init_datastore = memcache_init_datastore;
       break;
     default:
       return;
@@ -399,6 +409,7 @@ done:
   msg->dyn_error_code = 0;
   msg->rsp_handler = msg_local_one_rsp_handler;
   msg->consistency = DC_ONE;
+  msg->timestamp = 0;
   return msg;
 }
 
@@ -671,6 +682,9 @@ void msg_init(size_t msgs_max) {
   alloc_msgs_max = msgs_max;
   TAILQ_INIT(&free_msgq);
   rbtree_init(&tmo_rbt, &tmo_rbs);
+
+  // Initialize the underlying datastore.
+  g_init_datastore();
 }
 
 void msg_deinit(void) {
@@ -737,6 +751,43 @@ uint8_t *msg_get_full_key_copy(struct msg *msg, int idx, uint32_t *keylen) {
   copied_key[*keylen] = '\0';
 
   return copied_key;
+}
+
+static uint8_t *msg_get_arg(struct msg *req, uint32_t arg_index,
+                            uint32_t *arglen) {
+  *arglen = 0;
+  if (array_n(req->args) == 0) return NULL;
+  ASSERT_LOG(arg_index < array_n(req->args), "%s has %u keys", print_obj(req),
+             array_n(req->args));
+
+  struct argpos *argpos = array_get(req->args, arg_index);
+  uint8_t *arg_start = argpos->start;
+  uint8_t *arg_end = argpos->end;
+  *arglen = (uint32_t)(arg_end - arg_start);
+  return arg_start;
+}
+
+/*
+ * Returns the 'idx' arg in 'msg'.
+ *
+ * Transfers ownership of returned buffer to the caller, so the caller must
+ * take the responsibility of freeing it.
+ *
+ * Returns NULL if key does not exist or if we're unable to allocate memory.
+ */
+uint8_t *msg_get_arg_copy(struct msg *msg, int idx, uint32_t *arglen) {
+  // Get a pointer to the required arg in 'msg'.
+  uint8_t *arg_ptr = msg_get_arg(msg, idx, arglen);
+
+  // Allocate a new buffer for the key.
+  uint8_t *copied_arg = dn_alloc((size_t)(*arglen + 1));
+  if (copied_arg == NULL) return NULL;
+
+  // Copy contents of the key from 'msg' to our new buffer.
+  dn_memcpy(copied_arg, arg_ptr, *arglen);
+  copied_arg[*arglen] = '\0';
+
+  return copied_arg;
 }
 
 uint32_t msg_payload_crc32(struct msg *rsp) {
