@@ -380,6 +380,11 @@ struct keypos {
   uint8_t *tag_end;   /* hashtagged key end pos */
 };
 
+struct argpos {
+  uint8_t *start;     // Argument start position
+  uint8_t *end;       // Argument end position
+};
+
 struct msg {
   object_t object;
   TAILQ_ENTRY(msg) c_tqe; /* link in client q */
@@ -413,15 +418,16 @@ struct msg {
   msg_type_t type; /* message type */
 
   struct array *keys; /* array of keypos, for req */
+  struct array *args; /* array of keypos, for req */
 
   uint32_t vlen; /* value length (memcache) */
   uint8_t *end;  /* end marker (memcache) */
 
-  uint8_t *narg_start; /* narg start (redis) */
-  uint8_t *narg_end;   /* narg end (redis) */
-  uint32_t narg;       /* # arguments (redis) */
+  uint8_t *ntoken_start; /* ntoken start (redis) */
+  uint8_t *ntoken_end;   /* ntoken end (redis) */
+  uint32_t ntokens;       /* # tokens (redis) */
   uint32_t nkeys;      /* # keys in script (redis EVAL/EVALSHA) */
-  uint32_t rnarg;      /* running # arg used by parsing fsa (redis) */
+  uint32_t rntokens;      /* running # tokens used by parsing fsa (redis) */
   uint32_t rlen;       /* running length in parsing fsa (redis) */
   uint32_t integer;    /* integer reply value (redis) */
 
