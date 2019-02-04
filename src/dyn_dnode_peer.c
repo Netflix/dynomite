@@ -320,7 +320,7 @@ static void dnode_peer_ack_err(struct context *ctx, struct conn *conn,
   log_info("%s Closing req %u:%u len %" PRIu32 " type %d %c %s",
            print_obj(conn), req->id, req->parent_id, req->mlen, req->type,
            conn->err ? ':' : ' ', conn->err ? strerror(conn->err) : " ");
-  rstatus_t status = conn_handle_response(
+  rstatus_t status = conn_handle_response(ctx,
       c_conn, req->parent_id ? req->parent_id : req->id, rsp);
   IGNORE_RET_VAL(status);
   if (req->swallow) req_put(req);
@@ -1005,7 +1005,7 @@ static void dnode_rsp_forward_match(struct context *ctx, struct conn *peer_conn,
 
   dnode_rsp_forward_stats(ctx, rsp);
   // c_conn owns respnse now
-  status = conn_handle_response(c_conn,
+  status = conn_handle_response(ctx, c_conn,
                                 req->parent_id ? req->parent_id : req->id, rsp);
   IGNORE_RET_VAL(status);
   if (req->swallow) {
@@ -1117,7 +1117,7 @@ static void dnode_rsp_forward(struct context *ctx, struct conn *peer_conn,
         "Peer connection s %d skipping request %u:%u, dummy err_rsp %u:%u",
         peer_conn->sd, req->id, req->parent_id, err_rsp->id,
         err_rsp->parent_id);
-    rstatus_t status = conn_handle_response(
+    rstatus_t status = conn_handle_response(ctx,
         c_conn, req->parent_id ? req->parent_id : req->id, err_rsp);
     IGNORE_RET_VAL(status);
     if (req->swallow) {

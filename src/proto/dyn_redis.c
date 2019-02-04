@@ -25,6 +25,7 @@
 
 #include "../dyn_core.h"
 #include "../dyn_dnode_peer.h"
+#include "../dyn_util.h"
 #include "dyn_proto.h"
 
 #define RSP_STRING(ACTION) ACTION(ok, "+OK\r\n")
@@ -407,6 +408,7 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
   struct msg *new_msg = NULL;
   uint8_t *key = NULL;
   rstatus_t ret_status = DN_OK;
+
   switch (orig_msg->type) {
     case MSG_REQ_REDIS_SMEMBERS:
 
@@ -2489,6 +2491,24 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
 
       case SW_SIMPLE:
         if (ch == CR) {
+          uint8_t* j;
+
+          // Find where this arg started.
+          // TODO: Not a big deal, but avoid iterating backwards.
+          for (j = p; j > 0; --j) {
+            if (*j == ':' || *j == '+' || *j == '-') break;
+          }
+
+          // Record this argument.
+          {
+            rstatus_t argstatus = record_arg(j , p , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
+
           state = SW_MULTIBULK_ARGN_LF;
           r->rntokens--;
         }
@@ -2736,6 +2756,16 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           goto error;
         }
 
+        {
+          // Record all args.
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
+
         p += r->rlen; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -2795,13 +2825,22 @@ done:
   r->token = NULL;
   r->result = MSG_PARSE_OK;
   r->is_error = redis_error(r);
-
   log_hexdump(LOG_VERB, b->pos, mbuf_length(b),
               "parsed rsp %" PRIu64
               " res %d "
               "type %d state %d rpos %d of %d",
               r->id, r->result, r->type, r->state, r->pos - b->pos,
               b->last - b->pos);
+  return;
+
+enomem:
+  r->result = MSG_PARSE_ERROR;
+  r->state = state;
+  log_hexdump(LOG_ERR, b->pos, mbuf_length(b),
+              "out of memory on parse req %" PRIu64
+              " "
+              "res %d type %d state %d",
+              r->id, r->result, r->type, r->state);
   return;
 
 error:
