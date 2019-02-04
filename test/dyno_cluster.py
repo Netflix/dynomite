@@ -115,6 +115,19 @@ class DynoCluster(object):
         with open(CLUSTER_DESC_FILEPATH, 'w') as outfile:
             yaml.dump(yaml_cluster_desc, outfile, default_flow_style=False)
 
+    def _print_cluster_topology(self):
+        tokens = tokens_for_cluster(self.request['cluster_desc'], None)
+        print("Cluster topology:-");
+        for dc, racks in tokens:
+            print("\tDC: %s" % dc)
+            for rack, tokens in racks:
+                print("\t\tRack: %s" % rack)
+                # Nested loop is okay here since the #nodes will always be small.
+                for node in self.nodes:
+                    if node.spec.dc == dc and node.spec.rack == rack:
+                        print("\t\t\tNode: %s  || PID: %s" % (node.name, \
+                            node.get_dyno_node_pid()))
+
     def _delete_running_cluster_file(self):
         os.remove(CLUSTER_DESC_FILEPATH)
 
@@ -129,6 +142,7 @@ class DynoCluster(object):
 
         # Now that the cluster is up, write its description to a file.
         self._write_running_cluster_file()
+        self._print_cluster_topology()
 
     def teardown(self):
         for n in self.nodes:
