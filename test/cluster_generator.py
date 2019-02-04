@@ -12,7 +12,7 @@ from plumbum import local
 
 from dyno_cluster import DynoCluster
 from func_test import comparison_test
-from utils import generate_ips, setup_temp_dir
+from utils import generate_ips, setup_temp_dir, sleep_with_animation
 from redis_node import RedisNode
 
 REDIS_PORT = 1212
@@ -49,7 +49,7 @@ def main():
         stack.enter_context(dynomite_cluster)
 
         # Wait for a while for the above nodes to start.
-        sleep(SETTLE_TIME)
+        sleep_with_animation(SETTLE_TIME, "Waiting for cluster to start")
 
         # Run all the functional comparison tests.
         comparison_test(standalone_redis, dynomite_cluster, False)
