@@ -47,9 +47,10 @@
 #include "dyn_dict_msg_id.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_server.h"
+#include "dyn_util.h"
 
-static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp);
-static msg_response_handler_t msg_get_rsp_handler(struct msg *req);
+static rstatus_t msg_quorum_rsp_handler(struct context *ctx, struct msg *req, struct msg *rsp);
+static msg_response_handler_t msg_get_rsp_handler(struct context *ctx, struct msg *req);
 
 static rstatus_t rewrite_query_if_necessary(struct msg **req,
                                             struct context *ctx);
@@ -230,7 +231,7 @@ static void client_close(struct context *ctx, struct conn *conn) {
  * request scenario and then use the post coalesce logic to cook up a combined
  * response
  */
-static rstatus_t client_handle_response(struct conn *conn, msgid_t reqid,
+static rstatus_t client_handle_response(struct context *ctx, struct conn *conn, msgid_t reqid,
                                         struct msg *rsp) {
   // now the handler owns the response.
   ASSERT(conn->type == CONN_CLIENT);
@@ -242,7 +243,7 @@ static rstatus_t client_handle_response(struct conn *conn, msgid_t reqid,
     return DN_OK;
   }
   // we have to submit the response irrespective of the unref status.
-  rstatus_t status = msg_handle_response(req, rsp);
+  rstatus_t status = msg_handle_response(ctx, req, rsp);
   if (conn->waiting_to_unref) {
     // don't care about the status.
     if (req->awaiting_rsps) return DN_OK;
@@ -336,6 +337,11 @@ struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc) {
     conn->rmsg = req;
   }
 
+  // Record timetamps if repairs are enabled.
+  // TODO: Consider requests that span multiple mbufs.
+  if (ctx->read_repairs_enabled) {
+    req->timestamp = current_timestamp_in_millis();
+  }
   return req;
 }
 
@@ -404,7 +410,7 @@ void req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
   rsp->dmsg = dmsg_get();
   rsp->dmsg->id = req->id;
 
-  rstatus_t status = conn_handle_response(
+  rstatus_t status = conn_handle_response(ctx,
       conn, req->parent_id ? req->parent_id : req->id, rsp);
   IGNORE_RET_VAL(status);
 }
@@ -603,7 +609,7 @@ static rstatus_t admin_req_forward_local_datastore(struct context *ctx,
   return req_forward_local_datastore(ctx, c_conn, req, key, keylen, dyn_error_code);
 }
 
-static rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
+rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
     struct msg *req, struct node *peer, uint8_t* key, uint32_t keylen,
     struct mbuf *orig_mbuf, bool force_copy, dyn_error_t *dyn_error_code) {
 
@@ -825,7 +831,7 @@ static void req_forward_local_dc(struct context *ctx, struct conn *c_conn,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc) {
   struct server_pool *pool = c_conn->owner;
-  req->rsp_handler = msg_get_rsp_handler(req);
+  req->rsp_handler = msg_get_rsp_handler(ctx, req);
   if (request_send_to_all_local_racks(req)) {
     // send request to all local racks
     req_forward_all_local_racks(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
@@ -957,6 +963,8 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
 rstatus_t rewrite_query_if_necessary(struct msg **req, struct context *ctx) {
   bool did_rewrite = false;
   struct msg *new_req = NULL;
+
+  msg_type_t orig_msg_type = (*req)->type;
   rstatus_t ret_status = g_rewrite_query(*req, ctx, &did_rewrite, &new_req);
   THROW_STATUS(ret_status);
 
@@ -965,6 +973,36 @@ rstatus_t rewrite_query_if_necessary(struct msg **req, struct context *ctx) {
     // the original request and point it to the 'new_req'.
     msg_put(*req);
     *req = new_req;
+    (*req)->orig_type = orig_msg_type;
+  }
+  return DN_OK;
+}
+
+/*
+ * Rewrites a query as a script that updates both the data and metadata.
+ *
+ * If a rewrite occured, it will replace '*req' with the new 'msg' that contains
+ * the new query and free up the original msg.
+ *
+ */
+rstatus_t rewrite_query_with_timestamp_md(struct msg **req, struct context *ctx) {
+
+  if (ctx->read_repairs_enabled == false) return DN_OK;
+
+  bool did_rewrite = false;
+  struct msg *new_req = NULL;
+
+  msg_type_t orig_msg_type = (*req)->type;
+  rstatus_t ret_status = g_rewrite_query_with_timestamp_md(
+      *req, ctx, &did_rewrite, &new_req);
+  THROW_STATUS(ret_status);
+
+  if (did_rewrite) {
+    // If we successfully did a rewrite, we neet to make sure that the 'new_req' is the
+    // msg considered from here on, and record the original msg for later reference.
+    new_req->orig_msg = *req;
+    *req = new_req;
+    (*req)->orig_type = orig_msg_type;
   }
   return DN_OK;
 }
@@ -1007,6 +1045,9 @@ void req_recv_done(struct context *ctx, struct conn *conn, struct msg *req,
   status = fragment_query_if_necessary(req, conn, &frag_msgq);
   if (status != DN_OK) goto error;
 
+  status = rewrite_query_with_timestamp_md(&req, ctx);
+  if (status != DN_OK) goto error;
+
   /* if no fragment happened */
   if (TAILQ_EMPTY(&frag_msgq)) {
     req_forward(ctx, conn, req);
@@ -1035,7 +1076,7 @@ error:
   return;
 }
 
-static msg_response_handler_t msg_get_rsp_handler(struct msg *req) {
+static msg_response_handler_t msg_get_rsp_handler(struct context *ctx, struct msg *req) {
   if (request_send_to_all_local_racks(req)) {
     // Request is being braoadcasted
     // Check if its quorum
@@ -1045,7 +1086,7 @@ static msg_response_handler_t msg_get_rsp_handler(struct msg *req) {
   return msg_local_one_rsp_handler;
 }
 
-rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp) {
+rstatus_t msg_local_one_rsp_handler(struct context *ctx, struct msg *req, struct msg *rsp) {
   ASSERT_LOG(!req->selected_rsp,
              "Received more than one response for dc_one.\
                %s prev %s new rsp %s",
@@ -1071,12 +1112,13 @@ static rstatus_t swallow_extra_rsp(struct msg *req, struct msg *rsp) {
   return DN_NOOPS;
 }
 
-static rstatus_t msg_quorum_rsp_handler(struct msg *req, struct msg *rsp) {
+static rstatus_t msg_quorum_rsp_handler(struct context *ctx, struct msg *req,
+    struct msg *rsp) {
   if (req->rspmgr.done) return swallow_extra_rsp(req, rsp);
   rspmgr_submit_response(&req->rspmgr, rsp);
   if (!rspmgr_check_is_done(&req->rspmgr)) return DN_EAGAIN;
   // rsp is absorbed by rspmgr. so we can use that variable
-  rsp = rspmgr_get_response(&req->rspmgr);
+  rsp = rspmgr_get_response(ctx, &req->rspmgr);
   ASSERT(rsp);
   rspmgr_free_other_responses(&req->rspmgr, rsp);
   rsp->peer = req;

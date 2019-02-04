@@ -1616,3 +1616,13 @@ rstatus_t memcache_rewrite_query(struct msg *orig_msg, struct context *ctx,
                                  bool *did_rewrite, struct msg **new_msg_ptr) {
   return DN_OK;
 }
+
+rstatus_t memcache_rewrite_query_with_timestamp_md(struct msg *orig_msg,
+    struct context *ctx, bool *did_rewrite, struct msg **new_msg_ptr) {
+  return DN_OK;
+}
+
+rstatus_t memcache_make_repair_query(struct context *ctx, struct response_mgr *rspmgr,
+    struct msg **new_msg_ptr) {
+  return DN_OK;
+}

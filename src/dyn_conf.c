@@ -270,6 +270,8 @@ static rstatus_t conf_pool_init(struct conf_pool *cp, struct string *name) {
     return status;
   }
 
+  cp->read_repairs_enabled = false;
+
   log_debug(LOG_VVERB, "init conf pool %p, '%.*s'", cp, name->len, name->data);
 
   return DN_OK;
@@ -1167,6 +1169,8 @@ static struct command conf_commands[] = {
     {string("remote_peer_connections"), conf_set_num,
      offsetof(struct conf_pool, remote_peer_connections)},
 
+    {string("read_repairs_enabled"), conf_set_bool,
+     offsetof(struct conf_pool, read_repairs_enabled)},
     null_command};
 
 static rstatus_t conf_handler(struct conf *cf, void *data) {
