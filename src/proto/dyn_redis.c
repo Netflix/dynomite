@@ -361,6 +361,20 @@ static bool redis_error(struct msg *r) {
   return false;
 }
 
+rstatus_t record_arg(uint8_t* start_pos, uint8_t* end_pos, struct array *target_arr) {
+  ASSERT(target_arr != NULL && start_pos != NULL && end_pos != NULL);
+
+  struct argpos *arg_pos;
+  arg_pos = array_push(target_arr);
+  if (arg_pos == NULL) {
+    return DN_ENOMEM;
+  }
+  arg_pos->start = start_pos;
+  arg_pos->end = end_pos;
+
+  return DN_OK;
+}
+
 /*
  * Detects the query and does a rewrite if applicable.
  *
@@ -549,17 +563,17 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           }
           r->token = p;
           /* req_start <- p */
-          r->narg_start = p;
-          r->rnarg = 0;
+          r->ntoken_start = p;
+          r->rntokens = 0;
           state = SW_NARG;
         } else if (isdigit(ch)) {
-          r->rnarg = r->rnarg * 10 + (uint32_t)(ch - '0');
+          r->rntokens = r->rntokens * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
-          if (r->rnarg == 0) {
+          if (r->rntokens == 0) {
             goto error;
           }
-          r->narg = r->rnarg;
-          r->narg_end = p;
+          r->ntokens = r->rntokens;
+          r->ntoken_end = p;
           r->token = NULL;
           state = SW_NARG_LF;
         } else {
@@ -606,10 +620,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         } else if (isdigit(ch)) {
           r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
-          if (r->rlen == 0 || r->rnarg == 0) {
+          if (r->rlen == 0 || r->rntokens == 0) {
             goto error;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
           state = SW_REQ_TYPE_LEN_LF;
         } else {
@@ -1553,11 +1567,11 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         }
         switch (ch) {
           case LF:
-            if (redis_argz(r) && (r->rnarg == 0)) {
+            if (redis_argz(r) && (r->rntokens == 0)) {
               goto done;
-            } else if (redis_arg_upto1(r) && r->rnarg == 0) {
+            } else if (redis_arg_upto1(r) && r->rntokens == 0) {
               goto done;
-            } else if (redis_arg_upto1(r) && r->rnarg == 1) {
+            } else if (redis_arg_upto1(r) && r->rntokens == 1) {
               state = SW_ARG1_LEN;
             } else if (r->type == MSG_REQ_REDIS_SCRIPT_LOAD ||
                   r->type == MSG_REQ_REDIS_SCRIPT_EXISTS) {
@@ -1601,10 +1615,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                       r->id, r->type, r->rlen, mbuf_data_size());
             goto error;
           }
-          if (r->rnarg == 0) {
+          if (r->rntokens == 0) {
             goto error;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
           state = SW_KEY_LEN_LF;
         } else {
@@ -1674,37 +1688,37 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         switch (ch) {
           case LF:
             if (redis_arg0(r)) {
-              if (r->rnarg != 0) {
+              if (r->rntokens != 0) {
                 goto error;
               }
               goto done;
             } else if (redis_arg1(r)) {
-              if (r->rnarg != 1) {
+              if (r->rntokens != 1) {
                 goto error;
               }
               state = SW_ARG1_LEN;
             } else if (redis_arg2(r)) {
-              if (r->rnarg != 2) {
+              if (r->rntokens != 2) {
                 goto error;
               }
               state = SW_ARG1_LEN;
             } else if (redis_arg3(r)) {
-              if (r->rnarg != 3) {
+              if (r->rntokens != 3) {
                 goto error;
               }
               state = SW_ARG1_LEN;
             } else if (redis_argn(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_ARG1_LEN;
             } else if (redis_argx(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_KEY_LEN;
             } else if (redis_argkvx(r)) {
-              if (r->narg % 2 == 0) {
+              if (r->ntokens % 2 == 0) {
                 goto error;
               }
               state = SW_ARG1_LEN;
@@ -1713,7 +1727,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               if (r->nkeys > 0) {
                 // if there are more keys pending, parse them
                 state = SW_KEY_LEN;
-              } else if (r->rnarg > 0) {
+              } else if (r->rntokens > 0) {
                 // we finished parsing keys, now start with args
                 state = SW_ARGN_LEN;
               } else {
@@ -1742,10 +1756,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         } else if (isdigit(ch)) {
           r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
-          if ((p - r->token) <= 1 || r->rnarg == 0) {
+          if ((p - r->token) <= 1 || r->rntokens == 0) {
             goto error;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
           state = SW_ARG1_LEN_LF;
         } else {
@@ -1785,6 +1799,14 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           goto error;
         }
 
+        {
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
         p = m; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -1796,34 +1818,34 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         switch (ch) {
           case LF:
             if (redis_arg_upto1(r) || redis_arg1(r)) {
-              if (r->rnarg != 0) {
+              if (r->rntokens != 0) {
                 goto error;
               }
               goto done;
             } else if (redis_arg2(r)) {
-              if (r->rnarg != 1) {
+              if (r->rntokens != 1) {
                 goto error;
               }
               state = SW_ARG2_LEN;
             } else if (redis_arg3(r)) {
-              if (r->rnarg != 2) {
+              if (r->rntokens != 2) {
                 goto error;
               }
               state = SW_ARG2_LEN;
             } else if (redis_argn(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_ARGN_LEN;
             } else if (redis_argeval(r)) {
-              if (r->rnarg < 2) {
+              if (r->rntokens < 2) {
                 log_error("Dynomite EVAL/EVALSHA requires at least 1 key. "\
-                    "Currently have %d keys", r->rnarg - 1);
+                    "Currently have %d keys", r->rntokens - 1);
                 goto error;
               }
               state = SW_ARG2_LEN;
             } else if (redis_argkvx(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_KEY_LEN;
@@ -1849,10 +1871,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         } else if (isdigit(ch)) {
           r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
-          if ((p - r->token) <= 1 || r->rnarg == 0) {
+          if ((p - r->token) <= 1 || r->rntokens == 0) {
             goto error;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
           state = SW_ARG2_LEN_LF;
         } else {
@@ -1894,6 +1916,16 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           goto error;
         }
 
+        {
+          // TODO: Verify if this is the correct behavior for EVAL/EVALSHA
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
+
         p = m; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -1923,7 +1955,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             log_error("EVAL/EVALSHA requires atleast 1 key");
             goto error;
           }
-          if (r->rnarg < nkey) {
+          if (r->rntokens < nkey) {
             log_error("EVAL/EVALSHA Not all keys provided: expecting %u", nkey);
             goto error;
           }
@@ -1939,22 +1971,22 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         switch (ch) {
           case LF:
             if (redis_arg2(r)) {
-              if (r->rnarg != 0) {
+              if (r->rntokens != 0) {
                 goto error;
               }
               goto done;
             } else if (redis_arg3(r)) {
-              if (r->rnarg != 1) {
+              if (r->rntokens != 1) {
                 goto error;
               }
               state = SW_ARG3_LEN;
             } else if (redis_argn(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_ARGN_LEN;
             } else if (redis_argeval(r)) {
-              if (r->rnarg < 1) {
+              if (r->rntokens < 1) {
                 goto error;
               }
               state = SW_KEY_LEN;
@@ -1980,10 +2012,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         } else if (isdigit(ch)) {
           r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
-          if ((p - r->token) <= 1 || r->rnarg == 0) {
+          if ((p - r->token) <= 1 || r->rntokens == 0) {
             goto error;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
           state = SW_ARG3_LEN_LF;
         } else {
@@ -2017,6 +2049,15 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           goto error;
         }
 
+        {
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
+
         p = m; /* move forward by rlen bytes */
         r->rlen = 0;
         state = SW_ARG3_LF;
@@ -2027,12 +2068,12 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         switch (ch) {
           case LF:
             if (redis_arg3(r)) {
-              if (r->rnarg != 0) {
+              if (r->rntokens != 0) {
                 goto error;
               }
               goto done;
             } else if (redis_argn(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_ARGN_LEN;
@@ -2058,10 +2099,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         } else if (isdigit(ch)) {
           r->rlen = r->rlen * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
-          if ((p - r->token) <= 1 || r->rnarg == 0) {
+          if ((p - r->token) <= 1 || r->rntokens == 0) {
             goto error;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
           state = SW_ARGN_LEN_LF;
         } else {
@@ -2095,6 +2136,15 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           goto error;
         }
 
+        {
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
+
         p = m; /* move forward by rlen bytes */
         r->rlen = 0;
         state = SW_ARGN_LF;
@@ -2105,7 +2155,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         switch (ch) {
           case LF:
             if (redis_argn(r) || redis_argeval(r)) {
-              if (r->rnarg == 0) {
+              if (r->rntokens == 0) {
                 goto done;
               }
               state = SW_ARGN_LEN;
@@ -2442,7 +2492,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
       case SW_SIMPLE:
         if (ch == CR) {
           state = SW_MULTIBULK_ARGN_LF;
-          r->rnarg--;
+          r->rntokens--;
         }
         break;
 
@@ -2557,19 +2607,19 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           }
           r->token = p;
           /* rsp_start <- p */
-          r->narg_start = p;
-          r->rnarg = 0;
+          r->ntoken_start = p;
+          r->rntokens = 0;
         } else if (ch == '-') {
           state = SW_RUNTO_CRLF;
         } else if (isdigit(ch)) {
-          r->rnarg = r->rnarg * 10 + (uint32_t)(ch - '0');
+          r->rntokens = r->rntokens * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
           if ((p - r->token) <= 1) {
             goto error;
           }
 
-          r->narg = r->rnarg;
-          r->narg_end = p;
+          r->ntokens = r->rntokens;
+          r->ntoken_end = p;
           r->token = NULL;
           state = SW_MULTIBULK_NARG_LF;
         } else {
@@ -2581,7 +2631,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
       case SW_MULTIBULK_NARG_LF:
         switch (ch) {
           case LF:
-            if (r->rnarg == 0) {
+            if (r->rntokens == 0) {
               /* response is '*0\r\n' */
               goto done;
             }
@@ -2645,7 +2695,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
         } else if (ch == '-') {
           ;
         } else if (ch == CR) {
-          if ((p - r->token) <= 1 || r->rnarg == 0) {
+          if ((p - r->token) <= 1 || r->rntokens == 0) {
             goto error;
           }
 
@@ -2655,7 +2705,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           } else {
             state = SW_MULTIBULK_ARGN_LEN_LF;
           }
-          r->rnarg--;
+          r->rntokens--;
           r->token = NULL;
         } else {
           goto error;
@@ -2698,7 +2748,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
       case SW_MULTIBULK_ARGN_LF:
         switch (ch) {
           case LF:
-            if (r->rnarg == 0) {
+            if (r->rntokens == 0) {
               goto done;
             }
 
@@ -2896,16 +2946,16 @@ void redis_pre_coalesce(struct msg *rsp) {
       mbuf = STAILQ_FIRST(&rsp->mhdr);
       /*
        * Muti-bulk reply can span over multiple mbufs and in each reply
-       * we should skip over the narg token. Our response parser
-       * guarantees thaat the narg token and the immediately following
+       * we should skip over the ntokens token. Our response parser
+       * guarantees thaat the ntokens token and the immediately following
        * '\r\n' will exist in a contiguous region in the first mbuf
        */
-      ASSERT(rsp->narg_start == mbuf->pos);
-      ASSERT(rsp->narg_start < rsp->narg_end);
+      ASSERT(rsp->ntoken_start == mbuf->pos);
+      ASSERT(rsp->ntoken_start < rsp->ntoken_end);
 
-      rsp->narg_end += CRLF_LEN;
-      rsp->mlen -= (uint32_t)(rsp->narg_end - rsp->narg_start);
-      mbuf->pos = rsp->narg_end;
+      rsp->ntoken_end += CRLF_LEN;
+      rsp->mlen -= (uint32_t)(rsp->ntoken_end - rsp->ntoken_start);
+      mbuf->pos = rsp->ntoken_end;
 
       break;
 
@@ -2972,8 +3022,8 @@ static void redis_post_coalesce_mget(struct msg *request) {
   rstatus_t status;
   uint32_t i;
 
-  // -1 is because mget is also counted in narg. So the response will be 1 less
-  status = msg_prepend_format(response, "*%d\r\n", request->narg - 1);
+  // -1 is because mget is also counted in ntokens. So the response will be 1 less
+  status = msg_prepend_format(response, "*%d\r\n", request->ntokens - 1);
   if (status != DN_OK) {
     /*
      * the fragments is still in c_conn->omsg_q, we have to discard all of them,
@@ -3147,7 +3197,7 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
   uint32_t i;
   rstatus_t status;
 
-  ASSERT(array_n(r->keys) == (r->narg - 1) / key_step);
+  ASSERT(array_n(r->keys) == (r->ntokens - 1) / key_step);
 
   uint32_t total_peers = array_n(&pool->peers);
   sub_msgs = dn_zalloc(total_peers * sizeof(*sub_msgs));
@@ -3166,12 +3216,12 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
   mbuf->pos = mbuf->start;
 
   /*
-   * This code is based on the assumption that '*narg\r\n$4\r\nMGET\r\n' is
+   * This code is based on the assumption that '*ntokens\r\n$4\r\nMGET\r\n' is
    * located in a contiguous location. This is always true because we have
    * capped our MBUF_MIN_SIZE at 512 and whenever we have multiple messages, we
    * copy the tail message into a new mbuf
    */
-  for (i = 0; i < 3; i++) { /* eat *narg\r\n$4\r\nMGET\r\n */
+  for (i = 0; i < 3; i++) { /* eat *ntokens\r\n$4\r\nMGET\r\n */
     for (; *(mbuf->pos) != '\n';) {
       mbuf->pos++;
     }
@@ -3198,7 +3248,7 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
     }
     r->frag_seq[i] = sub_msg = sub_msgs[idx];
 
-    sub_msg->narg++;
+    sub_msg->ntokens++;
     status = redis_append_key(sub_msg, kpos);
     if (status != DN_OK) {
       dn_free(sub_msgs);
@@ -3220,7 +3270,7 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
         return status;
       }
 
-      sub_msg->narg++;
+      sub_msg->ntokens++;
     }
   }
 
@@ -3233,16 +3283,16 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
 
     if (r->type == MSG_REQ_REDIS_MGET) {
       status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmget\r\n",
-                                  sub_msg->narg + 1);
+                                  sub_msg->ntokens + 1);
     } else if (r->type == MSG_REQ_REDIS_DEL) {
       status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
-                                  sub_msg->narg + 1);
+                                  sub_msg->ntokens + 1);
     } else if (r->type == MSG_REQ_REDIS_EXISTS) {
       status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
-                                  sub_msg->narg + 1);
+                                  sub_msg->ntokens + 1);
     } else if (r->type == MSG_REQ_REDIS_MSET) {
       status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n",
-                                  sub_msg->narg + 1);
+                                  sub_msg->ntokens + 1);
     } else {
       NOT_REACHED();
     }
@@ -3392,10 +3442,10 @@ static rstatus_t redis_append_nargs(struct msg *rsp, int nargs) {
   size_t len = 1 + 10 + CRLF_LEN;  // len(*<int>CRLF)
   struct mbuf *mbuf = msg_ensure_mbuf(rsp, len);
   if (!mbuf) return DN_ENOMEM;
-  rsp->narg_start = mbuf->last;
+  rsp->ntoken_start = mbuf->last;
   int n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", nargs);
   mbuf->last += n;
-  rsp->narg_end = (rsp->narg_start + n - CRLF_LEN);
+  rsp->ntoken_end = (rsp->ntoken_start + n - CRLF_LEN);
   rsp->mlen += (uint32_t)n;
   return DN_OK;
 }
