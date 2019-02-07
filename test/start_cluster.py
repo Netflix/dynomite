@@ -6,7 +6,7 @@ from plumbum import local
 from time import sleep
 
 from dyno_cluster import DynoCluster
-from utils import generate_ips, setup_temp_dir
+from utils import generate_ips, setup_temp_dir, sleep_with_animation
 
 SETTLE_TIME = 5
 
@@ -33,7 +33,7 @@ def main():
         dynomite_cluster.launch()
 
         # Wait for a while for the above nodes to start.
-        sleep(SETTLE_TIME)
+        sleep_with_animation(SETTLE_TIME, "Waiting for cluster to start")
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -4,6 +4,8 @@ import os
 import signal
 import string
 import yaml
+import time
+import sys
 
 from ip_util import int2quad
 from ip_util import quad2int
@@ -15,7 +17,22 @@ from itertools import count
 
 BASE_IPADDRESS = quad2int('127.0.1.1')
 RING_SIZE = 2**32
+TEARDOWN_SETTLE_TIME = 1
 
+
+def sleep_with_animation(seconds, optional_msg=""):
+    ticker = "|/-\\"
+    print("\n")
+    for i in range(seconds * 10):
+        time.sleep(0.1)
+        sys.stdout.write(\
+            "\r" + ticker[i % len(ticker)] + \
+            "\t" + ticker[i % len(ticker)] + \
+            "\t" + optional_msg + \
+            "\t" + ticker[i % len(ticker)] + \
+            "\t" + ticker[i % len(ticker)])
+        sys.stdout.flush()
+    print("\n")
 
 def string_generator(size=6, chars=string.ascii_letters + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
@@ -56,6 +73,7 @@ def teardown_running_cluster(cluster_desc_filepath, delete_test_dir=False):
                 # Delete the test directory of this cluster.
                 shutil.rmtree(yaml_desc['test_dir'])
         os.remove(cluster_desc_filepath)
+        sleep_with_animation(TEARDOWN_SETTLE_TIME, "Tearing down cluster")
 
 def setup_temp_dir():
     tempdir = LocalPath(mkdtemp(dir='.', prefix='test_run.'))
