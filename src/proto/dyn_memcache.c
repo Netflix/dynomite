@@ -196,7 +196,7 @@ void memcache_parse_req(struct msg *r, const struct string *hash_tag) {
           m = r->token;
           r->token = NULL;
           r->type = MSG_UNKNOWN;
-          r->narg++;
+          r->ntokens++;
 
           switch (p - m) {
             case 3:
@@ -383,7 +383,7 @@ void memcache_parse_req(struct msg *r, const struct string *hash_tag) {
           kpos->start = r->token;
           kpos->end = p;
 
-          r->narg++;
+          r->ntokens++;
           r->token = NULL;
 
           /* get next state */
@@ -1325,7 +1325,7 @@ static rstatus_t memcache_fragment_retrieval(struct msg *r,
     }
     r->frag_seq[i] = sub_msg = sub_msgs[idx];
 
-    sub_msg->narg++;
+    sub_msg->ntokens++;
     status = memcache_append_key(sub_msg, kpos->start, kpos->end - kpos->start);
     if (status != DN_OK) {
       dn_free(sub_msgs);
