@@ -1,0 +1,3 @@
+#! /usr/bin/dh-exec
+init/systemd_environment__dynomite => etc/environment.d/dynomite.conf
+conf/dynomite.dist.yml => etc/dynomite.yml
