@@ -1,11 +1,11 @@
 Adds a default configuration file basded on README.md.
 --- /dev/null
-+++ b/conf/dynomite.dist.yml
++++ b/dist/conf/dynomite.yml
 @@ -0,0 +1,92 @@
 +---
 +
 +# References:
-+# https://github.com/Netflix/dynomite/wiki/Architecture 
++# https://github.com/Netflix/dynomite/wiki/Architecture
 +# /usr/share/docs/dynomite/notes/recommendation.md#liveness
 +
 +# Specify environment of a node. Currently supports aws and network (for
