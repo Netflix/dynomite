@@ -411,8 +411,6 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
     case MSG_REQ_REDIS_SMEMBERS:
 
       if (orig_msg->owner->read_consistency == DC_SAFE_QUORUM) {
-        // SMEMBERS should have only one key.
-        ASSERT(orig_msg->nkeys == 1);
 
         // Get a new 'msg' structure.
         new_msg = msg_get(orig_msg->owner, true, __FUNCTION__);
