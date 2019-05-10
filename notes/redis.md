@@ -319,16 +319,18 @@
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
     |     EVALSHA       |    Yes*    | EVALSHA sha1 numkeys key [key ...] arg [arg ...]                                                                    |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |    SCRIPT EXISTS  |    No      | SCRIPT EXISTS script [script ...]                                                                                   |
+    |    SCRIPT EXISTS  |    Yes     | SCRIPT EXISTS script [script ...]                                                                                   |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |    SCRIPT FLUSH   |    No      | SCRIPT FLUSH                                                                                                        |
+    |    SCRIPT FLUSH   |    Yes**   | SCRIPT FLUSH                                                                                                        |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |    SCRIPT KILL    |    No      | SCRIPT KILL                                                                                                         |
+    |    SCRIPT KILL    |    Yes**   | SCRIPT KILL                                                                                                         |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
-    |    SCRIPT LOAD    |    No      | SCRIPT LOAD script                                                                                                  |
+    |    SCRIPT LOAD    |    Yes     | SCRIPT LOAD script                                                                                                  |
     +-------------------+------------+---------------------------------------------------------------------------------------------------------------------+
 
  * EVAL and EVALSHA support is limited to scripts that take at least 1 key. If multiple keys are used, all keys must hash to the same server. You can ensure this by using the same [hashtag](recommendation.md#hash-tags) for all keys. If you use more than 1 key, the proxy does no checking to verify that all keys hash to the same server, and the entire command is forwarded to the server that the first key hashes to
+
+ ** SCRIPT KILL and SCRIPT FLUSH will kill and flush on ALL Dynomite nodes.
 
 ### Connection
 

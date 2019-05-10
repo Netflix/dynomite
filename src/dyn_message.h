@@ -149,6 +149,7 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_HSETNX)                                                     \
   ACTION(REQ_REDIS_HSCAN)                                                      \
   ACTION(REQ_REDIS_HVALS)                                                      \
+  ACTION(REQ_REDIS_HSTRLEN)                                                    \
   ACTION(REQ_REDIS_KEYS)                                                       \
   ACTION(REQ_REDIS_INFO)                                                       \
   ACTION(REQ_REDIS_LINDEX) /* redis requests - lists */                        \
@@ -211,25 +212,49 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_GEODIST)                                                    \
   ACTION(REQ_REDIS_GEOHASH)                                                    \
   ACTION(REQ_REDIS_GEOPOS)                                                     \
-  ACTION(REQ_REDIS_GEORADIUSBYMEMBER)							    \			
-                                     /* ACTION( REQ_REDIS_AUTH) */             \
-      /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */                    \
-      ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */        \
-      ACTION(REQ_REDIS_PFCOUNT) ACTION(RSP_REDIS_STATUS) /* redis response */  \
-      ACTION(RSP_REDIS_INTEGER) ACTION(RSP_REDIS_BULK)                         \
-          ACTION(RSP_REDIS_MULTIBULK) ACTION(REQ_REDIS_CONFIG) ACTION(         \
-              RSP_REDIS_ERROR) ACTION(RSP_REDIS_ERROR_ERR)                     \
-              ACTION(RSP_REDIS_ERROR_OOM) ACTION(RSP_REDIS_ERROR_BUSY) ACTION( \
-                  RSP_REDIS_ERROR_NOAUTH) ACTION(RSP_REDIS_ERROR_LOADING)      \
-                  ACTION(RSP_REDIS_ERROR_BUSYKEY)                              \
-                      ACTION(RSP_REDIS_ERROR_MISCONF)                          \
-                          ACTION(RSP_REDIS_ERROR_NOSCRIPT)                     \
-                              ACTION(RSP_REDIS_ERROR_READONLY)                 \
-                                  ACTION(RSP_REDIS_ERROR_WRONGTYPE) ACTION(    \
-                                      RSP_REDIS_ERROR_EXECABORT)               \
-                                      ACTION(RSP_REDIS_ERROR_MASTERDOWN)       \
-                                          ACTION(RSP_REDIS_ERROR_NOREPLICAS)   \
-                                              ACTION(SENTINEL)
+  ACTION(REQ_REDIS_GEORADIUSBYMEMBER)                                          \
+  ACTION(REQ_REDIS_UNLINK)                                                     \
+  ACTION(REQ_REDIS_JSONSET)                                                    \
+  ACTION(REQ_REDIS_JSONGET)                                                    \
+  ACTION(REQ_REDIS_JSONDEL)                                                    \
+  ACTION(REQ_REDIS_JSONTYPE)                                                   \
+  ACTION(REQ_REDIS_JSONMGET)                                                   \
+  ACTION(REQ_REDIS_JSONARRAPPEND)                                              \
+  ACTION(REQ_REDIS_JSONARRINSERT)                                              \
+  ACTION(REQ_REDIS_JSONARRLEN)                                                 \
+  ACTION(REQ_REDIS_JSONOBJKEYS)                                                \
+  ACTION(REQ_REDIS_JSONOBJLEN)                                                 \
+  /* ACTION(REQ_REDIS_AUTH) */                                                 \
+  /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
+  ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
+  ACTION(REQ_REDIS_PFCOUNT)                                                    \
+  ACTION(RSP_REDIS_STATUS) /* redis response */                                \
+  ACTION(RSP_REDIS_INTEGER)                                                    \
+  ACTION(RSP_REDIS_BULK)                                                       \
+  ACTION(RSP_REDIS_MULTIBULK)                                                  \
+  ACTION(REQ_REDIS_CONFIG)                                                     \
+  ACTION(RSP_REDIS_ERROR)                                                      \
+  ACTION(RSP_REDIS_ERROR_ERR)                                                  \
+  ACTION(RSP_REDIS_ERROR_OOM)                                                  \
+  ACTION(RSP_REDIS_ERROR_BUSY)                                                 \
+  ACTION(RSP_REDIS_ERROR_NOAUTH)                                               \
+  ACTION(RSP_REDIS_ERROR_LOADING)                                              \
+  ACTION(RSP_REDIS_ERROR_BUSYKEY)                                              \
+  ACTION(RSP_REDIS_ERROR_MISCONF)                                              \
+  ACTION(RSP_REDIS_ERROR_NOSCRIPT)                                             \
+  ACTION(RSP_REDIS_ERROR_READONLY)                                             \
+  ACTION(RSP_REDIS_ERROR_WRONGTYPE)                                            \
+  ACTION(RSP_REDIS_ERROR_EXECABORT)                                            \
+  ACTION(RSP_REDIS_ERROR_MASTERDOWN)                                           \
+  ACTION(RSP_REDIS_ERROR_NOREPLICAS)                                           \
+  ACTION(SENTINEL)                                                             \
+  ACTION(REQ_REDIS_SCRIPT)                                                     \
+  ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
+  ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
+  ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
+  ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
+  /* ACTION( REQ_REDIS_AUTH) */                                                \
+  /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
 
 #define DEFINE_ACTION(_name) MSG_##_name,
 typedef enum msg_type { MSG_TYPE_CODEC(DEFINE_ACTION) } msg_type_t;
@@ -322,11 +347,14 @@ extern uint8_t g_timeout_factor;
 
 typedef enum msg_routing {
   ROUTING_NORMAL = 0,
-  ROUTING_LOCAL_NODE_ONLY = 1, /* Ignore the key hashing */
-  ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY =
-      2, /* apply key hashing, but local rack only */
-  ROUTING_ALL_NODES_LOCAL_RACK_ONLY =
-      3, /* Ignore key hashing, local rack only */
+  // Ignore the key hashing
+  ROUTING_LOCAL_NODE_ONLY = 1,
+  // Apply key hashing, but only for the local rack.
+  ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY = 2,
+  // Ignore key hashing, but only for the local rack.
+  ROUTING_ALL_NODES_LOCAL_RACK_ONLY = 3,
+  // Ignore key hashing, and send to all nodes in all racks in all DCs.
+  ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS = 4,
 } msg_routing_t;
 
 static inline char *get_msg_routing_string(msg_routing_t route) {
@@ -339,6 +367,8 @@ static inline char *get_msg_routing_string(msg_routing_t route) {
       return "ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY";
     case ROUTING_ALL_NODES_LOCAL_RACK_ONLY:
       return "ROUTING_ALL_NODES_LOCAL_RACK_ONLY";
+    case ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS:
+      return "ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS";
   }
   return "INVALID MSG ROUTING TYPE";
 }
@@ -348,6 +378,11 @@ struct keypos {
   uint8_t *end;       /* key end pos */
   uint8_t *tag_start; /* hashtagged key start pos */
   uint8_t *tag_end;   /* hashtagged key end pos */
+};
+
+struct argpos {
+  uint8_t *start;     // Argument start position
+  uint8_t *end;       // Argument end position
 };
 
 struct msg {
@@ -383,15 +418,16 @@ struct msg {
   msg_type_t type; /* message type */
 
   struct array *keys; /* array of keypos, for req */
+  struct array *args; /* array of keypos, for req */
 
   uint32_t vlen; /* value length (memcache) */
   uint8_t *end;  /* end marker (memcache) */
 
-  uint8_t *narg_start; /* narg start (redis) */
-  uint8_t *narg_end;   /* narg end (redis) */
-  uint32_t narg;       /* # arguments (redis) */
+  uint8_t *ntoken_start; /* ntoken start (redis) */
+  uint8_t *ntoken_end;   /* ntoken end (redis) */
+  uint32_t ntokens;       /* # tokens (redis) */
   uint32_t nkeys;      /* # keys in script (redis EVAL/EVALSHA) */
-  uint32_t rnarg;      /* running # arg used by parsing fsa (redis) */
+  uint32_t rntokens;      /* running # tokens used by parsing fsa (redis) */
   uint32_t rlen;       /* running length in parsing fsa (redis) */
   uint32_t integer;    /* integer reply value (redis) */
 
@@ -510,20 +546,17 @@ void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn,
 
 void req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                        err_t error_code, err_t dyn_error_code);
-rstatus_t remote_req_forward(struct context *ctx, struct conn *c_conn,
-                             struct msg *msg, struct rack *rack, uint8_t *key,
-                             uint32_t keylen, dyn_error_t *dyn_error_code);
 void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
                                  struct msg *req, struct mbuf *orig_mbuf,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc);
-rstatus_t local_req_forward(struct context *ctx, struct conn *c_conn,
+rstatus_t req_forward_local_datastore(struct context *ctx, struct conn *c_conn,
                             struct msg *msg, uint8_t *key, uint32_t keylen,
                             dyn_error_t *dyn_error_code);
 rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
                                  struct conn *p_conn, struct msg *msg,
-                                 struct rack *rack, uint8_t *key,
-                                 uint32_t keylen, dyn_error_t *dyn_error_code);
+                                 uint8_t *key, uint32_t keylen,
+                                 dyn_error_t *dyn_error_code);
 
 // void peer_gossip_forward(struct context *ctx, struct conn *conn, struct
 // string *data);

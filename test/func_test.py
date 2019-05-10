@@ -2,7 +2,7 @@
 import redis
 import argparse
 import random
-import string 
+import string
 import sys
 import time
 from utils import string_generator, number_generator
@@ -62,6 +62,38 @@ def run_multikey_test(c, max_keys=1000, max_payload=10):
             key = create_key(test_name, key_id)
             keys.append(key)
         c.run_verify("mget", keys)
+
+def run_script_tests(c):
+    TEST_NAME="SCRIPTS"
+    print("Running %s tests" % TEST_NAME)
+
+    # This script basically executes 'GET <key>'.
+    SCRIPT_BODY='{}'.format("return redis.call('get', KEYS[1])")
+    EXPECTED_VALUE = "value1"
+
+    # Load a simple script.
+    script_hash = c.run_verify("script_load", SCRIPT_BODY)
+
+    # Make sure that the script exists.
+    assert c.run_verify("script_exists", script_hash)[0] == True
+
+    # Create a key to test with.
+    key = create_key(TEST_NAME, "key1")
+    c.run_verify("set", key, EXPECTED_VALUE)
+
+    # Verify that the result of the script is the same in both Dynomite and Redis using
+    # EVALSHA.
+    evalsha_result = c.run_verify("evalsha", script_hash, 1, key)
+
+    # Decode from UTF-8 before comparing the result.
+    assert str(evalsha_result, 'utf-8') == EXPECTED_VALUE
+
+    # Flush the Redis script cache through Dynomite.
+    c.run_dynomite_only("script_flush")
+
+    # Verify that the script no longer exists.
+    assert c.run_dynomite_only("evalsha", script_hash, 1, key) == None
+
 
 def run_hash_tests(c, max_keys=10, max_fields=1000):
     def create_key_field(keyid=None, fieldid=None):
@@ -125,7 +157,7 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
     #next_index = 0;
     #while True:
         #result = c.run_verify("hscan", key, next_index)
-        #next_index = result[0] 
+        #next_index = result[0]
         #print next_index
         #if next_index == 0:
             #break
@@ -140,6 +172,7 @@ def comparison_test(redis, dynomite, debug):
     run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
     run_multikey_test(c)
     run_hash_tests(c, max_keys=10, max_fields=100)
+    run_script_tests(c)
     print("All test ran fine")
 
 def main(args):

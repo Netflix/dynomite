@@ -74,10 +74,12 @@ char *get_public_hostname(struct server_pool *sp) {
   }
 
   struct node *peer = *(struct node **)array_get(&sp->peers, 0);
-  char c = (char)peer->name.data[0];
-  if ((peer != NULL) && (peer->name.data != NULL) && !isdigit(c)) {
-    public_hostname = (char *)peer->name.data;
-    return public_hostname;
+  if ((peer != NULL) && (peer->name.data != NULL)) {
+    char c = (char)peer->name.data[0];
+    if (!isdigit(c)) {
+        public_hostname = (char *)peer->name.data;
+        return public_hostname;
+    }
   }
   return NULL;
 }

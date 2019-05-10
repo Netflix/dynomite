@@ -86,7 +86,7 @@ static void add_next_word(uint32_t *buf, uint32_t len, uint32_t next_int) {
 
   /* magick! */
   uint32_t radix_val = 0x17179149;
-  uint32_t i;
+  int32_t i;
   for (i = len - 1; i >= 0; i--) {
     product = radix_val * buf[i] + carry;
     buf[i] = (uint32_t)product;

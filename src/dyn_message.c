@@ -356,6 +356,12 @@ done:
     return NULL;
   }
 
+  msg->args = array_create(1, sizeof(struct argpos));
+  if (msg->args == NULL) {
+    dn_free(msg);
+    return NULL;
+  }
+
   msg->vlen = 0;
   msg->end = NULL;
 
@@ -365,10 +371,10 @@ done:
   msg->nfrag_done = 0;
   msg->frag_id = 0;
 
-  msg->narg_start = NULL;
-  msg->narg_end = NULL;
-  msg->narg = 0;
-  msg->rnarg = 0;
+  msg->ntoken_start = NULL;
+  msg->ntoken_end = NULL;
+  msg->ntokens = 0;
+  msg->rntokens = 0;
   msg->nkeys = 0;
   msg->rlen = 0;
   msg->integer = 0;
@@ -467,6 +473,7 @@ rstatus_t msg_clone(struct msg *src, struct mbuf *mbuf_start,
   target->vlen = src->vlen;
   target->is_read = src->is_read;
   target->consistency = src->consistency;
+  target->msg_routing = src->msg_routing;
 
   struct mbuf *mbuf, *nbuf;
   bool started = false;
@@ -908,8 +915,8 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
    * buffer.
    */
   if (mbuf == NULL || ((!encryption_detected) && mbuf_full(mbuf)) ||
-      (!encryption_detected && mbuf->last == mbuf->end_extra) ||
-      (!encryption_detected && mbuf_full(mbuf) &&
+      (encryption_detected && mbuf->last == mbuf->end_extra) ||
+      (encryption_detected && mbuf_full(mbuf) &&
        (mbuf->flags & MBUF_FLAGS_JUST_DECRYPTED))) {
     mbuf = mbuf_get();
     if (mbuf == NULL) {

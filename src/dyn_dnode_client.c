@@ -291,12 +291,13 @@ static void dnode_req_forward(struct context *ctx, struct conn *conn,
     conn_enqueue_outq(ctx, conn, req);
     req->rsp_handler = msg_local_one_rsp_handler;
   }
+
   if (req->dmsg->type == DMSG_REQ) {
     // This is a request received from a peer rack in the same DC, just forward
     // it to the local datastore
     dyn_error_t dyn_error_code = DN_OK;
     rstatus_t s =
-        local_req_forward(ctx, conn, req, key, keylen, &dyn_error_code);
+        req_forward_local_datastore(ctx, conn, req, key, keylen, &dyn_error_code);
     if (s != DN_OK) {
       req_forward_error(ctx, conn, req, s, dyn_error_code);
     }
