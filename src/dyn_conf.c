@@ -974,13 +974,38 @@ static char *conf_set_num(struct conf *cf, struct command *cmd, void *conf) {
   return CONF_OK;
 }
 
+static char *conf_set_short(struct conf *cf, struct command *cmd, void *conf) {
+  uint8_t *p;
+  int num;
+  uint8_t *np;
+  struct string *value;
+
+  p = conf;
+  np = (uint8_t *)(p + cmd->offset);
+
+  if (*np != CONF_UNSET_NUM) {
+    return "is a duplicate";
+  }
+
+  value = array_top(&cf->arg);
+
+  num = dn_atoi(value->data, value->len);
+  if (num < 0) {
+    return "is not a number";
+  }
+
+  *np = num;
+
+  return CONF_OK;
+}
+
 static char *conf_set_bool(struct conf *cf, struct command *cmd, void *conf) {
   uint8_t *p;
-  int *bp;
+  bool *bp;
   struct string *value, true_str, false_str;
 
   p = conf;
-  bp = (int *)(p + cmd->offset);
+  bp = (bool *)(p + cmd->offset);
 
   if (*bp != CONF_UNSET_NUM) {
     return "is a duplicate";
@@ -1158,13 +1183,13 @@ static struct command conf_commands[] = {
     {string("max_msgs"), conf_set_num,
      offsetof(struct conf_pool, alloc_msgs_max)},
 
-    {string("datastore_connections"), conf_set_num,
+    {string("datastore_connections"), conf_set_short,
      offsetof(struct conf_pool, datastore_connections)},
 
-    {string("local_peer_connections"), conf_set_num,
+    {string("local_peer_connections"), conf_set_short,
      offsetof(struct conf_pool, local_peer_connections)},
 
-    {string("remote_peer_connections"), conf_set_num,
+    {string("remote_peer_connections"), conf_set_short,
      offsetof(struct conf_pool, remote_peer_connections)},
 
     null_command};
