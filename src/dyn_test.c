@@ -231,7 +231,7 @@ static rstatus_t init_peer(struct node *s) {
 
 static size_t fill_buffer(struct mbuf *mbuf) {
   loga("total data size: %d", dn_strlen(data));
-  loga("mbuf size: %d", mbuf_size(mbuf));
+  loga("mbuf size: %d", mbuf_remaining_space(mbuf));
   size_t data_size = dn_strlen(data) - position;
 
   loga("data left-over size: %d", data_size);
@@ -239,7 +239,7 @@ static size_t fill_buffer(struct mbuf *mbuf) {
     return 0;
   }
 
-  size_t min_len = data_size > mbuf_size(mbuf) ? mbuf_size(mbuf) : data_size;
+  size_t min_len = data_size > mbuf_remaining_space(mbuf) ? mbuf_remaining_space(mbuf) : data_size;
   mbuf_copy(mbuf, &data[position], min_len);
   position += min_len;
 
@@ -573,12 +573,12 @@ aes_msg_test2(struct node *server)
     struct msg *msg = msg_get(conn, true, __FUNCTION__);
 
     struct mbuf *mbuf1 = mbuf_get();
-    mbuf_write_bytes(mbuf1, data, mbuf_size(mbuf1));
+    mbuf_write_bytes(mbuf1, data, mbuf_remaining_space(mbuf1));
     STAILQ_INSERT_HEAD(&msg->mhdr, mbuf1, next);
 
     struct mbuf *mbuf2 = mbuf_get();
-    mbuf_write_bytes(mbuf2, data + mbuf_size(mbuf2), strlen(data) -
-mbuf_size(mbuf2)); STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
+    mbuf_write_bytes(mbuf2, data + mbuf_remaining_space(mbuf2), strlen(data) -
+mbuf_remaining_space(mbuf2)); STAILQ_INSERT_TAIL(&msg->mhdr, mbuf2, next);
 
     loga("dumping the content of the original msg: ");
     msg_dump(msg);

@@ -22,7 +22,7 @@ class RedisNode(Node):
 
     def launch(self):
         self.proc_future = \
-            (redis_bin['--bind', self.ip, '--port', self.port] > self.logfile) & BG(-9)
+            (redis_bin['--bind', self.ip, '--port', self.port, '--loglevel', 'verbose'] > self.logfile) & BG(-9)
 
     def teardown(self):
         self.proc_future.proc.kill()
