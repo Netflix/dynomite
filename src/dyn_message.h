@@ -227,7 +227,7 @@
 typedef enum msg_type { MSG_TYPE_CODEC(DEFINE_ACTION) } msg_type_t;
 #undef DEFINE_ACTION
 
-typedef void (*func_msg_parse_t)(struct msg *, const struct string *hash_tag);
+typedef void (*func_msg_parse_t)(struct msg *, struct context *ctx);
 typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
                                          struct rack *, struct msg_tqh *);
 typedef rstatus_t (*func_msg_verify_t)(struct msg *, struct server_pool *,
@@ -439,6 +439,7 @@ struct msg {
   int state;      /* current parser state */
   uint8_t *pos;   /* parser position marker */
   uint8_t *token; /* token marker */
+  int latest_parsed_mbuf_idx; /* Most recent idx of mbuf parsed in 'mhdr' linked list */
 
   func_msg_parse_t parser;   /* message parser */
   msg_parse_result_t result; /* message parsing result */
@@ -485,6 +486,10 @@ struct msg {
   unsigned dnode_header_prepended : 1;
   unsigned rsp_sent : 1; /* is a response sent for this request?*/
   uint64_t timestamp;   // Timestamp of request. Used only if 'read_repiars' is enabled.
+
+  // Some 'msg's are not possible to rewrite.
+  // Currently, the main reason is if an arg is across mbuf's.
+  bool rewrite_with_ts_possible;
   bool needs_repair;    // If 'true', a repair msg will be sent to 'owner'.
   struct write_with_ts msg_info;
   struct msg *orig_msg; // The original message if a rewrite took place.
@@ -545,7 +550,7 @@ struct msg *msg_get_rsp_integer(struct conn *conn);
 struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
 rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
-rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
+rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, int num_args, ...);
 
 uint8_t *msg_get_tagged_key(struct msg *req, uint32_t key_index,
                             uint32_t *keylen);

@@ -405,18 +405,18 @@ static rstatus_t finalize_repair_msg(struct context *ctx, struct conn *conn,
 
   // Prepend the total number of tokens as mandated by the Redis wire protocol, followed
   // by the script and finally the argument string to the script.
-  ret_status = msg_prepend_format(new_msg, "*%d\r\n%s%s", msg_info->total_num_tokens,
-      msg_info->rewrite_script, arg_str);
+  ret_status = msg_prepend_format(new_msg, "*%d\r\n%s%s", 3 /* num_args */,
+      msg_info->total_num_tokens, msg_info->rewrite_script, arg_str);
   if (ret_status != DN_OK) goto error;
 
   {
     // Set the 'pos' of the 'new_msg' so that the parser knows where to begin parsing from
-    struct mbuf *new_mbuf = STAILQ_LAST(&new_msg->mhdr, mbuf, next);
+    struct mbuf *new_mbuf = STAILQ_FIRST(&new_msg->mhdr);
     new_msg->pos = new_mbuf->pos;
   }
 
   // Parse the newly formed repair msg.
-  new_msg->parser(new_msg, &ctx->pool.hash_tag);
+  new_msg->parser(new_msg, ctx);
   if (new_msg->result != MSG_PARSE_OK) {
     ret_status = DN_ERROR;
     goto error;
@@ -647,6 +647,9 @@ rstatus_t redis_rewrite_query_with_timestamp_md(struct msg *orig_msg, struct con
 
   // If we don't support read repairs for a command, return.
   if (proto_cmd_info[orig_msg->type].has_repair_support == false) return DN_OK;
+
+  // If the parser couldn't parse the args correctly, return.
+  if (orig_msg->rewrite_with_ts_possible == false) return DN_OK;
 
   rstatus_t status = post_parse_msg(orig_msg);
   if (status != DN_OK) goto error;

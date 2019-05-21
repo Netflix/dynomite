@@ -77,8 +77,8 @@ struct dmsg {
 
 TAILQ_HEAD(dmsg_tqh, dmsg);
 
-void dyn_parse_req(struct msg *r, const struct string *hash_tag);
-void dyn_parse_rsp(struct msg *r, const struct string *UNUSED);
+void dyn_parse_req(struct msg *r, struct context *ctx);
+void dyn_parse_rsp(struct msg *r, struct context *ctx);
 
 void dmsg_free(struct dmsg *dmsg);
 void dmsg_put(struct dmsg *dmsg);
