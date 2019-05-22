@@ -203,7 +203,6 @@ rstatus_t obtain_info_from_latest_rsp(struct response_mgr *rspmgr,
                                 proto_cmd_info[orig_msg_type].repair_by_rem;
 
   struct write_with_ts *orig_msg_info = &rspmgr->msg->orig_msg->msg_info;
-  int i = 0;
 
   // Copy all the relevant information from the 'most_updated_rsp' to craft a
   // 'struct write_with_ts' to be used while creating the repair msg.
@@ -258,60 +257,17 @@ rstatus_t obtain_info_from_latest_rsp(struct response_mgr *rspmgr,
   return DN_ERROR;
 }
 
-/*
- * Appends a string argument based on the Redis wire protocol to the string pointed to by
- * 'out_str_ptr' and moves the pointer forward by the number of bytes appended.
- *
- * Returns the total number of bytes appended.
- */
-static size_t append_redis_prtcl_varchar_arg_to_str(char *arg, int len,
-    char** out_str_ptr) {
-  int n = sprintf(*out_str_ptr, "$%d\r\n%.*s\r\n", len, len, arg);
-  *out_str_ptr += n;
-
-  return n;
-}
-
-static size_t append_redis_prtcl_int_arg_to_str(int arg, int len,
-    char** out_str_ptr) {
-  int n = sprintf(*out_str_ptr, "$%d\r\n%d\r\n", len, arg);
-  *out_str_ptr += n;
-
-  return n;
-}
-
-
-static size_t append_redis_prtcl_llu_arg_to_str(unsigned long long arg, int len,
-    char** out_str_ptr) {
-  int n = sprintf(*out_str_ptr, "$%d\r\n%llu\r\n", len, arg);
-  *out_str_ptr += n;
-
-  return n;
-}
+#define REDIS_PRTCL_BEGIN_TOTAL_TOKENS "*%d\r\n"
+#define REDIS_PRTCL_INT_ARG_FMT "$%d\r\n%d\r\n"
+#define REDIS_PRTCL_VARCHAR_ARG_FMT "$%d\r\n%.*s\r\n"
+#define REDIS_PRTCL_LLU_ARG_FMT "$%d\r\n%llu\r\n"
 
 /*
- * Using the information found in 'write_with_ts', this function populates 'out_fmt_str'
- * with an argument string based on the Redis wire protocol that will be passed to a
- * Lua script.
- *
- * It also updates 'src' with the total number of tokens.
- *
- * The format is:
- * <key1>..(<keyN>) <+set> <-set> <orig_cmd> <num_flds> <ts> (<fld1>) (<val1>) (<fldN>) ..
- *
- * Tokens shown above with parantheses are optional.
- *
- * Returns the total size of the final stirng.
+ * Helper function to update the total number of tokens in 'src' based on
+ * information already present in the struct.
  *
  */
-static size_t create_redis_prtcl_script_args(
-    struct write_with_ts *src, char *out_fmt_str) {
-  ASSERT(out_fmt_str != NULL);
-
-  int n, i;
-  int total_len = 0;
-  char *str_ptr = out_fmt_str;
-
+void update_total_num_tokens(struct write_with_ts *src) {
   int num_keys = src->num_keys;
   int num_fields = src->num_fields;
   int num_values = src->num_values;
@@ -319,41 +275,94 @@ static size_t create_redis_prtcl_script_args(
   // Add 2 by default, one for the 'EVAL' command and one for the script itself.
   src->total_num_tokens = 2;
 
-  // Adding 2 to 'num_keys' for the add and remove sets.
-  total_len += append_redis_prtcl_int_arg_to_str(
-      num_keys + 2, count_digits(num_keys + 2), &str_ptr);
+  // Add one token for the total number of keys.
   ++src->total_num_tokens;
+
+  // Add all the keys touched in the query.
+  src->total_num_tokens += num_keys;
+
+  // Add the add-set and rem-set keys.
+  src->total_num_tokens += 2;
+
+  // Add the command string. (Eg: SET, HSET, etc.)
+  // Add the number of fields.
+  // Add the timestamp.
+  src->total_num_tokens += 3;
+
+  if (num_fields > 0 || num_values > 0) {
+
+    // If we have both fields and values present, each field and value must be present in
+    // pairs (since all Redis commands follow that protocol), else we list all the fields
+    // or all the values.
+    src->total_num_tokens += (num_fields > 0 && num_values > 0) ? num_fields * 2 :
+         ((num_fields > 0) ? num_fields : num_values);
+  }
+
+}
+
+/*
+ * Using the information found in 'write_with_ts', this function populates 'msg'
+ * with the entire script and supporting arguments based on the Redis wire protocol.
+ *
+ * It also updates 'src' with the total number of tokens.
+ *
+ * The format is:
+ * <total_num_tokens> <script> <args>
+ *
+ * where <args> can be elaborated more into:
+ * <key1>..(<keyN>) <+set> <-set> <orig_cmd> <num_flds> <ts> (<fld1>) (<val1>) (<fldN>) ..
+ *
+ * Tokens shown above with parantheses are optional.
+ *
+ */
+static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
+    struct msg **msg_ptr) {
+
+  int i;
+  int num_keys = src->num_keys;
+  int num_fields = src->num_fields;
+  int num_values = src->num_values;
+  struct msg *msg = *msg_ptr;
+
+  // Add the total number of tokens.
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_BEGIN_TOTAL_TOKENS, 1,
+      src->total_num_tokens));
+
+  // Append the rewrite script.
+  THROW_STATUS(msg_append_format(msg, "%s", 1, src->rewrite_script));
+
+  // Add the total number of keys in the command. We add 2 for the add and remove sets.
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
+      count_digits(num_keys + 2), num_keys + 2));
+
 
   // Add all the keys touched in the query.
   for (i = 0; i < src->num_keys; ++i) {
     struct keypos *elem = array_get(src->keys, i);
     uint32_t elem_len = keypos_elem_len(elem);
-    total_len += append_redis_prtcl_varchar_arg_to_str(
-        (char*)elem->tag_start, elem_len, &str_ptr);
-    ++src->total_num_tokens;
+    THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, elem_len,
+        elem_len, elem->tag_start));
   }
   // Add the add-set and rem-set keys.
   int add_set_len = strlen(src->add_set);
   int rem_set_len = strlen(src->rem_set);
-  total_len += append_redis_prtcl_varchar_arg_to_str(src->add_set, add_set_len, &str_ptr);
-  total_len += append_redis_prtcl_varchar_arg_to_str(src->rem_set, rem_set_len, &str_ptr);
-  src->total_num_tokens += 2;
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, add_set_len,
+      add_set_len, src->add_set));
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, rem_set_len,
+      rem_set_len, src->rem_set));
 
   // Add the command string. (Eg: SET, HSET, etc.)
   char *orig_cmd_str = proto_cmd_info[src->cmd_type].cmd_str;
-  total_len += append_redis_prtcl_varchar_arg_to_str(
-      orig_cmd_str, strlen(orig_cmd_str), &str_ptr);
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, strlen(orig_cmd_str),
+      strlen(orig_cmd_str), orig_cmd_str));
 
   // Add the number of fields.
-  total_len += append_redis_prtcl_int_arg_to_str(
-      num_fields, count_digits(num_fields), &str_ptr);
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
+      count_digits(num_fields), num_fields));
 
   // Add the timestamp.
-  int num_ts_digits = count_digits(src->ts);
-  total_len += append_redis_prtcl_llu_arg_to_str(
-      src->ts, count_digits(src->ts), &str_ptr);
-
-  src->total_num_tokens += 3;
+  THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_LLU_ARG_FMT, 2,
+      count_digits(src->ts), src->ts));
 
   if (num_fields > 0 || num_values > 0) {
 
@@ -367,24 +376,20 @@ static size_t create_redis_prtcl_script_args(
       if (num_fields > 0) {
         struct argpos *field_elem = array_get(src->fields, i);
         uint32_t field_len = argpos_elem_len(field_elem);
-        total_len += append_redis_prtcl_varchar_arg_to_str(
-            (char*)field_elem->start, field_len, &str_ptr);
-        ++src->total_num_tokens;
+        THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, field_len,
+            field_len, field_elem->start));
       }
 
       if (num_values > 0) {
         struct argpos *value_elem = array_get(src->values, i);
         uint32_t value_len = argpos_elem_len(value_elem);
-        total_len += append_redis_prtcl_varchar_arg_to_str(
-            (char*)value_elem->start, value_len, &str_ptr);
-        ++src->total_num_tokens;
+        THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, value_len,
+            value_len, value_elem->start));
       }
     }
   }
 
-  // NULL terminate the string.
-  strcpy(str_ptr, "\0");
-  return total_len;
+  return DN_OK;
 }
 
 /*
@@ -393,7 +398,7 @@ static size_t create_redis_prtcl_script_args(
  *
  */
 static rstatus_t finalize_repair_msg(struct context *ctx, struct conn *conn,
-    struct write_with_ts *msg_info, char* arg_str,  struct msg **new_msg_ptr) {
+    struct write_with_ts *msg_info, struct msg **new_msg_ptr) {
 
   rstatus_t ret_status;
   struct msg *new_msg = NULL;
@@ -403,10 +408,7 @@ static rstatus_t finalize_repair_msg(struct context *ctx, struct conn *conn,
     goto error;
   }
 
-  // Prepend the total number of tokens as mandated by the Redis wire protocol, followed
-  // by the script and finally the argument string to the script.
-  ret_status = msg_prepend_format(new_msg, "*%d\r\n%s%s", 3 /* num_args */,
-      msg_info->total_num_tokens, msg_info->rewrite_script, arg_str);
+  ret_status = create_redis_prtcl_script(msg_info, &new_msg);
   if (ret_status != DN_OK) goto error;
 
   {
@@ -417,6 +419,7 @@ static rstatus_t finalize_repair_msg(struct context *ctx, struct conn *conn,
 
   // Parse the newly formed repair msg.
   new_msg->parser(new_msg, ctx);
+
   if (new_msg->result != MSG_PARSE_OK) {
     ret_status = DN_ERROR;
     goto error;
@@ -424,7 +427,6 @@ static rstatus_t finalize_repair_msg(struct context *ctx, struct conn *conn,
 
   *new_msg_ptr = new_msg;
   return ret_status;
-
  error:
   if (new_msg != NULL) msg_put(new_msg);
   return ret_status;
@@ -581,14 +583,10 @@ rstatus_t redis_make_repair_query(struct context *ctx, struct response_mgr *rspm
   }
   if (!proto_cmd_info[msg_type].is_repairable) return DN_OK;
 
-  struct msg *new_msg = NULL;
   rstatus_t ret_status = DN_OK;
 
-  int i;
-  uint64_t biggest_ts = 0;
   struct msg* most_updated_rsp = NULL;
   bool repair_by_add = false;
-  bool at_least_one_repair = false;
   uint32_t num_values = 0;
 
   // Redis commands either lookup keys or fields (secondary keys), so the number of
@@ -607,15 +605,12 @@ rstatus_t redis_make_repair_query(struct context *ctx, struct response_mgr *rspm
   }
 
   struct write_with_ts repair_msg_info;
-  rstatus_t status = obtain_info_from_latest_rsp(rspmgr, most_updated_rsp,
-      repair_by_add, &repair_msg_info);
+  THROW_STATUS(obtain_info_from_latest_rsp(rspmgr, most_updated_rsp,
+      repair_by_add, &repair_msg_info));
 
-  // TODO: Dynamically allocate 'arg_fmt_str'.
-  char arg_fmt_str[MAX_ARG_FMT_STR_LEN];
-  size_t arg_fmt_str_len = create_redis_prtcl_script_args(&repair_msg_info, (char*)&arg_fmt_str);
+  update_total_num_tokens(&repair_msg_info);
 
-  ret_status = finalize_repair_msg(ctx, rspmgr->msg->owner, &repair_msg_info,
-      (char*)&arg_fmt_str, new_msg_ptr);
+  ret_status = finalize_repair_msg(ctx, rspmgr->msg->owner, &repair_msg_info, new_msg_ptr);
   if (ret_status != DN_OK) {
     goto done;
   }
@@ -654,12 +649,9 @@ rstatus_t redis_rewrite_query_with_timestamp_md(struct msg *orig_msg, struct con
   rstatus_t status = post_parse_msg(orig_msg);
   if (status != DN_OK) goto error;
 
-  char arg_fmt_str[MAX_ARG_FMT_STR_LEN];
-  size_t arg_fmt_str_len = create_redis_prtcl_script_args(
-      &orig_msg->msg_info, (char*)&arg_fmt_str);
+  update_total_num_tokens(&orig_msg->msg_info);
 
-  ret_status = finalize_repair_msg(ctx, orig_msg->owner, &orig_msg->msg_info,
-      (char*)&arg_fmt_str, new_msg_ptr);
+  ret_status = finalize_repair_msg(ctx, orig_msg->owner, &orig_msg->msg_info, new_msg_ptr);
   if (ret_status != DN_OK) goto error;
   *did_rewrite = true;
   return ret_status;

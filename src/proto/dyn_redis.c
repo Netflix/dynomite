@@ -431,7 +431,7 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
 
         // Write the new command into 'new_msg'
         rstatus_t prepend_status = msg_prepend_format(
-            new_msg, SMEMBERS_REWRITE_FMT_STRING,  2 /* num_args */, keylen, key);
+            new_msg, SMEMBERS_REWRITE_FMT_STRING, keylen, key);
         if (prepend_status != DN_OK) {
           ret_status = prepend_status;
           goto error;
@@ -537,16 +537,21 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
   const struct string* hash_tag = &ctx->pool.hash_tag;
 
   state = r->state;
-  b = STAILQ_FIRST(&r->mhdr);
-  if (r->state > SW_START) {
-    // If this is not the first time we're parsing the same request (because we hadn't
-    // receive the entire payload yet), skip all the mbufs already parsed.
-    int mbuf_idx = -1;
-    while (r->latest_parsed_mbuf_idx > mbuf_idx) {
-      loga("Skipping previously parsed mbuf");
-      b = STAILQ_NEXT(b, next);
-      ++mbuf_idx;
+
+  if (ctx->read_repairs_enabled) {
+    b = STAILQ_FIRST(&r->mhdr);
+    if (r->state > SW_START) {
+      // If this is not the first time we're parsing the same request (because we hadn't
+      // receive the entire payload yet), skip all the mbufs already parsed.
+      int mbuf_idx = -1;
+      while (r->latest_parsed_mbuf_idx > mbuf_idx) {
+        loga("Skipping previously parsed mbuf");
+        b = STAILQ_NEXT(b, next);
+        ++mbuf_idx;
+      }
     }
+  } else {
+    b = STAILQ_LAST(&r->mhdr, mbuf, next);
   }
 
   ASSERT(r->is_request);
@@ -1801,22 +1806,33 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           goto error;
         }
         m = p + r->rlen;
-        bool arg1_across_mbufs = false;
-        while (m >= b->last) {
-          // 'm' has surpassed the current mbuf. Make the next mbuf current.
-          int new_mbuf_offset = m - b->last;
-          struct mbuf *next_mbuf;
-          next_mbuf = STAILQ_NEXT(b, next);
-          if (next_mbuf == NULL) break;
-          arg1_across_mbufs = true;
 
-          // Since the arg is across mbufs, we don't have logic to rewrite those with
-          // timestamps.
-          r->rewrite_with_ts_possible = false;
+        if (ctx->read_repairs_enabled) {
+          bool arg1_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            arg1_across_mbufs = true;
 
-          m = next_mbuf->pos + new_mbuf_offset;
-          b = next_mbuf;
-          ++r->latest_parsed_mbuf_idx;
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
+
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            ++r->latest_parsed_mbuf_idx;
+          }
+          if (arg1_across_mbufs == false) {
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
         }
         if (m >= b->last) {
           // If we don't have a following mbuf, we expect a following incoming
@@ -1831,14 +1847,6 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           goto error;
         }
 
-        if (arg1_across_mbufs == false) {
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
-        }
         p = m; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -1937,22 +1945,33 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
         }
 
         m = p + r->rlen;
-        bool arg2_across_mbufs = false;
-        while (m >= b->last) {
-          // 'm' has surpassed the current mbuf. Make the next mbuf current.
-          int new_mbuf_offset = m - b->last;
-          struct mbuf *next_mbuf;
-          next_mbuf = STAILQ_NEXT(b, next);
-          if (next_mbuf == NULL) break;
-          arg2_across_mbufs = true;
+        if (ctx->read_repairs_enabled) {
+          bool arg2_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            arg2_across_mbufs = true;
 
-          // Since the arg is across mbufs, we don't have logic to rewrite those with
-          // timestamps.
-          r->rewrite_with_ts_possible = false;
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
 
-          m = next_mbuf->pos + new_mbuf_offset;
-          b = next_mbuf;
-          ++r->latest_parsed_mbuf_idx;
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            ++r->latest_parsed_mbuf_idx;
+          }
+          if (arg2_across_mbufs == false) {
+            // TODO: Verify if this is the correct behavior for EVAL/EVALSHA
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
         }
         if (m >= b->last) {
           // If we don't have a following mbuf, we expect a following incoming
@@ -1965,16 +1984,6 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
         if (*m != CR) {
           goto error;
-        }
-
-        if (arg2_across_mbufs == false) {
-          // TODO: Verify if this is the correct behavior for EVAL/EVALSHA
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
         }
 
         p = m; /* move forward by rlen bytes */
@@ -2089,22 +2098,32 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
       case SW_ARG3:
         m = p + r->rlen;
-        bool arg3_across_mbufs = false;
-        while (m >= b->last) {
-          // 'm' has surpassed the current mbuf. Make the next mbuf current.
-          int new_mbuf_offset = m - b->last;
-          struct mbuf *next_mbuf;
-          next_mbuf = STAILQ_NEXT(b, next);
-          if (next_mbuf == NULL) break;
-          arg3_across_mbufs = true;
+        if (ctx->read_repairs_enabled) {
+          bool arg3_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            arg3_across_mbufs = true;
 
-          // Since the arg is across mbufs, we don't have logic to rewrite those with
-          // timestamps.
-          r->rewrite_with_ts_possible = false;
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
 
-          m = next_mbuf->pos + new_mbuf_offset;
-          b = next_mbuf;
-          ++r->latest_parsed_mbuf_idx;
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            ++r->latest_parsed_mbuf_idx;
+          }
+          if (arg3_across_mbufs == false) {
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
         }
         if (m >= b->last) {
           // If we don't have a following mbuf, we expect a following incoming
@@ -2117,15 +2136,6 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
         if (*m != CR) {
           goto error;
-        }
-
-        if (arg3_across_mbufs == false) {
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
         }
 
         p = m; /* move forward by rlen bytes */
@@ -2195,22 +2205,32 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
       case SW_ARGN:
         m = p + r->rlen;
-        bool argn_across_mbufs = false;
-        while (m >= b->last) {
-          // 'm' has surpassed the current mbuf. Make the next mbuf current.
-          int new_mbuf_offset = m - b->last;
-          struct mbuf *next_mbuf;
-          next_mbuf = STAILQ_NEXT(b, next);
-          if (next_mbuf == NULL) break;
-          argn_across_mbufs = true;
+        if (ctx->read_repairs_enabled) {
+          bool argn_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            argn_across_mbufs = true;
 
-          // Since the arg is across mbufs, we don't have logic to rewrite those with
-          // timestamps.
-          r->rewrite_with_ts_possible = false;
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
 
-          m = next_mbuf->pos + new_mbuf_offset;
-          b = next_mbuf;
-          ++r->latest_parsed_mbuf_idx;
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            ++r->latest_parsed_mbuf_idx;
+          }
+          if (argn_across_mbufs == false) {
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
         }
         if (m >= b->last) {
           // If we don't have a following mbuf, we expect a following incoming
@@ -2223,15 +2243,6 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
         if (*m != CR) {
           goto error;
-        }
-
-        if (argn_across_mbufs == false) {
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
         }
 
         p = m; /* move forward by rlen bytes */
@@ -3140,7 +3151,7 @@ void redis_post_coalesce_num(struct msg *request) {
   struct msg *response = request->selected_rsp;
   rstatus_t status;
 
-  status = msg_prepend_format(response, ":%d\r\n",  1 /* num_args */, request->integer);
+  status = msg_prepend_format(response, ":%d\r\n", request->integer);
   if (status != DN_OK) {
     response->is_error = 1;
     response->error_code = errno;
@@ -3154,7 +3165,7 @@ static void redis_post_coalesce_mget(struct msg *request) {
   uint32_t i;
 
   // -1 is because mget is also counted in ntokens. So the response will be 1 less
-  status = msg_prepend_format(response, "*%d\r\n",  1 /* num_args */, request->ntokens - 1);
+  status = msg_prepend_format(response, "*%d\r\n", request->ntokens - 1);
   if (status != DN_OK) {
     /*
      * the fragments is still in c_conn->omsg_q, we have to discard all of them,
@@ -3413,16 +3424,16 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
     }
 
     if (r->type == MSG_REQ_REDIS_MGET) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmget\r\n", 1 /* num_args */,
+      status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmget\r\n",
                                   sub_msg->ntokens + 1);
     } else if (r->type == MSG_REQ_REDIS_DEL) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n", 1 /* num_args */,
+      status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
                                   sub_msg->ntokens + 1);
     } else if (r->type == MSG_REQ_REDIS_EXISTS) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n", 1 /* num_args */,
+      status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
                                   sub_msg->ntokens + 1);
     } else if (r->type == MSG_REQ_REDIS_MSET) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n", 1 /* num_args */,
+      status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n",
                                   sub_msg->ntokens + 1);
     } else {
       NOT_REACHED();

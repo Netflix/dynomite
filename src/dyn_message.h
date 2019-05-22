@@ -549,8 +549,9 @@ uint32_t msg_payload_crc32(struct msg *msg);
 struct msg *msg_get_rsp_integer(struct conn *conn);
 struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
 rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_append_format(struct msg *msg, const char *fmt, int num_args, ...);
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
-rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, int num_args, ...);
+rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
 
 uint8_t *msg_get_tagged_key(struct msg *req, uint32_t key_index,
                             uint32_t *keylen);
