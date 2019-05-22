@@ -488,7 +488,6 @@ static struct msg* find_most_updated_rsp(struct response_mgr *rspmgr,
   return (at_least_one_repair) ? most_updated_rsp : NULL;
 }
 
-
 /*
  * The response buffers are returned in an internal Dynomite format which the
  * client should not see. This function adjusts the response buffer of the most
@@ -536,30 +535,44 @@ static void adjust_rsp_buffers_for_client(struct response_mgr *rspmgr,
     struct argpos* first_value_pos =
         (struct argpos*)array_get(cur_rsp->args, start_idx_from_rsp);
 
-    // Here we're making space to write the total number of value tokens.
-    // In reverse order, it's 2 for "\r\n", 'first_val_len_digits', 1 for "$",
-    // 2 more for "\r\n", the number of token digits and finally 1 for "*".
-    // If the value is an integer, we don't include the multibulk len and its
-    // corressponding CRLF bytes.
-    int go_back_by = 2 + num_value_digits + 1;
-    if (*first_value_pos->start != ':') {
-      int first_val_len_digits =
-          count_digits(first_value_pos->end - first_value_pos->start);
-      go_back_by += 2 + first_val_len_digits + 1;
-    }
-    rsp_mbuf->pos = first_value_pos->start - go_back_by;
+    if (num_values > 1) {
+      // Here we're making space to write the total number of value tokens.
+      // In reverse order, it's 2 for "\r\n", 'first_val_len_digits', 1 for "$",
+      // 2 more for "\r\n", the number of token digits and finally 1 for "*".
+      // If the value is an integer, we don't include the multibulk len and its
+      // corressponding CRLF bytes.
+      int go_back_by = 2 + num_value_digits + 1;
+      if (*first_value_pos->start != ':') {
+        int first_val_len_digits =
+            count_digits(first_value_pos->end - first_value_pos->start);
+        go_back_by += 2 + first_val_len_digits + 1;
+      }
+      rsp_mbuf->pos = first_value_pos->start - go_back_by;
 
-    // Now we just need to write the "*" and the total number of tokens, the remaining
-    // already exists as expected.
-    *rsp_mbuf->pos = '*';
-    int num_values_copy = num_values;
-    int num_value_digits_copy = num_value_digits;
-    while(num_value_digits_copy > 0) {
-      int digit = num_values_copy % 10;
-      *(rsp_mbuf->pos + num_value_digits_copy) = digit + '0';
+      // Now we just need to write the "*" and the total number of tokens, the remaining
+      // already exists as expected.
+      *rsp_mbuf->pos = '*';
+      int num_values_copy = num_values;
+      int num_value_digits_copy = num_value_digits;
+      while(num_value_digits_copy > 0) {
+        int digit = num_values_copy % 10;
+        *(rsp_mbuf->pos + num_value_digits_copy) = digit + '0';
 
-      --num_value_digits_copy;
-      num_values_copy /= 10;
+        --num_value_digits_copy;
+        num_values_copy /= 10;
+      }
+    } else {
+      rsp_mbuf->pos = first_value_pos->start;
+
+      // If it's an integer, we already have the right value.
+      if (*rsp_mbuf->pos == ':') continue;
+
+      // If the value is a string.
+      rsp_mbuf->pos -= 2; // Go back 2 bytes to point behind the '\r\n' tokens.
+      // Now go further back over the length of the token till we reach '$'
+      while (*rsp_mbuf->pos != '$') {
+        rsp_mbuf->pos -= 1;
+      }
     }
   }
 }
