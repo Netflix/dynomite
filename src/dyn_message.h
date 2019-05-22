@@ -353,6 +353,8 @@ extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
 extern uint8_t g_timeout_factor;
 
+extern bool g_read_repairs_enabled;
+
 typedef enum msg_routing {
   ROUTING_NORMAL = 0,
   // Ignore the key hashing

@@ -167,6 +167,9 @@ static struct string msg_type_strings[] = {MSG_TYPE_CODEC(DEFINE_ACTION)
                                                null_string};
 #undef DEFINE_ACTION
 
+// Determines if read repairs is enabled or not.
+bool g_read_repairs_enabled = false;
+
 static char *print_req(const struct object *obj) {
   ASSERT(obj->type == OBJ_REQ);
   struct msg *req = (struct msg *)obj;

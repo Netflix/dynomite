@@ -338,8 +338,7 @@ struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc) {
   }
 
   // Record timetamps if repairs are enabled.
-  // TODO: Consider requests that span multiple mbufs.
-  if (ctx->read_repairs_enabled) {
+  if (g_read_repairs_enabled) {
     req->timestamp = current_timestamp_in_millis();
   }
   return req;
@@ -987,7 +986,7 @@ rstatus_t rewrite_query_if_necessary(struct msg **req, struct context *ctx) {
  */
 rstatus_t rewrite_query_with_timestamp_md(struct msg **req, struct context *ctx) {
 
-  if (ctx->read_repairs_enabled == false) return DN_OK;
+  if (g_read_repairs_enabled == false) return DN_OK;
 
   bool did_rewrite = false;
   struct msg *new_req = NULL;

@@ -276,7 +276,6 @@ struct context {
   dyn_state_t dyn_state;     /* state of the node.  Don't need volatile as
                                 it is ok to eventually get its new value */
   uint32_t admin_opt;        /* admin mode */
-  bool read_repairs_enabled;      /* Repairs out of sync replicas */
 };
 
 rstatus_t core_start(struct instance *nci);

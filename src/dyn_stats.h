@@ -187,6 +187,7 @@ typedef enum {
   CMD_GET_TIMEOUT_FACTOR,
   CMD_SET_TIMEOUT_FACTOR,
   CMD_GET_STATE,
+  CMD_TOGGLE_READ_REPAIRS,
 } stats_cmd_t;
 
 struct stats_metric {

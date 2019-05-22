@@ -311,7 +311,7 @@ rstatus_t core_start(struct instance *nci) {
   IGNORE_RET_VAL(core_gossip_pool_init(ctx));
 
   // Set the repairs flag.
-  ctx->read_repairs_enabled = ctx->cf->pool.read_repairs_enabled;
+  g_read_repairs_enabled = ctx->cf->pool.read_repairs_enabled;
 
   /**
    * Providing mbuf_size and alloc_msgs through the command line

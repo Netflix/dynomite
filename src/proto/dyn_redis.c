@@ -538,7 +538,11 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
   state = r->state;
 
-  if (ctx->read_repairs_enabled) {
+  // Get the state of read repairs in the beginning, so that we don't risk it
+  // getting changed in the middle of parsing.
+  bool is_read_repairs_enabled = g_read_repairs_enabled;
+
+  if (is_read_repairs_enabled) {
     b = STAILQ_FIRST(&r->mhdr);
     if (r->state > SW_START) {
       // If this is not the first time we're parsing the same request (because we hadn't
@@ -1807,7 +1811,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
         }
         m = p + r->rlen;
 
-        if (ctx->read_repairs_enabled) {
+        if (is_read_repairs_enabled) {
           bool arg1_across_mbufs = false;
           while (m >= b->last) {
             // 'm' has surpassed the current mbuf. Make the next mbuf current.
@@ -1945,7 +1949,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
         }
 
         m = p + r->rlen;
-        if (ctx->read_repairs_enabled) {
+        if (is_read_repairs_enabled) {
           bool arg2_across_mbufs = false;
           while (m >= b->last) {
             // 'm' has surpassed the current mbuf. Make the next mbuf current.
@@ -2098,7 +2102,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
       case SW_ARG3:
         m = p + r->rlen;
-        if (ctx->read_repairs_enabled) {
+        if (is_read_repairs_enabled) {
           bool arg3_across_mbufs = false;
           while (m >= b->last) {
             // 'm' has surpassed the current mbuf. Make the next mbuf current.
@@ -2205,7 +2209,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
       case SW_ARGN:
         m = p + r->rlen;
-        if (ctx->read_repairs_enabled) {
+        if (is_read_repairs_enabled) {
           bool argn_across_mbufs = false;
           while (m >= b->last) {
             // 'm' has surpassed the current mbuf. Make the next mbuf current.

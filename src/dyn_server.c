@@ -695,7 +695,7 @@ struct msg *rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc) {
 
   // Record timetamps if repairs are enabled.
   // TODO: Consider requests that span multiple mbufs.
-  if (ctx->read_repairs_enabled) {
+  if (g_read_repairs_enabled) {
     rsp->timestamp = current_timestamp_in_millis();
   }
   return rsp;
