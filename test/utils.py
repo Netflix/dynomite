@@ -19,7 +19,6 @@ BASE_IPADDRESS = quad2int('127.0.1.1')
 RING_SIZE = 2**32
 TEARDOWN_SETTLE_TIME = 1
 
-
 def sleep_with_animation(seconds, optional_msg=""):
     ticker = "|/-\\"
     print("\n")
@@ -99,8 +98,7 @@ def pick_tokens(count, start_offset):
         token += stride
 
 def tokens_for_rack(count):
-    offset = random.randrange(0, RING_SIZE)
-    return list(pick_tokens(count, offset))
+    return list(pick_tokens(count, 0))
 
 def tokens_for_dc(racks):
     return [
