@@ -143,15 +143,18 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
     key, _ = create_key_field()
     c.run_verify("hlen", key)
 
-    # These have issues because redis instances can return different values.
     # hgetall, hkeys, hvals
-    #key, _ = create_key_field()
-    #c.run_verify("hgetall", key)
-    #key, _ = create_key_field()
-    #c.run_verify("hkeys", key)
-    #key, _ = create_key_field()
-    #c.run_verify("hvals", key)
+    # We may get differently ordered results from both Redis and Dynomite, so instruct
+    # client to sort all results before comparing.
+    c.set_sort_before_compare(True)
+    key, _ = create_key_field()
+    c.run_verify("hgetall", key)
+    key, _ = create_key_field()
+    c.run_verify("hkeys", key)
+    key, _ = create_key_field()
+    c.run_verify("hvals", key)
 
+    # TODO: Still have ordering issues with HSCAN. Find another way to test.
     # finally do a hscan
     #key, _ = create_key_field()
     #next_index = 0;

@@ -21,6 +21,14 @@ class dual_run():
         self.r = r
         self.d = d
         self.debug = debug
+        self.sort_before_cmp = False
+
+    # If 'self.sort_before_cmp' is True, we sort the return values (if they're of the
+    # list type) from Dynomite and Redis before comparing them so that we have ordered
+    # comparison.
+    def set_sort_before_compare(self, should_sort):
+        self.sort_before_cmp = should_sort
+
     def run_verify(self, func, *args):
         r_result = None
         d_result = None
@@ -46,6 +54,11 @@ class dual_run():
             print("Query: %s %s" % (func, str(args)))
             print("Redis result: %s" % str(r_result))
             print("Dyno result: %s" % str(d_result))
+
+        if (self.sort_before_cmp and isinstance(r_result, list)):
+            r_result.sort()
+            d_result.sort()
+
         if r_result != d_result:
             raise ResultMismatchError(r_result, d_result, func, *args)
         return d_result
