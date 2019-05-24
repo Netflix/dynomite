@@ -741,7 +741,8 @@ static bool request_send_to_all_dcs(struct msg *req) {
 static bool request_send_to_all_local_racks(struct msg *req) {
   /* There is a routing override set by the parser on this message. Do not
    * propagate it to other racks irrespective of the consistency setting */
-  if (req->msg_routing != ROUTING_NORMAL) return false;
+  if (req->msg_routing != ROUTING_NORMAL
+      || req->msg_routing == ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS) return false;
 
   // A write should go to all racks
   if (!req->is_read) return true;
@@ -762,6 +763,7 @@ static rstatus_t req_forward_all_dcs_all_racks_all_nodes(struct context *ctx,
   struct server_pool *pool = c_conn->owner;
   uint32_t peer_cnt = array_n(&pool->peers);
 
+  req->rsp_handler = msg_get_rsp_handler(req);
   // Ennumerate every node (or 'peer') in the cluster and send 'req' to each of them.
   uint32_t peer_idx = 0;
   for (peer_idx = 0; peer_idx < peer_cnt; ++peer_idx) {
@@ -1043,9 +1045,11 @@ static msg_response_handler_t msg_get_rsp_handler(struct msg *req) {
   if (request_send_to_all_local_racks(req)) {
     // Request is being braoadcasted
     // Check if its quorum
-    if ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
+    if ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM)) {
       return msg_quorum_rsp_handler;
+    }
   }
+
   return msg_local_one_rsp_handler;
 }
 
@@ -1054,6 +1058,7 @@ rstatus_t msg_local_one_rsp_handler(struct msg *req, struct msg *rsp) {
              "Received more than one response for dc_one.\
                %s prev %s new rsp %s",
              print_obj(req), print_obj(req->selected_rsp), print_obj(rsp));
+
   req->awaiting_rsps = 0;
   rsp->peer = req;
   req->is_error = rsp->is_error;

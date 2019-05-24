@@ -247,12 +247,12 @@ typedef enum msg_parse_result {
   ACTION(RSP_REDIS_ERROR_EXECABORT)                                            \
   ACTION(RSP_REDIS_ERROR_MASTERDOWN)                                           \
   ACTION(RSP_REDIS_ERROR_NOREPLICAS)                                           \
-  ACTION(SENTINEL)                                                             \
   ACTION(REQ_REDIS_SCRIPT)                                                     \
   ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
   ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
   ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
   ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
+  ACTION(SENTINEL)                                                             \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
   /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
 

@@ -872,7 +872,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str4icmp(m, 'l', 'o', 'a', 'd')) {
               // A command called 'LOAD' does not exist. This is the second half of the
               // command 'SCRIPT LOAD'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_LOAD;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
@@ -881,7 +880,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str4icmp(m, 'k', 'i', 'l', 'l')) {
               // A command called 'KILL' does not exist. This is the second half of the
               // command 'SCRIPT KILL'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_KILL;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
@@ -1006,7 +1004,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str5icmp(m, 'f', 'l', 'u', 's', 'h')) {
               // A command called 'FLUSH' does not exist. This is the second half of the
               // command 'SCRIPT FLUSH'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_FLUSH;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
