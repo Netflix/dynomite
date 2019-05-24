@@ -896,7 +896,6 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
             if (str4icmp(m, 'l', 'o', 'a', 'd')) {
               // A command called 'LOAD' does not exist. This is the second half of the
               // command 'SCRIPT LOAD'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_LOAD;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
@@ -905,7 +904,6 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
             if (str4icmp(m, 'k', 'i', 'l', 'l')) {
               // A command called 'KILL' does not exist. This is the second half of the
               // command 'SCRIPT KILL'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_KILL;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
