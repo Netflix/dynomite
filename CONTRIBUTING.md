@@ -22,7 +22,7 @@ Contributions will be accepted to the [dev](https://github.com/Netflix/dynomite/
 
     c. Push to your branch (git push origin my_branch)
 
-    d. Initiate a pull request on github ( http://help.github.com/send-pull-requests/ )
+    d. Initiate a pull request on github ( http://help.github.com/en/articles/creating-a-pull-request/ )
 
     e. Done :)
 
