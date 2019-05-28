@@ -686,7 +686,10 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
         r->rlen = 0;
         m = r->token;
         r->token = NULL;
-        r->type = MSG_UNKNOWN;
+
+        // 'SCRIPT' commands are parsed in 2 steps due to the whitespace in between cmds,
+        // so don't set the type to MSG_UNKNOWN.
+        if (r->type != MSG_REQ_REDIS_SCRIPT) r->type = MSG_UNKNOWN;
 
         switch (p - m) {
           case 3:

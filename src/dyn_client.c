@@ -742,8 +742,7 @@ static bool request_send_to_all_dcs(struct msg *req) {
 static bool request_send_to_all_local_racks(struct msg *req) {
   /* There is a routing override set by the parser on this message. Do not
    * propagate it to other racks irrespective of the consistency setting */
-  if (req->msg_routing != ROUTING_NORMAL
-      || req->msg_routing == ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS) return false;
+  if (req->msg_routing != ROUTING_NORMAL) return false;
 
   // A write should go to all racks
   if (!req->is_read) return true;
@@ -765,6 +764,7 @@ static rstatus_t req_forward_all_dcs_all_racks_all_nodes(struct context *ctx,
   uint32_t peer_cnt = array_n(&pool->peers);
 
   req->rsp_handler = msg_get_rsp_handler(ctx, req);
+
   // Ennumerate every node (or 'peer') in the cluster and send 'req' to each of them.
   uint32_t peer_idx = 0;
   for (peer_idx = 0; peer_idx < peer_cnt; ++peer_idx) {
@@ -925,6 +925,10 @@ static void req_forward(struct context *ctx, struct conn *c_conn,
   }
 
   if (req->msg_routing == ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS) {
+    // Under this routing mechanism, it doesn't make sense to check for quorum, so we set the
+    // consistency to DC_ONE regardless of the configuration.
+    req->consistency = DC_ONE;
+
     // Send 'req' to every node in the cluster.
     s = req_forward_all_dcs_all_racks_all_nodes(ctx, c_conn, req, orig_mbuf, key, keylen,
         &dyn_error_code);
