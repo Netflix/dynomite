@@ -610,7 +610,8 @@ static rstatus_t admin_req_forward_local_datastore(struct context *ctx,
 
 rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
     struct msg *req, struct node *peer, uint8_t* key, uint32_t keylen,
-    struct mbuf *orig_mbuf, bool force_copy, dyn_error_t *dyn_error_code) {
+    struct mbuf *orig_mbuf, bool force_copy, bool force_swallow,
+    dyn_error_t *dyn_error_code) {
 
   rstatus_t status;
 
@@ -651,7 +652,7 @@ rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
     rack_msg = req;
   }
 
-  if (!(same_dc && same_rack)) {
+  if (!(same_dc && same_rack) || force_swallow) {
     // Swallow responses from remote racks or DCs.
     rack_msg->swallow = true;
   }
@@ -715,7 +716,8 @@ void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
 
     // Forward the message to the peer.
     rstatus_t status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
-        orig_mbuf, false /* force_copy? */, &dyn_error_code);
+        orig_mbuf, false /* force_copy? */, false /* force swallow? */,
+        &dyn_error_code);
 
     // We ignore the return value since the callee will take care of forwarding errors.
     IGNORE_RET_VAL(status);
@@ -769,8 +771,11 @@ static rstatus_t req_forward_all_dcs_all_racks_all_nodes(struct context *ctx,
   uint32_t peer_idx = 0;
   for (peer_idx = 0; peer_idx < peer_cnt; ++peer_idx) {
     struct node *peer = *(struct node **)array_get(&pool->peers, peer_idx);
+
+    // Force a swallow for all the peers since we don't care about matching the return
+    // values for each one.
     status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
-        orig_mbuf, true /* force_copy */, dyn_error_code);
+        orig_mbuf, true /* force_copy */, true /* force swallow */, dyn_error_code);
     // We ignore the return value since the callee will take care of forwarding errors.
     IGNORE_RET_VAL(status);
   }
@@ -799,7 +804,8 @@ static void req_forward_remote_dc(struct context *ctx, struct conn *c_conn,
   dyn_error_t dyn_error_code = DYNOMITE_OK;
   // Forward the message to the peer.
   rstatus_t status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
-      orig_mbuf, true /* force_copy */, &dyn_error_code);
+      orig_mbuf, true /* force_copy */, false /* force swallow? */,
+      &dyn_error_code);
 
   // If we succeeded in sending it to the preselected rack in the preferred remote DC,
   // then we return, else we go ahead to try other racks in the remote DC.
@@ -818,7 +824,8 @@ static void req_forward_remote_dc(struct context *ctx, struct conn *c_conn,
              rack->name->data);
 
     status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
-        orig_mbuf, true /* force_copy */, &dyn_error_code);
+        orig_mbuf, true /* force_copy */, false /* force swallow */,
+        &dyn_error_code);
     if (status == DN_OK) {
       stats_pool_incr(ctx, remote_peer_failover_requests);
       return;
@@ -847,7 +854,8 @@ static void req_forward_local_dc(struct context *ctx, struct conn *c_conn,
     dyn_error_t dyn_error_code = 0;
     // Forward the message to the peer.
     rstatus_t status = req_forward_to_peer(ctx, c_conn, req, peer, key, keylen,
-        orig_mbuf, false /* force_copy? */, &dyn_error_code);
+        orig_mbuf, false /* force_copy? */, false /* force swallow? */,
+        &dyn_error_code);
     IGNORE_RET_VAL(status);
   }
 }

@@ -112,7 +112,8 @@ bool perform_repairs_if_necessary(struct context *ctx, struct response_mgr *rspm
 
       // Send the repair 'msg' to the peer node.
       status = req_forward_to_peer(ctx, c_conn, repair_msg, target_peer,
-          key_pos->start, keylen, orig_mbuf, true, &dyn_error_code);
+          key_pos->start, keylen, orig_mbuf, true /*force copy? */,
+          false /* force swallow? */, &dyn_error_code);
 
       IGNORE_RET_VAL(status);
     }
