@@ -257,6 +257,7 @@ def comparison_test(redis, dynomite, debug):
 
     # XLarge payloads
     run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
+
     run_multikey_test(c)
     run_hash_tests(c, max_keys=10, max_fields=100)
     run_script_tests(c)

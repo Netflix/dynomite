@@ -15,7 +15,7 @@ class RedisNode(Node):
         self.proc_future = None
 
     def get_connection(self):
-        return redis.StrictRedis(self.ip, self.port, db=0)
+        return redis.Redis(self.ip, self.port, db=0)
 
     def get_pid(self):
         return self.proc_future.proc.pid
