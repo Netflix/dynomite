@@ -1,4 +1,5 @@
 #include "dyn_client.h"
+#include "dyn_conf.h"
 #include "dyn_core.h"
 #include "dyn_dnode_peer.h"
 #include "dyn_message.h"
@@ -102,13 +103,34 @@ bool perform_repairs_if_necessary(struct context *ctx, struct response_mgr *rspm
       struct node *target_peer = (struct node*)rspmgr->responses[i]->owner->owner;
       ASSERT(target_peer != NULL);
 
+      {
+        // (struct msg)->owner->owner can be of type (struct node*) or (struct server_pool*)
+        // Responses received usually are of type (struct node) as seen in the previous
+        // line, and request messages usually have a (struct server_pool)
+        // (TODO: Confirm if always true)
+        struct server_pool *cur_node_sp = (struct server_pool*)rspmgr->msg->owner->owner;
+        int dynomite_port = cur_node_sp->proxy_endpoint.port;
+        int dynomite_peer_port = cur_node_sp->dnode_proxy_endpoint.port;
+
+        // TODO: This is a hack. A 'struct node' that points to the local datastore as
+        // opposed to a dynomite peer, does not have the 'is_local' field filled in. We fill
+        // it in here if we find that the port does not match the dynomite port.
+        // We also would receive a response from a single datastore directly, i.e. the local
+        // datastore, so it's okay to assume that is_local will be true if the ports don't
+        // match.
+        if (target_peer->endpoint.port != dynomite_port &&
+            target_peer->endpoint.port != dynomite_peer_port) {
+          target_peer->is_local = true;
+        }
+      }
+
       rstatus_t status;
       dyn_error_t dyn_error_code;
 
       // need to capture the initial mbuf location as once we add in the dynomite
       // headers (as mbufs to the src req), that will bork the request sent to
       // secondary racks
-       struct mbuf *orig_mbuf = STAILQ_FIRST(&repair_msg->mhdr);
+      struct mbuf *orig_mbuf = STAILQ_FIRST(&repair_msg->mhdr);
 
       // Send the repair 'msg' to the peer node.
       status = req_forward_to_peer(ctx, c_conn, repair_msg, target_peer,

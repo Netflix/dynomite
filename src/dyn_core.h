@@ -92,7 +92,7 @@ static inline char *get_state(dyn_state_t s) {
 
 // Read repairs are only enabled if either of the quorum options
 // are enabled.
-bool is_read_repairs_enabled();
+bool is_read_repairs_enabled(void);
 
 typedef enum data_store {
   DATA_REDIS = 0,   /* Data store is Redis */

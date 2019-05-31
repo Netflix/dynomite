@@ -27,6 +27,7 @@
 #include "../dyn_dnode_peer.h"
 #include "../dyn_util.h"
 #include "dyn_proto.h"
+#include "dyn_proto_repair.h"
 
 #define RSP_STRING(ACTION) ACTION(ok, "+OK\r\n")
 
@@ -3493,6 +3494,11 @@ rstatus_t redis_verify_request(struct msg *r, struct server_pool *pool,
   uint32_t prev_idx = 0, i;
   for (i = 0; i < array_n(r->keys); i++) { /* for each key */
     struct keypos *kpos = array_get(r->keys, i);
+
+    // If the keys are any of the dynomite reserved keys, skip verification for them
+    // as we don't distribute them based on tokens.
+    if (strncmp((char*)kpos->start, ADD_SET_STR, strlen(ADD_SET_STR)) == 0) continue;
+    if (strncmp((char*)kpos->start, REM_SET_STR, strlen(REM_SET_STR)) == 0) continue;
     uint32_t idx = dnode_peer_idx_for_key_on_rack(
         pool, rack, kpos->tag_start, kpos->tag_end - kpos->tag_start);
     if (i == 0) prev_idx = idx;

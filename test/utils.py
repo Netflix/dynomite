@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import random
+import requests
 import os
 import signal
 import string
@@ -115,10 +116,12 @@ def tokens_for_cluster(dcs, seed):
         for dc in dcs
     ]
 
-
 def dc_count(dc):
     return sum(count for rack, count in dc)
 
 def generate_ips():
     for ip in count(start=BASE_IPADDRESS, step=1):
         yield int2quad(ip)
+
+def make_get_rest_call(url):
+    return requests.get(url)
