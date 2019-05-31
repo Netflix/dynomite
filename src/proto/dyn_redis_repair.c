@@ -587,7 +587,7 @@ static void adjust_rsp_buffers_for_client(struct response_mgr *rspmgr,
 rstatus_t redis_make_repair_query(struct context *ctx, struct response_mgr *rspmgr,
     struct msg **new_msg_ptr) {
 
-  if (g_read_repairs_enabled == 0) return DN_OK;
+  if (is_read_repairs_enabled() == 0) return DN_OK;
 
   *new_msg_ptr = NULL;
   msg_type_t msg_type = rspmgr->msg->orig_type;
