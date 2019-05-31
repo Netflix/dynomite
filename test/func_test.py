@@ -223,12 +223,19 @@ def run_read_repair_test(c, num_keys=10):
     # Make sure that we have the dynomite reserved metadata key
     assert redis_conn.exists(ADD_SET_MD_KEY) == True
 
-    # Get the TS of our 'key'
-    add_ts = redis_conn.zscore(ADD_SET_MD_KEY, key)
+    # Get the TS of our 'key' and update it by 1.
+    add_ts = redis_conn.zscore(ADD_SET_MD_KEY, key) + 1.0
     # Update the TS of that key to make it appear that this node has
     # the latest value.
-    redis_conn.zadd(ADD_SET_MD_KEY, add_ts + 1.0, key)
-    assert redis_conn.zscore(ADD_SET_MD_KEY, key) == add_ts + 1.0
+    # Note: Redis-py unfortunately has backward compatibility issues, so we change the API
+    # based on the version.
+    # https://github.com/andymccurdy/redis-py/issues/1068#issuecomment-439175760
+    if redis.VERSION[0] < 3:
+        redis_conn.zadd(ADD_SET_MD_KEY, add_ts, key)
+    else:
+        redis_conn.zadd(ADD_SET_MD_KEY, {key: add_ts})
+    score = redis_conn.zscore(ADD_SET_MD_KEY, key)
+    assert score == add_ts , score
 
     # Update with a value that we want to repair with
     assert redis_conn.set(key, REPAIRED_VALUE) == True
