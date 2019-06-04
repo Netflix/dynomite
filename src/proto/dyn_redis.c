@@ -89,8 +89,6 @@ static bool redis_arg0(struct msg *r) {
 
     case MSG_REQ_REDIS_KEYS:
     case MSG_REQ_REDIS_PFCOUNT:
-      
-      
       return true;
 
     default:
@@ -136,7 +134,6 @@ static bool redis_arg1(struct msg *r) {
     case MSG_REQ_REDIS_CONFIG:
     case MSG_REQ_REDIS_SCRIPT_LOAD:
     case MSG_REQ_REDIS_SCRIPT_EXISTS:
-
 
       return true;
 
@@ -1662,7 +1659,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         if (*m != CR) {
           goto error;
         } else {
-            
           struct keypos *kpos;
 
           p = m; /* move forward by rlen bytes */
