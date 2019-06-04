@@ -89,6 +89,8 @@ static bool redis_arg0(struct msg *r) {
 
     case MSG_REQ_REDIS_KEYS:
     case MSG_REQ_REDIS_PFCOUNT:
+      
+      
       return true;
 
     default:
@@ -135,6 +137,7 @@ static bool redis_arg1(struct msg *r) {
     case MSG_REQ_REDIS_SCRIPT_LOAD:
     case MSG_REQ_REDIS_SCRIPT_EXISTS:
 
+
       return true;
 
     default:
@@ -147,6 +150,7 @@ static bool redis_arg1(struct msg *r) {
 static bool redis_arg_upto1(struct msg *r) {
   switch (r->type) {
     case MSG_REQ_REDIS_INFO:
+    case MSG_REQ_REDIS_SELECT:
       return true;
     default:
       break;
@@ -1172,6 +1176,12 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 0;
               break;
             }
+            if (str6icmp(m, 's', 'e', 'l', 'e', 'c', 't')) {
+                r->type = MSG_REQ_REDIS_SELECT;
+                r->msg_routing = ROUTING_LOCAL_NODE_ONLY; /* 0 expected */
+                r->is_read = 0;
+                break;
+            }
             break;
 
           case 7:
@@ -1652,6 +1662,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         if (*m != CR) {
           goto error;
         } else {
+            
           struct keypos *kpos;
 
           p = m; /* move forward by rlen bytes */
@@ -1784,6 +1795,11 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           log_error("Redis CONFIG command not supported '%.*s'", p - m, m);
           goto error;
         }
+        if (r->type == MSG_REQ_REDIS_SELECT && dn_atoi(p, r->rlen)) {
+          log_error("Redis SELECT command not supported for db '%.*s'", r->rlen, p);
+          goto error;
+        }
+        
         m = p + r->rlen;
 
         if (m >= b->last) {
