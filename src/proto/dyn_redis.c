@@ -564,7 +564,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
   struct mbuf *b;
   uint8_t *p, *m = 0;
   uint8_t ch;
-  uint8_t mandatory_args = 0;
   enum {
     SW_START,
     SW_NARG,
@@ -1164,7 +1163,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               ASSERT(r->type == MSG_REQ_REDIS_XREADGROUP);
               r->type = MSG_REQ_REDIS_XREADGROUP_GROUP;
               r->is_read = 0;
-              mandatory_args = 2;
               break;
             }
 
@@ -2112,7 +2110,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                 log_error("Dynomite XREADGROUP requires exactly two arguments following the keyword GROUP");
                 goto error;
               }
-              mandatory_args--;
               state = SW_ARG2_LEN;
             } else if (redis_argkvx(r)) {
               if (r->rntokens == 0) {
