@@ -39,6 +39,8 @@
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS 500
 
+#define MAX_BULK_REPLY_DEPTH 6
+
 typedef void (*func_msg_parse_t)(struct msg *, const struct string *hash_tag);
 typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
                                          struct rack *, struct msg_tqh *);
@@ -152,6 +154,7 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_HSTRLEN)                                                    \
   ACTION(REQ_REDIS_KEYS)                                                       \
   ACTION(REQ_REDIS_INFO)                                                       \
+  ACTION(REQ_REDIS_DBSIZE)                                                     \
   ACTION(REQ_REDIS_LINDEX) /* redis requests - lists */                        \
   ACTION(REQ_REDIS_LINSERT)                                                    \
   ACTION(REQ_REDIS_LLEN)                                                       \
@@ -224,6 +227,30 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_JSONARRLEN)                                                 \
   ACTION(REQ_REDIS_JSONOBJKEYS)                                                \
   ACTION(REQ_REDIS_JSONOBJLEN)                                                 \
+  ACTION(REQ_REDIS_XACK) /* redis requests - streams */                        \
+  ACTION(REQ_REDIS_XADD)                                                       \
+  ACTION(REQ_REDIS_XCLAIM)                                                     \
+  ACTION(REQ_REDIS_XDEL)                                                       \
+  ACTION(REQ_REDIS_XGROUP)                                                     \
+  ACTION(REQ_REDIS_XGROUP_CREATE)                                              \
+  ACTION(REQ_REDIS_XGROUP_DELCONSUMER)                                         \
+  ACTION(REQ_REDIS_XGROUP_DESTROY)                                             \
+  ACTION(REQ_REDIS_XGROUP_HELP)                                                \
+  ACTION(REQ_REDIS_XGROUP_SETID)                                               \
+  ACTION(REQ_REDIS_XINFO)                                                      \
+  ACTION(REQ_REDIS_XINFO_CONSUMERS)                                            \
+  ACTION(REQ_REDIS_XINFO_GROUPS)                                               \
+  ACTION(REQ_REDIS_XINFO_HELP)                                                 \
+  ACTION(REQ_REDIS_XINFO_STREAM)                                               \
+  ACTION(REQ_REDIS_XLEN)                                                       \
+  ACTION(REQ_REDIS_XPENDING)                                                   \
+  ACTION(REQ_REDIS_XRANGE)                                                     \
+  ACTION(REQ_REDIS_XREAD)                                                      \
+  ACTION(REQ_REDIS_XREAD_STREAMS)                                              \
+  ACTION(REQ_REDIS_XREADGROUP)                                                 \
+  ACTION(REQ_REDIS_XREADGROUP_GROUP)                                           \
+  ACTION(REQ_REDIS_XREVRANGE)                                                  \
+  ACTION(REQ_REDIS_XTRIM)                                                      \
   /* ACTION(REQ_REDIS_AUTH) */                                                 \
   /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
   ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
@@ -253,6 +280,7 @@ typedef enum msg_parse_result {
   ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
   ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
   ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
+  ACTION(REQ_REDIS_SCRIPT_HELP)                                                \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
   /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
 
@@ -423,13 +451,15 @@ struct msg {
   uint32_t vlen; /* value length (memcache) */
   uint8_t *end;  /* end marker (memcache) */
 
-  uint8_t *ntoken_start; /* ntoken start (redis) */
-  uint8_t *ntoken_end;   /* ntoken end (redis) */
-  uint32_t ntokens;       /* # tokens (redis) */
-  uint32_t nkeys;      /* # keys in script (redis EVAL/EVALSHA) */
-  uint32_t rntokens;      /* running # tokens used by parsing fsa (redis) */
-  uint32_t rlen;       /* running length in parsing fsa (redis) */
-  uint32_t integer;    /* integer reply value (redis) */
+  uint8_t *ntoken_start;                /* ntoken start (redis) */
+  uint8_t *ntoken_end;                  /* ntoken end (redis) */
+  uint32_t ntokens;                     /* # tokens (redis) */
+  uint32_t nkeys;                       /* # keys in script (redis EVAL/EVALSHA) or parameters for XREAD */
+  uint32_t rntokens;                    /* running # tokens used by parsing fsa (redis) */
+  uint32_t rlen;                        /* running length in parsing fsa (redis) */
+  uint32_t stack[MAX_BULK_REPLY_DEPTH]; /* stack to save rntokens of nesting multibulks */
+  uint8_t  nested_depth;                /* the depth of the current nested multibulk */
+  uint32_t integer;                     /* integer reply value (redis) */
 
   struct msg *frag_owner; /* owner of fragment message */
   uint32_t nfrag;         /* # fragment */
@@ -438,6 +468,7 @@ struct msg {
   struct msg *
       *frag_seq; /* sequence of fragment message, map from keys to fragments*/
 
+  msg_type_t require_subcommand;       /* command with sub-cmd like SCRIPT LOAD */
   err_t error_code;                    /* errno on error? */
   unsigned is_error : 1;               /* error? */
   unsigned is_ferror : 1;              /* one or more fragments are in error? */

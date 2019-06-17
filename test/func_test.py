@@ -162,6 +162,32 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
         #if next_index == 0:
             #break
 
+def run_streams_tests(c, max_stream_entries=1000):
+    #Set some
+    test_name="STREAMS"
+    print("Running %s tests" % test_name)
+
+    STREAM_ENTRY_COUNT = 32
+    STREAM_NAME = "TEST_STREAM"
+    key = STREAM_NAME
+
+    # Populate stream:
+    #   XADD key * data1 x data 2
+    for x in range(0, max_stream_entries):
+        c.run_verify("xadd", key, {"data1": x, "data2": x + 10})
+
+    xlen = c.run_verify("xlen", key)
+    assert xlen == max_stream_entries
+
+    c.run_dynomite_only("xinfo_stream", key)
+
+    # XRANGE
+    res = c.run_dynomite_only("xrange", key, count=STREAM_ENTRY_COUNT)
+    assert len(res) == STREAM_ENTRY_COUNT
+
+    res = c.run_dynomite_only("xread", {key: 0}, count=10)
+
+
 def comparison_test(redis, dynomite, debug):
     r_c = redis.get_connection()
     d_c = dynomite.get_connection()
@@ -173,6 +199,7 @@ def comparison_test(redis, dynomite, debug):
     run_multikey_test(c)
     run_hash_tests(c, max_keys=10, max_fields=100)
     run_script_tests(c)
+    run_streams_tests(c)
     print("All test ran fine")
 
 def main(args):
