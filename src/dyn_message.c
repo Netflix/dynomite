@@ -376,6 +376,8 @@ done:
   msg->ntokens = 0;
   msg->rntokens = 0;
   msg->nkeys = 0;
+  memset(msg->stack, 0, sizeof(msg->stack));
+  msg->nested_depth = 0;
   msg->rlen = 0;
   msg->integer = 0;
 
@@ -390,6 +392,7 @@ done:
   msg->swallow = 0;
   msg->dnode_header_prepended = 0;
   msg->rsp_sent = 0;
+  msg->require_subcommand = 0;
 
   // dynomite
   msg->is_read = 1;
