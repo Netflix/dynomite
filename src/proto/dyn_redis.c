@@ -44,8 +44,12 @@ static bool redis_argz(struct msg *r) {
   switch (r->type) {
     case MSG_REQ_REDIS_PING:
     case MSG_REQ_REDIS_QUIT:
+    case MSG_REQ_REDIS_DBSIZE:
     case MSG_REQ_REDIS_SCRIPT_FLUSH:
     case MSG_REQ_REDIS_SCRIPT_KILL:
+    case MSG_REQ_REDIS_SCRIPT_HELP:
+    case MSG_REQ_REDIS_XINFO_HELP:
+    case MSG_REQ_REDIS_XGROUP_HELP:
       return true;
 
     default:
@@ -86,6 +90,10 @@ static bool redis_arg0(struct msg *r) {
     case MSG_REQ_REDIS_SRANDMEMBER:
 
     case MSG_REQ_REDIS_ZCARD:
+
+    case MSG_REQ_REDIS_XLEN:
+    case MSG_REQ_REDIS_XINFO_STREAM:
+    case MSG_REQ_REDIS_XINFO_GROUPS:
 
     case MSG_REQ_REDIS_KEYS:
     case MSG_REQ_REDIS_PFCOUNT:
@@ -135,6 +143,9 @@ static bool redis_arg1(struct msg *r) {
     case MSG_REQ_REDIS_SCRIPT_LOAD:
     case MSG_REQ_REDIS_SCRIPT_EXISTS:
 
+    case MSG_REQ_REDIS_XINFO_CONSUMERS:
+    case MSG_REQ_REDIS_XGROUP_DESTROY:
+
       return true;
 
     default:
@@ -153,6 +164,7 @@ static bool redis_arg_upto1(struct msg *r) {
   }
   return false;
 }
+
 /*
  * Return true, if the redis command accepts exactly 2 arguments, otherwise
  * return false
@@ -185,6 +197,9 @@ static bool redis_arg2(struct msg *r) {
     case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
 
     case MSG_REQ_REDIS_RESTORE:
+
+    case MSG_REQ_REDIS_XGROUP_DELCONSUMER:
+    case MSG_REQ_REDIS_XGROUP_SETID:
 
       return true;
 
@@ -261,6 +276,16 @@ static bool redis_argn(struct msg *r) {
     case MSG_REQ_REDIS_GEOPOS:
     case MSG_REQ_REDIS_GEORADIUSBYMEMBER:
 
+    case MSG_REQ_REDIS_XACK:
+    case MSG_REQ_REDIS_XADD:
+    case MSG_REQ_REDIS_XCLAIM:
+    case MSG_REQ_REDIS_XDEL:
+    case MSG_REQ_REDIS_XPENDING:
+    case MSG_REQ_REDIS_XRANGE:
+    case MSG_REQ_REDIS_XREVRANGE:
+    case MSG_REQ_REDIS_XTRIM:
+    case MSG_REQ_REDIS_XGROUP_CREATE:
+
     case MSG_REQ_REDIS_JSONSET:
     case MSG_REQ_REDIS_JSONGET:
     case MSG_REQ_REDIS_JSONDEL:
@@ -271,6 +296,7 @@ static bool redis_argn(struct msg *r) {
     case MSG_REQ_REDIS_JSONARRLEN:
     case MSG_REQ_REDIS_JSONOBJKEYS:
     case MSG_REQ_REDIS_JSONOBJLEN:
+
       return true;
 
     default:
@@ -324,6 +350,45 @@ static bool redis_argeval(struct msg *r) {
   switch (r->type) {
     case MSG_REQ_REDIS_EVAL:
     case MSG_REQ_REDIS_EVALSHA:
+      return true;
+
+    default:
+      break;
+  }
+
+  return false;
+}
+
+static bool redis_argxread(struct msg *r) {
+  switch (r->type) {
+    case MSG_REQ_REDIS_XREAD:
+      return true;
+
+    default:
+      break;
+  }
+
+  return false;
+}
+
+static bool redis_argxreadgroup(struct msg *r) {
+  switch (r->type) {
+    case MSG_REQ_REDIS_XREADGROUP_GROUP:
+      return true;
+
+    default:
+      break;
+  }
+
+  return false;
+}
+
+static bool redis_has_subcommand(struct msg *r) {
+  switch (r->type) {
+    case MSG_REQ_REDIS_XINFO:
+    case MSG_REQ_REDIS_XGROUP:
+    case MSG_REQ_REDIS_XREADGROUP:
+    case MSG_REQ_REDIS_SCRIPT:
       return true;
 
     default:
@@ -534,7 +599,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
 
   state = r->state;
   b = STAILQ_LAST(&r->mhdr, mbuf, next);
-
+  
   ASSERT(r->is_request);
   ASSERT(state >= SW_START && state < SW_SENTINEL);
   ASSERT(b != NULL);
@@ -872,6 +937,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str4icmp(m, 'l', 'o', 'a', 'd')) {
               // A command called 'LOAD' does not exist. This is the second half of the
               // command 'SCRIPT LOAD'.
+
               ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_LOAD;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
@@ -888,6 +954,56 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               break;
             }
 
+            if (str4icmp(m, 'x', 'a', 'd', 'd')) {
+              r->type = MSG_REQ_REDIS_XADD;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str4icmp(m, 'x', 'a', 'c', 'k')) {
+              r->type = MSG_REQ_REDIS_XACK;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str4icmp(m, 'x', 'd', 'e', 'l')) {
+              r->type = MSG_REQ_REDIS_XDEL;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str4icmp(m, 'x', 'l', 'e', 'n')) {
+              r->type = MSG_REQ_REDIS_XLEN;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str4icmp(m, 'h', 'e', 'l', 'p') && r->require_subcommand == MSG_REQ_REDIS_SCRIPT) {
+              // This is the second half of the command 'XINFO HELP'.
+              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
+              r->type = MSG_REQ_REDIS_SCRIPT_HELP;
+              r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str4icmp(m, 'h', 'e', 'l', 'p') && r->require_subcommand == MSG_REQ_REDIS_XINFO) {
+              // This is the second half of the command 'XINFO HELP'.
+              ASSERT(r->type == MSG_REQ_REDIS_XINFO);
+              r->type = MSG_REQ_REDIS_XINFO_HELP;
+              r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str4icmp(m, 'h', 'e', 'l', 'p') && r->require_subcommand == MSG_REQ_REDIS_XGROUP) {
+              // This is the second half of the command 'XGROUP HELP'.
+              ASSERT(r->type == MSG_REQ_REDIS_XGROUP);
+              r->type = MSG_REQ_REDIS_XGROUP_HELP;
+              r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
+              r->is_read = 1;
+              break;
+            }
 
             break;
 
@@ -998,17 +1114,54 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+
             if (str5icmp(m, 'p', 'f', 'a', 'd', 'd')) {
               r->type = MSG_REQ_REDIS_PFADD;
               r->is_read = 0;
               break;
             }
+
             if (str5icmp(m, 'f', 'l', 'u', 's', 'h')) {
               // A command called 'FLUSH' does not exist. This is the second half of the
               // command 'SCRIPT FLUSH'.
               ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_FLUSH;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str5icmp(m, 'x', 'i', 'n', 'f', 'o')) {
+              r->type = MSG_REQ_REDIS_XINFO;
+              r->is_read = 1;
+              r->require_subcommand = r->type;
+              break;
+            }
+
+            if (str5icmp(m, 'x', 'r', 'e', 'a', 'd')) {
+              r->type = MSG_REQ_REDIS_XREAD;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str5icmp(m, 'x', 't', 'r', 'i', 'm')) {
+              r->type = MSG_REQ_REDIS_XTRIM;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str5icmp(m, 's', 'e', 't', 'i', 'd') && r->require_subcommand == MSG_REQ_REDIS_XGROUP) {
+              // This is the second half of the command 'XGROUP SETID'.
+              ASSERT(r->type == MSG_REQ_REDIS_XGROUP);
+              r->type = MSG_REQ_REDIS_XGROUP_SETID;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str5icmp(m, 'g', 'r', 'o', 'u', 'p') && r->require_subcommand == MSG_REQ_REDIS_XREADGROUP) {
+              // This is the second half of the command 'XREADGROUP GROUP'.
+              ASSERT(r->type == MSG_REQ_REDIS_XREADGROUP);
+              r->type = MSG_REQ_REDIS_XREADGROUP_GROUP;
               r->is_read = 0;
               break;
             }
@@ -1034,6 +1187,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+
             if (str6icmp(m, 'e', 'x', 'i', 's', 't', 's')
                 && r->type == MSG_REQ_REDIS_SCRIPT) {
               // This is not to be confused with 'EXISTS'. This is the second half of the
@@ -1042,7 +1196,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
-
 
             if (str6icmp(m, 'e', 'x', 'p', 'i', 'r', 'e')) {
               r->type = MSG_REQ_REDIS_EXPIRE;
@@ -1152,26 +1305,82 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+
             if (str6icmp(m, 'g', 'e', 'o', 'a', 'd', 'd')) {
               r->type = MSG_REQ_REDIS_GEOADD;
               r->is_read = 0;
               break;
             }
+
             if (str6icmp(m, 'g', 'e', 'o', 'p', 'o', 's')) {
               r->type = MSG_REQ_REDIS_GEOPOS;
               r->is_read = 1;
               break;
             }
+
             if (str6icmp(m, 'u', 'n', 'l', 'i', 'n', 'k')) {
               r->type = MSG_REQ_REDIS_UNLINK;
               r->is_read = 0;
               break;
             }
+
             if (str6icmp(m, 's', 'c', 'r', 'i', 'p', 't')) {
               r->type = MSG_REQ_REDIS_SCRIPT;
+              r->require_subcommand = r->type;
               r->is_read = 0;
               break;
             }
+
+            if (str6icmp(m, 'x', 'c', 'l', 'a', 'i', 'm')) {
+              r->type = MSG_REQ_REDIS_XCLAIM;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str6icmp(m, 'x', 'g', 'r', 'o', 'u', 'p')) {
+              r->type = MSG_REQ_REDIS_XGROUP;
+              r->is_read = 0;
+              r->require_subcommand = r->type;
+              break;
+            }
+
+            if (str6icmp(m, 'x', 'r', 'a', 'n', 'g', 'e')) {
+              r->type = MSG_REQ_REDIS_XRANGE;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str6icmp(m, 's', 't', 'r', 'e', 'a', 'm') && r->require_subcommand == MSG_REQ_REDIS_XINFO) {
+              // This is the second half of the command 'XINFO STREAM'.
+              ASSERT(r->type == MSG_REQ_REDIS_XINFO);
+              r->type = MSG_REQ_REDIS_XINFO_STREAM;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str6icmp(m, 'g', 'r', 'o', 'u', 'p', 's') && r->require_subcommand == MSG_REQ_REDIS_XINFO) {
+              // This is the second half of the command 'XINFO GROUPS'.
+              ASSERT(r->type == MSG_REQ_REDIS_XINFO);
+              r->type = MSG_REQ_REDIS_XINFO_GROUPS;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str6icmp(m, 'c', 'r', 'e', 'a', 't', 'e') && r->require_subcommand == MSG_REQ_REDIS_XGROUP) {
+              // This is the second half of the command 'XGROUP CREATE'.
+              ASSERT(r->type == MSG_REQ_REDIS_XGROUP);
+              r->type = MSG_REQ_REDIS_XGROUP_CREATE;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str6icmp(m, 'd', 'b', 's', 'i', 'z', 'e')) {
+              r->type = MSG_REQ_REDIS_DBSIZE;
+              r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
+              r->is_read = 1;
+              break;
+            }
+
             break;
 
           case 7:
@@ -1236,24 +1445,36 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 0;
               break;
             }
+
             if (str7icmp(m, 'p', 'f', 'c', 'o', 'u', 'n', 't')) {
               r->type = MSG_REQ_REDIS_PFCOUNT;
               r->is_read = 0;
               break;
             }
+
             if (str7icmp(m, 'g', 'e', 'o', 'h', 'a', 's', 'h')) {
               r->type = MSG_REQ_REDIS_GEOHASH;
               r->is_read = 1;
               break;
             }
+
             if (str7icmp(m, 'g', 'e', 'o', 'd', 'i', 's', 't')) {
               r->type = MSG_REQ_REDIS_GEODIST;
               r->is_read = 1;
               break;
             }
+
             if (str7icmp(m, 'h', 's', 't', 'r', 'l', 'e', 'n')) {
               r->type = MSG_REQ_REDIS_HSTRLEN;
               r->is_read = 1;
+              break;
+            }
+
+            if (str7icmp(m, 'd', 'e', 's', 't', 'r', 'o', 'y') && r->require_subcommand == MSG_REQ_REDIS_XGROUP) {
+              // This is the second half of the command 'XGROUP DESTROY'.
+              ASSERT(r->type == MSG_REQ_REDIS_XGROUP);
+              r->type = MSG_REQ_REDIS_XGROUP_DESTROY;
+              r->is_read = 0;
               break;
             }
 
@@ -1313,6 +1534,12 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               break;
             }
 
+            if (str8icmp(m, 'x', 'p', 'e', 'n', 'd', 'i', 'n', 'g')) {
+              r->type = MSG_REQ_REDIS_XPENDING;
+              r->is_read = 1;
+              break;
+            }
+
             break;
 
           case 9:
@@ -1351,6 +1578,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               r->is_read = 1;
               break;
             }
+
             if (str9icmp(m, 'j', 's', 'o', 'n', '.', 't', 'y', 'p', 'e')) {
               r->type = MSG_REQ_REDIS_JSONTYPE;
               r->is_read = 1;
@@ -1363,6 +1591,20 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               break;
             }
 
+            if (str9icmp(m, 'x', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
+              r->type = MSG_REQ_REDIS_XREVRANGE;
+              r->is_read = 1;
+              break;
+            }
+
+            if (str9icmp(m, 'c', 'o', 'n', 's', 'u', 'm', 'e', 'r', 's')  && r->require_subcommand == MSG_REQ_REDIS_XINFO) {
+              // This is the second half of the command 'XINFO CONSUMERS'.
+              ASSERT(r->type == MSG_REQ_REDIS_XINFO);
+              r->type = MSG_REQ_REDIS_XINFO_CONSUMERS;
+              r->is_read = 1;
+              break;
+            }
+
             break;
 
           case 10:
@@ -1370,6 +1612,14 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                           'e')) {
               r->type = MSG_REQ_REDIS_SDIFFSTORE;
               r->is_read = 0;
+              break;
+            }
+
+            if (str10icmp(m, 'x', 'r', 'e', 'a', 'd', 'g', 'r', 'o', 'u',
+                          'p')) {
+              r->type = MSG_REQ_REDIS_XREADGROUP;
+              r->is_read = 1;
+              r->require_subcommand = r-> type;
               break;
             }
 
@@ -1435,6 +1685,14 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str11icmp(m, 'j', 's', 'o', 'n', '.', 'o', 'b', 'j', 'l', 'e',
                           'n')) {
               r->type = MSG_REQ_REDIS_JSONOBJLEN;
+              r->is_read = 1;
+              break;
+            }
+
+             if (str11icmp(m, 'd', 'e', 'l', 'c', 'o', 'n', 's', 'u', 'm', 'e', 'r')  && r->require_subcommand == MSG_REQ_REDIS_XGROUP) {
+              // This is the second half of the command 'XGROUP DELCONSUMER'.
+              ASSERT(r->type == MSG_REQ_REDIS_XGROUP);
+              r->type = MSG_REQ_REDIS_XGROUP_DELCONSUMER;
               r->is_read = 1;
               break;
             }
@@ -1551,18 +1809,20 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         break;
 
       case SW_REQ_TYPE_LF:
-        if (r->type == MSG_REQ_REDIS_SCRIPT) {
+        if (redis_has_subcommand(r)) {
           // Parsing "SCRIPT <LOAD/KILL/FLUSH/EXISTS>" is a special case since there is a
           // space between the keyword SCRIPT and the following keyword. To deal with
           // this, we reset the state machine to a previous state to allow parsing of the
           // second keyword as well.
           // Set 'state' back to 'SW_REQ_TYPE_LEN' to parse the second half of the command
           // the space in 'SCRIPT <LOAD/KILL/FLUSH/EXISTS>'.
+          // Same logic applies to commands like XINFO, XGROUP etc.
           state = SW_REQ_TYPE_LEN;
           log_debug(LOG_VERB, "parsed partial command '%.*s'. Continuing to parse" \
               "remainaing part of command", p - m, m);
           break;
         }
+
         switch (ch) {
           case LF:
             if (redis_argz(r) && (r->rntokens == 0)) {
@@ -1576,6 +1836,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               // TODO: Find a way to do this without special casing for SCRIPT.
               state = SW_ARG1_LEN;
             } else if (redis_argeval(r)) {
+              state = SW_ARG1_LEN;
+            } else if (redis_argxread(r)) {
+              state = SW_ARGN_LEN;
+            } else if (redis_argxreadgroup(r)) {
               state = SW_ARG1_LEN;
             } else {
               state = SW_KEY_LEN;
@@ -1720,7 +1984,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                 goto error;
               }
               state = SW_ARG1_LEN;
-            } else if (redis_argeval(r)) {
+            } else if (redis_argeval(r) || redis_argxread(r) || redis_argxreadgroup(r)) {
               r->nkeys--;
               if (r->nkeys > 0) {
                 // if there are more keys pending, parse them
@@ -1779,7 +2043,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         break;
 
       case SW_ARG1:
-
         if (r->type == MSG_REQ_REDIS_CONFIG && !str3icmp(m, 'g', 'e', 't')) {
           log_error("Redis CONFIG command not supported '%.*s'", p - m, m);
           goto error;
@@ -1839,6 +2102,12 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               if (r->rntokens < 2) {
                 log_error("Dynomite EVAL/EVALSHA requires at least 1 key. "\
                     "Currently have %d keys", r->rntokens - 1);
+                goto error;
+              }
+              state = SW_ARG2_LEN;
+            } else if (redis_argxreadgroup(r)) {
+              if (r->rntokens < 1) {
+                log_error("Dynomite XREADGROUP requires exactly two arguments following the keyword GROUP");
                 goto error;
               }
               state = SW_ARG2_LEN;
@@ -1988,6 +2257,11 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
                 goto error;
               }
               state = SW_KEY_LEN;
+            } else if (redis_argxreadgroup(r)) {
+              if (r->rntokens < 1) {
+                goto error;
+              }
+              state = SW_ARGN_LEN;
             } else {
               goto error;
             }
@@ -2122,6 +2396,16 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         break;
 
       case SW_ARGN:
+        if ((r->type == MSG_REQ_REDIS_XREAD || r->type == MSG_REQ_REDIS_XREADGROUP_GROUP) && str7icmp(p,'s','t','r','e','a','m','s')) {
+          if ((r->rntokens % 2) != 0) {
+            log_error("Dynomite XREAD/XREADGROUP requires an even number of keys with args. " \
+                "For each key an arg must be specified " \
+                "Currently have %d key(s) with matching arg", r->rntokens - 1);
+            goto error;
+          }
+          r->nkeys = r->rntokens / 2;
+        }
+
         m = p + r->rlen;
         if (m >= b->last) {
           r->rlen -= (uint32_t)(b->last - p);
@@ -2152,11 +2436,20 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
       case SW_ARGN_LF:
         switch (ch) {
           case LF:
-            if (redis_argn(r) || redis_argeval(r)) {
+            if (redis_argn(r) || 
+                redis_argeval(r) || 
+                redis_argxread(r) || 
+                redis_argxreadgroup(r)) {
+
               if (r->rntokens == 0) {
                 goto done;
               }
-              state = SW_ARGN_LEN;
+              
+              if ((redis_argxread(r) || redis_argxreadgroup(r)) && (r->nkeys > 0)) {
+                state = SW_KEY_LEN;
+              } else {
+                state = SW_ARGN_LEN;
+              }
             } else {
               goto error;
             }
@@ -2267,6 +2560,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
   struct mbuf *b;
   uint8_t *p, *m;
   uint8_t ch;
+  int depth;
 
   enum {
     SW_START,
@@ -2305,7 +2599,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
   for (p = r->pos; p < b->last; p++) {
     ch = *p;
 
-    switch (state) {
+     switch (state) {
       case SW_START:
         r->type = MSG_UNKNOWN;
         switch (ch) {
@@ -2489,8 +2783,9 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
 
       case SW_SIMPLE:
         if (ch == CR) {
-          state = SW_MULTIBULK_ARGN_LF;
           r->rntokens--;
+          r->stack[r->nested_depth-1]--;
+          state = SW_MULTIBULK_ARGN_LF;
         }
         break;
 
@@ -2607,8 +2902,18 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           /* rsp_start <- p */
           r->ntoken_start = p;
           r->rntokens = 0;
+          r->nested_depth++;
+
+          if (r->nested_depth > MAX_BULK_REPLY_DEPTH) {
+            log_debug(LOG_ERR, "only support %d levels of multibulk", MAX_BULK_REPLY_DEPTH);
+            goto error;
+          }
         } else if (ch == '-') {
-          state = SW_RUNTO_CRLF;
+          p = p-1;
+          r->token = NULL;
+          r->rntokens = 1;
+          r->stack[r->nested_depth-1] = r->rntokens;
+          state = SW_MULTIBULK_ARGN_LEN;
         } else if (isdigit(ch)) {
           r->rntokens = r->rntokens * 10 + (uint32_t)(ch - '0');
         } else if (ch == CR) {
@@ -2619,6 +2924,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           r->ntokens = r->rntokens;
           r->ntoken_end = p;
           r->token = NULL;
+          r->stack[r->nested_depth-1] = r->ntokens; 
           state = SW_MULTIBULK_NARG_LF;
         } else {
           goto error;
@@ -2631,7 +2937,18 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           case LF:
             if (r->rntokens == 0) {
               /* response is '*0\r\n' */
-              goto done;
+
+              if (r->nested_depth == 1) {
+                goto done;
+              } else {
+                log_debug(LOG_VVVERB,
+                          "multibulk support@end of a nested empty bulk (level/entries) %d/%d",
+                          r->nested_depth, r->stack[r->nested_depth-1]);
+
+                p = p - 1;
+                state = SW_MULTIBULK_ARGN_LF;
+                break;
+              }
             }
             state = SW_MULTIBULK_ARGN_LEN;
             break;
@@ -2705,6 +3022,7 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           }
           r->rntokens--;
           r->token = NULL;
+          r->stack[r->nested_depth-1]--;
         } else {
           goto error;
         }
@@ -2746,7 +3064,23 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
       case SW_MULTIBULK_ARGN_LF:
         switch (ch) {
           case LF:
-            if (r->rntokens == 0) {
+            log_debug(LOG_VVVERB,
+                      "multibulk support@the end of the bulk (level/entries): %d/%d",
+                      r->nested_depth, r->stack[r->nested_depth-1]);
+
+            depth = r->nested_depth;
+            while (depth > 1 && r->stack[depth-1] == 0) {
+              depth--;
+              r->stack[depth-1]--;
+              r->nested_depth = depth;
+              r->rntokens = r->stack[depth-1];
+
+              log_debug(LOG_VVVERB,
+                        "multibulk support@the end of a nested multibulk (level/entries): %d/%d",
+                        r->nested_depth, r->stack[r->nested_depth-1]);
+            }
+
+            if (r->stack[0] == 0) {
               goto done;
             }
 
