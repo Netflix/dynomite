@@ -83,6 +83,10 @@ Dynomite can be configured through a YAML file specified by the -c or --conf-fil
 + **stats_interval**: set stats aggregation interval in msec (default: 30000 msec).
 + **mbuf_size**: size of mbuf chunk in bytes (default: 16384 bytes).
 + **max_msgs**: max number of messages to allocate (default: 200000).
++ **datastore_connections**: Maximum number of connections to the local datastore.
++ **local_peer_connections**: Maximum number of connections to a local DC peer.
++ **remote_peer_connections**: Maximum number of connections to a remote DC peer.
++ **dyn_port**: Port used by Dynomite servers to talk to each other.
 
 For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 
