@@ -129,7 +129,7 @@ static bool memcache_touch(struct msg *r) {
   return false;
 }
 
-void memcache_parse_req(struct msg *r, const struct string *hash_tag) {
+void memcache_parse_req(struct msg *r, struct context *ctx) {
   struct mbuf *b;
   uint8_t *p, *m;
   uint8_t ch;
@@ -159,6 +159,7 @@ void memcache_parse_req(struct msg *r, const struct string *hash_tag) {
     SW_SENTINEL
   } state;
 
+  const struct string* hash_tag = &ctx->pool.hash_tag;
   state = r->state;
   b = STAILQ_LAST(&r->mhdr, mbuf, next);
 
@@ -780,7 +781,7 @@ error:
               r->id, r->result, r->type, r->state);
 }
 
-void memcache_parse_rsp(struct msg *r, const struct string *UNUSED) {
+void memcache_parse_rsp(struct msg *r, struct context *ctx) {
   struct mbuf *b;
   uint8_t *p, *m;
   uint8_t ch;
@@ -1614,5 +1615,15 @@ struct msg *memcache_reconcile_responses(struct response_mgr *rspmgr) {
  */
 rstatus_t memcache_rewrite_query(struct msg *orig_msg, struct context *ctx,
                                  bool *did_rewrite, struct msg **new_msg_ptr) {
+  return DN_OK;
+}
+
+rstatus_t memcache_rewrite_query_with_timestamp_md(struct msg *orig_msg,
+    struct context *ctx, bool *did_rewrite, struct msg **new_msg_ptr) {
+  return DN_OK;
+}
+
+rstatus_t memcache_make_repair_query(struct context *ctx, struct response_mgr *rspmgr,
+    struct msg **new_msg_ptr) {
   return DN_OK;
 }

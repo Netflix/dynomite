@@ -151,18 +151,24 @@ static struct rbnode tmo_rbs;    /* timeout rbtree sentinel */
 static size_t alloc_msgs_max; /* maximum number of allowed allocated messages */
 uint8_t g_timeout_factor = 1;
 
-func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
-func_msg_coalesce_t g_post_coalesce; /* message post-coalesce */
-func_msg_fragment_t g_fragment;      /* message post-coalesce */
-func_msg_verify_t g_verify_request;  /* message post-coalesce */
+func_msg_coalesce_t g_pre_coalesce;     /* message pre-coalesce */
+func_msg_coalesce_t g_post_coalesce;    /* message post-coalesce */
+func_msg_fragment_t g_fragment;         /* message post-coalesce */
+func_msg_verify_t g_verify_request;     /* message post-coalesce */
 func_is_multikey_request g_is_multikey_request;
 func_reconcile_responses g_reconcile_responses;
-func_msg_rewrite_t g_rewrite_query; /* rewrite query in a msg if necessary */
+func_msg_rewrite_t g_rewrite_query;     /* rewrite query in a msg if necessary */
+/* rewrite query as script that updates both data and metadata */
+func_msg_rewrite_t g_rewrite_query_with_timestamp_md;
+func_msg_repair_t g_make_repair_query;  /* Send a repair msg. */
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {MSG_TYPE_CODEC(DEFINE_ACTION)
                                                null_string};
 #undef DEFINE_ACTION
+
+// Determines if read repairs is enabled or not.
+bool g_read_repairs_enabled = false;
 
 static char *print_req(const struct object *obj) {
   ASSERT(obj->type == OBJ_REQ);
@@ -193,6 +199,8 @@ void set_datastore_ops(void) {
       g_is_multikey_request = redis_is_multikey_request;
       g_reconcile_responses = redis_reconcile_responses;
       g_rewrite_query = redis_rewrite_query;
+      g_rewrite_query_with_timestamp_md = redis_rewrite_query_with_timestamp_md;
+      g_make_repair_query = redis_make_repair_query;
       break;
     case DATA_MEMCACHE:
       g_pre_coalesce = memcache_pre_coalesce;
@@ -202,6 +210,8 @@ void set_datastore_ops(void) {
       g_is_multikey_request = memcache_is_multikey_request;
       g_reconcile_responses = memcache_reconcile_responses;
       g_rewrite_query = memcache_rewrite_query;
+      g_rewrite_query_with_timestamp_md = memcache_rewrite_query_with_timestamp_md;
+      g_make_repair_query = memcache_make_repair_query;
       break;
     default:
       return;
@@ -344,6 +354,7 @@ done:
   msg->state = 0;
   msg->pos = NULL;
   msg->token = NULL;
+  msg->latest_parsed_mbuf_idx = -1;
 
   msg->parser = NULL;
   msg->result = MSG_PARSE_OK;
@@ -399,6 +410,12 @@ done:
   msg->dyn_error_code = 0;
   msg->rsp_handler = msg_local_one_rsp_handler;
   msg->consistency = DC_ONE;
+  msg->timestamp = 0;
+  msg->orig_type = MSG_UNKNOWN;
+  msg->orig_msg = NULL;
+  msg->needs_repair = false;
+  msg->rewrite_with_ts_possible = true;
+
   return msg;
 }
 
@@ -524,7 +541,7 @@ struct msg *msg_get_error(struct conn *conn, dyn_error_t dyn_error_code,
   }
   mbuf_insert(&rsp->mhdr, mbuf);
 
-  n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "%s %s %s" CRLF, protstr,
+  n = dn_scnprintf(mbuf->last, mbuf_remaining_space(mbuf), "%s %s %s" CRLF, protstr,
                    source, errstr);
   mbuf->last += n;
   rsp->mlen = (uint32_t)n;
@@ -558,7 +575,7 @@ struct msg *msg_get_rsp_integer(struct conn *conn) {
   }
   mbuf_insert(&rsp->mhdr, mbuf);
 
-  n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), ":0\r\n");
+  n = dn_scnprintf(mbuf->last, mbuf_remaining_space(mbuf), ":0\r\n");
   mbuf->last += n;
   rsp->mlen = (uint32_t)n;
 
@@ -615,6 +632,10 @@ void msg_put(struct msg *msg) {
     msg->keys = NULL;
   }
 
+  if (msg->orig_msg) {
+    msg_put(msg->orig_msg);
+    msg->orig_msg = NULL;
+  }
   TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }
 
@@ -671,6 +692,7 @@ void msg_init(size_t msgs_max) {
   alloc_msgs_max = msgs_max;
   TAILQ_INIT(&free_msgq);
   rbtree_init(&tmo_rbt, &tmo_rbs);
+
 }
 
 void msg_deinit(void) {
@@ -737,6 +759,43 @@ uint8_t *msg_get_full_key_copy(struct msg *msg, int idx, uint32_t *keylen) {
   copied_key[*keylen] = '\0';
 
   return copied_key;
+}
+
+static uint8_t *msg_get_arg(struct msg *req, uint32_t arg_index,
+                            uint32_t *arglen) {
+  *arglen = 0;
+  if (array_n(req->args) == 0) return NULL;
+  ASSERT_LOG(arg_index < array_n(req->args), "%s has %u keys", print_obj(req),
+             array_n(req->args));
+
+  struct argpos *argpos = array_get(req->args, arg_index);
+  uint8_t *arg_start = argpos->start;
+  uint8_t *arg_end = argpos->end;
+  *arglen = (uint32_t)(arg_end - arg_start);
+  return arg_start;
+}
+
+/*
+ * Returns the 'idx' arg in 'msg'.
+ *
+ * Transfers ownership of returned buffer to the caller, so the caller must
+ * take the responsibility of freeing it.
+ *
+ * Returns NULL if key does not exist or if we're unable to allocate memory.
+ */
+uint8_t *msg_get_arg_copy(struct msg *msg, int idx, uint32_t *arglen) {
+  // Get a pointer to the required arg in 'msg'.
+  uint8_t *arg_ptr = msg_get_arg(msg, idx, arglen);
+
+  // Allocate a new buffer for the key.
+  uint8_t *copied_arg = dn_alloc((size_t)(*arglen + 1));
+  if (copied_arg == NULL) return NULL;
+
+  // Copy contents of the key from 'msg' to our new buffer.
+  dn_memcpy(copied_arg, arg_ptr, *arglen);
+  copied_arg[*arglen] = '\0';
+
+  return copied_arg;
 }
 
 uint32_t msg_payload_crc32(struct msg *rsp) {
@@ -815,12 +874,15 @@ static rstatus_t msg_parsed(struct context *ctx, struct conn *conn,
 
 static rstatus_t msg_repair(struct context *ctx, struct conn *conn,
                             struct msg *msg) {
-  struct mbuf *nbuf;
+  struct mbuf *nbuf, *mbuf;
 
   nbuf = mbuf_split(&msg->mhdr, msg->pos, NULL, NULL);
   if (nbuf == NULL) {
     return DN_ENOMEM;
   }
+
+  mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+  mbuf_remove(&msg->mhdr, mbuf);
   mbuf_insert(&msg->mhdr, nbuf);
   msg->pos = nbuf->pos;
 
@@ -837,7 +899,7 @@ static rstatus_t msg_parse(struct context *ctx, struct conn *conn,
     return DN_OK;
   }
 
-  msg->parser(msg, &ctx->pool.hash_tag);
+  msg->parser(msg, ctx);
 
   switch (msg->result) {
     case MSG_PARSE_OK:
@@ -930,7 +992,7 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
   ASSERT(mbuf->end_extra - mbuf->last > 0);
 
   if (!encryption_detected) {
-    msize = mbuf_size(mbuf);
+    msize = mbuf_remaining_space(mbuf);
   } else {
     msize = (size_t)MIN(msg->dmsg->plen, mbuf->end_extra - mbuf->last);
   }
@@ -1200,7 +1262,7 @@ struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len) {
   struct mbuf *mbuf;
 
   if (STAILQ_EMPTY(&msg->mhdr) ||
-      mbuf_size(STAILQ_LAST(&msg->mhdr, mbuf, next)) < len) {
+      mbuf_remaining_space(STAILQ_LAST(&msg->mhdr, mbuf, next)) < len) {
     mbuf = mbuf_get();
     if (mbuf == NULL) {
       return NULL;
@@ -1214,7 +1276,7 @@ struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len) {
 }
 
 /*
- * Append n bytes of data, with n <= mbuf_size(mbuf)
+ * Append n bytes of data, with n <= mbuf_remaining_space(mbuf)
  * into mbuf
  */
 rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n) {
@@ -1227,7 +1289,7 @@ rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n) {
     return DN_ENOMEM;
   }
 
-  ASSERT(n <= mbuf_size(mbuf));
+  ASSERT(n <= mbuf_remaining_space(mbuf));
 
   mbuf_copy(mbuf, pos, n);
   msg->mlen += (uint32_t)n;
@@ -1236,7 +1298,7 @@ rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n) {
 }
 
 /*
- * Prepend n bytes of data, with n <= mbuf_size(mbuf)
+ * Prepend n bytes of data, with n <= mbuf_remaining_space(mbuf)
  * into mbuf
  */
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n) {
@@ -1247,7 +1309,7 @@ rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n) {
     return DN_ENOMEM;
   }
 
-  ASSERT(n <= mbuf_size(mbuf));
+  ASSERT(n <= mbuf_remaining_space(mbuf));
 
   mbuf_copy(mbuf, pos, n);
   msg->mlen += (uint32_t)n;
@@ -1272,7 +1334,7 @@ rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...) {
     return DN_ENOMEM;
   }
 
-  size = mbuf_size(mbuf);
+  size = mbuf_remaining_space(mbuf);
 
   va_start(args, fmt);
   n = dn_vscnprintf(mbuf->last, size, fmt, args);
@@ -1284,6 +1346,242 @@ rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...) {
   mbuf->last += n;
   msg->mlen += (uint32_t)n;
   STAILQ_INSERT_HEAD(&msg->mhdr, mbuf, next);
+
+  return DN_OK;
+}
+
+rstatus_t parse_int_arg_for_formatting(int arg, struct msg *msg, struct mbuf **mbuf_ptr,
+    char* current_fmt_string, uint32_t *required_space_ptr,
+    uint32_t *remaining_space_ptr) {
+  struct mbuf *mbuf = *mbuf_ptr;
+
+  *required_space_ptr = *required_space_ptr + (size_t) count_digits(arg);
+  int n = snprintf(mbuf->last, *required_space_ptr + 1, current_fmt_string, arg);
+  if (n < 0) return DN_ERROR;
+  mbuf->last += n;
+  msg->mlen += (uint32_t)n;
+  *remaining_space_ptr = *remaining_space_ptr - n;
+  return DN_OK;
+}
+
+rstatus_t parse_llu_arg_for_formatting(uint64_t arg, struct msg *msg,
+    struct mbuf **mbuf_ptr, char* current_fmt_string, uint32_t *required_space_ptr,
+    uint32_t *remaining_space_ptr) {
+  struct mbuf *mbuf = *mbuf_ptr;
+
+  *required_space_ptr = *required_space_ptr + (size_t) count_digits(arg);
+  int n = snprintf(mbuf->last, *required_space_ptr + 1, current_fmt_string, arg);
+  if (n < 0) return DN_ERROR;
+  mbuf->last += n;
+  msg->mlen += (uint32_t)n;
+  *remaining_space_ptr = *remaining_space_ptr - n;
+  return DN_OK;
+}
+
+rstatus_t parse_string_arg_for_formatting(char* arg, struct msg *msg,
+    struct mbuf **mbuf_ptr, int given_fixed_len, char* current_fmt_string,
+    int *cur_fmt_str_len_ptr, uint32_t *required_space_ptr,
+    uint32_t *remaining_space_ptr) {
+
+  struct mbuf *mbuf = *mbuf_ptr;
+
+  *required_space_ptr += (given_fixed_len > 0) ? given_fixed_len : strlen(arg);
+  int arg_offset = 0;
+  if (*required_space_ptr > *remaining_space_ptr) {
+    while (*required_space_ptr > *remaining_space_ptr) {
+
+      // If we're already using a fixed len format specifier, skip this bit.
+      if (given_fixed_len == 0) {
+        // First fill in the remaining space in the existing mbuf by converting the
+        // format string to a string that takes a string length.
+        strncpy(current_fmt_string + (*cur_fmt_str_len_ptr) - 1, ".*s", 3);
+        *cur_fmt_str_len_ptr += 2;
+        current_fmt_string[*cur_fmt_str_len_ptr] = '\0';
+      }
+
+      // This is the arg length to print without the rest of the format string.
+      int arglen = *remaining_space_ptr - (*cur_fmt_str_len_ptr - 4);
+
+      // Write 'remaining_space' bytes to the mbuf.
+      int n = snprintf(mbuf->last, *remaining_space_ptr + 1, current_fmt_string,
+          arglen + 1, arg + arg_offset);
+      if (n < 0) return DN_ERROR;
+
+      // Subtract 1 from 'n' to un-account for the '\0' put by snprintf().
+      // (see 'man snprintf').
+      *required_space_ptr -= n - 1;
+      mbuf->last += n - 1;
+      msg->mlen += (uint32_t)n - 1;
+      arg_offset += arglen;
+      if (given_fixed_len > 0) {
+        given_fixed_len -= n - 1;
+      }
+
+      // Get a new mbuf.
+      mbuf = mbuf_get();
+      if (mbuf == NULL) {
+        return DN_ENOMEM;
+      }
+      // Insert it into the 'msg' struct.
+      STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
+
+      *mbuf_ptr = mbuf;
+      *remaining_space_ptr = mbuf_remaining_space(mbuf);
+
+      // Adjust the format string for the rest of the arg.
+      char remaining_fmt_specifier[10];
+      if (given_fixed_len > 0) {
+        strcpy(remaining_fmt_specifier, "%.*s");
+        remaining_fmt_specifier[4] = '\0';
+      } else {
+        strcpy(remaining_fmt_specifier, "%s");
+        remaining_fmt_specifier[2] = '\0';
+      }
+      strncpy(current_fmt_string, remaining_fmt_specifier, strlen(remaining_fmt_specifier));
+      *cur_fmt_str_len_ptr = strlen(remaining_fmt_specifier);
+      current_fmt_string[*cur_fmt_str_len_ptr] = '\0';
+    }
+  }
+
+  int n;
+  // Copy the remaining part of the argument into the mbuf.
+  if (given_fixed_len > 0) {
+    n = snprintf(mbuf->last, *required_space_ptr + 1, current_fmt_string, given_fixed_len,
+        arg + arg_offset);
+  } else {
+    n = snprintf(mbuf->last, *required_space_ptr + 1, current_fmt_string,
+        arg + arg_offset);
+  }
+  if (n < 0) return DN_ERROR;
+  mbuf->last += n;
+  msg->mlen += (uint32_t)n;
+  *remaining_space_ptr -= n;
+
+  return DN_OK;
+}
+
+/*
+ * Prepend a formatted string into msg.
+ *
+ * This currently only supports the %d and %s format specifiers.
+ * The complicated logic is due to supporting prepending multi-mbuf payloads to
+ * 'msg'.
+ *
+ */
+rstatus_t msg_append_format(struct msg *msg, const char *fmt, int num_args, ...) {
+  struct mbuf *mbuf;
+  int n;
+  uint32_t remaining_space;
+  va_list args;
+
+  // Check if an mbuf with free space already exists in this 'msg'.
+  mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+  if (mbuf == NULL || mbuf_full(mbuf)) {
+    mbuf = mbuf_get();
+    if (mbuf == NULL) {
+      return DN_ENOMEM;
+    }
+    STAILQ_INSERT_TAIL(&msg->mhdr, mbuf, next);
+  }
+
+  remaining_space = mbuf_remaining_space(mbuf);
+
+  va_start(args, num_args);
+  uint32_t required_space = 0;
+  const char* start_from = fmt;
+  char current_fmt_string[512];
+  int i;
+
+  // Iterate through the arguments and map them onto the format specifiers in the
+  // format string.
+  for (i = 0; i < num_args; ++i) {
+    char *fmt_specifier = strstr(start_from, "%") + 1;
+    if (fmt_specifier == NULL) {
+      log_error("Number of arguments do not match format string.");
+      return DN_ERROR;
+    }
+
+    // Calculate the space required for all the non replaceable chars in the format
+    // string (i.e. chars not prepended with a '%').
+    required_space = fmt_specifier - start_from - 1;
+
+    switch ((char) *fmt_specifier) {
+      case 'd':
+        {
+          int cur_fmt_str_len = fmt_specifier - start_from + 1;
+          strncpy(current_fmt_string, start_from, cur_fmt_str_len);
+          current_fmt_string[cur_fmt_str_len] = '\0';
+          int arg = va_arg(args, int);
+          if (parse_int_arg_for_formatting(arg, msg, &mbuf, current_fmt_string,
+              &required_space, &remaining_space) != DN_OK) {
+            return DN_ERROR;
+          }
+          // Start from right after the format specifier we just processed.
+          start_from = fmt_specifier + 1;
+          break;
+        }
+      // Case assumes '%llu'
+      case 'l':
+        {
+          int cur_fmt_str_len = fmt_specifier - start_from + 3; // 3 because 'llu'
+          strncpy(current_fmt_string, start_from, cur_fmt_str_len);
+          current_fmt_string[cur_fmt_str_len] = '\0';
+          uint64_t arg = va_arg(args, uint64_t);
+          if (parse_llu_arg_for_formatting(arg, msg, &mbuf, current_fmt_string,
+              &required_space, &remaining_space) != DN_OK) {
+            return DN_ERROR;
+          }
+          // Start from right after the format specifier we just processed.
+          start_from = fmt_specifier + 3;
+          break;
+        }
+      case 's':
+        {
+          int cur_fmt_str_len = fmt_specifier - start_from + 1;
+          strncpy(current_fmt_string, start_from, cur_fmt_str_len);
+          current_fmt_string[cur_fmt_str_len] = '\0';
+          char* arg = va_arg(args, char*);
+          if (parse_string_arg_for_formatting(arg, msg, &mbuf, 0, current_fmt_string,
+              &cur_fmt_str_len, &required_space, &remaining_space) != DN_OK) {
+            return DN_ERROR;
+          }
+          // Start from right after the format specifier we just processed.
+          start_from = fmt_specifier + 1;
+          break;
+        }
+      // Case assumes '%.*s'
+      case '.':
+        {
+          int cur_fmt_str_len = fmt_specifier - start_from + 3; // 3 because '.*s'
+          strncpy(current_fmt_string, start_from, cur_fmt_str_len);
+          current_fmt_string[cur_fmt_str_len] = '\0';
+          int arg_fixed_len = va_arg(args, int);
+          char* arg = va_arg(args, char*);
+          ++i; // Skip one index since we parsed 2 args here.
+          if (parse_string_arg_for_formatting(arg, msg, &mbuf, arg_fixed_len,
+              current_fmt_string, &cur_fmt_str_len, &required_space,
+              &remaining_space) != DN_OK) {
+            return DN_ERROR;
+          }
+
+          // Start from right after the format specifier we just processed.
+          start_from = fmt_specifier + 3;
+          break;
+        }
+      default:
+        log_error("Unsupported format string");
+        return DN_ERROR;
+    }
+  }
+  va_end(args);
+
+  // Copy the remaining part of the format string.
+  int string_epilogue_len = (fmt + strlen(fmt)) - start_from;
+  if (string_epilogue_len != 0) {
+    strcpy(mbuf->last, start_from);
+    mbuf->last += string_epilogue_len;
+    msg->mlen += string_epilogue_len;
+  }
 
   return DN_OK;
 }

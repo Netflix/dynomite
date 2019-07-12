@@ -1,5 +1,8 @@
+#include "dyn_client.h"
+#include "dyn_conf.h"
 #include "dyn_core.h"
 #include "dyn_dnode_peer.h"
+#include "dyn_message.h"
 #include "dyn_server.h"
 
 void init_response_mgr(struct response_mgr *rspmgr, struct msg *req,
@@ -77,7 +80,71 @@ static void rspmgr_incr_non_quorum_responses_stats(
     stats_pool_incr(conn_to_ctx(rspmgr->conn), client_non_quorum_w_responses);
 }
 
-struct msg *rspmgr_get_response(struct response_mgr *rspmgr) {
+/*
+ * Finds the most updated response based on timestamp if it exists, and repairs
+ * the node(s) with outdated response(s).
+ *
+ * Returns 'true' if repairs were performed, 'false' otherwise.
+ */
+bool perform_repairs_if_necessary(struct context *ctx, struct response_mgr *rspmgr) {
+
+  struct msg* repair_msg;
+  rstatus_t repair_create_status = g_make_repair_query(ctx, rspmgr, &repair_msg);
+
+  if (repair_create_status == DN_OK && repair_msg != NULL) {
+    struct conn *c_conn = rspmgr->msg->owner;
+    struct keypos *key_pos = (struct keypos*)array_get(rspmgr->msg->keys, 0);
+    uint32_t keylen = key_pos->end - key_pos->start;
+    int i;
+    for (i = 0; i < rspmgr->good_responses; ++i) {
+      if (rspmgr->responses[i]->needs_repair == false) continue;
+
+      // Find the information of the node that needs repairing.
+      struct node *target_peer = (struct node*)rspmgr->responses[i]->owner->owner;
+      ASSERT(target_peer != NULL);
+
+      {
+        // (struct msg)->owner->owner can be of type (struct node*) or (struct server_pool*)
+        // Responses received usually are of type (struct node) as seen in the previous
+        // line, and request messages usually have a (struct server_pool)
+        // (TODO: Confirm if always true)
+        struct server_pool *cur_node_sp = (struct server_pool*)rspmgr->msg->owner->owner;
+        int dynomite_port = cur_node_sp->proxy_endpoint.port;
+        int dynomite_peer_port = cur_node_sp->dnode_proxy_endpoint.port;
+
+        // TODO: This is a hack. A 'struct node' that points to the local datastore as
+        // opposed to a dynomite peer, does not have the 'is_local' field filled in. We fill
+        // it in here if we find that the port does not match the dynomite port.
+        // We also would receive a response from a single datastore directly, i.e. the local
+        // datastore, so it's okay to assume that is_local will be true if the ports don't
+        // match.
+        if (target_peer->endpoint.port != dynomite_port &&
+            target_peer->endpoint.port != dynomite_peer_port) {
+          target_peer->is_local = true;
+        }
+      }
+
+      rstatus_t status;
+      dyn_error_t dyn_error_code;
+
+      // need to capture the initial mbuf location as once we add in the dynomite
+      // headers (as mbufs to the src req), that will bork the request sent to
+      // secondary racks
+      struct mbuf *orig_mbuf = STAILQ_FIRST(&repair_msg->mhdr);
+
+      // Send the repair 'msg' to the peer node.
+      status = req_forward_to_peer(ctx, c_conn, repair_msg, target_peer,
+          key_pos->start, keylen, orig_mbuf, true /*force copy? */,
+          false /* force swallow? */, &dyn_error_code);
+
+      IGNORE_RET_VAL(status);
+    }
+    return true;
+  }
+  return false;
+}
+
+struct msg *rspmgr_get_response(struct context *ctx, struct response_mgr *rspmgr) {
   // no quorum possible
   if (rspmgr->good_responses < rspmgr->quorum_responses) {
     ASSERT(rspmgr->err_rsp);
@@ -89,6 +156,19 @@ struct msg *rspmgr_get_response(struct response_mgr *rspmgr) {
     return rspmgr->err_rsp;
   }
 
+  if (perform_repairs_if_necessary(ctx, rspmgr) == true) {
+    // If the above call returns 'true', then repairs were performed. So we pick out
+    // a response that was not one of the repair candidates, or rather we pick a response
+    // that is the latest based on timestamp.
+    int i;
+    for (i = 0; i < rspmgr->good_responses; ++i) {
+      if (rspmgr->responses[i]->needs_repair == false) {
+        return rspmgr->responses[i];
+      }
+    }
+  }
+
+  // If we did not perform any repairs. we fall back to checksum matching.
   uint32_t chk0, chk1, chk2;
   chk0 = rspmgr->checksums[0];
   chk1 = rspmgr->checksums[1];

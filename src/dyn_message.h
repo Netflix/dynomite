@@ -39,40 +39,6 @@
 
 #define MAX_ALLOWABLE_PROCESSED_MSGS 500
 
-typedef void (*func_msg_parse_t)(struct msg *, const struct string *hash_tag);
-typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
-                                         struct rack *, struct msg_tqh *);
-typedef rstatus_t (*func_msg_verify_t)(struct msg *, struct server_pool *,
-                                       struct rack *);
-typedef void (*func_msg_coalesce_t)(struct msg *r);
-typedef rstatus_t (*msg_response_handler_t)(struct msg *req, struct msg *rsp);
-typedef bool (*func_msg_failure_t)(struct msg *r);
-typedef bool (*func_is_multikey_request)(struct msg *r);
-typedef struct msg *(*func_reconcile_responses)(struct response_mgr *rspmgr);
-typedef rstatus_t (*func_msg_rewrite_t)(struct msg *orig_msg,
-                                        struct context *ctx, bool *did_rewrite,
-                                        struct msg **new_msg_ptr);
-
-extern func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
-extern func_msg_coalesce_t g_post_coalesce; /* message post-coalesce */
-extern func_msg_fragment_t g_fragment;      /* message fragment */
-extern func_msg_verify_t g_verify_request;  /* message verify */
-extern func_is_multikey_request g_is_multikey_request;
-extern func_reconcile_responses g_reconcile_responses;
-extern func_msg_rewrite_t
-    g_rewrite_query; /* rewrite query in a msg if necessary */
-
-void set_datastore_ops(void);
-
-typedef enum msg_parse_result {
-  MSG_PARSE_OK,       /* parsing ok */
-  MSG_PARSE_ERROR,    /* parsing error */
-  MSG_PARSE_REPAIR,   /* more to parse -> repair parsed & unparsed data */
-  MSG_PARSE_FRAGMENT, /* multi-vector request -> fragment */
-  MSG_PARSE_AGAIN,    /* incomplete -> parse again */
-  MSG_OOM_ERROR
-} msg_parse_result_t;
-
 #define MSG_TYPE_CODEC(ACTION)                                                 \
   ACTION(UNKNOWN)                                                              \
   ACTION(REQ_MC_GET) /* memcache retrieval requests */                         \
@@ -228,11 +194,16 @@ typedef enum msg_parse_result {
   /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
   ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
   ACTION(REQ_REDIS_PFCOUNT)                                                    \
+  ACTION(REQ_REDIS_CONFIG)                                                     \
+  ACTION(REQ_REDIS_SCRIPT)                                                     \
+  ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
+  ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
+  ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
+  ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
   ACTION(RSP_REDIS_STATUS) /* redis response */                                \
   ACTION(RSP_REDIS_INTEGER)                                                    \
   ACTION(RSP_REDIS_BULK)                                                       \
   ACTION(RSP_REDIS_MULTIBULK)                                                  \
-  ACTION(REQ_REDIS_CONFIG)                                                     \
   ACTION(RSP_REDIS_ERROR)                                                      \
   ACTION(RSP_REDIS_ERROR_ERR)                                                  \
   ACTION(RSP_REDIS_ERROR_OOM)                                                  \
@@ -248,17 +219,54 @@ typedef enum msg_parse_result {
   ACTION(RSP_REDIS_ERROR_MASTERDOWN)                                           \
   ACTION(RSP_REDIS_ERROR_NOREPLICAS)                                           \
   ACTION(SENTINEL)                                                             \
-  ACTION(REQ_REDIS_SCRIPT)                                                     \
-  ACTION(REQ_REDIS_SCRIPT_LOAD)                                                \
-  ACTION(REQ_REDIS_SCRIPT_EXISTS)                                              \
-  ACTION(REQ_REDIS_SCRIPT_FLUSH)                                               \
-  ACTION(REQ_REDIS_SCRIPT_KILL)                                                \
+  ACTION(END_IDX)                                                              \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
-  /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */
+  /* ACTION( REQ_REDIS_SELECT)*/ /* only during init */                        \
 
 #define DEFINE_ACTION(_name) MSG_##_name,
 typedef enum msg_type { MSG_TYPE_CODEC(DEFINE_ACTION) } msg_type_t;
 #undef DEFINE_ACTION
+
+typedef void (*func_msg_parse_t)(struct msg *, struct context *ctx);
+typedef rstatus_t (*func_msg_fragment_t)(struct msg *, struct server_pool *,
+                                         struct rack *, struct msg_tqh *);
+typedef rstatus_t (*func_msg_verify_t)(struct msg *, struct server_pool *,
+                                       struct rack *);
+typedef void (*func_msg_coalesce_t)(struct msg *r);
+typedef rstatus_t (*msg_response_handler_t)(struct context *ctx, struct msg *req,
+                                            struct msg *rsp);
+typedef bool (*func_msg_failure_t)(struct msg *r);
+typedef bool (*func_is_multikey_request)(struct msg *r);
+typedef struct msg *(*func_reconcile_responses)(struct response_mgr *rspmgr);
+typedef rstatus_t (*func_msg_rewrite_t)(struct msg *orig_msg,
+                                        struct context *ctx, bool *did_rewrite,
+                                        struct msg **new_msg_ptr);
+typedef rstatus_t (*func_msg_repair_t)(struct context *ctx, struct response_mgr *rspmgr,
+    struct msg **new_msg_ptr);
+typedef void (*func_init_datastore_t)();
+
+extern func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
+extern func_msg_coalesce_t g_post_coalesce; /* message post-coalesce */
+extern func_msg_fragment_t g_fragment;      /* message fragment */
+extern func_msg_verify_t g_verify_request;  /* message verify */
+extern func_is_multikey_request g_is_multikey_request;
+extern func_reconcile_responses g_reconcile_responses;
+extern func_msg_rewrite_t
+    g_rewrite_query; /* rewrite query in a msg if necessary */
+extern func_msg_rewrite_t
+    g_rewrite_query_with_timestamp_md;
+extern func_msg_repair_t g_make_repair_query; /* Create a repair msg. */
+
+void set_datastore_ops(void);
+
+typedef enum msg_parse_result {
+  MSG_PARSE_OK,       /* parsing ok */
+  MSG_PARSE_ERROR,    /* parsing error */
+  MSG_PARSE_REPAIR,   /* more to parse -> repair parsed & unparsed data */
+  MSG_PARSE_FRAGMENT, /* multi-vector request -> fragment */
+  MSG_PARSE_AGAIN,    /* incomplete -> parse again */
+  MSG_OOM_ERROR
+} msg_parse_result_t;
 
 typedef enum dyn_error {
   DYNOMITE_OK,
@@ -345,6 +353,8 @@ extern consistency_t g_write_consistency;
 extern consistency_t g_read_consistency;
 extern uint8_t g_timeout_factor;
 
+extern bool g_read_repairs_enabled;
+
 typedef enum msg_routing {
   ROUTING_NORMAL = 0,
   // Ignore the key hashing
@@ -385,6 +395,26 @@ struct argpos {
   uint8_t *end;       // Argument end position
 };
 
+// This struct is used when 'read_repairs' is enabled. It holds information required to
+// set the metadata of every write that will be used in the case of a quorum mismatch in
+// order to repair a query.
+struct write_with_ts {
+  msg_type_t cmd_type;
+  char *add_set;
+  char *rem_set;
+  uint64_t ts;
+  int num_keys;
+  struct array *keys;
+  int num_fields;
+  struct array *fields;
+  int num_values;
+  struct array *values;
+  int num_optionals;
+  struct array *optionals;
+  const char* rewrite_script;
+  int total_num_tokens;
+};
+
 struct msg {
   object_t object;
   TAILQ_ENTRY(msg) c_tqe; /* link in client q */
@@ -411,11 +441,13 @@ struct msg {
   int state;      /* current parser state */
   uint8_t *pos;   /* parser position marker */
   uint8_t *token; /* token marker */
+  int latest_parsed_mbuf_idx; /* Most recent idx of mbuf parsed in 'mhdr' linked list */
 
   func_msg_parse_t parser;   /* message parser */
   msg_parse_result_t result; /* message parsing result */
 
   msg_type_t type; /* message type */
+  msg_type_t orig_type; /* Original message type. Only used on a query rewrite. */
 
   struct array *keys; /* array of keypos, for req */
   struct array *args; /* array of keypos, for req */
@@ -455,6 +487,14 @@ struct msg {
    * destination */
   unsigned dnode_header_prepended : 1;
   unsigned rsp_sent : 1; /* is a response sent for this request?*/
+  uint64_t timestamp;   // Timestamp of request. Used only if 'read_repiars' is enabled.
+
+  // Some 'msg's are not possible to rewrite.
+  // Currently, the main reason is if an arg is across mbuf's.
+  bool rewrite_with_ts_possible;
+  bool needs_repair;    // If 'true', a repair msg will be sent to 'owner'.
+  struct write_with_ts msg_info;
+  struct msg *orig_msg; // The original message if a rewrite took place.
 
   // dynomite
   struct dmsg *dmsg; /* dyn message */
@@ -481,8 +521,8 @@ static inline void msg_decr_awaiting_rsps(struct msg *req) {
   return;
 }
 
-static inline rstatus_t msg_handle_response(struct msg *req, struct msg *rsp) {
-  return req->rsp_handler(req, rsp);
+static inline rstatus_t msg_handle_response(struct context *ctx, struct msg *req, struct msg *rsp) {
+  return req->rsp_handler(ctx, req, rsp);
 }
 
 size_t msg_free_queue_size(void);
@@ -511,6 +551,7 @@ uint32_t msg_payload_crc32(struct msg *msg);
 struct msg *msg_get_rsp_integer(struct conn *conn);
 struct mbuf *msg_ensure_mbuf(struct msg *msg, size_t len);
 rstatus_t msg_append(struct msg *msg, uint8_t *pos, size_t n);
+rstatus_t msg_append_format(struct msg *msg, const char *fmt, int num_args, ...);
 rstatus_t msg_prepend(struct msg *msg, uint8_t *pos, size_t n);
 rstatus_t msg_prepend_format(struct msg *msg, const char *fmt, ...);
 
@@ -519,6 +560,7 @@ uint8_t *msg_get_tagged_key(struct msg *req, uint32_t key_index,
 uint8_t *msg_get_full_key(struct msg *req, uint32_t key_index,
                           uint32_t *keylen);
 uint8_t *msg_get_full_key_copy(struct msg *msg, int idx, uint32_t *keylen);
+uint8_t *msg_get_arg_copy(struct msg *msg, int idx, uint32_t *arglen);
 
 struct msg *req_get(struct conn *conn);
 void req_put(struct msg *msg);

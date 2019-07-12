@@ -143,15 +143,18 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
     key, _ = create_key_field()
     c.run_verify("hlen", key)
 
-    # These have issues because redis instances can return different values.
     # hgetall, hkeys, hvals
-    #key, _ = create_key_field()
-    #c.run_verify("hgetall", key)
-    #key, _ = create_key_field()
-    #c.run_verify("hkeys", key)
-    #key, _ = create_key_field()
-    #c.run_verify("hvals", key)
+    # We may get differently ordered results from both Redis and Dynomite, so instruct
+    # client to sort all results before comparing.
+    c.set_sort_before_compare(True)
+    key, _ = create_key_field()
+    c.run_verify("hgetall", key)
+    key, _ = create_key_field()
+    c.run_verify("hkeys", key)
+    key, _ = create_key_field()
+    c.run_verify("hvals", key)
 
+    # TODO: Still have ordering issues with HSCAN. Find another way to test.
     # finally do a hscan
     #key, _ = create_key_field()
     #next_index = 0;
@@ -162,17 +165,113 @@ def run_hash_tests(c, max_keys=10, max_fields=1000):
         #if next_index == 0:
             #break
 
+def run_read_repair_test(c, num_keys=10):
+    # Enable read repairs (TODO)
+
+    test_name="READ_REPAIR_TEST"
+    print("Running %s tests" % test_name)
+
+    dyno_cluster = c.get_dynomite_cluster()
+
+    # We need a connection to a DC that has RF > 1, since we're going to be using quorum.
+    print("\t-Ensuring we have a connection to a multi-rack DC")
+    c.ensure_underlying_dyno_conn_is_multi_dc()
+
+    print("\t-Enabling read repairs")
+    # Enable read repairs in the cluster
+    dyno_cluster.enable_read_repairs()
+
+    print("\t-Enabling DC_SAFE_QUORUM")
+    # Make the consistency level of the cluster as "DC_SAFE_QUORUM"
+    # as read repairs are disabled on "DC_ONE"
+    # TODO: Remove when no longer true
+    dyno_cluster.set_cluster_consistency_level("DC_SAFE_QUORUM")
+
+    # Set a key
+    key = create_key(test_name, "_1")
+    value = string_generator(size=random.randint(1, 1024))
+
+    print("\t-Writing to key '%s'" % key)
+    c.run_verify("set", key, value)
+
+    # 'get' and verify that the value is the same.
+    assert value == str(c.run_verify("get", key), 'utf-8')
+
+    print("\t-Simulating partial update to key '%s'" % key)
+    # Below, we simulate a partial write by updating the value of 'key' on only
+    # one replica, and updating its timestamp on that replica.
+    # After simulating such a write, doing a quorum read will eventually fix the
+    # key on all replicas.
+    ADD_SET_MD_KEY = "._add-set"
+    REPAIRED_VALUE = "REPAIRED_VALUE"
+
+    # Find a DC with multiple racks (i.e. RF > 1)
+    dc_name, racks = dyno_cluster.get_multi_rack_dc()
+    num_racks = len(racks)
+
+    # Pick any rack
+    rack = next(iter(racks.keys()))
+
+    # Find the exact node(shard) in the rack that has 'key'
+    node_with_key = dyno_cluster.find_node_with_key(dc_name, rack, key)
+    # Get the connection to the Redis process on that node.
+    redis_conn = node_with_key.get_data_store_connection()
+    assert redis_conn.exists(key) == True
+    assert redis_conn.delete(key) == 1
+    assert redis_conn.exists(key) == False
+
+    # Make sure that we have the dynomite reserved metadata key
+    assert redis_conn.exists(ADD_SET_MD_KEY) == True
+
+    # Get the TS of our 'key' and update it by 1.
+    add_ts = redis_conn.zscore(ADD_SET_MD_KEY, key) + 1.0
+    # Update the TS of that key to make it appear that this node has
+    # the latest value.
+    # Note: Redis-py unfortunately has backward compatibility issues, so we change the API
+    # based on the version.
+    # https://github.com/andymccurdy/redis-py/issues/1068#issuecomment-439175760
+    if redis.VERSION[0] < 3:
+        redis_conn.zadd(ADD_SET_MD_KEY, add_ts, key)
+    else:
+        redis_conn.zadd(ADD_SET_MD_KEY, {key: add_ts})
+    score = redis_conn.zscore(ADD_SET_MD_KEY, key)
+    assert score == add_ts , score
+
+    # Update with a value that we want to repair with
+    assert redis_conn.set(key, REPAIRED_VALUE) == True
+
+    test_success = False
+    # Attempt to retrieve the up to 20 times and confirm that we read the
+    # repaired value.
+    # We retry multiple times since the quorum can be achieved with the majority replicas
+    # that have the older data, but we'll eventually conflict with the replica with the
+    # latest data causing the repair on all nodes.
+    for i in range(0, 20):
+        final_val = str(c.run_dynomite_only("get", key), 'utf-8')
+        if final_val == REPAIRED_VALUE:
+            test_success = True
+            break
+
+    assert test_success == True
+    print("\t-Confirmed read repair took place successfully")
+    print("\t-Disabling read repairs")
+    dyno_cluster.disable_read_repairs()
+
+
 def comparison_test(redis, dynomite, debug):
-    r_c = redis.get_connection()
-    d_c = dynomite.get_connection()
-    c = dual_run(r_c, d_c, debug)
+    c = dual_run(redis, dynomite, debug)
     run_key_value_tests(c)
 
     # XLarge payloads
     run_key_value_tests(c, max_keys=10, max_payload=5*1024*1024)
+
     run_multikey_test(c)
     run_hash_tests(c, max_keys=10, max_fields=100)
     run_script_tests(c)
+
+    # Run read repairs tests last since we change the state of the cluster to use
+    # DC_SAFE_QUORUM
+    run_read_repair_test(c)
     print("All test ran fine")
 
 def main(args):

@@ -32,6 +32,7 @@
 #include "dyn_server.h"
 #include "dyn_task.h"
 #include "event/dyn_event.h"
+
 uint32_t admin_opt = 0;
 
 static void core_print_peer_status(void *arg1) {
@@ -308,6 +309,9 @@ rstatus_t core_start(struct instance *nci) {
   }
   // XXX: Gossip is currently not maintained actively, so ignore any failures.
   IGNORE_RET_VAL(core_gossip_pool_init(ctx));
+
+  // Set the repairs flag.
+  g_read_repairs_enabled = ctx->cf->pool.read_repairs_enabled;
 
   /**
    * Providing mbuf_size and alloc_msgs through the command line
@@ -663,4 +667,11 @@ rstatus_t core_loop(struct context *ctx) {
   stats_swap(ctx->stats);
 
   return DN_OK;
+}
+
+// TODO: Does this belong here?
+bool is_read_repairs_enabled() {
+  return g_read_repairs_enabled &&
+        (g_read_consistency > DC_ONE) &&
+        (g_write_consistency > DC_ONE);
 }

@@ -15,14 +15,14 @@ class RedisNode(Node):
         self.proc_future = None
 
     def get_connection(self):
-        return redis.StrictRedis(self.ip, self.port, db=0)
+        return redis.Redis(self.ip, self.port, db=0)
 
     def get_pid(self):
         return self.proc_future.proc.pid
 
     def launch(self):
         self.proc_future = \
-            (redis_bin['--bind', self.ip, '--port', self.port] > self.logfile) & BG(-9)
+            (redis_bin['--bind', self.ip, '--port', self.port, '--loglevel', 'verbose'] > self.logfile) & BG(-9)
 
     def teardown(self):
         self.proc_future.proc.kill()

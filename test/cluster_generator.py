@@ -17,7 +17,7 @@ from redis_node import RedisNode
 
 REDIS_PORT = 1212
 STATS_PORT = 22222
-SETTLE_TIME = 5
+SETTLE_TIME = 3
 
 def main():
     parser = argparse.ArgumentParser(
