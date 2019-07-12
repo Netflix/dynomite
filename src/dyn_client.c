@@ -654,9 +654,6 @@ static rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
   // Get a connection to the node.
   struct conn *p_conn = dnode_peer_get_conn(ctx, peer, c_conn->sd);
   if (p_conn == NULL) {
-    // Assume that this peer is in a local rack to satisfy the conditions to forward an
-    // error.
-    same_dc = same_rack = true;
     status = DN_ERROR;
     *dyn_error_code = PEER_HOST_NOT_CONNECTED;
     goto error;
@@ -682,6 +679,13 @@ static rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
       req_forward_error(ctx, c_conn,
           (rack_msg ? rack_msg : req),
           status, *dyn_error_code);
+    } else if (!same_rack && req->consistency == DC_ONE) {
+      // We won't receive a response from one host, so account for that
+      // (even though it's effectively a no-op as we wait only for one response in
+      // DC_ONE).
+      req->rspmgr.max_responses--;
+      log_error("Swallowing cross rack error due to DC_ONE. Error: %d '%s'",
+          status, dyn_error_source(*dyn_error_code));
     }
   }
   // Release the copy if we made one above..
