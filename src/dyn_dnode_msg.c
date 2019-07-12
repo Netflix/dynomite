@@ -401,20 +401,21 @@ error:
   return false;
 }
 
-static void data_store_parse_req(struct msg *r, const struct string *hash_tag) {
+static void data_store_parse_req(struct msg *r, struct context *ctx) {
   if (g_data_store == DATA_REDIS) {
-    return redis_parse_req(r, hash_tag);
+    return redis_parse_req(r, ctx);
   } else if (g_data_store == DATA_MEMCACHE) {
-    return memcache_parse_req(r, hash_tag);
+    return memcache_parse_req(r, ctx);
   } else {
     ASSERT_LOG(false, "invalid datastore");
     exit(1);
   }
 }
 
-void dyn_parse_req(struct msg *r, const struct string *hash_tag) {
+void dyn_parse_req(struct msg *r, struct context *ctx) {
   bool done_parsing = false;
   struct mbuf *b = STAILQ_LAST(&r->mhdr, mbuf, next);
+  const struct string* hash_tag = &ctx->pool.hash_tag;
 
   if (dyn_parse_core(r)) {
     struct dmsg *dmsg = r->dmsg;
@@ -466,7 +467,7 @@ void dyn_parse_req(struct msg *r, const struct string *hash_tag) {
 
         r->mlen = mbuf_length(decrypted_buf);
 
-        data_store_parse_req(r, hash_tag);
+        data_store_parse_req(r, ctx);
         return;
       }
 
@@ -477,7 +478,7 @@ void dyn_parse_req(struct msg *r, const struct string *hash_tag) {
     } else if (r->dyn_parse_state == DYN_POST_DONE) {
       struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
       if (last_buf->flags & MBUF_FLAGS_READ_FLIP) {
-        data_store_parse_req(r, hash_tag);
+        data_store_parse_req(r, ctx);
       } else {
         r->result = MSG_PARSE_AGAIN;
       }
@@ -496,7 +497,7 @@ void dyn_parse_req(struct msg *r, const struct string *hash_tag) {
 
     if (done_parsing) return;
 
-    return data_store_parse_req(r, hash_tag);
+    return data_store_parse_req(r, ctx);
   }
 
   // bad case
@@ -507,18 +508,18 @@ void dyn_parse_req(struct msg *r, const struct string *hash_tag) {
   r->result = MSG_PARSE_AGAIN;
 }
 
-static void data_store_parse_rsp(struct msg *r, const struct string *hash_tag) {
+static void data_store_parse_rsp(struct msg *r, struct context *ctx) {
   if (g_data_store == DATA_REDIS) {
-    return redis_parse_rsp(r, hash_tag);
+    return redis_parse_rsp(r, ctx);
   } else if (g_data_store == DATA_MEMCACHE) {
-    return memcache_parse_rsp(r, hash_tag);
+    return memcache_parse_rsp(r, ctx);
   } else {
     ASSERT_LOG(false, "invalid datastore");
     exit(1);
   }
 }
 
-void dyn_parse_rsp(struct msg *r, const struct string *UNUSED) {
+void dyn_parse_rsp(struct msg *r, struct context *ctx) {
   if (log_loggable(LOG_VVERB)) {
     log_debug(LOG_VVERB,
               ":::::::::::::::::::::: In dyn_parse_rsp, start to process "
@@ -576,7 +577,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED) {
 
         r->mlen = mbuf_length(decrypted_buf);
 
-        return data_store_parse_rsp(r, UNUSED);
+        return data_store_parse_rsp(r, ctx);
       }
 
       // Subtract already received bytes
@@ -586,7 +587,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED) {
     } else if (r->dyn_parse_state == DYN_POST_DONE) {
       struct mbuf *last_buf = STAILQ_LAST(&r->mhdr, mbuf, next);
       if (last_buf->flags & MBUF_FLAGS_READ_FLIP) {
-        data_store_parse_rsp(r, UNUSED);
+        data_store_parse_rsp(r, ctx);
       } else {
         r->result = MSG_PARSE_AGAIN;
       }
@@ -595,7 +596,7 @@ void dyn_parse_rsp(struct msg *r, const struct string *UNUSED) {
 
     if (done_parsing) return;
 
-    return data_store_parse_rsp(r, UNUSED);
+    return data_store_parse_rsp(r, ctx);
   }
 
   // bad case

@@ -1062,7 +1062,11 @@ static void parse_request(int sd, struct stats_cmd *st_cmd) {
           } else {
             st_cmd->cmd = CMD_PING;
           }
-
+          return;
+        } else if (strncmp(reqline[1], "/toggle_read_repairs", 20) == 0) {
+          st_cmd->cmd = CMD_TOGGLE_READ_REPAIRS;
+          g_read_repairs_enabled = !g_read_repairs_enabled;
+          loga("Read repairs enabled: $d", g_read_repairs_enabled);
           return;
         }
 
@@ -1259,6 +1263,11 @@ static rstatus_t stats_send_rsp(struct stats *st) {
       }
     }
     string_deinit(&st_cmd.req_data);
+  } else if (cmd == CMD_TOGGLE_READ_REPAIRS) {
+    char repairs_rsp[1024];
+    dn_sprintf(repairs_rsp, "Read Repairs: %s\r\n",
+        (g_read_repairs_enabled) ? "ENABLED" : "DISABLED" );
+    return stats_http_rsp(sd, repairs_rsp, dn_strlen(repairs_rsp));
   } else {
     log_debug(LOG_VERB, "Unsupported cmd");
   }

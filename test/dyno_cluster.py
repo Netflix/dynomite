@@ -74,18 +74,21 @@ class DynoCluster(object):
             self.request = yaml.load(fh)
 
         self.ips = ips
+        self.nodes = []
+        self.counts_by_dc = {}
+        self.counts_by_rack = {}
         # Generate the specification for each node to be started in the cluster.
         self.specs = list(self._generate_dynomite_specs())
-        self.nodes = []
 
     def _generate_dynomite_specs(self):
         tokens = tokens_for_cluster(self.request['cluster_desc'], None)
-        counts_by_rack = dict_request(self.request['cluster_desc'], 'name', 'racks')
-        counts_by_dc = sum_racks(counts_by_rack)
-        total_nodes = sum(counts_by_dc.values())
+        self.counts_by_rack = dict_request(self.request['cluster_desc'], 'name', 'racks')
+        self.counts_by_dc = sum_racks(self.counts_by_rack)
+        total_nodes = sum(self.counts_by_dc.values())
+
         for dc, racks in tokens:
-            dc_count = counts_by_dc[dc]
-            rack_count = counts_by_rack[dc]
+            dc_count = self.counts_by_dc[dc]
+            rack_count = self.counts_by_rack[dc]
             remote_count = total_nodes - dc_count
             for rack, tokens in racks:
                 local_count = rack_count[rack] - 1
@@ -157,6 +160,57 @@ class DynoCluster(object):
     def __exit__(self, type_, value, traceback):
         self.teardown()
 
+    def enable_read_repairs(self):
+        for node in self.nodes:
+            r = make_get_rest_call('http://%s:22222/toggle_read_repairs' % node.ip)
+            assert r.text.find('ENABLED') != -1
+
+    def disable_read_repairs(self):
+        for node in self.nodes:
+            r = make_get_rest_call('http://%s:22222/toggle_read_repairs' % node.ip)
+            assert r.text.find('DISABLED') != -1
+
+    def set_cluster_consistency_level(self, quorum_option):
+        assert "DC_ONE" in quorum_option or \
+               "DC_QUORUM" in quorum_option or \
+               "DC_SAFE_QUORUM" in quorum_option
+        for node in self.nodes:
+            r = make_get_rest_call('http://%s:22222/set_consistency/read/%s' % \
+                (node.ip, quorum_option))
+            r = make_get_rest_call('http://%s:22222/set_consistency/write/%s' % \
+                (node.ip, quorum_option))
+
+    # Returns the name of the first DC with multiple racks along with the rack count.
+    # Returns None if no DC has multiple racks.
+    def get_multi_rack_dc(self):
+        for dc, racks in self.counts_by_rack.items():
+            if len(racks) > 1:
+                return dc, racks
+
+    # Returns the DynoNode object of the node that contains 'key' under 'dc' and 'rack'.
+    def find_node_with_key(self, dc, rack, key):
+        for node in self.nodes:
+            if node.spec.dc == dc and node.spec.rack == rack:
+                node_conn = node.get_data_store_connection()
+                if node_conn.exists(key):
+                    return node
+
+    # Checks if 'node' is part of a DC that has multiple racks.
+    def _is_node_in_multi_rack_dc(self, node):
+        source_dc = node.spec.dc
+        for dc, racks in self.counts_by_rack.items():
+            if source_dc == dc and len(racks) > 1:
+                return True
+        return False
+
     def get_connection(self):
         node = random.choice(self.nodes)
         return node.get_connection()
+
+    def get_connection_to_multi_rack_dc(self):
+        # Attempt this an arbitrary number of times, else just return None.
+        for i in range(0, 10):
+            node = random.choice(self.nodes)
+            if self._is_node_in_multi_rack_dc(node) == True:
+                return node.get_connection()
+        return None

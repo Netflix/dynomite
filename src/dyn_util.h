@@ -86,6 +86,10 @@
 #define dn_atoi(_line, _n) _dn_atoi((uint8_t *)_line, (size_t)_n)
 #define dn_atoui(_line, _n) _dn_atoui((uint8_t *)_line, (size_t)_n)
 
+// Forward declarations.
+struct keypos;
+struct argpos;
+
 int dn_set_blocking(int sd);
 int dn_set_nonblocking(int sd);
 int dn_set_reuseaddr(int sd);
@@ -379,5 +383,18 @@ char *dn_unresolve_desc(int sd);
 unsigned int dict_string_hash(const void *key);
 int dict_string_key_compare(void *privdata, const void *key1, const void *key2);
 void dict_string_destructor(void *privdata, void *val);
+
+/*
+ * Counts the total number of digits in 'arg'.
+ */
+int count_digits(uint64_t arg);
+
+/*
+ * Returns the current timestamp in milliseconds.
+ */
+uint64_t current_timestamp_in_millis(void);
+
+uint32_t keypos_elem_len(struct keypos* elem);
+uint32_t argpos_elem_len(struct argpos* elem);
 
 #endif
