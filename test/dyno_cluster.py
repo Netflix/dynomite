@@ -162,12 +162,12 @@ class DynoCluster(object):
 
     def enable_read_repairs(self):
         for node in self.nodes:
-            r = make_get_rest_call('http://%s:22222/toggle_read_repairs' % node.ip)
+            r = make_get_rest_call('http://%s:22222/read_repairs/enable' % node.ip)
             assert r.text.find('ENABLED') != -1
 
     def disable_read_repairs(self):
         for node in self.nodes:
-            r = make_get_rest_call('http://%s:22222/toggle_read_repairs' % node.ip)
+            r = make_get_rest_call('http://%s:22222/read_repairs/disable' % node.ip)
             assert r.text.find('DISABLED') != -1
 
     def set_cluster_consistency_level(self, quorum_option):

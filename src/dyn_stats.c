@@ -1063,10 +1063,17 @@ static void parse_request(int sd, struct stats_cmd *st_cmd) {
             st_cmd->cmd = CMD_PING;
           }
           return;
-        } else if (strncmp(reqline[1], "/toggle_read_repairs", 20) == 0) {
+        } else if (strncmp(reqline[1], "/read_repairs", 13) == 0) {
+          log_notice("Setting read_repairs (enabled/disabled): %s", reqline[1]);
+          char *op = reqline[1] + 13;
           st_cmd->cmd = CMD_TOGGLE_READ_REPAIRS;
-          g_read_repairs_enabled = !g_read_repairs_enabled;
-          loga("Read repairs enabled: $d", g_read_repairs_enabled);
+          if (strncmp(op, "/enable", 7) == 0) {
+            g_read_repairs_enabled = true;
+          } else if (strncmp(op, "/disable", 8) == 0) {
+            g_read_repairs_enabled = false;
+          } else {
+            st_cmd->cmd = CMD_UNKNOWN;
+          }
           return;
         }
 
