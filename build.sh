@@ -14,16 +14,19 @@ OS=`uname -s`
 if [ $OS == "Darwin" ] ; then
     SSL_LIBDIR=`pkg-config --variable=libdir openssl`
     SSL_INCLUDEDIR=`pkg-config --variable=includedir openssl`
+else
+    sudo apt install -y autoconf libtool automake gcc openssl cmake
 fi
+
 
 #make clean
 
 autoreconf -fvi
 
 if [ $OS == "Darwin" ] ; then
-    ./configure --enable-debug=yes LDFLAGS="-L${SSL_LIBDIR}" CPPFLAGS="-I${SSL_INCLUDEDIR}"
+    ./configure --enable-debug=log LDFLAGS="-L${SSL_LIBDIR}" CPPFLAGS="-I${SSL_INCLUDEDIR}"
 else
-    ./configure --enable-debug=full
+    ./configure --enable-debug=log
 fi
 
-make
+make -j8
