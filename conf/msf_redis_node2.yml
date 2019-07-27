@@ -9,8 +9,7 @@ dyn_o_mite:
   servers:
   - 127.0.0.1:33222:1
   tokens: '987654321'
-  secure_server_option: datacenter
-  pem_key_file: conf/dynomite.pem
+  secure_server_option: none
   data_store: 0
   stats_listen: 0.0.0.0:22222
   datastore_connections: 3
