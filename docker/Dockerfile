@@ -18,16 +18,17 @@
 
 ##########################################################################
 
-# Set the base image to Ubuntu
-FROM ubuntu
+# Set the base image to Debian10
+FROM debian:10
 
 # File Author / Maintainer
-MAINTAINER Ioannis Papapanagiotou - dynomite@netflix.com
+MAINTAINER Miguel Filipe miguel.filipe@gmail.com
 
 # Update the repository sources list and Install package Build Essential
 RUN apt-get update && \
 	export DEBIAN_FRONTEND=noninteractive && \
     apt-get install -y \
+    procps \
 	autoconf \
 	build-essential \
 	dh-autoreconf \
@@ -36,7 +37,7 @@ RUN apt-get update && \
 	libtool \
 	software-properties-common \
 	redis-server \
-	tcl8.5 
+	tcl8.6
 
 # Clone the Dynomite Git
 RUN git clone https://github.com/Netflix/dynomite.git
@@ -52,8 +53,8 @@ WORKDIR dynomite/
 # Autoreconf
 RUN autoreconf -fvi \
 	&& ./configure --enable-debug=log \
-	&& CFLAGS="-ggdb3 -O0" ./configure --enable-debug=full \
-	&& make \
+	&& CFLAGS="-ggdb3 -O2" ./configure --enable-debug=full \
+	&& make -j4 \
 	&& make install
 
 ##################### INSTALLATION ENDS #####################
@@ -73,10 +74,6 @@ EXPOSE 22222
 # Default port to acccess Dynomite
 RUN echo 'Exposing client port for Dynomite 8102'
 EXPOSE 8102
-
-
-# Setting overcommit for Redis to be able to do BGSAVE/BGREWRITEAOF
-RUN sysctl vm.overcommit_memory=1
 
 # Set the entry-point to be the startup script
 ENTRYPOINT ["/dynomite/startup.sh"]
