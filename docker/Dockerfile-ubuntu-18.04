@@ -1,0 +1,84 @@
+##########################################################################
+# Dockerfile to build Dynomite container images with Redis as the backend
+# Based on Ubuntu
+##########################################################################
+# Copyright 2015 Netflix, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+##########################################################################
+
+FROM ubuntu:18.04
+
+# File Author / Maintainer
+MAINTAINER Miguel Filipe miguel.filipe@gmail.com
+
+# Update the repository sources list and Install package Build Essential
+RUN apt-get update && \
+	export DEBIAN_FRONTEND=noninteractive && \
+    apt-get install -y \
+    procps \
+	  autoconf \
+	  build-essential \
+	  dh-autoreconf \
+	  git \
+	  libssl-dev \
+	  libtool \
+	  software-properties-common \
+	  redis-server \
+	  tcl8.6
+
+# Clone the Dynomite Git
+
+WORKDIR /dynomite
+COPY . .
+RUN echo 'done copying file'
+
+
+# Autoreconf
+RUN autoreconf -fvi \
+	&& ./configure --enable-debug=log \
+	&& CFLAGS="-ggdb3 -O2" ./configure --enable-debug=log \
+	&& make -j4 \
+	&& make install
+
+##############
+# check binaries and required packages
+RUN ls -lh src/dynomite \
+      && mv src/dynomite bin/. \
+      && chmod +x bin/dynomite \
+      && ldd bin/dynomite \
+      && tar zcpvf /dynomite-ubuntu-18.04.tgz /dynomite \
+      && ls -lh /dynomite-ubuntu-18.04.tgz
+
+##################### INSTALLATION ENDS #####################
+
+# Expose the underlying Redis port
+RUN echo 'Exposing Redis port 8100'
+EXPOSE 8100
+
+# Expose the peer port
+RUN echo 'Exposing peer port 8101'
+EXPOSE 8101
+
+# Default port to acccess Dynomite
+RUN echo 'Exposing client port for Dynomite 8102'
+EXPOSE 8102
+
+# Expose the stats/admin port
+RUN echo 'Exposing stats/admin port 8103'
+EXPOSE 8103
+
+# Set the entry-point to be the startup script
+ENTRYPOINT ["/dynomite/docker/scripts/startup.sh"]
+
