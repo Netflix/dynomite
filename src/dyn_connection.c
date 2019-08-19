@@ -234,6 +234,13 @@ rstatus_t conn_listen(struct context *ctx, struct conn *p) {
     return DN_ERROR;
   }
 
+  status = dn_set_keepalive(p->sd, 1);
+  if (status != DN_OK) {
+      log_error("set keepalive on p %d on addr '%.*s' failed: %s", p->sd,
+                p->pname.len, p->pname.data, strerror(errno));
+      // Continue since this is not catastrophic
+  }
+
   status = conn_event_add_conn(p);
   if (status < 0) {
     log_error("event add conn p %d on addr '%.*s' failed: %s", p->sd,
