@@ -29,22 +29,26 @@
 #include <dyn_server.h>
 #include <dyn_vnode.h>
 
+
+// Similar to strcmp() but compares 2 'dyn_token' structs instead.
 static int vnode_item_cmp(const void *t1, const void *t2) {
   const struct continuum *ct1 = t1, *ct2 = t2;
 
   return cmp_dyn_token(ct1->token, ct2->token);
 }
 
+// Sorts the continuum for a rack based on their tokens.
 static rstatus_t vnode_rack_verify_continuum(void *elem) {
   struct rack *rack = elem;
-  qsort(rack->continuum, rack->ncontinuum, sizeof(*rack->continuum),
+  qsort(rack->continuums.elem, rack->ncontinuum, sizeof(struct continuum),
         vnode_item_cmp);
 
   log_debug(LOG_VERB, "**** printing continuums for rack '%.*s'",
             rack->name->len, rack->name->data);
   uint32_t i;
   for (i = 0; i < rack->ncontinuum; i++) {
-    struct continuum *c = &rack->continuum[i];
+    struct continuum *c = (struct continuum*) array_get(&rack->continuums, i);
+    ASSERT(c != NULL);
     log_debug(LOG_VERB, "next c[%d]: idx = %u, token->mag = %u", i, c->index,
               c->token->mag[0]);
   }
@@ -88,21 +92,18 @@ rstatus_t vnode_update(struct server_pool *sp) {
     uint32_t orig_cnt = rack->nserver_continuum;
     uint32_t new_cnt = orig_cnt + token_cnt;
 
-    if (new_cnt > 1) {
-      struct continuum *continuum =
-          dn_realloc(rack->continuum, sizeof(struct continuum) * new_cnt);
-      if (continuum == NULL) {
-        log_debug(LOG_ERR, "Are we failing? Why???? This is a serious issue");
-        return DN_ENOMEM;
-      }
-
-      rack->continuum = continuum;
+    struct continuum *continuum = array_push(&rack->continuums);
+    if (continuum == NULL) {
+      log_error("Could not allocate memory to expand the continuum.");
+      return DN_ENOMEM;
     }
     rack->nserver_continuum = new_cnt;
 
     uint32_t j;
     for (j = 0; j < token_cnt; j++) {
-      struct continuum *c = &rack->continuum[orig_cnt + j];
+      struct continuum *c = (struct continuum*) array_get(
+          &rack->continuums, orig_cnt + j);
+      ASSERT(c != NULL);
       c->index = i;
       c->value = 0; /* set this to an empty value, only used by ketama */
       c->token = array_get(&peer->tokens, j);
@@ -120,16 +121,15 @@ rstatus_t vnode_update(struct server_pool *sp) {
   return DN_OK;
 }
 
-// if token falls into interval (a,b], we return b.
-uint32_t vnode_dispatch(struct continuum *continuum, uint32_t ncontinuum,
+uint32_t vnode_dispatch(struct array *continuums, uint32_t ncontinuum,
                         struct dyn_token *token) {
   struct continuum *left, *right, *middle;
 
-  ASSERT(continuum != NULL);
+  ASSERT(continuums != NULL);
   ASSERT(ncontinuum != 0);
 
-  left = continuum;
-  right = continuum + ncontinuum - 1;
+  left = (struct continuum*) array_get(continuums, 0);
+  right = (struct continuum*) array_get(continuums, ncontinuum - 1);
 
   if (cmp_dyn_token(right->token, token) < 0 ||
       cmp_dyn_token(left->token, token) >= 0)

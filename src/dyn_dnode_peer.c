@@ -785,7 +785,7 @@ uint32_t dnode_peer_idx_for_key_on_rack(struct server_pool *pool,
                                         uint32_t keylen) {
   struct dyn_token token;
   pool->key_hash(key, keylen, &token);
-  return vnode_dispatch(rack->continuum, rack->ncontinuum, &token);
+  return vnode_dispatch(&rack->continuums, rack->ncontinuum, &token);
 }
 
 static struct node *dnode_peer_for_key_on_rack(struct server_pool *pool,

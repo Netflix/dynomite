@@ -50,7 +50,8 @@ static void core_print_peer_status(void *arg1) {
       struct rack *rack = array_get(&dc->racks, rack_index);
       uint8_t i = 0;
       for (i = 0; i < rack->ncontinuum; i++) {
-        struct continuum *c = &rack->continuum[i];
+        struct continuum *c = (struct continuum*) array_get(&rack->continuums, i);
+        ASSERT(c != NULL);
         uint32_t peer_index = c->index;
         struct node *peer = *(struct node **)array_get(&sp->peers, peer_index);
         if (!peer) log_panic("peer is null. Topology not inited proerly");
