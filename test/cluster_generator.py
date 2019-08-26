@@ -38,7 +38,7 @@ def main():
     standalone_redis = RedisNode(standalone_redis_ip, REDIS_PORT)
 
     # Create a Dynomite cluster.
-    dynomite_cluster = DynoCluster(args.request_file, ips)
+    dynomite_cluster = DynoCluster.fromRequestAndIPs(args.request_file, ips)
 
     with ExitStack() as stack:
         # Make sure to change the working directory to the temp dir before running the
