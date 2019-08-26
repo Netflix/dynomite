@@ -69,13 +69,14 @@ class DynoSpec(namedtuple('DynoSpec', 'ip dnode_port client_port rack dc token '
 
 
 class DynoCluster(object):
-    def __init__(self, request, counts_by_dc, counts_by_rack, specs, ips):
+    def __init__(self, request, counts_by_dc, counts_by_rack, specs, ips, launch_nodes=True):
         self.request = request
         self.counts_by_dc = counts_by_dc
         self.counts_by_rack = counts_by_rack
         self.specs = specs
         self.ips = ips
         self.nodes = []
+        self.launch_nodes = launch_nodes
 
     @classmethod
     def fromRequestAndIPs(cls, request_file, ips):
@@ -97,7 +98,7 @@ class DynoCluster(object):
         )
 
     @classmethod
-    def fromDynomiteSpecs(cls, specs):
+    def fromDynomiteSpecs(cls, specs, launch_nodes):
         request = _request_from_specs(specs)
         counts_by_rack = dict_request(request['cluster_desc'], 'name', 'racks')
         counts_by_dc = sum_racks(counts_by_rack)
@@ -108,6 +109,7 @@ class DynoCluster(object):
             counts_by_rack=counts_by_rack,
             specs=specs,
             ips=ips,
+            launch_nodes=launch_nodes,
         )
 
     def _get_cluster_desc_yaml(self):
@@ -141,8 +143,8 @@ class DynoCluster(object):
                 # Nested loop is okay here since the #nodes will always be small.
                 for node in self.nodes:
                     if node.spec.dc == dc and node.spec.rack == rack:
-                        print("\t\t\tNode: %s  || PID: %s" % (node.name, \
-                            node.get_dyno_node_pid()))
+                        pid = node.get_dyno_node_pid() if self.launch_nodes else -1
+                        print("\t\t\tNode: %s  || PID: %s" % (node.name, pid))
 
     def _delete_running_cluster_file(self):
         os.remove(CLUSTER_DESC_FILEPATH)
@@ -153,14 +155,19 @@ class DynoCluster(object):
         seeds_list = [spec.seed_string for spec in self.specs]
         # Launch each individual Dyno node.
         self.nodes = [DynoNode(spec, seeds_list) for spec in self.specs]
-        for n in self.nodes:
-            n.launch()
+        if self.launch_nodes:
+            for n in self.nodes:
+                n.launch()
 
-        # Now that the cluster is up, write its description to a file.
-        self._write_running_cluster_file()
+            # Now that the cluster is up, write its description to a file.
+            self._write_running_cluster_file()
+
         self._print_cluster_topology()
 
     def teardown(self):
+        if not self.launch_nodes:
+            return
+
         for n in self.nodes:
             n.teardown()
 
