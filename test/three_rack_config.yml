@@ -1,0 +1,34 @@
+---
+- ip: '127.0.1.1'
+  rack: rack1
+  dc: dc1
+  token: 0
+  dnode_port: 8101
+  client_port: 8102
+  local_connections: 0
+  remote_connections: 0
+  req_conf:
+    read_consistency: 'DC_SAFE_QUORUM'
+    write_consistency: 'DC_SAFE_QUORUM'
+- ip: '127.0.1.2'
+  rack: rack2
+  dc: dc1
+  token: 0
+  dnode_port: 8101
+  client_port: 8102
+  local_connections: 0
+  remote_connections: 0
+  req_conf:
+    read_consistency: 'DC_SAFE_QUORUM'
+    write_consistency: 'DC_SAFE_QUORUM'
+- ip: '127.0.1.3'
+  rack: rack3
+  dc: dc1
+  token: 0
+  dnode_port: 8101
+  client_port: 8102
+  local_connections: 0
+  remote_connections: 0
+  req_conf:
+    read_consistency: 'DC_SAFE_QUORUM'
+    write_consistency: 'DC_SAFE_QUORUM'
