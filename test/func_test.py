@@ -62,10 +62,16 @@ def run_multikey_test(c, max_keys=1000, max_payload=10):
             key = create_key(test_name, key_id)
             keys.append(key)
         c.run_verify("mget", keys)
+        c.run_verify("delete", " ".join(kv_pairs.keys()))
 
 def run_script_tests(c):
     TEST_NAME="SCRIPTS"
     print("Running %s tests" % TEST_NAME)
+
+    # set consistency level to DC_ONE for this tor run correctly
+    # TODO: Remove when no longer true
+    dyno_cluster = c.get_dynomite_cluster()
+    dyno_cluster.set_cluster_consistency_level("DC_ONE")
 
     # This script basically executes 'GET <key>'.
     SCRIPT_BODY='{}'.format("return redis.call('get', KEYS[1])")
@@ -267,6 +273,8 @@ def comparison_test(redis, dynomite, debug):
 
     run_multikey_test(c)
     run_hash_tests(c, max_keys=10, max_fields=100)
+
+    # this sets consistency level to DC_ONE for this tor run correctly
     run_script_tests(c)
 
     # Run read repairs tests last since we change the state of the cluster to use
