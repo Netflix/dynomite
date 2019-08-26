@@ -25,7 +25,7 @@ def main():
     ips = generate_ips()
 
     # Create a Dynomite cluster.
-    dynomite_cluster = DynoCluster(args.request_file, ips)
+    dynomite_cluster = DynoCluster.fromRequestAndIPs(args.request_file, ips)
 
     # Make sure to change the working directory to the temp dir.
     with local.cwd(temp):
