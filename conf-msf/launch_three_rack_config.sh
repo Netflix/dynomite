@@ -6,12 +6,12 @@ set -ex
 
 ulimit -n 32000  # increase file descriptor limit to 32k
 
-redis-server --bind 127.0.1.1 --port 1212 &
-src/dynomite --conf-file=conf-msf/conf/dc1:rack1:0.yml &
-
 redis-server --bind 127.0.1.2 --port 1212 &
-src/dynomite --conf-file=conf-msf/conf/dc1:rack2:0.yml &
+src/dynomite --conf-file=conf-msf/conf/eu-west-1:eu-west-1a:0.yml &
 
 redis-server --bind 127.0.1.3 --port 1212 &
-src/dynomite --conf-file=conf-msf/conf/dc1:rack3:0.yml &
+src/dynomite --conf-file=conf-msf/conf/eu-west-1:eu-west-1b:0.yml &
+
+redis-server --bind 127.0.1.4 --port 1212 &
+src/dynomite --conf-file=conf-msf/conf/eu-west-1:eu-west-1c:0.yml &
 

@@ -1,20 +1,20 @@
 dyn_o_mite:
   data_store: 0
-  datacenter: dc1
+  datacenter: eu-west-1
   datastore_connections: 1
-  dyn_listen: 127.0.1.1:8101
+  dyn_listen: 127.0.1.3:8101
   dyn_seeds:
-  - 127.0.1.2:8101:rack2:dc1:0
-  - 127.0.1.3:8101:rack3:dc1:0
-  listen: 127.0.1.1:8102
+  - 127.0.1.2:8101:eu-west-1a:eu-west-1:0
+  - 127.0.1.4:8101:eu-west-1c:eu-west-1:0
+  listen: 127.0.1.3:8102
   local_peer_connections: 0
   pem_key_file: conf/dynomite.pem
-  rack: rack1
+  rack: eu-west-1b
   read_consistency: DC_SAFE_QUORUM
   remote_peer_connections: 0
   secure_server_option: datacenter
   servers:
-  - 127.0.1.1:1212:0
-  stats_listen: 127.0.1.1:22222
+  - 127.0.1.3:1212:0
+  stats_listen: 127.0.1.3:22222
   tokens: 0
   write_consistency: DC_SAFE_QUORUM
