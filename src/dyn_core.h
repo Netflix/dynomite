@@ -126,7 +126,7 @@ struct instance {
 
 struct continuum {
   uint32_t index;          /* dyn_peer index */
-  uint32_t value;          /* hash value, used by ketama */
+  uint32_t value;          /* hash value, used ONLY by ketama */
   struct dyn_token *token; /* used in vnode/dyn_token situations */
 };
 
@@ -136,7 +136,7 @@ struct rack {
   uint32_t ncontinuum; /* # continuum points */
   uint32_t
       nserver_continuum; /* # servers - live and dead on continuum (const) */
-  struct continuum *continuum; /* continuum */
+  struct array continuums;
 };
 
 struct datacenter {
