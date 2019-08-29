@@ -274,25 +274,3 @@ def comparison_test(redis, dynomite, debug):
     run_read_repair_test(c)
     print("All test ran fine")
 
-def main(args):
-    # This test assumes for now that the nodes are running at the given ports.
-    # This is done by travis.sh. Please check that file and the corresponding
-    # yml files for each dynomite instance there to get an idea of the topology.
-    r = RedisNode(ip="127.0.1.1", port=1212)
-    d1 = DynoNode(ip="127.0.1.2", data_store_port=22121)
-    d2 = DynoNode(ip="127.0.1.3", data_store_port=22122)
-    d3 = DynoNode(ip="127.0.1.4", data_store_port=22123)
-    d4 = DynoNode(ip="127.0.1.5", data_store_port=22124)
-    d5 = DynoNode(ip="127.0.1.6", data_store_port=22125)
-    dyno_nodes = [d1,d2,d3,d4,d5]
-    cluster = DynoCluster(dyno_nodes)
-    try:
-        comparison_test(r, cluster, args.debug)
-    except ResultMismatchError as r:
-        print(r)
-        return 1
-    return 0
-
-if __name__ == "__main__":
-    args = parse_args()
-    sys.exit(main(args))
