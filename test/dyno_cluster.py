@@ -2,10 +2,7 @@
 from collections import namedtuple
 from plumbum import local
 import os
-import redis
 import random
-import shutil
-import signal
 import yaml
 
 from dyno_node import DynoNode
@@ -71,7 +68,7 @@ class DynoCluster(object):
     def __init__(self, request_file, ips):
         # Load the YAML file describing the cluster.
         with open(request_file, 'r') as fh:
-            self.request = yaml.load(fh)
+            self.request = yaml.safe_load(fh)
 
         self.ips = ips
         self.nodes = []

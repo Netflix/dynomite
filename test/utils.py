@@ -59,7 +59,7 @@ def teardown_running_cluster(cluster_desc_filepath, delete_test_dir=False):
     running_cluster_file = Path(cluster_desc_filepath)
     if running_cluster_file.is_file():
         with open(cluster_desc_filepath, 'r') as fh:
-            yaml_desc = yaml.load(fh)
+            yaml_desc = yaml.safe_load(fh)
             for cluster in yaml_desc['cluster_desc']:
                 print("Killing existing '{}'".format(cluster['name']))
                 for pid in cluster['pids']:
