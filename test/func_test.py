@@ -2,14 +2,9 @@
 import redis
 import argparse
 import random
-import string
-import sys
 import time
 from utils import string_generator, number_generator
-from dyno_node import DynoNode
-from redis_node import RedisNode
-from dyno_cluster import DynoCluster
-from dual_run import dual_run, ResultMismatchError
+from dual_run import dual_run
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -273,4 +268,3 @@ def comparison_test(redis, dynomite, debug):
     # DC_SAFE_QUORUM
     run_read_repair_test(c)
     print("All test ran fine")
-

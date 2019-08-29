@@ -3,7 +3,6 @@ import argparse
 import sys
 
 from plumbum import local
-from time import sleep
 
 from dyno_cluster import DynoCluster
 from utils import generate_ips, setup_temp_dir, sleep_with_animation
