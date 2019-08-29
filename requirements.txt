@@ -1,0 +1,9 @@
+certifi==2019.6.16
+chardet==3.0.4
+idna==2.8
+pkg-resources==0.0.0
+plumbum==1.6.7
+PyYAML==5.1.2
+redis==3.3.7
+requests==2.22.0
+urllib3==1.25.3
