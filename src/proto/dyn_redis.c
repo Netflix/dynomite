@@ -1065,6 +1065,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
               // This is not to be confused with 'EXISTS'. This is the second half of the
               // command 'SCRIPT EXISTS'.
               r->type = MSG_REQ_REDIS_SCRIPT_EXISTS;
+              r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 1;
               break;
             }
