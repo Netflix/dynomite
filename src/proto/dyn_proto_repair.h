@@ -77,7 +77,6 @@
  * compile time constants.
  *
  * This is still in the beta stage and has some limitations:
- * - Large values may cause overflows ( > 512 bytes)
  * - Limited command support due to parser limitations:
  *     - Sorted sets and lists need optional command parsing support.
  * - Repairing on the read path vs. the background has perf implications. In the future,
@@ -289,6 +288,71 @@
   "end\n\n"\
   "local value = redis.call(orig_cmd, key, field)\n"\
   "return {status_field, ts, value}\n\r\n"
+
+#define ZADD_SCRIPT "$4\r\nEVAL\r\n$2022\r\n"\
+  "local key = KEYS[1]\n"\
+  "local top_level_add_set = KEYS[2]\n"\
+  "local top_level_rem_set = KEYS[3]\n"\
+  "local add_set = top_level_add_set .. '_' .. key\n"\
+  "local rem_set = top_level_rem_set .. '_' .. key\n"\
+  "local orig_cmd = ARGV[1]\n"\
+  "local num_opts = ARGV[2]\n"\
+  "local num_fields = ARGV[3]\n"\
+  "local cur_ts = ARGV[4]\n"\
+  "local start_loop = 5 + num_opts\n"\
+  "local end_loop = (num_fields * 2) + 4 + num_opts\n"\
+  "local top_level_rem_set_ts = redis.call('ZSCORE', top_level_rem_set, key)\n"\
+  "if (top_level_rem_set_ts) then\n"\
+  "  if (tonumber(cur_ts) < tonumber(top_level_rem_set_ts)) then\n"\
+  "    return 0\n"\
+  "  end\n"\
+  "  redis.call('ZREM', top_level_rem_set, key)\n"\
+  "end\n"\
+  "local top_level_add_set_ts = redis.call('ZSCORE', top_level_add_set, key)\n"\
+  "if (top_level_add_set_ts) then\n"\
+  "  if (tonumber(cur_ts) > tonumber(top_level_add_set_ts)) then\n"\
+  "    redis.call('ZADD', top_level_add_set, cur_ts, key)\n"\
+  "  end\n"\
+  "else\n"\
+  "  redis.call('ZADD', top_level_add_set, cur_ts, key)\n"\
+  "end\n"\
+  "local skiploop\n"\
+  "local ret\n"\
+  "for i=start_loop,end_loop,2\n"\
+  "do\n"\
+  "  skiploop = false\n"\
+  "  local field = ARGV[i]\n"\
+  "  local value = ARGV[i+1]\n"\
+  "  local last_seen_ts_in_add = redis.call('ZSCORE', add_set, field)\n"\
+  "  local last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, field)\n"\
+  "  if (last_seen_ts_in_rem) then\n"\
+  "    if (tonumber(cur_ts) < tonumber(last_seen_ts_in_rem)) then\n"\
+  "      skiploop = true\n"\
+  "    end\n"\
+  "    redis.call('ZREM', rem_set, field)\n"\
+  "  elseif (last_seen_ts_in_add) then\n"\
+  "    if (tonumber(cur_ts) < tonumber(last_seen_ts_in_add)) then\n"\
+  "      skiploop = true\n"\
+  "    end\n"\
+  "  end\n"\
+  "  if (skiploop == false) then\n"\
+  "    if (num_opts == '0') then\n"\
+  "      ret = redis.call(orig_cmd, key, value, field)\n"\
+  "    elseif (num_opts == '1') then\n"\
+  "      ret = redis.call(orig_cmd, key, ARGV[5], value, field)\n"\
+  "    elseif (num_opts == '2') then\n"\
+  "      ret = redis.call(orig_cmd, key, ARGV[5], ARGV[6], value, field)\n"\
+  "    elseif (num_opts == '3') then\n"\
+  "      ret = redis.call(orig_cmd, key, ARGV[5], ARGV[6], ARGV[7], value, field)\n"\
+  "    else\n"\
+  "      ret = false\n"\
+  "    end\n"\
+  "    if (type(ret) ~= 'boolean') then\n"\
+  "      redis.call('ZADD', add_set, cur_ts, field)\n"\
+  "    end\n"\
+  "  end\n"\
+  "end\n"\
+  "return ret\n\r\n"
 
 #define SADD_SCRIPT "$4\r\nEVAL\r\n$1526\r\n"\
   "local key = KEYS[1]\n"\
