@@ -161,6 +161,7 @@ func_msg_rewrite_t g_rewrite_query;     /* rewrite query in a msg if necessary *
 /* rewrite query as script that updates both data and metadata */
 func_msg_rewrite_t g_rewrite_query_with_timestamp_md;
 func_msg_repair_t g_make_repair_query;  /* Send a repair msg. */
+func_clear_repair_md_t g_clear_repair_md_for_key; /* Clear repair metadata for a key */
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {MSG_TYPE_CODEC(DEFINE_ACTION)
@@ -201,6 +202,7 @@ void set_datastore_ops(void) {
       g_rewrite_query = redis_rewrite_query;
       g_rewrite_query_with_timestamp_md = redis_rewrite_query_with_timestamp_md;
       g_make_repair_query = redis_make_repair_query;
+      g_clear_repair_md_for_key = redis_clear_repair_md_for_key;
       break;
     case DATA_MEMCACHE:
       g_pre_coalesce = memcache_pre_coalesce;
@@ -212,6 +214,7 @@ void set_datastore_ops(void) {
       g_rewrite_query = memcache_rewrite_query;
       g_rewrite_query_with_timestamp_md = memcache_rewrite_query_with_timestamp_md;
       g_make_repair_query = memcache_make_repair_query;
+      g_clear_repair_md_for_key = memcache_clear_repair_md_for_key;
       break;
     default:
       return;
@@ -606,7 +609,7 @@ void msg_put(struct msg *msg) {
     return;
   }
 
-  if (msg->is_request && msg->awaiting_rsps != 0) {
+  if (msg->is_request && msg->awaiting_rsps != 0 && msg->expect_datastore_reply !=0) {
     log_error("Not freeing req %d, awaiting_rsps = %u", msg->id,
               msg->awaiting_rsps);
     return;
@@ -1120,7 +1123,13 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
     msize = (size_t)MIN(msg->dmsg->plen, mbuf->end_extra - mbuf->last);
   }
 
-  n = conn_recv_data(conn, mbuf->last, msize);
+  if (msize != 0) {
+    n = conn_recv_data(conn, mbuf->last, msize);
+  } else {
+    // We may have got an event notification even though we received all the data.
+    // In that case, we don't want to read off the socket again.
+    n = 0;
+  }
 
   if (n < 0) {
     if (n == DN_EAGAIN) {
@@ -1135,7 +1144,7 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
 
   // Only used in encryption case
   if (encryption_detected) {
-    if (n >= msg->dmsg->plen || mbuf->end_extra == mbuf->last) {
+    if ((n >= msg->dmsg->plen && n != 0) || mbuf->end_extra == mbuf->last) {
       // log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or
       // eligible!");
       struct mbuf *nbuf = NULL;

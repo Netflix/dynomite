@@ -1627,3 +1627,8 @@ rstatus_t memcache_make_repair_query(struct context *ctx, struct response_mgr *r
     struct msg **new_msg_ptr) {
   return DN_OK;
 }
+
+rstatus_t memcache_clear_repair_md_for_key(struct context *ctx, struct msg *req,
+    struct msg **new_msg_ptr) {
+  return DN_OK;
+}
