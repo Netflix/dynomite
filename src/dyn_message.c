@@ -632,6 +632,11 @@ void msg_put(struct msg *msg) {
     msg->keys = NULL;
   }
 
+  if (msg->args) {
+    array_destroy(msg->args);
+    msg->args = NULL;
+  }
+
   if (msg->orig_msg) {
     msg_put(msg->orig_msg);
     msg->orig_msg = NULL;
@@ -881,8 +886,10 @@ static rstatus_t msg_repair(struct context *ctx, struct conn *conn,
     return DN_ENOMEM;
   }
 
-  mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-  mbuf_remove(&msg->mhdr, mbuf);
+  // This was added to handle a specific case which doesn't seem reproducible
+  // now. Revisit if things seem off.
+  //mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+  //mbuf_remove(&msg->mhdr, mbuf);
   mbuf_insert(&msg->mhdr, nbuf);
   msg->pos = nbuf->pos;
 

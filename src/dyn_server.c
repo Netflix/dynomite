@@ -508,7 +508,9 @@ dictType dc_string_dict_type = {
 };
 
 static rstatus_t rack_init(struct rack *rack) {
-  rack->continuum = dn_alloc(sizeof(struct continuum));
+
+  // TODO: Initialize the array to the size of the ring instead of to 1.
+  THROW_STATUS(array_init(&rack->continuums, 1, sizeof(struct continuum)));
   rack->ncontinuum = 0;
   rack->nserver_continuum = 0;
   rack->name = dn_alloc(sizeof(struct string));
@@ -521,9 +523,7 @@ static rstatus_t rack_init(struct rack *rack) {
 }
 
 static rstatus_t rack_deinit(struct rack *rack) {
-  if (rack->continuum != NULL) {
-    dn_free(rack->continuum);
-  }
+  array_deinit(&rack->continuums);
 
   return DN_OK;
 }

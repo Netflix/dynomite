@@ -131,7 +131,7 @@ struct cmd_info proto_cmd_info[] = {
  {"SUNION", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"SUNIONSTORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"SSCAN", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
- {"ZADD", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
+ {"ZADD", 2, 1, 1, 1, 1, true, false, false, 0, 0, 2, 2, 1, 2, ZADD_SCRIPT, 0, 0}, // idx 110
  {"ZCARD", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZCOUNT", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZINCRBY", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
@@ -141,7 +141,7 @@ struct cmd_info proto_cmd_info[] = {
  {"ZRANGEBYLEX", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZRANGEBYSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZRANK", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
- {"ZREM", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
+ {"ZREM", 1, 1, 1, 0, 0, true, true, false, 0, 0, 1, 1, -1, 0, HDEL_SCRIPT, 0, 0}, // idx 120
  {"ZREMRANGEBYRANK", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREMRANGEBYLEX", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREMRANGEBYSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
@@ -149,7 +149,8 @@ struct cmd_info proto_cmd_info[] = {
  {"ZREVRANGEBYLEX", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREVRANGEBYSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREVRANK", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
- {"ZSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
+ {"ZSCORE", 1, 1, 1, 0, 0, true, false, true, 0, 0, 1, 0, -1, 0, HGET_SCRIPT,
+     MSG_REQ_REDIS_ZADD, MSG_REQ_REDIS_ZREM}, // idx 128
  {"ZUNIONSTORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZSCAN", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"EVAL", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
@@ -246,6 +247,59 @@ static rstatus_t get_values_from_source(int num_tokens, int start_pos,
   return DN_OK;
 }
 
+rstatus_t post_parse_optional_args(struct msg *orig_msg) {
+  struct write_with_ts *out_struct = &orig_msg->msg_info;
+  struct cmd_info *orig_cmd_info = &proto_cmd_info[orig_msg->type];
+
+  switch (orig_msg->type) {
+    case MSG_REQ_REDIS_ZADD: ;
+      int idx = 0;
+      int num_args = array_n(orig_msg->args);
+
+      // All the optional fields for ZADD come before the first score, so record all the options
+      // provided.
+      bool nx = false;
+      bool xx = false;
+      bool ch = false;
+      bool incr = false;
+      while (idx < num_args) {
+        struct argpos *opt_arg = (struct argpos*)array_get(orig_msg->args, idx);
+        if (opt_arg == NULL) return DN_ERROR;
+
+        uint8_t *opt_arg_start = opt_arg->start;
+        if (dn_strcasecmp(opt_arg_start, "NX") == 0) {
+          nx = true;
+        } else if (dn_strcasecmp(opt_arg_start, "XX") == 0) {
+          xx = true;
+        } else if (dn_strcasecmp(opt_arg_start, "INCR") == 0) {
+          incr = true;
+        } else if (dn_strcasecmp(opt_arg_start, "CH") == 0) {
+          ch = true;
+        } else {
+          break;
+        }
+        ++idx;
+
+        if (out_struct->optionals == NULL) {
+          out_struct->optionals = array_create(1, sizeof(struct argpos));
+          if (out_struct->optionals == NULL) return DN_ENOMEM;
+        }
+        struct argpos *record_opt_pos = (struct argpos*)array_push(out_struct->optionals);
+        record_opt_pos->start = opt_arg->start;
+        record_opt_pos->end = opt_arg->end;
+      }
+
+      // Both these options cannot be set together.
+      if (nx && xx) return DN_ERROR;
+
+      out_struct->num_optionals = idx;
+      break;
+    default:
+      return DN_OK;
+  }
+  return DN_OK;
+}
+
 /*
  * Parses the original 'struct msg' and fills in 'orig_msg->msg_info' with all
  * the keys, fields, values and optional fields.
@@ -256,13 +310,14 @@ static rstatus_t get_values_from_source(int num_tokens, int start_pos,
 rstatus_t post_parse_msg(struct msg *orig_msg) {
 
   struct write_with_ts *out_struct = &orig_msg->msg_info;
+  struct cmd_info *orig_cmd_info = &proto_cmd_info[orig_msg->type];
   ASSERT(out_struct != NULL);
 
   out_struct->cmd_type = orig_msg->type;
   out_struct->ts = orig_msg->timestamp;
-  struct cmd_info *orig_cmd_info = &proto_cmd_info[orig_msg->type];
   out_struct->num_fields = orig_cmd_info->min_num_fields;
   out_struct->num_values = orig_cmd_info->min_num_values;
+  out_struct->num_optionals = 0;
   out_struct->keys = NULL;
   out_struct->fields = NULL;
   out_struct->values = NULL;
@@ -314,26 +369,38 @@ rstatus_t post_parse_msg(struct msg *orig_msg) {
     }
   }
 
+  // Check if this command has optional arguments and parse + validate them.
+  if (orig_cmd_info->num_optionals > 0) {
+    post_parse_optional_args(orig_msg);
+  }
+
+  // If we have optional fields, we need to offset the field and value positions
+  // accordingly.
+  int first_field_pos = orig_cmd_info->first_field_pos
+      + out_struct->num_optionals;
+  int first_value_pos = orig_cmd_info->first_value_pos
+      + out_struct->num_optionals;
+
   out_struct->num_fields = total_tokens_of_type(
       orig_cmd_info->variadic_field_jump,
-      orig_cmd_info->first_field_pos - 1 /* start_pos */,
+      first_field_pos - 1 /* start_pos */,
       orig_cmd_info->min_num_fields,
       orig_msg->args->nelem);
 
   if (parse_tokens_of_type(out_struct->num_fields, 0,
-          orig_cmd_info->variadic_field_jump, orig_cmd_info->first_field_pos,
+          orig_cmd_info->variadic_field_jump, first_field_pos,
           orig_msg->args, false, &out_struct->fields) != DN_OK) {
     goto error;
   }
 
   out_struct->num_values = total_tokens_of_type(
       orig_cmd_info->variadic_value_jump,
-      orig_cmd_info->first_value_pos - 1 /* start_pos */,
+      first_value_pos - 1/* start_pos */,
       orig_cmd_info->min_num_values,
       orig_msg->args->nelem);
 
   if (parse_tokens_of_type(out_struct->num_values, 0,
-          orig_cmd_info->variadic_value_jump, orig_cmd_info->first_value_pos,
+          orig_cmd_info->variadic_value_jump, first_value_pos,
           orig_msg->args, false, &out_struct->values) != DN_OK) {
     goto error;
   }
@@ -383,6 +450,7 @@ rstatus_t obtain_info_from_latest_rsp(struct response_mgr *rspmgr,
   repair_msg_info->num_keys = orig_msg_info->num_keys;
   repair_msg_info->num_fields = orig_msg_info->num_fields;
   repair_msg_info->num_values = orig_msg_info->num_values;
+  repair_msg_info->num_optionals = 0;
 
   repair_msg_info->keys = orig_msg_info->keys;
   repair_msg_info->fields = orig_msg_info->fields;
@@ -441,6 +509,7 @@ void update_total_num_tokens(struct write_with_ts *src) {
   int num_keys = src->num_keys;
   int num_fields = src->num_fields;
   int num_values = src->num_values;
+  int num_optionals = src->num_optionals;
 
   // Add 2 by default, one for the 'EVAL' command and one for the script itself.
   src->total_num_tokens = 2;
@@ -458,6 +527,13 @@ void update_total_num_tokens(struct write_with_ts *src) {
   // Add the number of fields.
   // Add the timestamp.
   src->total_num_tokens += 3;
+
+  if (proto_cmd_info[src->cmd_type].num_optionals > 0) {
+    // If this command supports optional fields, add one token for the number of optional args.
+    src->total_num_tokens += 1;
+    // Then add the number of tokens for the optional fields themselves.
+    src->total_num_tokens += num_optionals;
+  }
 
   if (num_fields > 0 || num_values > 0) {
 
@@ -480,7 +556,8 @@ void update_total_num_tokens(struct write_with_ts *src) {
  * <total_num_tokens> <script> <args>
  *
  * where <args> can be elaborated more into:
- * <key1>..(<keyN>) <+set> <-set> <orig_cmd> <num_flds> <ts> (<fld1>) (<val1>) (<fldN>) ..
+ * <key1>..(<keyN>) <+set> <-set> <orig_cmd> <num_opts> <num_flds> \
+ * <ts> (<opt1>) .. (<optN>) (<fld1>) (<val1>) (<fldN>) ..
  *
  * Tokens shown above with parantheses are optional.
  *
@@ -492,6 +569,7 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   int num_keys = src->num_keys;
   int num_fields = src->num_fields;
   int num_values = src->num_values;
+  int num_optionals = src->num_optionals;
   struct msg *msg = *msg_ptr;
 
   // Add the total number of tokens.
@@ -504,7 +582,6 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   // Add the total number of keys in the command. We add 2 for the add and remove sets.
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
       count_digits(num_keys + 2), num_keys + 2));
-
 
   // Add all the keys touched in the query.
   for (i = 0; i < src->num_keys; ++i) {
@@ -526,6 +603,14 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, strlen(orig_cmd_str),
       strlen(orig_cmd_str), orig_cmd_str));
 
+  struct cmd_info *orig_cmd_info = &proto_cmd_info[src->cmd_type];
+  // Add number of optionals if the command supports any. If the command does, the script will
+  // expect a number of 0 or more.
+  if (orig_cmd_info->num_optionals > 0) {
+    THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
+        count_digits(num_optionals), num_optionals));
+  }
+
   // Add the number of fields.
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
       count_digits(num_fields), num_fields));
@@ -533,6 +618,16 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   // Add the timestamp.
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_LLU_ARG_FMT, 2,
       count_digits(src->ts), src->ts));
+
+  // Add the optional elements.
+  if (num_optionals > 0) {
+    for (i = 0; i < num_optionals; ++i) {
+      struct argpos *opt_elem = array_get(src->optionals, i);
+      uint32_t opt_len = argpos_elem_len(opt_elem);
+      THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, opt_len,
+            opt_len, opt_elem->start));
+    }
+  }
 
   if (num_fields > 0 || num_values > 0) {
 
