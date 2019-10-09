@@ -632,6 +632,11 @@ void msg_put(struct msg *msg) {
     msg->keys = NULL;
   }
 
+  if (msg->args) {
+    array_destroy(msg->args);
+    msg->args = NULL;
+  }
+
   if (msg->orig_msg) {
     msg_put(msg->orig_msg);
     msg->orig_msg = NULL;
