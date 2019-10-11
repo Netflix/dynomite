@@ -5,15 +5,109 @@
 #include "dyn_message.h"
 #include "dyn_server.h"
 
-void init_response_mgr(struct response_mgr *rspmgr, struct msg *req,
-                       bool is_read, uint8_t max_responses, struct conn *conn) {
+
+int init_response_mgr_each_quorum_helper(struct msg *req,
+    struct response_mgr *rspmgr, struct conn *c_conn, struct datacenter *dc);
+
+rstatus_t init_response_mgr_all_dcs(struct context *ctx, struct msg *req,
+    struct conn *c_conn, struct datacenter *local_dc) {
+
+  ASSERT(req->consistency == DC_EACH_SAFE_QUORUM);
+
+
+  uint32_t total_responses_to_await = 0;
+  int num_dcs_in_quorum = array_n(&ctx->pool.datacenters);
+  req->additional_each_rspmgrs =
+      (struct response_mgr**) dn_alloc(num_dcs_in_quorum * (sizeof(struct response_mgr*)));
+  if (req->additional_each_rspmgrs == NULL) return DN_ENOMEM;
+
+  // Initialize the response managers for all remote DCs. (The 0th idx in the
+  // 'additional_each_rspmgrs' array is reserved for the local DC).
+  int i;
+  for (i = 1; i < num_dcs_in_quorum; ++i) {
+    req->additional_each_rspmgrs[i] = (struct rspmgr*) dn_alloc(sizeof(struct response_mgr));
+    if (req->additional_each_rspmgrs[i] == NULL) {
+      goto enomem;
+    }
+
+    uint32_t dc_idx = 0;
+    struct datacenter *remote_dc = NULL;
+    do {
+      remote_dc = (struct datacenter*) array_get(&ctx->pool.datacenters, dc_idx);
+      ++dc_idx;
+    } while(string_compare(remote_dc->name, local_dc->name) == 0); // Skip the local DC.
+
+    int max_rsps_for_dc = init_response_mgr_each_quorum_helper(
+        req, req->additional_each_rspmgrs[i], c_conn, remote_dc);
+    if (max_rsps_for_dc == -1) goto enomem;
+
+    total_responses_to_await += max_rsps_for_dc;
+  }
+
+  // Now do the same as the above for the local DC.
+  // Point the 0th index to the statically allocated response_mgr.
+  req->additional_each_rspmgrs[0] = &req->rspmgr;
+
+  int max_rsps_for_dc = init_response_mgr_each_quorum_helper(
+      req, req->additional_each_rspmgrs[0], c_conn, local_dc);
+  if (max_rsps_for_dc == -1) goto enomem;
+  total_responses_to_await += max_rsps_for_dc;
+
+  // Update the total number of responses to wait for.
+  req->awaiting_rsps = total_responses_to_await;
+
+  return DN_OK;
+ enomem: ;
+  int j = 1;
+  while (req->additional_each_rspmgrs[j] != NULL) {
+    if (req->additional_each_rspmgrs[j]->dc_name.data != NULL) {
+      string_deinit(&req->additional_each_rspmgrs[j]->dc_name);
+    }
+    dn_free(req->additional_each_rspmgrs[j]);
+    ++j;
+  }
+  dn_free(req->additional_each_rspmgrs);
+  return DN_ENOMEM;
+}
+
+
+/*
+ * Helper function that initializes a 'struct response_mgr' and copies the appropriate
+ * DC name to it. Only used under DC_EACH_SAFE_QUORUM.
+ *
+ * Returns maximum number of responses possible for 'dc'.
+ * Returns -1 on an error.
+ */
+int init_response_mgr_each_quorum_helper(struct msg *req,
+    struct response_mgr *rspmgr, struct conn *c_conn, struct datacenter *dc) {
+
+  ASSERT(req->consistency == DC_EACH_SAFE_QUORUM);
+
+  uint8_t rack_cnt = (uint8_t) array_n(&dc->racks);
+
+  // Initialize the response mgr.
+  init_response_mgr(req, rspmgr, rack_cnt, c_conn);
+
+  // Copy the name of the DC to the response manager.
+  if (string_duplicate(&rspmgr->dc_name, dc->name) != DN_OK) {
+    return -1;
+  }
+
+  return rspmgr->max_responses;
+}
+
+void init_response_mgr(struct msg *req, struct response_mgr *rspmgr,
+    uint8_t max_responses_for_dc, struct conn *c_conn) {
+
   memset(rspmgr, 0, sizeof(struct response_mgr));
-  rspmgr->is_read = is_read;
-  rspmgr->max_responses = max_responses;
-  rspmgr->quorum_responses = (uint8_t)(max_responses / 2 + 1);
-  rspmgr->conn = conn;
+  rspmgr->is_read = req->is_read;
+  rspmgr->max_responses = max_responses_for_dc;
+  rspmgr->quorum_responses = (uint8_t)(max_responses_for_dc / 2 + 1);
+  rspmgr->conn = c_conn;
   rspmgr->msg = req;
-  req->awaiting_rsps = max_responses;
+  req->awaiting_rsps = max_responses_for_dc;
+
+  req->rspmgrs_inited = true;
 }
 
 static bool rspmgr_is_quorum_achieved(struct response_mgr *rspmgr) {

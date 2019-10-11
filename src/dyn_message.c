@@ -415,6 +415,8 @@ done:
   msg->orig_msg = NULL;
   msg->needs_repair = false;
   msg->rewrite_with_ts_possible = true;
+  msg->additional_each_rspmgrs = NULL;
+  msg->rspmgrs_inited = false;
 
   return msg;
 }
@@ -640,6 +642,23 @@ void msg_put(struct msg *msg) {
   if (msg->orig_msg) {
     msg_put(msg->orig_msg);
     msg->orig_msg = NULL;
+  }
+
+  if (msg->additional_each_rspmgrs) {
+    ASSERT(msg->consistency == DC_EACH_SAFE_QUORUM);
+    // Only requests have their connection's owner as the 'struct server_pool' object,
+    // and only requests would have 'additional_each_rspmgrs', so it's safe to cast to
+    // 'struct server_pool'.
+    struct server_pool *sp = msg->owner->owner;
+    uint8_t num_dcs = array_n(&sp->datacenters);
+
+    int i;
+    // Skip the 0th index as that points back to the statically allocated 'rspmgr' struct
+    // in 'msg'.
+    for (i = 1; i < num_dcs; ++i) {
+      dn_free(msg->additional_each_rspmgrs[i]);
+    }
+    dn_free(msg->additional_each_rspmgrs);
   }
   TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }

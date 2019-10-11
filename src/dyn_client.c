@@ -50,6 +50,8 @@
 #include "dyn_util.h"
 
 static rstatus_t msg_quorum_rsp_handler(struct context *ctx, struct msg *req, struct msg *rsp);
+static rstatus_t msg_each_quorum_rsp_handler(struct context *ctx, struct msg *req,
+    struct msg *rsp);
 static msg_response_handler_t msg_get_rsp_handler(struct context *ctx, struct msg *req);
 
 static rstatus_t rewrite_query_if_necessary(struct msg **req,
@@ -653,8 +655,10 @@ rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
   }
 
   if (!(same_dc && same_rack) || force_swallow) {
-    // Swallow responses from remote racks or DCs.
-    rack_msg->swallow = true;
+    if (req->consistency != DC_EACH_SAFE_QUORUM || force_swallow) {
+      // Swallow responses from remote racks or DCs.
+      rack_msg->swallow = true;
+    }
   }
 
   // Get a connection to the node.
@@ -701,13 +705,20 @@ rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
   return status;
 }
 
-void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
+void req_forward_all_racks_for_dc(struct context *ctx, struct conn *c_conn,
                                  struct msg *req, struct mbuf *orig_mbuf,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc) {
   uint8_t rack_cnt = (uint8_t)array_n(&dc->racks);
   uint8_t rack_index;
-  init_response_mgr(&req->rspmgr, req, req->is_read, rack_cnt, c_conn);
+
+  if (req->rspmgrs_inited == false) {
+    if (req->consistency == DC_EACH_SAFE_QUORUM) {
+      init_response_mgr_all_dcs(ctx, req, c_conn, dc);
+    } else {
+      init_response_mgr(req, &req->rspmgr, rack_cnt, c_conn);
+    }
+  }
   log_info("%s %s same DC racks:%d expect replies %d", print_obj(c_conn),
            print_obj(req), rack_cnt, req->rspmgr.max_responses);
 
@@ -732,6 +743,10 @@ static bool request_send_to_all_dcs(struct msg *req) {
   // There is a routing override
   if (req->msg_routing != ROUTING_NORMAL) return false;
 
+  // Under DC_EACH_SAFE_QUORUM, we need to send reads and writes to all
+  // DCs.
+  if (req->consistency == DC_EACH_SAFE_QUORUM) return true;
+
   // Reads are not propagated
   if (req->is_read) return false;
 
@@ -753,8 +768,11 @@ static bool request_send_to_all_local_racks(struct msg *req) {
   // A write should go to all racks
   if (!req->is_read) return true;
 
-  if ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM))
+  if ((req->consistency == DC_QUORUM)
+    || (req->consistency == DC_SAFE_QUORUM)
+    || (req->consistency == DC_EACH_SAFE_QUORUM)) {
     return true;
+  }
   return false;
 }
 
@@ -793,6 +811,17 @@ static void req_forward_remote_dc(struct context *ctx, struct conn *c_conn,
                                   struct datacenter *dc) {
   const uint32_t rack_cnt = array_n(&dc->racks);
   if (rack_cnt == 0) return;
+
+  if (req->consistency == DC_EACH_SAFE_QUORUM) {
+    // Under 'DC_EACH_SAFE_QUORUM', we want to hear back from at least
+    // quorum racks in each DC, so send it to all racks in remote DCs.
+    req_forward_all_racks_for_dc(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
+    return;
+  }
+
+  // If we're not expecting a consistency level of 'DC_EACH_SAFE_QUORUM', then
+  // we send it to only to the preselected rack in the remote DCs. If that's not
+  // reachable, we failover to another in the remote DC.
 
   // Pick the preferred pre-selected rack for this DC.
   struct rack *rack = dc->preselected_rack_for_replication;
@@ -846,7 +875,7 @@ static void req_forward_local_dc(struct context *ctx, struct conn *c_conn,
   req->rsp_handler = msg_get_rsp_handler(ctx, req);
   if (request_send_to_all_local_racks(req)) {
     // send request to all local racks
-    req_forward_all_local_racks(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
+    req_forward_all_racks_for_dc(ctx, c_conn, req, orig_mbuf, key, keylen, dc);
   } else {
     // send request to only local token owner
     struct rack *rack =
@@ -1002,7 +1031,7 @@ rstatus_t rewrite_query_if_necessary(struct msg **req, struct context *ctx) {
  * the new query and free up the original msg.
  *
  */
-rstatus_t rewrite_query_with_timestamp_md(struct msg **req, struct context *ctx) {
+static rstatus_t rewrite_query_with_timestamp_md(struct msg **req, struct context *ctx) {
 
   if (is_read_repairs_enabled() == false) return DN_OK;
 
@@ -1099,6 +1128,8 @@ static msg_response_handler_t msg_get_rsp_handler(struct context *ctx, struct ms
     // Check if its quorum
     if ((req->consistency == DC_QUORUM) || (req->consistency == DC_SAFE_QUORUM)) {
       return msg_quorum_rsp_handler;
+    } else if (req->consistency == DC_EACH_SAFE_QUORUM) {
+      return msg_each_quorum_rsp_handler;
     }
   }
 
@@ -1146,6 +1177,104 @@ static rstatus_t msg_quorum_rsp_handler(struct context *ctx, struct msg *req,
   req->error_code = rsp->error_code;
   req->is_error = rsp->is_error;
   req->dyn_error_code = rsp->dyn_error_code;
+  return DN_OK;
+}
+
+static int find_rspmgr_idx(struct context *ctx, struct response_mgr **rspmgrs,
+    struct string *target_dc_name) {
+  int num_dcs = (int) array_n(&ctx->pool.datacenters);
+
+  int i = 0;
+  for (i = 0; i < num_dcs; ++i) {
+    struct response_mgr *rspmgr = rspmgrs[i];
+    if (string_compare(&rspmgr->dc_name, target_dc_name) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static bool all_rspmgrs_done(struct context *ctx, struct response_mgr **rspmgrs) {
+  int num_dcs = (int) array_n(&ctx->pool.datacenters);
+  int i = 0;
+  for (i = 0; i < num_dcs; ++i) {
+    struct response_mgr *rspmgr = rspmgrs[i];
+    if (!rspmgr->done) return false;
+  }
+
+  return true;
+}
+
+static struct msg *all_rspmgrs_get_response(struct context *ctx, struct msg *req) {
+  int num_dcs = (int) array_n(&ctx->pool.datacenters);
+  struct msg *rsp = NULL;
+  int i;
+  for (i = 0; i < num_dcs; ++i) {
+    struct response_mgr *rspmgr = req->additional_each_rspmgrs[i];
+    struct msg *dc_rsp = NULL;
+    if (!rsp) {
+      rsp = rspmgr_get_response(ctx, rspmgr);
+      ASSERT(rsp);
+    } else if (rsp->is_error) {
+      // If any of the DCs errored out, we just clean up responses from the
+      // remaining DCs.
+      rspmgr_free_other_responses(rspmgr, NULL);
+      continue;
+    } else {
+      ASSERT(rsp->is_error == false);
+      // If the DCs we've processed so far have not seen errors, we need to
+      // make sure that the remaining DCs don't have errors too.
+      dc_rsp = rspmgr_get_response(ctx, rspmgr);
+      ASSERT(dc_rsp);
+      if (dc_rsp->is_error) {
+        rsp_put(rsp);
+        rsp = dc_rsp;
+      } else {
+        // If it's not an error, clear all responses from this DC.
+        rspmgr_free_other_responses(rspmgr, NULL);
+        continue;
+      }
+    }
+
+    rspmgr_free_other_responses(rspmgr, rsp);
+    rsp->peer = req;
+    req->selected_rsp = rsp;
+    req->error_code = rsp->error_code;
+    req->is_error = rsp->is_error;
+    req->dyn_error_code = rsp->dyn_error_code;
+
+  }
+
+  return rsp;
+}
+
+static rstatus_t msg_each_quorum_rsp_handler(struct context *ctx, struct msg *req,
+    struct msg *rsp) {
+
+  if (all_rspmgrs_done(ctx, req->additional_each_rspmgrs)) return swallow_extra_rsp(req, rsp);
+
+  int rspmgr_idx = -1;
+  struct conn *rsp_conn = rsp->owner;
+  if (rsp_conn == NULL) {
+    rspmgr_idx = 0;
+  } else if (rsp_conn->type == CONN_DNODE_PEER_SERVER) {
+    struct node *peer_instance = (struct node*) rsp_conn->owner;
+    struct string *peer_dc_name = &peer_instance->dc;
+    rspmgr_idx = find_rspmgr_idx(ctx, req->additional_each_rspmgrs, peer_dc_name);
+    if (rspmgr_idx == -1) {
+      log_error("Could not find which DC response was from");
+    }
+  } else if (rsp_conn->type == CONN_SERVER) {
+    // If this is a 'CONN_SERVER' connection, then it is from the same DC.
+    rspmgr_idx = 0;
+  }
+
+  struct response_mgr *rspmgr = req->additional_each_rspmgrs[rspmgr_idx];
+  rspmgr_submit_response(rspmgr, rsp);
+  if (!rspmgr_check_is_done(rspmgr)) return DN_EAGAIN;
+  if (!all_rspmgrs_done(ctx, req->additional_each_rspmgrs)) return DN_EAGAIN;
+
+  rsp = all_rspmgrs_get_response(ctx, req);
   return DN_OK;
 }
 

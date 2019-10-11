@@ -306,7 +306,8 @@ static void dnode_req_forward(struct context *ctx, struct conn *conn,
     // racks
     struct mbuf *orig_mbuf = STAILQ_FIRST(&req->mhdr);
     struct datacenter *dc = server_get_dc(pool, &pool->dc);
-    req_forward_all_local_racks(ctx, conn, req, orig_mbuf, key, keylen, dc);
+
+    req_forward_all_racks_for_dc(ctx, conn, req, orig_mbuf, key, keylen, dc);
   }
 }
 

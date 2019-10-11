@@ -333,6 +333,7 @@ typedef enum consistency {
   DC_ONE = 0,
   DC_QUORUM,
   DC_SAFE_QUORUM,
+  DC_EACH_SAFE_QUORUM,
 } consistency_t;
 
 static inline char *get_consistency_string(consistency_t cons) {
@@ -343,6 +344,8 @@ static inline char *get_consistency_string(consistency_t cons) {
       return "DC_QUORUM";
     case DC_SAFE_QUORUM:
       return "DC_SAFE_QUORUM";
+    case DC_EACH_SAFE_QUORUM:
+      return "DC_EACH_SAFE_QUORUM";
   }
   return "INVALID CONSISTENCY";
 }
@@ -430,7 +433,7 @@ struct msg {
                                              or remote region or cross rack */
   usec_t request_send_time; /* when message was sent: either to the data store
                                or remote region or cross rack */
-  uint8_t awaiting_rsps;
+  uint32_t awaiting_rsps;
   struct msg *selected_rsp;
 
   struct rbnode tmo_rbe; /* entry in rbtree */
@@ -506,7 +509,16 @@ struct msg {
   msg_response_handler_t rsp_handler;
   consistency_t consistency;
   msgid_t parent_id; /* parent message id */
+
+  // Primary response_mgr for this instance's DC.
   struct response_mgr rspmgr;
+
+  // Additional response_mgrs if we choose to use DC_EACH_SAFE_QUORUM
+  struct response_mgr **additional_each_rspmgrs;
+
+  // Indicates whether the rspmgr and additional_each_rspmgrs(if applicable)
+  // are init-ed.
+  bool rspmgrs_inited;
 };
 
 TAILQ_HEAD(msg_tqh, msg);
@@ -588,7 +600,7 @@ void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn,
 
 void req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                        err_t error_code, err_t dyn_error_code);
-void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
+void req_forward_all_racks_for_dc(struct context *ctx, struct conn *c_conn,
                                  struct msg *req, struct mbuf *orig_mbuf,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc);
