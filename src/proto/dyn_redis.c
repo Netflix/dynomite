@@ -25,7 +25,9 @@
 
 #include "../dyn_core.h"
 #include "../dyn_dnode_peer.h"
+#include "../dyn_util.h"
 #include "dyn_proto.h"
+#include "dyn_proto_repair.h"
 
 #define RSP_STRING(ACTION) ACTION(ok, "+OK\r\n")
 
@@ -408,6 +410,7 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
   struct msg *new_msg = NULL;
   uint8_t *key = NULL;
   rstatus_t ret_status = DN_OK;
+
   switch (orig_msg->type) {
     case MSG_REQ_REDIS_SMEMBERS:
 
@@ -443,7 +446,7 @@ rstatus_t redis_rewrite_query(struct msg *orig_msg, struct context *ctx,
         }
         // Parse the message 'new_msg' to populate all of its appropriate
         // fields.
-        new_msg->parser(new_msg, &ctx->pool.hash_tag);
+        new_msg->parser(new_msg, ctx);
         // Check if 'new_msg' was parsed successfully.
         if (new_msg->result != MSG_PARSE_OK) {
           ret_status = DN_ERROR;
@@ -496,7 +499,7 @@ done:
  * Dynomite supports the Redis unified protocol for requests and inline ping.
  * The inline ping is being utilized by redis-benchmark
  */
-void redis_parse_req(struct msg *r, const struct string *hash_tag) {
+void redis_parse_req(struct msg *r, struct context *ctx) {
   struct mbuf *b;
   uint8_t *p, *m = 0;
   uint8_t ch;
@@ -533,8 +536,29 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
     SW_SENTINEL
   } state;
 
+  const struct string* hash_tag = &ctx->pool.hash_tag;
+
   state = r->state;
-  b = STAILQ_LAST(&r->mhdr, mbuf, next);
+
+  // Get the state of read repairs in the beginning, so that we don't risk it
+  // getting changed in the middle of parsing.
+  bool read_repairs_enabled = is_read_repairs_enabled();
+
+  if (read_repairs_enabled) {
+    b = STAILQ_FIRST(&r->mhdr);
+    if (r->state > SW_START) {
+      // If this is not the first time we're parsing the same request (because we hadn't
+      // receive the entire payload yet), skip all the mbufs already parsed.
+      int mbuf_idx = -1;
+      while (r->latest_parsed_mbuf_idx > mbuf_idx) {
+        loga("Skipping previously parsed mbuf");
+        b = STAILQ_NEXT(b, next);
+        ++mbuf_idx;
+      }
+    }
+  } else {
+    b = STAILQ_LAST(&r->mhdr, mbuf, next);
+  }
 
   ASSERT(r->is_request);
   ASSERT(state >= SW_START && state < SW_SENTINEL);
@@ -648,6 +672,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           r->token = p;
         }
 
+        // TODO: No multi-mbuf support for SW_REQ_TYPE (since very unlikely)
         m = r->token + r->rlen;
         if (m >= b->last) {
           m = b->last - 1;
@@ -663,7 +688,10 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         r->rlen = 0;
         m = r->token;
         r->token = NULL;
-        r->type = MSG_UNKNOWN;
+
+        // 'SCRIPT' commands are parsed in 2 steps due to the whitespace in between cmds,
+        // so don't set the type to MSG_UNKNOWN.
+        if (r->type != MSG_REQ_REDIS_SCRIPT) r->type = MSG_UNKNOWN;
 
         switch (p - m) {
           case 3:
@@ -873,7 +901,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str4icmp(m, 'l', 'o', 'a', 'd')) {
               // A command called 'LOAD' does not exist. This is the second half of the
               // command 'SCRIPT LOAD'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_LOAD;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
@@ -882,7 +909,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
             if (str4icmp(m, 'k', 'i', 'l', 'l')) {
               // A command called 'KILL' does not exist. This is the second half of the
               // command 'SCRIPT KILL'.
-              ASSERT(r->type == MSG_REQ_REDIS_SCRIPT);
               r->type = MSG_REQ_REDIS_SCRIPT_KILL;
               r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 0;
@@ -1040,6 +1066,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
               // This is not to be confused with 'EXISTS'. This is the second half of the
               // command 'SCRIPT EXISTS'.
               r->type = MSG_REQ_REDIS_SCRIPT_EXISTS;
+              r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 1;
               break;
             }
@@ -1649,6 +1676,7 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           r->token = p;
         }
 
+        // TODO: No multi-mbuf support for SW_KEY (since very unlikely)
         m = r->token + r->rlen;
         if (m >= b->last) {
           m = b->last - 1;
@@ -1798,10 +1826,42 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         
         m = p + r->rlen;
 
+        if (read_repairs_enabled) {
+          bool arg1_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            arg1_across_mbufs = true;
+
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
+
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
+          }
+          if (arg1_across_mbufs == false) {
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
+        }
         if (m >= b->last) {
+          // If we don't have a following mbuf, we expect a following incoming
+          // buffer to have the rest of the payload.
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
@@ -1809,14 +1869,6 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
           goto error;
         }
 
-        {
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
-        }
         p = m; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -1915,25 +1967,47 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
         }
 
         m = p + r->rlen;
+        if (read_repairs_enabled) {
+          bool arg2_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            arg2_across_mbufs = true;
+
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
+
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
+          }
+          if (arg2_across_mbufs == false) {
+            // TODO: Verify if this is the correct behavior for EVAL/EVALSHA
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
+        }
         if (m >= b->last) {
+          // If we don't have a following mbuf, we expect a following incoming
+          // buffer to have the rest of the payload.
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
         if (*m != CR) {
           goto error;
-        }
-
-        {
-          // TODO: Verify if this is the correct behavior for EVAL/EVALSHA
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
         }
 
         p = m; /* move forward by rlen bytes */
@@ -2048,24 +2122,46 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
 
       case SW_ARG3:
         m = p + r->rlen;
+        if (read_repairs_enabled) {
+          bool arg3_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            arg3_across_mbufs = true;
+
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
+
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
+          }
+          if (arg3_across_mbufs == false) {
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
+        }
         if (m >= b->last) {
+          // If we don't have a following mbuf, we expect a following incoming
+          // buffer to have the rest of the payload.
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
         if (*m != CR) {
           goto error;
-        }
-
-        {
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
         }
 
         p = m; /* move forward by rlen bytes */
@@ -2135,24 +2231,46 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
 
       case SW_ARGN:
         m = p + r->rlen;
+        if (read_repairs_enabled) {
+          bool argn_across_mbufs = false;
+          while (m >= b->last) {
+            // 'm' has surpassed the current mbuf. Make the next mbuf current.
+            int new_mbuf_offset = m - b->last;
+            struct mbuf *next_mbuf;
+            next_mbuf = STAILQ_NEXT(b, next);
+            if (next_mbuf == NULL) break;
+            argn_across_mbufs = true;
+
+            // Since the arg is across mbufs, we don't have logic to rewrite those with
+            // timestamps.
+            r->rewrite_with_ts_possible = false;
+
+            m = next_mbuf->pos + new_mbuf_offset;
+            b = next_mbuf;
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
+          }
+          if (argn_across_mbufs == false) {
+            rstatus_t argstatus = record_arg(p , m , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
+        }
         if (m >= b->last) {
+          // If we don't have a following mbuf, we expect a following incoming
+          // buffer to have the rest of the payload.
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
         if (*m != CR) {
           goto error;
-        }
-
-        {
-          rstatus_t argstatus = record_arg(p , m , r->args);
-          if (argstatus == DN_ERROR) {
-            goto error;
-          } else if (argstatus == DN_ENOMEM) {
-            goto enomem;
-          }
         }
 
         p = m; /* move forward by rlen bytes */
@@ -2192,10 +2310,13 @@ void redis_parse_req(struct msg *r, const struct string *hash_tag) {
   r->pos = p;
   r->state = state;
 
+  // If we have to parse again, we won't be able to write with the timestamp.
+  r->rewrite_with_ts_possible = false;
   if (b->last == b->end && r->token != NULL) {
     r->pos = r->token;
     r->token = NULL;
     r->result = MSG_PARSE_REPAIR;
+
   } else {
     r->result = MSG_PARSE_AGAIN;
   }
@@ -2275,7 +2396,7 @@ error:
  *     strings (bulks) with the initial line indicating how many bulks that
  *     will follow. The first byte of a multi bulk reply is always *.
  */
-void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
+void redis_parse_rsp(struct msg *r, struct context *ctx) {
   struct mbuf *b;
   uint8_t *p, *m;
   uint8_t ch;
@@ -2501,6 +2622,24 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
 
       case SW_SIMPLE:
         if (ch == CR) {
+          uint8_t* j;
+
+          // Find where this arg started.
+          // TODO: Not a big deal, but avoid iterating backwards.
+          for (j = p; j > 0; --j) {
+            if (*j == ':' || *j == '+' || *j == '-') break;
+          }
+
+          // Record this argument.
+          {
+            rstatus_t argstatus = record_arg(j , p , r->args);
+            if (argstatus == DN_ERROR) {
+              goto error;
+            } else if (argstatus == DN_ENOMEM) {
+              goto enomem;
+            }
+          }
+
           state = SW_MULTIBULK_ARGN_LF;
           r->rntokens--;
         }
@@ -2748,6 +2887,16 @@ void redis_parse_rsp(struct msg *r, const struct string *UNUSED) {
           goto error;
         }
 
+        {
+          // Record all args.
+          rstatus_t argstatus = record_arg(p , m , r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+        }
+
         p += r->rlen; /* move forward by rlen bytes */
         r->rlen = 0;
 
@@ -2807,13 +2956,22 @@ done:
   r->token = NULL;
   r->result = MSG_PARSE_OK;
   r->is_error = redis_error(r);
-
   log_hexdump(LOG_VERB, b->pos, mbuf_length(b),
               "parsed rsp %" PRIu64
               " res %d "
               "type %d state %d rpos %d of %d",
               r->id, r->result, r->type, r->state, r->pos - b->pos,
               b->last - b->pos);
+  return;
+
+enomem:
+  r->result = MSG_PARSE_ERROR;
+  r->state = state;
+  log_hexdump(LOG_ERR, b->pos, mbuf_length(b),
+              "out of memory on parse req %" PRIu64
+              " "
+              "res %d type %d state %d",
+              r->id, r->result, r->type, r->state);
   return;
 
 error:
@@ -3356,6 +3514,11 @@ rstatus_t redis_verify_request(struct msg *r, struct server_pool *pool,
   uint32_t prev_idx = 0, i;
   for (i = 0; i < array_n(r->keys); i++) { /* for each key */
     struct keypos *kpos = array_get(r->keys, i);
+
+    // If the keys are any of the dynomite reserved keys, skip verification for them
+    // as we don't distribute them based on tokens.
+    if (strncmp((char*)kpos->start, ADD_SET_STR, strlen(ADD_SET_STR)) == 0) continue;
+    if (strncmp((char*)kpos->start, REM_SET_STR, strlen(REM_SET_STR)) == 0) continue;
     uint32_t idx = dnode_peer_idx_for_key_on_rack(
         pool, rack, kpos->tag_start, kpos->tag_end - kpos->tag_start);
     if (i == 0) prev_idx = idx;
@@ -3453,7 +3616,7 @@ static rstatus_t redis_append_nargs(struct msg *rsp, int nargs) {
   struct mbuf *mbuf = msg_ensure_mbuf(rsp, len);
   if (!mbuf) return DN_ENOMEM;
   rsp->ntoken_start = mbuf->last;
-  int n = dn_scnprintf(mbuf->last, mbuf_size(mbuf), "*%d\r\n", nargs);
+  int n = dn_scnprintf(mbuf->last, mbuf_remaining_space(mbuf), "*%d\r\n", nargs);
   mbuf->last += n;
   rsp->ntoken_end = (rsp->ntoken_start + n - CRLF_LEN);
   rsp->mlen += (uint32_t)n;

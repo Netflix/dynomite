@@ -591,3 +591,26 @@ char *dn_unresolve_desc(int sd) {
 
   return dn_unresolve_addr(addr, addrlen);
 }
+
+int count_digits(uint64_t arg) {
+  return snprintf(NULL, 0, "%llu", arg) - (arg < 0);
+}
+
+uint64_t current_timestamp_in_millis() {
+  struct timeval t;
+  // Get the current time.
+  gettimeofday(&t, NULL);
+  uint64_t millis = (uint64_t)(t.tv_sec*1000LL + t.tv_usec/1000);
+
+  return millis;
+}
+
+uint32_t keypos_elem_len(struct keypos* elem) {
+  if (elem == NULL) return 0;
+  return elem->tag_end - elem->tag_start;
+}
+
+uint32_t argpos_elem_len(struct argpos* elem) {
+  if (elem == NULL) return 0;
+  return elem->end - elem->start;
+}

@@ -8,7 +8,7 @@ from time import sleep
 from dyno_cluster import DynoCluster
 from utils import generate_ips, setup_temp_dir, sleep_with_animation
 
-SETTLE_TIME = 5
+SETTLE_TIME = 3
 
 def main():
     parser = argparse.ArgumentParser(

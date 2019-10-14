@@ -200,7 +200,7 @@ static void dnode_client_close(struct context *ctx, struct conn *conn) {
   conn_unref(conn);
 }
 
-static rstatus_t dnode_client_handle_response(struct conn *conn, msgid_t reqid,
+static rstatus_t dnode_client_handle_response(struct context *ctx, struct conn *conn, msgid_t reqid,
                                               struct msg *rsp) {
   // Forward the response to the caller which is client connection.
   rstatus_t status = DN_OK;
@@ -218,7 +218,7 @@ static rstatus_t dnode_client_handle_response(struct conn *conn, msgid_t reqid,
   // client/coordinator. Hence all work for this request is done at this time
   ASSERT_LOG(!req->selected_rsp, "req %lu:%lu has selected_rsp set", req->id,
              req->parent_id);
-  status = msg_handle_response(req, rsp);
+  status = msg_handle_response(ctx, req, rsp);
   if (conn->waiting_to_unref) {
     dictDelete(conn->outstanding_msgs_dict, &reqid);
     log_info("Putting %s", print_obj(req));
@@ -306,7 +306,8 @@ static void dnode_req_forward(struct context *ctx, struct conn *conn,
     // racks
     struct mbuf *orig_mbuf = STAILQ_FIRST(&req->mhdr);
     struct datacenter *dc = server_get_dc(pool, &pool->dc);
-    req_forward_all_local_racks(ctx, conn, req, orig_mbuf, key, keylen, dc);
+
+    req_forward_all_racks_for_dc(ctx, conn, req, orig_mbuf, key, keylen, dc);
   }
 }
 

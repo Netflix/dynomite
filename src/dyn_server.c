@@ -28,6 +28,7 @@
 #include "dyn_dnode_peer.h"
 #include "dyn_server.h"
 #include "dyn_token.h"
+#include "dyn_util.h"
 
 static char *_print_datastore(const struct object *obj) {
   ASSERT(obj->type == OBJ_DATASTORE);
@@ -201,7 +202,7 @@ static void server_ack_err(struct context *ctx, struct conn *conn,
   log_info("close %s req %s len %" PRIu32 " from %s %c %s", print_obj(conn),
            print_obj(req), req->mlen, print_obj(c_conn), conn->err ? ':' : ' ',
            conn->err ? strerror(conn->err) : " ");
-  rstatus_t status = conn_handle_response(
+  rstatus_t status = conn_handle_response(ctx,
       c_conn, req->parent_id ? req->parent_id : req->id, rsp);
   IGNORE_RET_VAL(status);
   if (req->swallow) req_put(req);
@@ -507,7 +508,9 @@ dictType dc_string_dict_type = {
 };
 
 static rstatus_t rack_init(struct rack *rack) {
-  rack->continuum = dn_alloc(sizeof(struct continuum));
+
+  // TODO: Initialize the array to the size of the ring instead of to 1.
+  THROW_STATUS(array_init(&rack->continuums, 1, sizeof(struct continuum)));
   rack->ncontinuum = 0;
   rack->nserver_continuum = 0;
   rack->name = dn_alloc(sizeof(struct string));
@@ -520,9 +523,7 @@ static rstatus_t rack_init(struct rack *rack) {
 }
 
 static rstatus_t rack_deinit(struct rack *rack) {
-  if (rack->continuum != NULL) {
-    dn_free(rack->continuum);
-  }
+  array_deinit(&rack->continuums);
 
   return DN_OK;
 }
@@ -692,6 +693,11 @@ struct msg *rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc) {
     conn->rmsg = rsp;
   }
 
+  // Record timetamps if repairs are enabled.
+  // TODO: Consider requests that span multiple mbufs.
+  if (is_read_repairs_enabled()) {
+    rsp->timestamp = current_timestamp_in_millis();
+  }
   return rsp;
 }
 
@@ -785,7 +791,7 @@ static void server_rsp_forward(struct context *ctx, struct conn *s_conn,
 
   server_rsp_forward_stats(ctx, rsp);
   // handler owns the response now
-  status = conn_handle_response(c_conn, req->id, rsp);
+  status = conn_handle_response(ctx, c_conn, req->id, rsp);
   IGNORE_RET_VAL(status);
 }
 
