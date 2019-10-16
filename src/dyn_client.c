@@ -655,10 +655,8 @@ rstatus_t req_forward_to_peer(struct context *ctx, struct conn *c_conn,
   }
 
   if (!(same_dc && same_rack) || force_swallow) {
-    if (req->consistency != DC_EACH_SAFE_QUORUM || force_swallow) {
-      // Swallow responses from remote racks or DCs.
-      rack_msg->swallow = true;
-    }
+    // Swallow responses from remote racks or DCs.
+    rack_msg->swallow = true;
   }
 
   // Get a connection to the node.
