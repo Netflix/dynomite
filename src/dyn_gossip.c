@@ -840,12 +840,12 @@ static void *gossip_loop(void *arg) {
 }
 
 rstatus_t gossip_start(struct server_pool *sp) {
-  rstatus_t status;
   pthread_t tid;
 
-  status = pthread_create(&tid, NULL, gossip_loop, sp);
-  if (status < 0) {
-    log_error("gossip service create failed: %s", strerror(status));
+  int pthread_status;
+  pthread_status = pthread_create(&tid, NULL, gossip_loop, sp);
+  if (pthread_status < 0) {
+    log_error("gossip service create failed: %s", strerror(pthread_status));
     return DN_ERROR;
   }
 
