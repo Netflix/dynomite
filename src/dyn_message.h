@@ -191,7 +191,7 @@
   ACTION(REQ_REDIS_JSONOBJKEYS)                                                \
   ACTION(REQ_REDIS_JSONOBJLEN)                                                 \
   /* ACTION(REQ_REDIS_AUTH) */                                                 \
-  /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
+  ACTION(REQ_REDIS_SELECT) /* SELECT with arg '0' is valid */                  \
   ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
   ACTION(REQ_REDIS_PFCOUNT)                                                    \
   ACTION(REQ_REDIS_CONFIG)                                                     \
