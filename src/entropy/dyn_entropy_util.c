@@ -627,14 +627,13 @@ void *entropy_loop(void *arg) {
  */
 
 rstatus_t entropy_conn_start(struct entropy *cn) {
-  rstatus_t status;
-
   THROW_STATUS(entropy_listen(cn));
 
-  status = pthread_create(&cn->tid, NULL, entropy_loop, cn);
-  if (status < 0) {
+  int pthread_status;
+  pthread_status = pthread_create(&cn->tid, NULL, entropy_loop, cn);
+  if (pthread_status < 0) {
     log_error("reconciliation thread for socket create failed: %s",
-              strerror(status));
+              strerror(pthread_status));
     return DN_ERROR;
   }
 
