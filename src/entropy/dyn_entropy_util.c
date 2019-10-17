@@ -405,6 +405,9 @@ rstatus_t entropy_key_iv_load(struct context *ctx) {
 }
 
 /*
+ *
+ * NOTE: DEPRECATED and not currently used in the codebase.
+ *
  * Function:  entropy_snd_init
  * --------------------
  * Initiates the data for the connection towards another cluster for

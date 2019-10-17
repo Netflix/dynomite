@@ -132,6 +132,9 @@ static rstatus_t core_event_base_create(struct context *ctx) {
 }
 
 /**
+ *
+ * NOTE: DEPRECATED and not currently used in the codebase.
+ *
  * Initialize anti-entropy.
  * @param[in,out] ctx Context.
  * @return rstatus_t Return status code.
@@ -265,11 +268,6 @@ rstatus_t core_start(struct instance *nci) {
   }
 
   status = core_stats_create(ctx);
-  if (status != DN_OK) {
-    goto error;
-  }
-
-  status = core_entropy_init(ctx);
   if (status != DN_OK) {
     goto error;
   }
