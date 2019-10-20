@@ -218,6 +218,7 @@
   ACTION(RSP_REDIS_ERROR_EXECABORT)                                            \
   ACTION(RSP_REDIS_ERROR_MASTERDOWN)                                           \
   ACTION(RSP_REDIS_ERROR_NOREPLICAS)                                           \
+  ACTION(HACK_SETTING_CONN_CONSISTENCY)                                        \
   ACTION(SENTINEL)                                                             \
   ACTION(END_IDX)                                                              \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
@@ -260,11 +261,21 @@ extern func_msg_repair_t g_make_repair_query; /* Create a repair msg. */
 void set_datastore_ops(void);
 
 typedef enum msg_parse_result {
-  MSG_PARSE_OK,       /* parsing ok */
-  MSG_PARSE_ERROR,    /* parsing error */
-  MSG_PARSE_REPAIR,   /* more to parse -> repair parsed & unparsed data */
-  MSG_PARSE_FRAGMENT, /* multi-vector request -> fragment */
-  MSG_PARSE_AGAIN,    /* incomplete -> parse again */
+  // Parsing OK
+  MSG_PARSE_OK,
+  // Parsing error
+  MSG_PARSE_ERROR,
+  // More to parse -> Repair parsed & unparsed data
+  MSG_PARSE_REPAIR,
+  // Multi-vector request -> fragment
+  MSG_PARSE_FRAGMENT,
+  // Incomplete, parse again.
+  MSG_PARSE_AGAIN,
+  // Parsing done, but do nothing after
+  MSG_PARSE_NOOP,
+  // Parsing done, command was a dynomite configuration
+  MSG_PARSE_DYNO_CONFIG,
+  // OOM error during parsing (TODO: consider removing)
   MSG_OOM_ERROR
 } msg_parse_result_t;
 
@@ -348,6 +359,19 @@ static inline char *get_consistency_string(consistency_t cons) {
       return "DC_EACH_SAFE_QUORUM";
   }
   return "INVALID CONSISTENCY";
+}
+
+static inline consistency_t get_consistency_enum_from_string(char *cons) {
+  if (dn_strcasecmp(cons, "DC_ONE") == 0) {
+    return DC_ONE;
+  } else if (dn_strcasecmp(cons, "DC_QUORUM") == 0) {
+    return DC_QUORUM;
+  } else if (dn_strcasecmp(cons, "DC_SAFE_QUORUM") == 0) {
+    return DC_SAFE_QUORUM;
+  } else if (dn_strcasecmp(cons, "DC_EACH_SAFE_QUORUM") == 0) {
+    return DC_EACH_SAFE_QUORUM;
+  }
+  return -1;
 }
 
 #define DEFAULT_READ_CONSISTENCY DC_ONE
@@ -616,4 +640,8 @@ rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 // string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn,
                                struct mbuf *data);
+
+// Returns 'true' if 'msg_type' is a Dynomite configuration command.
+bool is_msg_type_dyno_config(msg_type_t msg_type);
+
 #endif

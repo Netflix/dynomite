@@ -182,7 +182,7 @@ static void rspmgr_incr_non_quorum_responses_stats(
  */
 bool perform_repairs_if_necessary(struct context *ctx, struct response_mgr *rspmgr) {
 
-  struct msg* repair_msg;
+  struct msg* repair_msg = NULL;
   rstatus_t repair_create_status = g_make_repair_query(ctx, rspmgr, &repair_msg);
 
   if (repair_create_status == DN_OK && repair_msg != NULL) {
