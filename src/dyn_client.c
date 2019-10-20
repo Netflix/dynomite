@@ -343,6 +343,7 @@ struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc) {
   if (is_read_repairs_enabled()) {
     req->timestamp = current_timestamp_in_millis();
   }
+
   return req;
 }
 
@@ -364,9 +365,18 @@ static bool req_filter(struct context *ctx, struct conn *conn,
   if (req->quit) {
     ASSERT(conn->rmsg == NULL);
     log_debug(LOG_VERB, "%s filter quit %s", print_obj(conn), print_obj(req));
+
+    // The client expects to receive an "+OK\r\n" response, so make sure
+    // to do that.
+    IGNORE_RET_VAL(simulate_ok_rsp(ctx, conn, req));
+
     conn->eof = 1;
     conn->recv_ready = 0;
-    req_put(req);
+    return true;
+  }
+
+  // If this is a Dynomite configuration message, don't forward it.
+  if (is_msg_type_dyno_config(req->type)) {
     return true;
   }
 

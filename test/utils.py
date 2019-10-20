@@ -38,7 +38,7 @@ def string_generator(size=6, chars=string.ascii_letters + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
 def number_generator(size=4, chars=string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
+    return int(''.join(random.choice(chars) for _ in range(size)))
 
 def dict_request(request, key1, key2):
     """Converts the request into an easy to consume dict format."""
