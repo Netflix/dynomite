@@ -365,9 +365,13 @@ static bool req_filter(struct context *ctx, struct conn *conn,
   if (req->quit) {
     ASSERT(conn->rmsg == NULL);
     log_debug(LOG_VERB, "%s filter quit %s", print_obj(conn), print_obj(req));
+
+    // The client expects to receive an "+OK\r\n" response, so make sure
+    // to do that.
+    IGNORE_RET_VAL(simulate_ok_rsp(ctx, conn, req));
+
     conn->eof = 1;
     conn->recv_ready = 0;
-    req_put(req);
     return true;
   }
 

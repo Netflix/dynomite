@@ -923,7 +923,7 @@ static rstatus_t msg_repair(struct context *ctx, struct conn *conn,
  *
  * Returns a 'msg' with the expected success response.
  */
-static struct msg *simulate_ok_rsp(struct context *ctx, struct conn *conn,
+static struct msg *craft_ok_rsp(struct context *ctx, struct conn *conn,
     struct msg *req) {
 
   ASSERT(req->is_request);
@@ -951,6 +951,24 @@ static struct msg *simulate_ok_rsp(struct context *ctx, struct conn *conn,
   return rsp;
 }
 
+rstatus_t simulate_ok_rsp(struct context *ctx, struct conn *conn,
+    struct msg *msg) {
+  // Create an OK response.
+  struct msg *ok_rsp = craft_ok_rsp(ctx, conn, msg);
+
+  // Add it to the outstanding messages dictionary, so that 'conn_handle_response'
+  // can process it appropriately.
+  dictAdd(conn->outstanding_msgs_dict, &msg->id, msg);
+
+  // Enqueue the message in the outbound queue so that the code on the response
+  // path can find it.
+  conn_enqueue_outq(ctx, conn, msg);
+
+  THROW_STATUS(conn_handle_response(ctx, conn,
+      msg->parent_id ? msg->parent_id : msg->id, ok_rsp));
+
+  return DN_OK;
+}
 
 /*
  * If the command sent to Dynomite was a special Dynomite configuration
@@ -979,19 +997,7 @@ static rstatus_t msg_apply_config(struct context *ctx, struct conn *conn,
   // Set the consistency to DC_ONE, since this is just a configuration setting.
   msg->consistency = DC_ONE;
 
-  // Create an OK response.
-  struct msg *ok_rsp = simulate_ok_rsp(ctx, conn, msg);
-
-  // Add it to the outstanding messages dictionary, so that 'conn_handle_response'
-  // can process it appropriately.
-  dictAdd(conn->outstanding_msgs_dict, &msg->id, msg);
-
-  // Enqueue the message in the outbound queue so that the code on the response
-  // path can find it.
-  conn_enqueue_outq(ctx, conn, msg);
-
-  THROW_STATUS(conn_handle_response(ctx, conn,
-      msg->parent_id ? msg->parent_id : msg->id, ok_rsp));
+  THROW_STATUS(simulate_ok_rsp(ctx, conn, msg));
 
   return DN_OK;
 }

@@ -641,6 +641,16 @@ rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn,
                                struct mbuf *data);
 
+/*
+ * Simulates a successful response as though the datastore sent it.
+ * Also, does the necessary to make sure that the response path is
+ * able to send this response back to the client.
+ *
+ * Returns DN_OK on success and an appropriate error otherwise.
+ */
+rstatus_t simulate_ok_rsp(struct context *ctx, struct conn *conn,
+    struct msg *msg);
+
 // Returns 'true' if 'msg_type' is a Dynomite configuration command.
 bool is_msg_type_dyno_config(msg_type_t msg_type);
 
