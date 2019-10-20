@@ -1562,6 +1562,18 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
             }
 
             break;
+
+          case 28:
+            // Note: This is not a Redis command, but a dynomite configuration
+            // command.
+            if (dn_strcasecmp(m, "dyno_config:conn_consistency") == 0) {
+              r->type = MSG_HACK_SETTING_CONN_CONSISTENCY;
+              r->is_read = 0;
+              break;
+            }
+
+            break;
+
           default:
             r->is_read = 1;
             break;
@@ -1588,6 +1600,12 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           state = SW_REQ_TYPE_LEN;
           log_debug(LOG_VERB, "parsed partial command '%.*s'. Continuing to parse" \
               "remainaing part of command", p - m, m);
+          break;
+        }
+
+        if (is_msg_type_dyno_config(r->type)) {
+          // If this is a Dynomite config message, we parse it a bit differently.
+          state = SW_ARG1_LEN;
           break;
         }
         switch (ch) {
@@ -1812,7 +1830,20 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           log_error("Redis CONFIG command not supported '%.*s'", p - m, m);
           goto error;
         }
+
         m = p + r->rlen;
+
+        if (is_msg_type_dyno_config(r->type)) {
+          rstatus_t argstatus = record_arg(p, m, r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+
+          r->result = MSG_PARSE_DYNO_CONFIG;
+          return;
+        }
 
         if (read_repairs_enabled) {
           bool arg1_across_mbufs = false;

@@ -915,6 +915,87 @@ static rstatus_t msg_repair(struct context *ctx, struct conn *conn,
   return DN_OK;
 }
 
+/*
+ * Crafts a success response message for the respective datastore.
+ *
+ * TODO: This currently does only Redis. The Redis specific code should
+ *       be moved out of this file.
+ *
+ * Returns a 'msg' with the expected success response.
+ */
+static struct msg *simulate_ok_rsp(struct context *ctx, struct conn *conn,
+    struct msg *req) {
+
+  ASSERT(req->is_request);
+
+  rstatus_t ret_status = DN_OK;
+  const char *QUIT_FMT_STRING = "+OK\r\n";
+
+  struct msg *rsp = msg_get(conn, false, __FUNCTION__);
+  if (rsp == NULL) {
+    conn->err = errno;
+    return NULL;
+  }
+
+  rstatus_t append_status = msg_append(rsp, QUIT_FMT_STRING, strlen(QUIT_FMT_STRING));
+  if (append_status != DN_OK) {
+    rsp_put(rsp);
+    return NULL;
+  }
+
+  rsp->peer = req;
+  rsp->is_request = 0;
+
+  req->done = 1;
+
+  return rsp;
+}
+
+
+/*
+ * If the command sent to Dynomite was a special Dynomite configuration
+ * command, we process and apply the configuration here.
+ *
+ * Returns: DN_OK on successful application, DN_ERROR otherwise.
+ */
+static rstatus_t msg_apply_config(struct context *ctx, struct conn *conn,
+    struct msg *msg) {
+
+  // We only support one type of configuration now.
+  // TODO: If we support more, convert this to a switch case.
+  ASSERT(msg->type == MSG_HACK_SETTING_CONN_CONSISTENCY);
+
+  struct argpos *consistency_string = (struct argpos*) array_get(msg->args, 0);
+
+  // We must have a consistency string, else we wouldn't have reached here.
+  ASSERT(consistency_string != NULL);
+
+  consistency_t cons = get_consistency_enum_from_string(consistency_string->start);
+  if (cons == -1) return DN_ERROR;
+
+  conn_set_read_consistency(conn, cons);
+  conn_set_write_consistency(conn, cons);
+
+  // Set the consistency to DC_ONE, since this is just a configuration setting.
+  msg->consistency = DC_ONE;
+
+  // Create an OK response.
+  struct msg *ok_rsp = simulate_ok_rsp(ctx, conn, msg);
+
+  // Add it to the outstanding messages dictionary, so that 'conn_handle_response'
+  // can process it appropriately.
+  dictAdd(conn->outstanding_msgs_dict, &msg->id, msg);
+
+  // Enqueue the message in the outbound queue so that the code on the response
+  // path can find it.
+  conn_enqueue_outq(ctx, conn, msg);
+
+  THROW_STATUS(conn_handle_response(ctx, conn,
+      msg->parent_id ? msg->parent_id : msg->id, ok_rsp));
+
+  return DN_OK;
+}
+
 static rstatus_t msg_parse(struct context *ctx, struct conn *conn,
                            struct msg *msg) {
   rstatus_t status;
@@ -929,18 +1010,23 @@ static rstatus_t msg_parse(struct context *ctx, struct conn *conn,
 
   switch (msg->result) {
     case MSG_PARSE_OK:
-      // log_debug(LOG_VVERB, "MSG_PARSE_OK");
       status = msg_parsed(ctx, conn, msg);
       break;
-
     case MSG_PARSE_REPAIR:
-      // log_debug(LOG_VVERB, "MSG_PARSE_REPAIR");
       status = msg_repair(ctx, conn, msg);
       break;
-
     case MSG_PARSE_AGAIN:
-      // log_debug(LOG_VVERB, "MSG_PARSE_AGAIN");
       status = DN_OK;
+      break;
+    case MSG_PARSE_DYNO_CONFIG:
+      status = msg_apply_config(ctx, conn, msg);
+
+      // No more data to parse.
+      conn_recv_done(ctx, conn, msg, NULL);
+      break;
+
+    case MSG_PARSE_NOOP:
+      status = DN_NOOPS;
       break;
 
     default:
@@ -1610,4 +1696,10 @@ rstatus_t msg_append_format(struct msg *msg, const char *fmt, int num_args, ...)
   }
 
   return DN_OK;
+}
+
+bool is_msg_type_dyno_config(msg_type_t msg_type) {
+  // TODO: Convert to a switch case if we support more.
+  if (msg_type == MSG_HACK_SETTING_CONN_CONSISTENCY) return true;
+  return false;
 }
