@@ -197,6 +197,7 @@ static void server_ack_err(struct context *ctx, struct conn *conn,
   rsp->error_code = req->error_code = conn->err;
   rsp->dyn_error_code = req->dyn_error_code = STORAGE_CONNECTION_REFUSE;
   rsp->dmsg = NULL;
+  rsp->owner = conn;
   log_debug(LOG_DEBUG, "%s <-> %s", print_obj(req), print_obj(rsp));
 
   log_info("close %s req %s len %" PRIu32 " from %s %c %s", print_obj(conn),
