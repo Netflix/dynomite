@@ -1230,6 +1230,7 @@ static struct msg *all_rspmgrs_get_response(struct context *ctx, struct msg *req
       continue;
     } else {
       ASSERT(rsp->is_error == false);
+
       // If the DCs we've processed so far have not seen errors, we need to
       // make sure that the remaining DCs don't have errors too.
       dc_rsp = rspmgr_get_response(ctx, rspmgr);
@@ -1259,11 +1260,14 @@ static struct msg *all_rspmgrs_get_response(struct context *ctx, struct msg *req
 static rstatus_t msg_each_quorum_rsp_handler(struct context *ctx, struct msg *req,
     struct msg *rsp) {
 
-  if (all_rspmgrs_done(ctx, req->additional_each_rspmgrs)) return swallow_extra_rsp(req, rsp);
+  if (all_rspmgrs_done(ctx, req->additional_each_rspmgrs)) {
+    return swallow_extra_rsp(req, rsp);
+  }
 
   int rspmgr_idx = -1;
   struct conn *rsp_conn = rsp->owner;
   if (rsp_conn == NULL) {
+    // TODO: We should remove this case. Test and confirm.
     rspmgr_idx = 0;
   } else if (rsp_conn->type == CONN_DNODE_PEER_SERVER) {
     struct node *peer_instance = (struct node*) rsp_conn->owner;
