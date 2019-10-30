@@ -405,6 +405,53 @@
   "end\n\n"\
   "return ret\n\r\n"
 
+
+/**********************************************************************/
+/*                   BEGIN METADATA CLEANUP SCRIPTS                   */
+/**********************************************************************/
+
+// Note: Some of the fields are not necessary but are still kept because the Dynomite
+// code creates all scripts with a certain argument format.
+// Eg: 'orig_cmd', 'num_fields', etc. are unnecessary for these scripts.
+#define CLEANUP_DEL_SCRIPT "$4\r\nEVAL\r\n$415\r\n"\
+"local key = KEYS[1]\n"\
+"local top_level_add_set = KEYS[2]\n"\
+"local top_level_rem_set = KEYS[3]\n"\
+"local orig_cmd = ARGV[1]\n"\
+"local num_fields = ARGV[2]\n"\
+"local cur_ts = ARGV[3]\n\n"\
+"local top_level_rem_set_ts = redis.call('ZSCORE', top_level_rem_set, key)\n"\
+"if (top_level_rem_set_ts) then\n"\
+"  if (tonumber(cur_ts) < tonumber(top_level_rem_set_ts)) then\n"\
+"    return 0\n"\
+"  end\n"\
+"  return redis.call('ZREM', top_level_rem_set, key)\n"\
+"end\n"\
+"return 0\n\r\n"
+
+#define CLEANUP_HDEL_SCRIPT "$4\r\nEVAL\r\n$664\r\n"\
+"local key = KEYS[1]\n"\
+"local top_level_add_set = KEYS[2]\n"\
+"local top_level_rem_set = KEYS[3]\n"\
+"local add_set = top_level_add_set .. '_' .. key\n"\
+"local rem_set = top_level_rem_set .. '_' .. key\n"\
+"local orig_cmd = ARGV[1]\n"\
+"local num_fields = ARGV[2]\n"\
+"local cur_ts = ARGV[3]\n"\
+"local field = ARGV[4]\n\n"\
+"local last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, field)\n"\
+"if (last_seen_ts_in_rem) then\n"\
+"  if (tonumber(cur_ts) < tonumber(last_seen_ts_in_rem)) then\n"\
+"    return 0\n"\
+"  end\n"\
+"  local ret = redis.call('ZREM', rem_set, field)\n"\
+"  local remaining_elems = redis.call('ZCARD', rem_set)\n"\
+"  if (remaining_elems == 0) then\n"\
+"    redis.call('ZREM', top_level_rem_set, key)\n"\
+"  end\n"\
+"  return ret\n"\
+"end\n\r\n"
+
 #define MAX_ARG_FMT_STR_LEN 512
 
 #define ADD_SET_STR "._add-set"

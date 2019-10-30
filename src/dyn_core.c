@@ -94,6 +94,7 @@ static rstatus_t core_dnode_peer_pool_preconnect(struct context *ctx) {
   IGNORE_RET_VAL(status);
   return status;
 }
+
 static rstatus_t core_dnode_peer_init(struct context *ctx) {
   /* initialize peers */
   THROW_STATUS(dnode_initialize_peers(ctx));
