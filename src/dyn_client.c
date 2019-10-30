@@ -1173,7 +1173,19 @@ static rstatus_t swallow_extra_rsp(struct msg *req, struct msg *rsp) {
 
 static rstatus_t msg_quorum_rsp_handler(struct context *ctx, struct msg *req,
     struct msg *rsp) {
-  if (req->rspmgr.done) return swallow_extra_rsp(req, rsp);
+  if (req->rspmgr.done) {
+    rstatus_t swallow_status = swallow_extra_rsp(req, rsp);
+    if (is_read_repairs_enabled()) {
+      struct msg *cleanup_msg = NULL;
+      // Check if we can delete tombstone metadata.
+      rstatus_t status = g_clear_repair_md_for_key(ctx, req, &cleanup_msg);
+      if (status == DN_OK) {
+        req_forward(ctx, req->owner, cleanup_msg);
+      }
+      return DN_NOOPS;
+    }
+    return swallow_status;
+  }
   rspmgr_submit_response(&req->rspmgr, rsp);
   if (!rspmgr_check_is_done(&req->rspmgr)) return DN_EAGAIN;
   // rsp is absorbed by rspmgr. so we can use that variable

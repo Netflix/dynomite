@@ -244,6 +244,8 @@ typedef rstatus_t (*func_msg_rewrite_t)(struct msg *orig_msg,
                                         struct msg **new_msg_ptr);
 typedef rstatus_t (*func_msg_repair_t)(struct context *ctx, struct response_mgr *rspmgr,
     struct msg **new_msg_ptr);
+typedef rstatus_t (*func_clear_repair_md_t)(struct context *ctx, struct msg *req,
+    struct msg **new_msg_ptr);
 typedef void (*func_init_datastore_t)();
 
 extern func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
@@ -257,6 +259,7 @@ extern func_msg_rewrite_t
 extern func_msg_rewrite_t
     g_rewrite_query_with_timestamp_md;
 extern func_msg_repair_t g_make_repair_query; /* Create a repair msg. */
+extern func_clear_repair_md_t g_clear_repair_md_for_key;
 
 void set_datastore_ops(void);
 

@@ -556,7 +556,7 @@ void update_total_num_tokens(struct write_with_ts *src) {
  * <total_num_tokens> <script> <args>
  *
  * where <args> can be elaborated more into:
- * <key1>..(<keyN>) <+set> <-set> <orig_cmd> <num_opts> <num_flds> \
+ * <key1>..(<keyN>) <+set> <-set> <orig_cmd> (<num_opts>) <num_flds> \
  * <ts> (<opt1>) .. (<optN>) (<fld1>) (<val1>) (<fldN>) ..
  *
  * Tokens shown above with parantheses are optional.
@@ -939,4 +939,97 @@ error:
   // Return the newly allocated message back to the free message queue.
   if (new_msg != NULL) msg_put(new_msg);
   return ret_status;
+}
+
+// TODO: Do code cleanup
+static rstatus_t create_cleanup_script(struct context *ctx, struct msg *orig_msg,
+    struct conn *conn, struct msg **new_msg_ptr) {
+  rstatus_t ret_status;
+
+  struct write_with_ts msg_info;
+  msg_info.keys = NULL;
+  msg_info.fields = NULL;
+  msg_info.num_keys = 1;
+  msg_info.num_values = 0;
+  msg_info.num_optionals = 0;
+
+  msg_info.keys = array_create(msg_info.num_keys, sizeof(struct keypos));
+  if (msg_info.keys == NULL) goto error;
+
+  struct keypos *kpos = (struct keypos*)array_push(msg_info.keys);
+  struct keypos *orig_kpos = (struct keypos*)array_get(orig_msg->keys, 0);
+  kpos->start = orig_kpos->start;
+  kpos->end = orig_kpos->end;
+  kpos->tag_start = orig_kpos->tag_start;
+  kpos->tag_end = orig_kpos->tag_end;
+
+  msg_info.ts = orig_msg->timestamp;
+  msg_info.add_set = ADD_SET_STR;
+  msg_info.rem_set = REM_SET_STR;
+
+  msg_type_t orig_msg_type = orig_msg->type;
+  switch (orig_msg_type) {
+    case MSG_REQ_REDIS_DEL:
+      msg_info.rewrite_script = CLEANUP_DEL_SCRIPT;
+      msg_info.num_fields = 0;
+      break;
+    case MSG_REQ_REDIS_ZREM:
+    case MSG_REQ_REDIS_HDEL:
+    case MSG_REQ_REDIS_SREM:
+      msg_info.rewrite_script = CLEANUP_HDEL_SCRIPT;
+      msg_info.num_fields = 1;
+      msg_info.fields = array_create(msg_info.num_fields, sizeof(struct argpos));
+      if (msg_info.fields == NULL) goto error;
+      struct argpos *field_pos = (struct argpos*)array_push(msg_info.fields);
+      struct argpos *orig_field_pos = (struct argpos*)array_get(orig_msg->args, 0);
+      field_pos->start = orig_field_pos->start;
+      field_pos->end = orig_field_pos->end;
+      break;
+    default:
+      return DN_NOOPS;
+      break;
+  }
+  // TODO: Consider adding a special type for cleanup scripts
+  msg_info.cmd_type = MSG_UNKNOWN;
+
+  update_total_num_tokens(&msg_info);
+
+  ret_status = finalize_repair_msg(ctx, conn, &msg_info, new_msg_ptr);
+
+  return ret_status;
+
+ error:
+  if (msg_info.keys != NULL) {
+    array_destroy(msg_info.keys);
+  }
+  if (msg_info.fields != NULL) {
+    array_destroy(msg_info.fields);
+  }
+  return DN_ERROR;
+}
+
+rstatus_t redis_clear_repair_md_for_key(struct context *ctx, struct msg *req,
+    struct msg **new_msg_ptr) {
+  // If we lost a track of the original message type, we cannot proceed.
+  if (req->orig_msg == NULL) return DN_NOOPS;
+  msg_type_t orig_msg_type = req->orig_msg->type;
+
+  // If the original request wasn't a delete, then we shouldn't clear the metadata.
+  if (proto_cmd_info[orig_msg_type].is_delete == false) return DN_NOOPS;
+
+  // If we haven't received responses from all the replicas yet, we shouldn't clear the MD.
+  if (++req->rspmgr.good_responses < req->rspmgr.max_responses) return DN_NOOPS;
+
+  rstatus_t create_status = create_cleanup_script(
+      ctx, req->orig_msg, req->owner, new_msg_ptr);
+
+  // If we were unsuccessful in creating the script, do nothing.
+  if (create_status != DN_OK) return DN_NOOPS;
+
+  // This is a best effort command, don't attempt to capture any responses to it.
+  (*new_msg_ptr)->expect_datastore_reply = false;
+  (*new_msg_ptr)->awaiting_rsps = 0;
+
+  //req_forward(ctx, req->owner, cleanup_msg);
+  return DN_OK;
 }
