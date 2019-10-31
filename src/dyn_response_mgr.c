@@ -24,13 +24,13 @@ rstatus_t init_response_mgr_all_dcs(struct context *ctx, struct msg *req,
   // Initialize the response managers for all remote DCs. (The 0th idx in the
   // 'additional_each_rspmgrs' array is reserved for the local DC).
   int i;
+  uint32_t dc_idx = 0;
   for (i = 1; i < num_dcs_in_quorum; ++i) {
     req->additional_each_rspmgrs[i] = (struct rspmgr*) dn_alloc(sizeof(struct response_mgr));
     if (req->additional_each_rspmgrs[i] == NULL) {
       goto enomem;
     }
 
-    uint32_t dc_idx = 0;
     struct datacenter *remote_dc = NULL;
     do {
       remote_dc = (struct datacenter*) array_get(&ctx->pool.datacenters, dc_idx);
