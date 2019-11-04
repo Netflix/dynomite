@@ -867,6 +867,10 @@ rstatus_t redis_make_repair_query(struct context *ctx, struct response_mgr *rspm
   bool repair_by_add = false;
   uint32_t num_values = 0;
 
+  // If we enabled read repairs halfway, in flight commands will not be
+  // repairable.
+  if (rspmgr->msg->orig_msg == NULL) return DN_OK;
+
   // Redis commands either lookup keys or fields (secondary keys), so the number of
   // expected values would be based on either one of them.
   if (rspmgr->msg->orig_msg->msg_info.num_fields > 0) {
