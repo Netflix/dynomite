@@ -107,7 +107,7 @@
   "redis.call('ZADD', add_set, cur_ts, key)\n"\
   "return redis.call(orig_cmd, key, value)\n\r\n"
 
-#define GET_SCRIPT "$4\r\nEVAL\r\n$490\r\n"\
+#define GET_SCRIPT "$4\r\nEVAL\r\n$569\r\n"\
   "local key = KEYS[1]\n"\
   "local add_set = KEYS[2]\n"\
   "local rem_set = KEYS[3]\n"\
@@ -116,8 +116,10 @@
   "local cur_ts = ARGV[3]\n\n"\
   "local value = redis.call(orig_cmd, key)\n\n"\
   "local last_seen_ts_in_add = redis.call('ZSCORE', add_set, key)\n"\
-  "if (last_seen_ts_in_add) then\n"\
+  "if (last_seen_ts_in_add and value) then\n"\
   "  return {'E', last_seen_ts_in_add, value}\n"\
+  "elseif (last_seen_ts_in_add) then\n"\
+  "  redis.call('ZREM', add_set, key)\n"\
   "end\n\n"\
   "local last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, key)\n"\
   "if (last_seen_ts_in_rem) then\n"\
@@ -251,7 +253,7 @@
   "end\n\n"\
   "return ret\n\r\n"
 
-#define HGET_SCRIPT "$4\r\nEVAL\r\n$982\r\n"\
+#define HGET_SCRIPT "$4\r\nEVAL\r\n$1055\r\n"\
   "local key = KEYS[1]\n"\
   "local top_level_add_set = KEYS[2]\n"\
   "local top_level_rem_set = KEYS[3]\n"\
@@ -266,7 +268,8 @@
   "local tl_removed_ts = redis.call('ZSCORE', top_level_rem_set, key)\n"\
   "if (tl_removed_ts) then\n"\
   "  status_field = 'R'\n"\
-  "  ts = tl_removed_ts\nelse\n"\
+  "  ts = tl_removed_ts\n"\
+  "else\n"\
   "  local removed_ts = redis.call('ZSCORE', rem_set, field)\n"\
   "  if (removed_ts) then\n"\
   "    ts = removed_ts\n"\
@@ -287,6 +290,9 @@
   "  end\n"\
   "end\n\n"\
   "local value = redis.call(orig_cmd, key, field)\n"\
+  "if (status_field == 'E' and not value) then\n"\
+  "  return {'X', 0, value}\n"\
+  "end\n"\
   "return {status_field, ts, value}\n\r\n"
 
 #define ZADD_SCRIPT "$4\r\nEVAL\r\n$2022\r\n"\

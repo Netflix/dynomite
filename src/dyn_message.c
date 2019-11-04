@@ -421,6 +421,20 @@ done:
   msg->additional_each_rspmgrs = NULL;
   msg->rspmgrs_inited = false;
 
+  // Init the write_with_ts struct:
+  struct write_with_ts *minfo = &msg->msg_info;
+  minfo->add_set = NULL;
+  minfo->rem_set = NULL;
+  minfo->keys = NULL;
+  minfo->num_keys = 0;
+  minfo->fields = NULL;
+  minfo->num_fields = 0;
+  minfo->values = NULL;
+  minfo->num_values = 0;
+  minfo->optionals = NULL;
+  minfo->num_optionals = 0;
+  minfo->rewrite_script = NULL;
+  minfo->total_num_tokens = 0;
   return msg;
 }
 
@@ -645,6 +659,19 @@ void msg_put(struct msg *msg) {
   if (msg->orig_msg) {
     msg_put(msg->orig_msg);
     msg->orig_msg = NULL;
+  }
+
+  if (msg->msg_info.keys) {
+    array_destroy(msg->msg_info.keys);
+  }
+  if (msg->msg_info.fields) {
+    array_destroy(msg->msg_info.fields);
+  }
+  if (msg->msg_info.values) {
+    array_destroy(msg->msg_info.values);
+  }
+  if (msg->msg_info.optionals) {
+    array_destroy(msg->msg_info.optionals);
   }
 
   if (msg->additional_each_rspmgrs) {
