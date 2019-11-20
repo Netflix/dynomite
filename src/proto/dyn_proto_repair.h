@@ -211,7 +211,7 @@
   "  return ret\n"\
   "end\n\r\n"
 
-#define HDEL_SCRIPT "$4\r\nEVAL\r\n$1175\r\n"\
+#define HDEL_SCRIPT "$4\r\nEVAL\r\n$1122\r\n"\
   "local key = KEYS[1]\n"\
   "local top_level_add_set = KEYS[2]\n"\
   "local top_level_rem_set = KEYS[3]\n"\
@@ -248,7 +248,6 @@
   "end\n\n"\
   "local card = redis.call('ZCARD', rem_set)\n"\
   "if (card == 0) then\n"\
-  "  redis.call('ZADD', top_level_add_set, cur_ts, key)\n"\
   "  redis.call('ZREM', top_level_rem_set, key)\n"\
   "end\n\n"\
   "return ret\n\r\n"
