@@ -934,7 +934,10 @@ rstatus_t redis_rewrite_query_with_timestamp_md(struct msg *orig_msg, struct con
   update_total_num_tokens(&orig_msg->msg_info);
 
   ret_status = finalize_repair_msg(ctx, orig_msg->owner, &orig_msg->msg_info, new_msg_ptr);
+
   if (ret_status != DN_OK) goto error;
+  (*new_msg_ptr)->is_read = orig_msg->is_read;
+
   *did_rewrite = true;
   return ret_status;
 
