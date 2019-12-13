@@ -24,7 +24,7 @@
 
 struct msg *craft_auth_rsp(struct context *ctx, struct conn *conn,
     struct msg *req, char *auth_msg);
-rstatus_t redis_auth_reply(struct context *ctx, struct conn *conn,
+rstatus_t simulate_auth_rsp(struct context *ctx, struct conn *conn,
                            struct msg *msg, char *auth_msg);
 static int extract_password(unsigned char *string, unsigned int len, char *passwd,
                             uint32_t *passwd_len);
@@ -118,8 +118,6 @@ struct msg *craft_auth_rsp(struct context *ctx, struct conn *conn,
     struct msg *req, char *auth_msg) {
 
   ASSERT(req->is_request);
-
-  rstatus_t ret_status = DN_OK;
   
   struct msg *rsp = msg_get(conn, false, __FUNCTION__);
   if (rsp == NULL) {
