@@ -106,7 +106,7 @@ struct conf_pool {
   struct string rack;  /* this node's logical rack */
   struct array tokens; /* this node's token: dyn_token array */
   msec_t gos_interval; /* wake up interval in ms */
-  
+
   /* none | datacenter | rack | all in order of increasing number of
    * connections. (default is datacenter) */
   struct string secure_server_option;
