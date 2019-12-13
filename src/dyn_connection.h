@@ -133,6 +133,7 @@ struct conn {
   unsigned eof : 1;              /* eof? aka passive close? */
   unsigned waiting_to_unref : 1; /* eof? aka passive close? */
   unsigned done : 1;             /* done? aka close? */
+  unsigned auth_required : 1;    /* auth required? */
   unsigned dyn_mode : 1;         /* is a dyn connection? */
   unsigned dnode_secured : 1;    /* is a secured connection? */
   unsigned crypto_key_sent : 1;  /* crypto state */

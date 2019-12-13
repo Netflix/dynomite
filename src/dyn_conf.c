@@ -224,6 +224,7 @@ static rstatus_t conf_pool_init(struct conf_pool *cp, struct string *name) {
   string_init(&cp->stats_listen.name);
   string_init(&cp->dc);
   string_init(&cp->env);
+  string_init(&cp->requirepass);
   cp->dyn_listen.port = 0;
   memset(&cp->dyn_listen.info, 0, sizeof(cp->dyn_listen.info));
   cp->dyn_listen.valid = 0;
@@ -305,6 +306,7 @@ static void conf_pool_deinit(struct conf_pool *cp) {
   string_deinit(&cp->stats_listen.name);
   string_deinit(&cp->dc);
   string_deinit(&cp->env);
+  string_deinit(&cp->requirepass);
 
   if (array_n(&cp->dyn_seeds) != 0) array_deinit(&cp->dyn_seeds);
 
@@ -1161,6 +1163,9 @@ static struct command conf_commands[] = {
     {string("datacenter"), conf_set_string, offsetof(struct conf_pool, dc)},
 
     {string("env"), conf_set_string, offsetof(struct conf_pool, env)},
+
+    {string("requirepass"), conf_set_string,
+     offsetof(struct conf_pool, requirepass)},
 
     {string("conn_msg_rate"), conf_set_num,
      offsetof(struct conf_pool, conn_msg_rate)},

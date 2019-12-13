@@ -106,7 +106,7 @@ struct conf_pool {
   struct string rack;  /* this node's logical rack */
   struct array tokens; /* this node's token: dyn_token array */
   msec_t gos_interval; /* wake up interval in ms */
-
+  
   /* none | datacenter | rack | all in order of increasing number of
    * connections. (default is datacenter) */
   struct string secure_server_option;
@@ -119,6 +119,7 @@ struct conf_pool {
                              reconciliation */
   struct string dc;       /* this node's dc */
   struct string env;      /* AWS, Google, network, ... */
+  struct string requirepass;
   uint32_t conn_msg_rate; /* conn msg per sec */
   bool enable_gossip;     /* enable/disable gossip */
   size_t mbuf_size;       /* mbuf chunk size */

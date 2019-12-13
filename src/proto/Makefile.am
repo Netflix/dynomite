@@ -10,6 +10,7 @@ noinst_LIBRARIES = libproto.a
 noinst_HEADERS = dyn_proto.h
 
 libproto_a_SOURCES =			\
-	dyn_memcache.c			\
+	dyn_memcache.c			    \
 	dyn_redis.c					\
-	dyn_redis_repair.c
+	dyn_redis_repair.c			\
+	dyn_redis_auth.c
