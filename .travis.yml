@@ -1,8 +1,0 @@
-language: c
-script: bash ./travis.sh
-
-addons:
-  apt:
-   packages:
-   - python3
-   - python3-pip
