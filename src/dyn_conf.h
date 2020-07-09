@@ -47,6 +47,7 @@
 #define CONF_STR_DC_ONE "dc_one"
 #define CONF_STR_DC_QUORUM "dc_quorum"
 #define CONF_STR_DC_SAFE_QUORUM "dc_safe_quorum"
+#define CONF_STR_DC_EACH_SAFE_QUORUM "dc_each_safe_quorum"
 
 #define UNSET_NUM 0
 
@@ -131,6 +132,9 @@ struct conf_pool {
   uint8_t datastore_connections;
   uint8_t local_peer_connections;
   uint8_t remote_peer_connections;
+
+  /* repairs enabled */
+  bool read_repairs_enabled;
 };
 
 struct conf {

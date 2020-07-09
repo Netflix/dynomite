@@ -90,6 +90,10 @@ static inline char *get_state(dyn_state_t s) {
   return "INVALID STATE";
 }
 
+// Read repairs are only enabled if either of the quorum options
+// are enabled.
+bool is_read_repairs_enabled(void);
+
 typedef enum data_store {
   DATA_REDIS = 0,   /* Data store is Redis */
   DATA_MEMCACHE = 1 /* Data store is Memcache */
@@ -122,7 +126,7 @@ struct instance {
 
 struct continuum {
   uint32_t index;          /* dyn_peer index */
-  uint32_t value;          /* hash value, used by ketama */
+  uint32_t value;          /* hash value, used ONLY by ketama */
   struct dyn_token *token; /* used in vnode/dyn_token situations */
 };
 
@@ -132,7 +136,7 @@ struct rack {
   uint32_t ncontinuum; /* # continuum points */
   uint32_t
       nserver_continuum; /* # servers - live and dead on continuum (const) */
-  struct continuum *continuum; /* continuum */
+  struct array continuums;
 };
 
 struct datacenter {

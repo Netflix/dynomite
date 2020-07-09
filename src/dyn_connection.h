@@ -63,7 +63,7 @@ typedef void (*func_ref_t)(struct conn *, void *);
 typedef void (*func_unref_t)(struct conn *);
 
 typedef void (*func_msgq_t)(struct context *, struct conn *, struct msg *);
-typedef rstatus_t (*func_response_handler)(struct conn *, msgid_t reqid,
+typedef rstatus_t (*func_response_handler)(struct context *ctx, struct conn *, msgid_t reqid,
                                            struct msg *rsp);
 struct conn_pool;
 
@@ -149,15 +149,16 @@ struct conn {
   connection_type_t type;
 };
 
-static inline rstatus_t conn_cant_handle_response(struct conn *conn,
+static inline rstatus_t conn_cant_handle_response(struct context *ctx, struct conn *conn,
                                                   msgid_t reqid,
                                                   struct msg *resp) {
   return DN_ENO_IMPL;
 }
 
-static inline rstatus_t conn_handle_response(struct conn *conn, msgid_t msgid,
+static inline rstatus_t conn_handle_response(struct context *ctx, struct conn *conn,
+                                             msgid_t msgid,
                                              struct msg *rsp) {
-  return conn->ops->rsp_handler(conn, msgid, rsp);
+  return conn->ops->rsp_handler(ctx, conn, msgid, rsp);
 }
 
 #define conn_recv(ctx, conn) (conn)->ops->recv(ctx, conn)

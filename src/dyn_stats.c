@@ -1062,7 +1062,18 @@ static void parse_request(int sd, struct stats_cmd *st_cmd) {
           } else {
             st_cmd->cmd = CMD_PING;
           }
-
+          return;
+        } else if (strncmp(reqline[1], "/read_repairs", 13) == 0) {
+          log_notice("Setting read_repairs (enabled/disabled): %s", reqline[1]);
+          char *op = reqline[1] + 13;
+          st_cmd->cmd = CMD_TOGGLE_READ_REPAIRS;
+          if (strncmp(op, "/enable", 7) == 0) {
+            g_read_repairs_enabled = true;
+          } else if (strncmp(op, "/disable", 8) == 0) {
+            g_read_repairs_enabled = false;
+          } else {
+            st_cmd->cmd = CMD_UNKNOWN;
+          }
           return;
         }
 
@@ -1259,6 +1270,11 @@ static rstatus_t stats_send_rsp(struct stats *st) {
       }
     }
     string_deinit(&st_cmd.req_data);
+  } else if (cmd == CMD_TOGGLE_READ_REPAIRS) {
+    char repairs_rsp[1024];
+    dn_sprintf(repairs_rsp, "Read Repairs: %s\r\n",
+        (g_read_repairs_enabled) ? "ENABLED" : "DISABLED" );
+    return stats_http_rsp(sd, repairs_rsp, dn_strlen(repairs_rsp));
   } else {
     log_debug(LOG_VERB, "Unsupported cmd");
   }
@@ -1330,17 +1346,16 @@ static rstatus_t stats_listen(struct stats *st) {
 }
 
 static rstatus_t stats_start_aggregator(struct stats *st) {
-  rstatus_t status;
-
   if (!stats_enabled) {
     return DN_OK;
   }
 
   THROW_STATUS(stats_listen(st));
 
-  status = pthread_create(&st->tid, NULL, stats_loop, st);
-  if (status < 0) {
-    log_error("stats aggregator create failed: %s", strerror(status));
+  int pthread_status;
+  pthread_status = pthread_create(&st->tid, NULL, stats_loop, st);
+  if (pthread_status < 0) {
+    log_error("stats aggregator create failed: %s", strerror(pthread_status));
     return DN_ERROR;
   }
 

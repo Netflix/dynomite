@@ -35,6 +35,8 @@
 #include "dyn_core.h"
 #include "dyn_signal.h"
 
+#include "proto/dyn_proto.h"
+
 #if defined(SYSCONFDIR)
 #define DN_CONF_PATH SYSCONFDIR "/dynomite.yml"
 #else

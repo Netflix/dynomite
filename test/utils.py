@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import random
+import requests
 import os
 import signal
 import string
@@ -19,7 +20,6 @@ BASE_IPADDRESS = quad2int('127.0.1.1')
 RING_SIZE = 2**32
 TEARDOWN_SETTLE_TIME = 1
 
-
 def sleep_with_animation(seconds, optional_msg=""):
     ticker = "|/-\\"
     print("\n")
@@ -38,7 +38,7 @@ def string_generator(size=6, chars=string.ascii_letters + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
 def number_generator(size=4, chars=string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
+    return int(''.join(random.choice(chars) for _ in range(size)))
 
 def dict_request(request, key1, key2):
     """Converts the request into an easy to consume dict format."""
@@ -99,8 +99,7 @@ def pick_tokens(count, start_offset):
         token += stride
 
 def tokens_for_rack(count):
-    offset = random.randrange(0, RING_SIZE)
-    return list(pick_tokens(count, offset))
+    return list(pick_tokens(count, 0))
 
 def tokens_for_dc(racks):
     return [
@@ -117,10 +116,12 @@ def tokens_for_cluster(dcs, seed):
         for dc in dcs
     ]
 
-
 def dc_count(dc):
     return sum(count for rack, count in dc)
 
 def generate_ips():
     for ip in count(start=BASE_IPADDRESS, step=1):
         yield int2quad(ip)
+
+def make_get_rest_call(url):
+    return requests.get(url)
