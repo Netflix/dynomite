@@ -174,7 +174,7 @@ uint32_t mbuf_length(struct mbuf *mbuf) {
  * Return the remaining space size for any new data in mbuf. Mbuf cannot
  * contain more than 2^32 bytes (4G).
  */
-uint32_t mbuf_size(struct mbuf *mbuf) {
+uint32_t mbuf_remaining_space(struct mbuf *mbuf) {
   ASSERT(mbuf->end >= mbuf->last);
 
   return (uint32_t)(mbuf->end - mbuf->last);
@@ -229,7 +229,7 @@ void mbuf_copy(struct mbuf *mbuf, uint8_t *pos, size_t n) {
   }
 
   /* mbuf has space for n bytes */
-  ASSERT(!mbuf_full(mbuf) && n <= mbuf_size(mbuf));
+  ASSERT(!mbuf_full(mbuf) && n <= mbuf_remaining_space(mbuf));
 
   /* no overlapping copy */
   ASSERT(pos < mbuf->start || pos >= mbuf->end);
@@ -309,13 +309,13 @@ void mbuf_deinit(void) {
 }
 
 void mbuf_write_char(struct mbuf *mbuf, char ch) {
-  ASSERT(mbuf_size(mbuf) >= 1);
+  ASSERT(mbuf_remaining_space(mbuf) >= 1);
   *mbuf->last = ch;
   mbuf->last += 1;
 }
 
 void mbuf_write_string(struct mbuf *mbuf, const struct string *s) {
-  ASSERT(s->len < mbuf_size(mbuf));
+  ASSERT(s->len < mbuf_remaining_space(mbuf));
   mbuf_copy(mbuf, s->data, s->len);
 }
 

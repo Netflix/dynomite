@@ -1,7 +1,11 @@
-#include "dyn_task.h"
+/*
+ * Dynomite - A thin, distributed replication layer for multi non-distributed
+ * storages. Copyright (C) 2019 Netflix, Inc.
+ */
 
 #include <stdbool.h>
 
+#include "dyn_task.h"
 #include "dyn_util.h"
 
 /**

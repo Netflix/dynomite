@@ -17,6 +17,7 @@ class DynoNode(Node):
         self.spec = spec
         self.seeds_list = seeds_list
         self.dnode_port = spec.dnode_port
+        self.data_store_port = spec.data_store_port
         self.data_store_node = RedisNode(self.ip, spec.data_store_port)
         self.logfile = 'logs/dynomite_{}.log'.format(self.ip)
         self.proc_future = None
@@ -52,7 +53,11 @@ class DynoNode(Node):
     def get_storage_node_pid(self):
         return self.data_store_node.get_pid()
 
+    def get_data_store_connection(self):
+        # should return the connection to the redis port
+        return redis.StrictRedis(self.ip, self.data_store_port, db=0)
+
     def get_connection(self):
         # should return the connection to the dyno port not the redis
         print("returning connection at %s:%d" % (self.ip, self.port))
-        return redis.StrictRedis(self.ip, self.port, db=0)
+        return redis.Redis(self.ip, self.port, db=0)

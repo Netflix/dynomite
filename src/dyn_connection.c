@@ -127,8 +127,7 @@ inline void conn_set_read_consistency(struct conn *conn, consistency_t cons) {
 }
 
 inline consistency_t conn_get_read_consistency(struct conn *conn) {
-  // return conn->read_consistency;
-  return g_read_consistency;
+  return conn->read_consistency;
 }
 
 inline void conn_set_write_consistency(struct conn *conn, consistency_t cons) {
@@ -136,8 +135,7 @@ inline void conn_set_write_consistency(struct conn *conn, consistency_t cons) {
 }
 
 inline consistency_t conn_get_write_consistency(struct conn *conn) {
-  // return conn->write_consistency;
-  return g_write_consistency;
+  return conn->write_consistency;
 }
 
 rstatus_t conn_event_del_conn(struct conn *conn) {
@@ -232,6 +230,13 @@ rstatus_t conn_listen(struct context *ctx, struct conn *p) {
     log_error("set nonblock on p %d on addr '%.*s' failed: %s", p->sd,
               p->pname.len, p->pname.data, strerror(errno));
     return DN_ERROR;
+  }
+
+  status = dn_set_keepalive(p->sd, 1);
+  if (status != DN_OK) {
+      log_error("set keepalive on p %d on addr '%.*s' failed: %s", p->sd,
+                p->pname.len, p->pname.data, strerror(errno));
+      // Continue since this is not catastrophic
   }
 
   status = conn_event_add_conn(p);
