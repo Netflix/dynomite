@@ -218,6 +218,7 @@
   ACTION(RSP_REDIS_ERROR_EXECABORT)                                            \
   ACTION(RSP_REDIS_ERROR_MASTERDOWN)                                           \
   ACTION(RSP_REDIS_ERROR_NOREPLICAS)                                           \
+  ACTION(HACK_SETTING_CONN_CONSISTENCY)                                        \
   ACTION(SENTINEL)                                                             \
   ACTION(END_IDX)                                                              \
   /* ACTION( REQ_REDIS_AUTH) */                                                \
@@ -243,6 +244,8 @@ typedef rstatus_t (*func_msg_rewrite_t)(struct msg *orig_msg,
                                         struct msg **new_msg_ptr);
 typedef rstatus_t (*func_msg_repair_t)(struct context *ctx, struct response_mgr *rspmgr,
     struct msg **new_msg_ptr);
+typedef rstatus_t (*func_clear_repair_md_t)(struct context *ctx, struct msg *req,
+    struct msg **new_msg_ptr);
 typedef void (*func_init_datastore_t)();
 
 extern func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
@@ -256,15 +259,26 @@ extern func_msg_rewrite_t
 extern func_msg_rewrite_t
     g_rewrite_query_with_timestamp_md;
 extern func_msg_repair_t g_make_repair_query; /* Create a repair msg. */
+extern func_clear_repair_md_t g_clear_repair_md_for_key;
 
 void set_datastore_ops(void);
 
 typedef enum msg_parse_result {
-  MSG_PARSE_OK,       /* parsing ok */
-  MSG_PARSE_ERROR,    /* parsing error */
-  MSG_PARSE_REPAIR,   /* more to parse -> repair parsed & unparsed data */
-  MSG_PARSE_FRAGMENT, /* multi-vector request -> fragment */
-  MSG_PARSE_AGAIN,    /* incomplete -> parse again */
+  // Parsing OK
+  MSG_PARSE_OK,
+  // Parsing error
+  MSG_PARSE_ERROR,
+  // More to parse -> Repair parsed & unparsed data
+  MSG_PARSE_REPAIR,
+  // Multi-vector request -> fragment
+  MSG_PARSE_FRAGMENT,
+  // Incomplete, parse again.
+  MSG_PARSE_AGAIN,
+  // Parsing done, but do nothing after
+  MSG_PARSE_NOOP,
+  // Parsing done, command was a dynomite configuration
+  MSG_PARSE_DYNO_CONFIG,
+  // OOM error during parsing (TODO: consider removing)
   MSG_OOM_ERROR
 } msg_parse_result_t;
 
@@ -333,6 +347,7 @@ typedef enum consistency {
   DC_ONE = 0,
   DC_QUORUM,
   DC_SAFE_QUORUM,
+  DC_EACH_SAFE_QUORUM,
 } consistency_t;
 
 static inline char *get_consistency_string(consistency_t cons) {
@@ -343,8 +358,23 @@ static inline char *get_consistency_string(consistency_t cons) {
       return "DC_QUORUM";
     case DC_SAFE_QUORUM:
       return "DC_SAFE_QUORUM";
+    case DC_EACH_SAFE_QUORUM:
+      return "DC_EACH_SAFE_QUORUM";
   }
   return "INVALID CONSISTENCY";
+}
+
+static inline consistency_t get_consistency_enum_from_string(char *cons) {
+  if (dn_strcasecmp(cons, "DC_ONE") == 0) {
+    return DC_ONE;
+  } else if (dn_strcasecmp(cons, "DC_QUORUM") == 0) {
+    return DC_QUORUM;
+  } else if (dn_strcasecmp(cons, "DC_SAFE_QUORUM") == 0) {
+    return DC_SAFE_QUORUM;
+  } else if (dn_strcasecmp(cons, "DC_EACH_SAFE_QUORUM") == 0) {
+    return DC_EACH_SAFE_QUORUM;
+  }
+  return -1;
 }
 
 #define DEFAULT_READ_CONSISTENCY DC_ONE
@@ -430,7 +460,7 @@ struct msg {
                                              or remote region or cross rack */
   usec_t request_send_time; /* when message was sent: either to the data store
                                or remote region or cross rack */
-  uint8_t awaiting_rsps;
+  uint32_t awaiting_rsps;
   struct msg *selected_rsp;
 
   struct rbnode tmo_rbe; /* entry in rbtree */
@@ -506,7 +536,16 @@ struct msg {
   msg_response_handler_t rsp_handler;
   consistency_t consistency;
   msgid_t parent_id; /* parent message id */
+
+  // Primary response_mgr for this instance's DC.
   struct response_mgr rspmgr;
+
+  // Additional response_mgrs if we choose to use DC_EACH_SAFE_QUORUM
+  struct response_mgr **additional_each_rspmgrs;
+
+  // Indicates whether the rspmgr and additional_each_rspmgrs(if applicable)
+  // are init-ed.
+  bool rspmgrs_inited;
 };
 
 TAILQ_HEAD(msg_tqh, msg);
@@ -588,7 +627,7 @@ void dnode_rsp_gos_syn(struct context *ctx, struct conn *p_conn,
 
 void req_forward_error(struct context *ctx, struct conn *conn, struct msg *req,
                        err_t error_code, err_t dyn_error_code);
-void req_forward_all_local_racks(struct context *ctx, struct conn *c_conn,
+void req_forward_all_racks_for_dc(struct context *ctx, struct conn *c_conn,
                                  struct msg *req, struct mbuf *orig_mbuf,
                                  uint8_t *key, uint32_t keylen,
                                  struct datacenter *dc);
@@ -604,4 +643,18 @@ rstatus_t dnode_peer_req_forward(struct context *ctx, struct conn *c_conn,
 // string *data);
 void dnode_peer_gossip_forward(struct context *ctx, struct conn *conn,
                                struct mbuf *data);
+
+/*
+ * Simulates a successful response as though the datastore sent it.
+ * Also, does the necessary to make sure that the response path is
+ * able to send this response back to the client.
+ *
+ * Returns DN_OK on success and an appropriate error otherwise.
+ */
+rstatus_t simulate_ok_rsp(struct context *ctx, struct conn *conn,
+    struct msg *msg);
+
+// Returns 'true' if 'msg_type' is a Dynomite configuration command.
+bool is_msg_type_dyno_config(msg_type_t msg_type);
+
 #endif

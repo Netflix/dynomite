@@ -1346,17 +1346,16 @@ static rstatus_t stats_listen(struct stats *st) {
 }
 
 static rstatus_t stats_start_aggregator(struct stats *st) {
-  rstatus_t status;
-
   if (!stats_enabled) {
     return DN_OK;
   }
 
   THROW_STATUS(stats_listen(st));
 
-  status = pthread_create(&st->tid, NULL, stats_loop, st);
-  if (status < 0) {
-    log_error("stats aggregator create failed: %s", strerror(status));
+  int pthread_status;
+  pthread_status = pthread_create(&st->tid, NULL, stats_loop, st);
+  if (pthread_status < 0) {
+    log_error("stats aggregator create failed: %s", strerror(pthread_status));
     return DN_ERROR;
   }
 

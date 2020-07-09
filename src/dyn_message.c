@@ -161,6 +161,7 @@ func_msg_rewrite_t g_rewrite_query;     /* rewrite query in a msg if necessary *
 /* rewrite query as script that updates both data and metadata */
 func_msg_rewrite_t g_rewrite_query_with_timestamp_md;
 func_msg_repair_t g_make_repair_query;  /* Send a repair msg. */
+func_clear_repair_md_t g_clear_repair_md_for_key; /* Clear repair metadata for a key */
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {MSG_TYPE_CODEC(DEFINE_ACTION)
@@ -201,6 +202,7 @@ void set_datastore_ops(void) {
       g_rewrite_query = redis_rewrite_query;
       g_rewrite_query_with_timestamp_md = redis_rewrite_query_with_timestamp_md;
       g_make_repair_query = redis_make_repair_query;
+      g_clear_repair_md_for_key = redis_clear_repair_md_for_key;
       break;
     case DATA_MEMCACHE:
       g_pre_coalesce = memcache_pre_coalesce;
@@ -212,6 +214,7 @@ void set_datastore_ops(void) {
       g_rewrite_query = memcache_rewrite_query;
       g_rewrite_query_with_timestamp_md = memcache_rewrite_query_with_timestamp_md;
       g_make_repair_query = memcache_make_repair_query;
+      g_clear_repair_md_for_key = memcache_clear_repair_md_for_key;
       break;
     default:
       return;
@@ -415,7 +418,23 @@ done:
   msg->orig_msg = NULL;
   msg->needs_repair = false;
   msg->rewrite_with_ts_possible = true;
+  msg->additional_each_rspmgrs = NULL;
+  msg->rspmgrs_inited = false;
 
+  // Init the write_with_ts struct:
+  struct write_with_ts *minfo = &msg->msg_info;
+  minfo->add_set = NULL;
+  minfo->rem_set = NULL;
+  minfo->keys = NULL;
+  minfo->num_keys = 0;
+  minfo->fields = NULL;
+  minfo->num_fields = 0;
+  minfo->values = NULL;
+  minfo->num_values = 0;
+  minfo->optionals = NULL;
+  minfo->num_optionals = 0;
+  minfo->rewrite_script = NULL;
+  minfo->total_num_tokens = 0;
   return msg;
 }
 
@@ -604,7 +623,7 @@ void msg_put(struct msg *msg) {
     return;
   }
 
-  if (msg->is_request && msg->awaiting_rsps != 0) {
+  if (msg->is_request && msg->awaiting_rsps != 0 && msg->expect_datastore_reply !=0) {
     log_error("Not freeing req %d, awaiting_rsps = %u", msg->id,
               msg->awaiting_rsps);
     return;
@@ -632,9 +651,44 @@ void msg_put(struct msg *msg) {
     msg->keys = NULL;
   }
 
+  if (msg->args) {
+    array_destroy(msg->args);
+    msg->args = NULL;
+  }
+
   if (msg->orig_msg) {
     msg_put(msg->orig_msg);
     msg->orig_msg = NULL;
+  }
+
+  if (msg->msg_info.keys) {
+    array_destroy(msg->msg_info.keys);
+  }
+  if (msg->msg_info.fields) {
+    array_destroy(msg->msg_info.fields);
+  }
+  if (msg->msg_info.values) {
+    array_destroy(msg->msg_info.values);
+  }
+  if (msg->msg_info.optionals) {
+    array_destroy(msg->msg_info.optionals);
+  }
+
+  if (msg->additional_each_rspmgrs) {
+    ASSERT(msg->consistency == DC_EACH_SAFE_QUORUM);
+    // Only requests have their connection's owner as the 'struct server_pool' object,
+    // and only requests would have 'additional_each_rspmgrs', so it's safe to cast to
+    // 'struct server_pool'.
+    struct server_pool *sp = msg->owner->owner;
+    uint8_t num_dcs = array_n(&sp->datacenters);
+
+    int i;
+    // Skip the 0th index as that points back to the statically allocated 'rspmgr' struct
+    // in 'msg'.
+    for (i = 1; i < num_dcs; ++i) {
+      dn_free(msg->additional_each_rspmgrs[i]);
+    }
+    dn_free(msg->additional_each_rspmgrs);
   }
   TAILQ_INSERT_HEAD(&free_msgq, msg, m_tqe);
 }
@@ -809,6 +863,11 @@ uint32_t msg_payload_crc32(struct msg *rsp) {
      the beginning of the first mbuf */
   bool start_found = rsp->dmsg ? false : true;
 
+  // If the message is from another DC, the mbufs will have the decrypted
+  // payload without the Dynomite header, so we do have the start.
+  // rsp->dmsg->payload for cross DC msgs will have the encrypted payload.
+  if (rsp->dmsg && !rsp->owner->same_dc) start_found = true;
+
   STAILQ_FOREACH(mbuf, &rsp->mhdr, next) {
     uint8_t *start = mbuf->start;
     uint8_t *end = mbuf->last;
@@ -881,10 +940,99 @@ static rstatus_t msg_repair(struct context *ctx, struct conn *conn,
     return DN_ENOMEM;
   }
 
-  mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
-  mbuf_remove(&msg->mhdr, mbuf);
+  // This was added to handle a specific case which doesn't seem reproducible
+  // now. Revisit if things seem off.
+  //mbuf = STAILQ_LAST(&msg->mhdr, mbuf, next);
+  //mbuf_remove(&msg->mhdr, mbuf);
   mbuf_insert(&msg->mhdr, nbuf);
   msg->pos = nbuf->pos;
+
+  return DN_OK;
+}
+
+/*
+ * Crafts a success response message for the respective datastore.
+ *
+ * TODO: This currently does only Redis. The Redis specific code should
+ *       be moved out of this file.
+ *
+ * Returns a 'msg' with the expected success response.
+ */
+static struct msg *craft_ok_rsp(struct context *ctx, struct conn *conn,
+    struct msg *req) {
+
+  ASSERT(req->is_request);
+
+  rstatus_t ret_status = DN_OK;
+  const char *QUIT_FMT_STRING = "+OK\r\n";
+
+  struct msg *rsp = msg_get(conn, false, __FUNCTION__);
+  if (rsp == NULL) {
+    conn->err = errno;
+    return NULL;
+  }
+
+  rstatus_t append_status = msg_append(rsp, QUIT_FMT_STRING, strlen(QUIT_FMT_STRING));
+  if (append_status != DN_OK) {
+    rsp_put(rsp);
+    return NULL;
+  }
+
+  rsp->peer = req;
+  rsp->is_request = 0;
+
+  req->done = 1;
+
+  return rsp;
+}
+
+rstatus_t simulate_ok_rsp(struct context *ctx, struct conn *conn,
+    struct msg *msg) {
+  // Create an OK response.
+  struct msg *ok_rsp = craft_ok_rsp(ctx, conn, msg);
+
+  // Add it to the outstanding messages dictionary, so that 'conn_handle_response'
+  // can process it appropriately.
+  dictAdd(conn->outstanding_msgs_dict, &msg->id, msg);
+
+  // Enqueue the message in the outbound queue so that the code on the response
+  // path can find it.
+  conn_enqueue_outq(ctx, conn, msg);
+
+  THROW_STATUS(conn_handle_response(ctx, conn,
+      msg->parent_id ? msg->parent_id : msg->id, ok_rsp));
+
+  return DN_OK;
+}
+
+/*
+ * If the command sent to Dynomite was a special Dynomite configuration
+ * command, we process and apply the configuration here.
+ *
+ * Returns: DN_OK on successful application, DN_ERROR otherwise.
+ */
+static rstatus_t msg_apply_config(struct context *ctx, struct conn *conn,
+    struct msg *msg) {
+
+  // We only support one type of configuration now.
+  // TODO: If we support more, convert this to a switch case.
+  ASSERT(msg->type == MSG_HACK_SETTING_CONN_CONSISTENCY);
+
+  struct argpos *consistency_string = (struct argpos*) array_get(msg->args, 0);
+
+  // We must have a consistency string, else we wouldn't have reached here.
+  ASSERT(consistency_string != NULL);
+
+  consistency_t cons = get_consistency_enum_from_string(consistency_string->start);
+  if (cons == -1) return DN_ERROR;
+
+  conn_set_read_consistency(conn, cons);
+  conn_set_write_consistency(conn, cons);
+
+  // Set the consistency to DC_ONE, since this is just a configuration setting.
+  msg->consistency = DC_ONE;
+
+  THROW_STATUS(simulate_ok_rsp(ctx, conn, msg));
 
   return DN_OK;
 }
@@ -903,18 +1051,23 @@ static rstatus_t msg_parse(struct context *ctx, struct conn *conn,
 
   switch (msg->result) {
     case MSG_PARSE_OK:
-      // log_debug(LOG_VVERB, "MSG_PARSE_OK");
       status = msg_parsed(ctx, conn, msg);
       break;
-
     case MSG_PARSE_REPAIR:
-      // log_debug(LOG_VVERB, "MSG_PARSE_REPAIR");
       status = msg_repair(ctx, conn, msg);
       break;
-
     case MSG_PARSE_AGAIN:
-      // log_debug(LOG_VVERB, "MSG_PARSE_AGAIN");
       status = DN_OK;
+      break;
+    case MSG_PARSE_DYNO_CONFIG:
+      status = msg_apply_config(ctx, conn, msg);
+
+      // No more data to parse.
+      conn_recv_done(ctx, conn, msg, NULL);
+      break;
+
+    case MSG_PARSE_NOOP:
+      status = DN_NOOPS;
       break;
 
     default:
@@ -997,7 +1150,13 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
     msize = (size_t)MIN(msg->dmsg->plen, mbuf->end_extra - mbuf->last);
   }
 
-  n = conn_recv_data(conn, mbuf->last, msize);
+  if (msize != 0) {
+    n = conn_recv_data(conn, mbuf->last, msize);
+  } else {
+    // We may have got an event notification even though we received all the data.
+    // In that case, we don't want to read off the socket again.
+    n = 0;
+  }
 
   if (n < 0) {
     if (n == DN_EAGAIN) {
@@ -1012,7 +1171,7 @@ static rstatus_t msg_recv_chain(struct context *ctx, struct conn *conn,
 
   // Only used in encryption case
   if (encryption_detected) {
-    if (n >= msg->dmsg->plen || mbuf->end_extra == mbuf->last) {
+    if ((n >= msg->dmsg->plen && n != 0) || mbuf->end_extra == mbuf->last) {
       // log_debug(LOG_VERB, "About to decrypt this mbuf as it is full or
       // eligible!");
       struct mbuf *nbuf = NULL;
@@ -1584,4 +1743,10 @@ rstatus_t msg_append_format(struct msg *msg, const char *fmt, int num_args, ...)
   }
 
   return DN_OK;
+}
+
+bool is_msg_type_dyno_config(msg_type_t msg_type) {
+  // TODO: Convert to a switch case if we support more.
+  if (msg_type == MSG_HACK_SETTING_CONN_CONSISTENCY) return true;
+  return false;
 }

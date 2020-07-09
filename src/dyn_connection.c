@@ -127,8 +127,7 @@ inline void conn_set_read_consistency(struct conn *conn, consistency_t cons) {
 }
 
 inline consistency_t conn_get_read_consistency(struct conn *conn) {
-  // return conn->read_consistency;
-  return g_read_consistency;
+  return conn->read_consistency;
 }
 
 inline void conn_set_write_consistency(struct conn *conn, consistency_t cons) {
@@ -136,8 +135,7 @@ inline void conn_set_write_consistency(struct conn *conn, consistency_t cons) {
 }
 
 inline consistency_t conn_get_write_consistency(struct conn *conn) {
-  // return conn->write_consistency;
-  return g_write_consistency;
+  return conn->write_consistency;
 }
 
 rstatus_t conn_event_del_conn(struct conn *conn) {

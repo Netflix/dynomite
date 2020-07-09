@@ -47,6 +47,7 @@
 #define CONF_STR_DC_ONE "dc_one"
 #define CONF_STR_DC_QUORUM "dc_quorum"
 #define CONF_STR_DC_SAFE_QUORUM "dc_safe_quorum"
+#define CONF_STR_DC_EACH_SAFE_QUORUM "dc_each_safe_quorum"
 
 #define UNSET_NUM 0
 

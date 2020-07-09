@@ -77,7 +77,6 @@
  * compile time constants.
  *
  * This is still in the beta stage and has some limitations:
- * - Large values may cause overflows ( > 512 bytes)
  * - Limited command support due to parser limitations:
  *     - Sorted sets and lists need optional command parsing support.
  * - Repairing on the read path vs. the background has perf implications. In the future,
@@ -108,7 +107,7 @@
   "redis.call('ZADD', add_set, cur_ts, key)\n"\
   "return redis.call(orig_cmd, key, value)\n\r\n"
 
-#define GET_SCRIPT "$4\r\nEVAL\r\n$490\r\n"\
+#define GET_SCRIPT "$4\r\nEVAL\r\n$569\r\n"\
   "local key = KEYS[1]\n"\
   "local add_set = KEYS[2]\n"\
   "local rem_set = KEYS[3]\n"\
@@ -117,8 +116,10 @@
   "local cur_ts = ARGV[3]\n\n"\
   "local value = redis.call(orig_cmd, key)\n\n"\
   "local last_seen_ts_in_add = redis.call('ZSCORE', add_set, key)\n"\
-  "if (last_seen_ts_in_add) then\n"\
+  "if (last_seen_ts_in_add and value) then\n"\
   "  return {'E', last_seen_ts_in_add, value}\n"\
+  "elseif (last_seen_ts_in_add) then\n"\
+  "  redis.call('ZREM', add_set, key)\n"\
   "end\n\n"\
   "local last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, key)\n"\
   "if (last_seen_ts_in_rem) then\n"\
@@ -210,7 +211,7 @@
   "  return ret\n"\
   "end\n\r\n"
 
-#define HDEL_SCRIPT "$4\r\nEVAL\r\n$1175\r\n"\
+#define HDEL_SCRIPT "$4\r\nEVAL\r\n$1122\r\n"\
   "local key = KEYS[1]\n"\
   "local top_level_add_set = KEYS[2]\n"\
   "local top_level_rem_set = KEYS[3]\n"\
@@ -247,12 +248,11 @@
   "end\n\n"\
   "local card = redis.call('ZCARD', rem_set)\n"\
   "if (card == 0) then\n"\
-  "  redis.call('ZADD', top_level_add_set, cur_ts, key)\n"\
   "  redis.call('ZREM', top_level_rem_set, key)\n"\
   "end\n\n"\
   "return ret\n\r\n"
 
-#define HGET_SCRIPT "$4\r\nEVAL\r\n$982\r\n"\
+#define HGET_SCRIPT "$4\r\nEVAL\r\n$1055\r\n"\
   "local key = KEYS[1]\n"\
   "local top_level_add_set = KEYS[2]\n"\
   "local top_level_rem_set = KEYS[3]\n"\
@@ -267,7 +267,8 @@
   "local tl_removed_ts = redis.call('ZSCORE', top_level_rem_set, key)\n"\
   "if (tl_removed_ts) then\n"\
   "  status_field = 'R'\n"\
-  "  ts = tl_removed_ts\nelse\n"\
+  "  ts = tl_removed_ts\n"\
+  "else\n"\
   "  local removed_ts = redis.call('ZSCORE', rem_set, field)\n"\
   "  if (removed_ts) then\n"\
   "    ts = removed_ts\n"\
@@ -288,7 +289,75 @@
   "  end\n"\
   "end\n\n"\
   "local value = redis.call(orig_cmd, key, field)\n"\
+  "if (status_field == 'E' and not value) then\n"\
+  "  return {'X', 0, value}\n"\
+  "end\n"\
   "return {status_field, ts, value}\n\r\n"
+
+#define ZADD_SCRIPT "$4\r\nEVAL\r\n$2022\r\n"\
+  "local key = KEYS[1]\n"\
+  "local top_level_add_set = KEYS[2]\n"\
+  "local top_level_rem_set = KEYS[3]\n"\
+  "local add_set = top_level_add_set .. '_' .. key\n"\
+  "local rem_set = top_level_rem_set .. '_' .. key\n"\
+  "local orig_cmd = ARGV[1]\n"\
+  "local num_opts = ARGV[2]\n"\
+  "local num_fields = ARGV[3]\n"\
+  "local cur_ts = ARGV[4]\n"\
+  "local start_loop = 5 + num_opts\n"\
+  "local end_loop = (num_fields * 2) + 4 + num_opts\n"\
+  "local top_level_rem_set_ts = redis.call('ZSCORE', top_level_rem_set, key)\n"\
+  "if (top_level_rem_set_ts) then\n"\
+  "  if (tonumber(cur_ts) < tonumber(top_level_rem_set_ts)) then\n"\
+  "    return 0\n"\
+  "  end\n"\
+  "  redis.call('ZREM', top_level_rem_set, key)\n"\
+  "end\n"\
+  "local top_level_add_set_ts = redis.call('ZSCORE', top_level_add_set, key)\n"\
+  "if (top_level_add_set_ts) then\n"\
+  "  if (tonumber(cur_ts) > tonumber(top_level_add_set_ts)) then\n"\
+  "    redis.call('ZADD', top_level_add_set, cur_ts, key)\n"\
+  "  end\n"\
+  "else\n"\
+  "  redis.call('ZADD', top_level_add_set, cur_ts, key)\n"\
+  "end\n"\
+  "local skiploop\n"\
+  "local ret\n"\
+  "for i=start_loop,end_loop,2\n"\
+  "do\n"\
+  "  skiploop = false\n"\
+  "  local field = ARGV[i]\n"\
+  "  local value = ARGV[i+1]\n"\
+  "  local last_seen_ts_in_add = redis.call('ZSCORE', add_set, field)\n"\
+  "  local last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, field)\n"\
+  "  if (last_seen_ts_in_rem) then\n"\
+  "    if (tonumber(cur_ts) < tonumber(last_seen_ts_in_rem)) then\n"\
+  "      skiploop = true\n"\
+  "    end\n"\
+  "    redis.call('ZREM', rem_set, field)\n"\
+  "  elseif (last_seen_ts_in_add) then\n"\
+  "    if (tonumber(cur_ts) < tonumber(last_seen_ts_in_add)) then\n"\
+  "      skiploop = true\n"\
+  "    end\n"\
+  "  end\n"\
+  "  if (skiploop == false) then\n"\
+  "    if (num_opts == '0') then\n"\
+  "      ret = redis.call(orig_cmd, key, value, field)\n"\
+  "    elseif (num_opts == '1') then\n"\
+  "      ret = redis.call(orig_cmd, key, ARGV[5], value, field)\n"\
+  "    elseif (num_opts == '2') then\n"\
+  "      ret = redis.call(orig_cmd, key, ARGV[5], ARGV[6], value, field)\n"\
+  "    elseif (num_opts == '3') then\n"\
+  "      ret = redis.call(orig_cmd, key, ARGV[5], ARGV[6], ARGV[7], value, field)\n"\
+  "    else\n"\
+  "      ret = false\n"\
+  "    end\n"\
+  "    if (type(ret) ~= 'boolean') then\n"\
+  "      redis.call('ZADD', add_set, cur_ts, field)\n"\
+  "    end\n"\
+  "  end\n"\
+  "end\n"\
+  "return ret\n\r\n"
 
 #define SADD_SCRIPT "$4\r\nEVAL\r\n$1526\r\n"\
   "local key = KEYS[1]\n"\
@@ -340,6 +409,53 @@
   "  end\n"\
   "end\n\n"\
   "return ret\n\r\n"
+
+
+/**********************************************************************/
+/*                   BEGIN METADATA CLEANUP SCRIPTS                   */
+/**********************************************************************/
+
+// Note: Some of the fields are not necessary but are still kept because the Dynomite
+// code creates all scripts with a certain argument format.
+// Eg: 'orig_cmd', 'num_fields', etc. are unnecessary for these scripts.
+#define CLEANUP_DEL_SCRIPT "$4\r\nEVAL\r\n$415\r\n"\
+"local key = KEYS[1]\n"\
+"local top_level_add_set = KEYS[2]\n"\
+"local top_level_rem_set = KEYS[3]\n"\
+"local orig_cmd = ARGV[1]\n"\
+"local num_fields = ARGV[2]\n"\
+"local cur_ts = ARGV[3]\n\n"\
+"local top_level_rem_set_ts = redis.call('ZSCORE', top_level_rem_set, key)\n"\
+"if (top_level_rem_set_ts) then\n"\
+"  if (tonumber(cur_ts) < tonumber(top_level_rem_set_ts)) then\n"\
+"    return 0\n"\
+"  end\n"\
+"  return redis.call('ZREM', top_level_rem_set, key)\n"\
+"end\n"\
+"return 0\n\r\n"
+
+#define CLEANUP_HDEL_SCRIPT "$4\r\nEVAL\r\n$664\r\n"\
+"local key = KEYS[1]\n"\
+"local top_level_add_set = KEYS[2]\n"\
+"local top_level_rem_set = KEYS[3]\n"\
+"local add_set = top_level_add_set .. '_' .. key\n"\
+"local rem_set = top_level_rem_set .. '_' .. key\n"\
+"local orig_cmd = ARGV[1]\n"\
+"local num_fields = ARGV[2]\n"\
+"local cur_ts = ARGV[3]\n"\
+"local field = ARGV[4]\n\n"\
+"local last_seen_ts_in_rem = redis.call('ZSCORE', rem_set, field)\n"\
+"if (last_seen_ts_in_rem) then\n"\
+"  if (tonumber(cur_ts) < tonumber(last_seen_ts_in_rem)) then\n"\
+"    return 0\n"\
+"  end\n"\
+"  local ret = redis.call('ZREM', rem_set, field)\n"\
+"  local remaining_elems = redis.call('ZCARD', rem_set)\n"\
+"  if (remaining_elems == 0) then\n"\
+"    redis.call('ZREM', top_level_rem_set, key)\n"\
+"  end\n"\
+"  return ret\n"\
+"end\n\r\n"
 
 #define MAX_ARG_FMT_STR_LEN 512
 
