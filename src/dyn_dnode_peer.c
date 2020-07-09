@@ -316,6 +316,7 @@ static void dnode_peer_ack_err(struct context *ctx, struct conn *conn,
   rsp->dyn_error_code = req->dyn_error_code = PEER_CONNECTION_REFUSE;
   rsp->dmsg = dmsg_get();
   rsp->dmsg->id = req->id;
+  rsp->owner = conn;
 
   log_info("%s Closing req %u:%u len %" PRIu32 " type %d %c %s",
            print_obj(conn), req->id, req->parent_id, req->mlen, req->type,

@@ -59,7 +59,7 @@ To build Dynomite in _debug mode_:
 
 ## Configuration
 
-Dynomite can be configured through a YAML file specified by the -c or --conf-file command-line argument on process start. The configuration files parses and understands the following keys:
+Dynomite can be configured through a YAML 1.1 (YAML 1.1 is not JSON compatible) file specified by the -c or --conf-file command-line argument on process start. The configuration files parses and understands the following keys:
 
 + **env**: Specify environment of a node.  Currently supports aws and network (for physical datacenter).
 + **datacenter**: The name of the datacenter.  Please refer to [architecture document](https://github.com/Netflix/dynomite/wiki/Architecture).

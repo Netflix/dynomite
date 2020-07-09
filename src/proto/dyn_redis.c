@@ -1065,6 +1065,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
               // This is not to be confused with 'EXISTS'. This is the second half of the
               // command 'SCRIPT EXISTS'.
               r->type = MSG_REQ_REDIS_SCRIPT_EXISTS;
+              r->msg_routing = ROUTING_ALL_NODES_ALL_RACKS_ALL_DCS;
               r->is_read = 1;
               break;
             }
@@ -1561,6 +1562,18 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
             }
 
             break;
+
+          case 28:
+            // Note: This is not a Redis command, but a dynomite configuration
+            // command.
+            if (dn_strcasecmp(m, "dyno_config:conn_consistency") == 0) {
+              r->type = MSG_HACK_SETTING_CONN_CONSISTENCY;
+              r->is_read = 0;
+              break;
+            }
+
+            break;
+
           default:
             r->is_read = 1;
             break;
@@ -1587,6 +1600,12 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           state = SW_REQ_TYPE_LEN;
           log_debug(LOG_VERB, "parsed partial command '%.*s'. Continuing to parse" \
               "remainaing part of command", p - m, m);
+          break;
+        }
+
+        if (is_msg_type_dyno_config(r->type)) {
+          // If this is a Dynomite config message, we parse it a bit differently.
+          state = SW_ARG1_LEN;
           break;
         }
         switch (ch) {
@@ -1811,7 +1830,20 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           log_error("Redis CONFIG command not supported '%.*s'", p - m, m);
           goto error;
         }
+
         m = p + r->rlen;
+
+        if (is_msg_type_dyno_config(r->type)) {
+          rstatus_t argstatus = record_arg(p, m, r->args);
+          if (argstatus == DN_ERROR) {
+            goto error;
+          } else if (argstatus == DN_ENOMEM) {
+            goto enomem;
+          }
+
+          r->result = MSG_PARSE_DYNO_CONFIG;
+          return;
+        }
 
         if (read_repairs_enabled) {
           bool arg1_across_mbufs = false;
@@ -1829,7 +1861,8 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
             m = next_mbuf->pos + new_mbuf_offset;
             b = next_mbuf;
-            ++r->latest_parsed_mbuf_idx;
+
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           }
           if (arg1_across_mbufs == false) {
             rstatus_t argstatus = record_arg(p , m , r->args);
@@ -1846,6 +1879,8 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
@@ -1967,7 +2002,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
             m = next_mbuf->pos + new_mbuf_offset;
             b = next_mbuf;
-            ++r->latest_parsed_mbuf_idx;
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           }
           if (arg2_across_mbufs == false) {
             // TODO: Verify if this is the correct behavior for EVAL/EVALSHA
@@ -1985,6 +2020,8 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
@@ -2120,7 +2157,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
             m = next_mbuf->pos + new_mbuf_offset;
             b = next_mbuf;
-            ++r->latest_parsed_mbuf_idx;
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           }
           if (arg3_across_mbufs == false) {
             rstatus_t argstatus = record_arg(p , m , r->args);
@@ -2137,6 +2174,8 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
@@ -2227,7 +2266,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
 
             m = next_mbuf->pos + new_mbuf_offset;
             b = next_mbuf;
-            ++r->latest_parsed_mbuf_idx;
+            if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           }
           if (argn_across_mbufs == false) {
             rstatus_t argstatus = record_arg(p , m , r->args);
@@ -2244,6 +2283,8 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
           r->rlen -= (uint32_t)(b->last - p);
           m = b->last - 1;
           p = m;
+
+          if (mbuf_full(b)) ++r->latest_parsed_mbuf_idx;
           break;
         }
 
@@ -2288,15 +2329,13 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
   r->pos = p;
   r->state = state;
 
-  // We reached here since we finished parsing the current 'mbuf' in 'r->mhdr'.
-  ++r->latest_parsed_mbuf_idx;
-
   // If we have to parse again, we won't be able to write with the timestamp.
   r->rewrite_with_ts_possible = false;
   if (b->last == b->end && r->token != NULL) {
     r->pos = r->token;
     r->token = NULL;
     r->result = MSG_PARSE_REPAIR;
+
   } else {
     r->result = MSG_PARSE_AGAIN;
   }

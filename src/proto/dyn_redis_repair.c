@@ -131,7 +131,7 @@ struct cmd_info proto_cmd_info[] = {
  {"SUNION", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"SUNIONSTORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"SSCAN", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
- {"ZADD", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
+ {"ZADD", 2, 1, 1, 1, 1, true, false, false, 0, 0, 2, 2, 1, 2, ZADD_SCRIPT, 0, 0}, // idx 110
  {"ZCARD", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZCOUNT", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZINCRBY", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
@@ -141,7 +141,7 @@ struct cmd_info proto_cmd_info[] = {
  {"ZRANGEBYLEX", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZRANGEBYSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZRANK", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
- {"ZREM", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
+ {"ZREM", 1, 1, 1, 0, 0, true, true, false, 0, 0, 1, 1, -1, 0, HDEL_SCRIPT, 0, 0}, // idx 120
  {"ZREMRANGEBYRANK", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREMRANGEBYLEX", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREMRANGEBYSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
@@ -149,7 +149,8 @@ struct cmd_info proto_cmd_info[] = {
  {"ZREVRANGEBYLEX", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREVRANGEBYSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZREVRANK", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
- {"ZSCORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
+ {"ZSCORE", 1, 1, 1, 0, 0, true, false, true, 0, 0, 1, 0, -1, 0, HGET_SCRIPT,
+     MSG_REQ_REDIS_ZADD, MSG_REQ_REDIS_ZREM}, // idx 128
  {"ZUNIONSTORE", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"ZSCAN", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
  {"EVAL", 0, 0, 0, 0, 0, false, false, false, -1, -1, -1, -1, -1, -1, NULL, 0, 0},
@@ -246,6 +247,59 @@ static rstatus_t get_values_from_source(int num_tokens, int start_pos,
   return DN_OK;
 }
 
+rstatus_t post_parse_optional_args(struct msg *orig_msg) {
+  struct write_with_ts *out_struct = &orig_msg->msg_info;
+  struct cmd_info *orig_cmd_info = &proto_cmd_info[orig_msg->type];
+
+  switch (orig_msg->type) {
+    case MSG_REQ_REDIS_ZADD: ;
+      int idx = 0;
+      int num_args = array_n(orig_msg->args);
+
+      // All the optional fields for ZADD come before the first score, so record all the options
+      // provided.
+      bool nx = false;
+      bool xx = false;
+      bool ch = false;
+      bool incr = false;
+      while (idx < num_args) {
+        struct argpos *opt_arg = (struct argpos*)array_get(orig_msg->args, idx);
+        if (opt_arg == NULL) return DN_ERROR;
+
+        uint8_t *opt_arg_start = opt_arg->start;
+        if (dn_strcasecmp(opt_arg_start, "NX") == 0) {
+          nx = true;
+        } else if (dn_strcasecmp(opt_arg_start, "XX") == 0) {
+          xx = true;
+        } else if (dn_strcasecmp(opt_arg_start, "INCR") == 0) {
+          incr = true;
+        } else if (dn_strcasecmp(opt_arg_start, "CH") == 0) {
+          ch = true;
+        } else {
+          break;
+        }
+        ++idx;
+
+        if (out_struct->optionals == NULL) {
+          out_struct->optionals = array_create(1, sizeof(struct argpos));
+          if (out_struct->optionals == NULL) return DN_ENOMEM;
+        }
+        struct argpos *record_opt_pos = (struct argpos*)array_push(out_struct->optionals);
+        record_opt_pos->start = opt_arg->start;
+        record_opt_pos->end = opt_arg->end;
+      }
+
+      // Both these options cannot be set together.
+      if (nx && xx) return DN_ERROR;
+
+      out_struct->num_optionals = idx;
+      break;
+    default:
+      return DN_OK;
+  }
+  return DN_OK;
+}
+
 /*
  * Parses the original 'struct msg' and fills in 'orig_msg->msg_info' with all
  * the keys, fields, values and optional fields.
@@ -256,13 +310,14 @@ static rstatus_t get_values_from_source(int num_tokens, int start_pos,
 rstatus_t post_parse_msg(struct msg *orig_msg) {
 
   struct write_with_ts *out_struct = &orig_msg->msg_info;
+  struct cmd_info *orig_cmd_info = &proto_cmd_info[orig_msg->type];
   ASSERT(out_struct != NULL);
 
   out_struct->cmd_type = orig_msg->type;
   out_struct->ts = orig_msg->timestamp;
-  struct cmd_info *orig_cmd_info = &proto_cmd_info[orig_msg->type];
   out_struct->num_fields = orig_cmd_info->min_num_fields;
   out_struct->num_values = orig_cmd_info->min_num_values;
+  out_struct->num_optionals = 0;
   out_struct->keys = NULL;
   out_struct->fields = NULL;
   out_struct->values = NULL;
@@ -314,26 +369,38 @@ rstatus_t post_parse_msg(struct msg *orig_msg) {
     }
   }
 
+  // Check if this command has optional arguments and parse + validate them.
+  if (orig_cmd_info->num_optionals > 0) {
+    post_parse_optional_args(orig_msg);
+  }
+
+  // If we have optional fields, we need to offset the field and value positions
+  // accordingly.
+  int first_field_pos = orig_cmd_info->first_field_pos
+      + out_struct->num_optionals;
+  int first_value_pos = orig_cmd_info->first_value_pos
+      + out_struct->num_optionals;
+
   out_struct->num_fields = total_tokens_of_type(
       orig_cmd_info->variadic_field_jump,
-      orig_cmd_info->first_field_pos - 1 /* start_pos */,
+      first_field_pos - 1 /* start_pos */,
       orig_cmd_info->min_num_fields,
       orig_msg->args->nelem);
 
   if (parse_tokens_of_type(out_struct->num_fields, 0,
-          orig_cmd_info->variadic_field_jump, orig_cmd_info->first_field_pos,
+          orig_cmd_info->variadic_field_jump, first_field_pos,
           orig_msg->args, false, &out_struct->fields) != DN_OK) {
     goto error;
   }
 
   out_struct->num_values = total_tokens_of_type(
       orig_cmd_info->variadic_value_jump,
-      orig_cmd_info->first_value_pos - 1 /* start_pos */,
+      first_value_pos - 1/* start_pos */,
       orig_cmd_info->min_num_values,
       orig_msg->args->nelem);
 
   if (parse_tokens_of_type(out_struct->num_values, 0,
-          orig_cmd_info->variadic_value_jump, orig_cmd_info->first_value_pos,
+          orig_cmd_info->variadic_value_jump, first_value_pos,
           orig_msg->args, false, &out_struct->values) != DN_OK) {
     goto error;
   }
@@ -383,6 +450,7 @@ rstatus_t obtain_info_from_latest_rsp(struct response_mgr *rspmgr,
   repair_msg_info->num_keys = orig_msg_info->num_keys;
   repair_msg_info->num_fields = orig_msg_info->num_fields;
   repair_msg_info->num_values = orig_msg_info->num_values;
+  repair_msg_info->num_optionals = 0;
 
   repair_msg_info->keys = orig_msg_info->keys;
   repair_msg_info->fields = orig_msg_info->fields;
@@ -441,6 +509,7 @@ void update_total_num_tokens(struct write_with_ts *src) {
   int num_keys = src->num_keys;
   int num_fields = src->num_fields;
   int num_values = src->num_values;
+  int num_optionals = src->num_optionals;
 
   // Add 2 by default, one for the 'EVAL' command and one for the script itself.
   src->total_num_tokens = 2;
@@ -458,6 +527,13 @@ void update_total_num_tokens(struct write_with_ts *src) {
   // Add the number of fields.
   // Add the timestamp.
   src->total_num_tokens += 3;
+
+  if (proto_cmd_info[src->cmd_type].num_optionals > 0) {
+    // If this command supports optional fields, add one token for the number of optional args.
+    src->total_num_tokens += 1;
+    // Then add the number of tokens for the optional fields themselves.
+    src->total_num_tokens += num_optionals;
+  }
 
   if (num_fields > 0 || num_values > 0) {
 
@@ -480,7 +556,8 @@ void update_total_num_tokens(struct write_with_ts *src) {
  * <total_num_tokens> <script> <args>
  *
  * where <args> can be elaborated more into:
- * <key1>..(<keyN>) <+set> <-set> <orig_cmd> <num_flds> <ts> (<fld1>) (<val1>) (<fldN>) ..
+ * <key1>..(<keyN>) <+set> <-set> <orig_cmd> (<num_opts>) <num_flds> \
+ * <ts> (<opt1>) .. (<optN>) (<fld1>) (<val1>) (<fldN>) ..
  *
  * Tokens shown above with parantheses are optional.
  *
@@ -492,6 +569,7 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   int num_keys = src->num_keys;
   int num_fields = src->num_fields;
   int num_values = src->num_values;
+  int num_optionals = src->num_optionals;
   struct msg *msg = *msg_ptr;
 
   // Add the total number of tokens.
@@ -504,7 +582,6 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   // Add the total number of keys in the command. We add 2 for the add and remove sets.
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
       count_digits(num_keys + 2), num_keys + 2));
-
 
   // Add all the keys touched in the query.
   for (i = 0; i < src->num_keys; ++i) {
@@ -526,6 +603,14 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, strlen(orig_cmd_str),
       strlen(orig_cmd_str), orig_cmd_str));
 
+  struct cmd_info *orig_cmd_info = &proto_cmd_info[src->cmd_type];
+  // Add number of optionals if the command supports any. If the command does, the script will
+  // expect a number of 0 or more.
+  if (orig_cmd_info->num_optionals > 0) {
+    THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
+        count_digits(num_optionals), num_optionals));
+  }
+
   // Add the number of fields.
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_INT_ARG_FMT, 2,
       count_digits(num_fields), num_fields));
@@ -533,6 +618,16 @@ static rstatus_t create_redis_prtcl_script(struct write_with_ts *src,
   // Add the timestamp.
   THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_LLU_ARG_FMT, 2,
       count_digits(src->ts), src->ts));
+
+  // Add the optional elements.
+  if (num_optionals > 0) {
+    for (i = 0; i < num_optionals; ++i) {
+      struct argpos *opt_elem = array_get(src->optionals, i);
+      uint32_t opt_len = argpos_elem_len(opt_elem);
+      THROW_STATUS(msg_append_format(msg, REDIS_PRTCL_VARCHAR_ARG_FMT, 3, opt_len,
+            opt_len, opt_elem->start));
+    }
+  }
 
   if (num_fields > 0 || num_values > 0) {
 
@@ -772,6 +867,10 @@ rstatus_t redis_make_repair_query(struct context *ctx, struct response_mgr *rspm
   bool repair_by_add = false;
   uint32_t num_values = 0;
 
+  // If we enabled read repairs halfway, in flight commands will not be
+  // repairable.
+  if (rspmgr->msg->orig_msg == NULL) return DN_OK;
+
   // Redis commands either lookup keys or fields (secondary keys), so the number of
   // expected values would be based on either one of them.
   if (rspmgr->msg->orig_msg->msg_info.num_fields > 0) {
@@ -835,7 +934,10 @@ rstatus_t redis_rewrite_query_with_timestamp_md(struct msg *orig_msg, struct con
   update_total_num_tokens(&orig_msg->msg_info);
 
   ret_status = finalize_repair_msg(ctx, orig_msg->owner, &orig_msg->msg_info, new_msg_ptr);
+
   if (ret_status != DN_OK) goto error;
+  (*new_msg_ptr)->is_read = orig_msg->is_read;
+
   *did_rewrite = true;
   return ret_status;
 
@@ -844,4 +946,97 @@ error:
   // Return the newly allocated message back to the free message queue.
   if (new_msg != NULL) msg_put(new_msg);
   return ret_status;
+}
+
+// TODO: Do code cleanup
+static rstatus_t create_cleanup_script(struct context *ctx, struct msg *orig_msg,
+    struct conn *conn, struct msg **new_msg_ptr) {
+  rstatus_t ret_status;
+
+  struct write_with_ts msg_info;
+  msg_info.keys = NULL;
+  msg_info.fields = NULL;
+  msg_info.num_keys = 1;
+  msg_info.num_values = 0;
+  msg_info.num_optionals = 0;
+
+  msg_info.keys = array_create(msg_info.num_keys, sizeof(struct keypos));
+  if (msg_info.keys == NULL) goto error;
+
+  struct keypos *kpos = (struct keypos*)array_push(msg_info.keys);
+  struct keypos *orig_kpos = (struct keypos*)array_get(orig_msg->keys, 0);
+  kpos->start = orig_kpos->start;
+  kpos->end = orig_kpos->end;
+  kpos->tag_start = orig_kpos->tag_start;
+  kpos->tag_end = orig_kpos->tag_end;
+
+  msg_info.ts = orig_msg->timestamp;
+  msg_info.add_set = ADD_SET_STR;
+  msg_info.rem_set = REM_SET_STR;
+
+  msg_type_t orig_msg_type = orig_msg->type;
+  switch (orig_msg_type) {
+    case MSG_REQ_REDIS_DEL:
+      msg_info.rewrite_script = CLEANUP_DEL_SCRIPT;
+      msg_info.num_fields = 0;
+      break;
+    case MSG_REQ_REDIS_ZREM:
+    case MSG_REQ_REDIS_HDEL:
+    case MSG_REQ_REDIS_SREM:
+      msg_info.rewrite_script = CLEANUP_HDEL_SCRIPT;
+      msg_info.num_fields = 1;
+      msg_info.fields = array_create(msg_info.num_fields, sizeof(struct argpos));
+      if (msg_info.fields == NULL) goto error;
+      struct argpos *field_pos = (struct argpos*)array_push(msg_info.fields);
+      struct argpos *orig_field_pos = (struct argpos*)array_get(orig_msg->args, 0);
+      field_pos->start = orig_field_pos->start;
+      field_pos->end = orig_field_pos->end;
+      break;
+    default:
+      return DN_NOOPS;
+      break;
+  }
+  // TODO: Consider adding a special type for cleanup scripts
+  msg_info.cmd_type = MSG_UNKNOWN;
+
+  update_total_num_tokens(&msg_info);
+
+  ret_status = finalize_repair_msg(ctx, conn, &msg_info, new_msg_ptr);
+
+  return ret_status;
+
+ error:
+  if (msg_info.keys != NULL) {
+    array_destroy(msg_info.keys);
+  }
+  if (msg_info.fields != NULL) {
+    array_destroy(msg_info.fields);
+  }
+  return DN_ERROR;
+}
+
+rstatus_t redis_clear_repair_md_for_key(struct context *ctx, struct msg *req,
+    struct msg **new_msg_ptr) {
+  // If we lost a track of the original message type, we cannot proceed.
+  if (req->orig_msg == NULL) return DN_NOOPS;
+  msg_type_t orig_msg_type = req->orig_msg->type;
+
+  // If the original request wasn't a delete, then we shouldn't clear the metadata.
+  if (proto_cmd_info[orig_msg_type].is_delete == false) return DN_NOOPS;
+
+  // If we haven't received responses from all the replicas yet, we shouldn't clear the MD.
+  if (++req->rspmgr.good_responses < req->rspmgr.max_responses) return DN_NOOPS;
+
+  rstatus_t create_status = create_cleanup_script(
+      ctx, req->orig_msg, req->owner, new_msg_ptr);
+
+  // If we were unsuccessful in creating the script, do nothing.
+  if (create_status != DN_OK) return DN_NOOPS;
+
+  // This is a best effort command, don't attempt to capture any responses to it.
+  (*new_msg_ptr)->expect_datastore_reply = false;
+  (*new_msg_ptr)->awaiting_rsps = 0;
+
+  //req_forward(ctx, req->owner, cleanup_msg);
+  return DN_OK;
 }

@@ -197,6 +197,7 @@ static void server_ack_err(struct context *ctx, struct conn *conn,
   rsp->error_code = req->error_code = conn->err;
   rsp->dyn_error_code = req->dyn_error_code = STORAGE_CONNECTION_REFUSE;
   rsp->dmsg = NULL;
+  rsp->owner = conn;
   log_debug(LOG_DEBUG, "%s <-> %s", print_obj(req), print_obj(rsp));
 
   log_info("close %s req %s len %" PRIu32 " from %s %c %s", print_obj(conn),
@@ -886,10 +887,11 @@ void req_send_done(struct context *ctx, struct conn *conn, struct msg *req) {
    * enqueue message (request) in server outq, if response is expected.
    * Otherwise, free the request
    */
-  if (req->expect_datastore_reply || (conn->type == CONN_SERVER))
+  if (req->expect_datastore_reply || (conn->type == CONN_SERVER)) {
     conn_enqueue_outq(ctx, conn, req);
-  else
+  } else {
     req_put(req);
+  }
 }
 
 static void req_server_enqueue_imsgq(struct context *ctx, struct conn *conn,
