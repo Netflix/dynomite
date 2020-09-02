@@ -35,6 +35,8 @@ static uint64_t mbuf_alloc_count = 0;
 
 uint64_t mbuf_alloc_get_count(void) { return mbuf_alloc_count; }
 
+const size_t mbuf_chunk_sz() { return mbuf_chunk_size; }
+
 static struct mbuf *_mbuf_get(void) {
   struct mbuf *mbuf;
   uint8_t *buf;
