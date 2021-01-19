@@ -3053,7 +3053,19 @@ static rstatus_t redis_copy_bulk(struct msg *dst, struct msg *src, bool log) {
       log_notice("dumping mbuf");
       mbuf_dump(mbuf);
     }
-    if (mbuf_length(mbuf) <= len) { /* steal this buf from src to dst */
+
+    size_t remaining_mbuf_len = mbuf_length(mbuf);
+    if (remaining_mbuf_len <= len &&
+        remaining_mbuf_len == mbuf_chunk_sz()) {
+      // Steal the entire buffer from src to dst if we need the whole buffer
+      //
+      // We only copy if it's the entire buffer because of the way our
+      // encryption/decryption works. Sending out multiple partially filled
+      // mbufs will fail to decrypt on the receiving side. This is because
+      // in the source side we encrypt each mbuf seperately but if all the
+      // partial mbufs can fit into one full mbuf on the receiving side,
+      // it will do so and hence fail to decrypt.
+      // TODO: Change this when the whole broken crypto scheme is changed.
       nbuf = STAILQ_NEXT(mbuf, next);
       mbuf_remove(&src->mhdr, mbuf);
       if (dst != NULL) {
@@ -3419,6 +3431,40 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
   r->nfrag = 0;
   r->frag_owner = r;
 
+  // Calculate number of tokens per participating peer.
+  // We need to know the total number of tokens before proceeding with
+  // crafting each peer's command since we're trying to fit as much as
+  // possible into one MBUF and not split them for convenience.
+  // TODO: This is the case because of our broken crypto scheme. Change once
+  // that is fixed.
+  for (i = 0; i < array_n(r->keys); i++) {
+    struct keypos *kpos = array_get(r->keys, i);
+    // use hash-tagged start and end for forwarding.
+    uint32_t idx = dnode_peer_idx_for_key_on_rack(
+        pool, rack, kpos->tag_start, kpos->tag_end - kpos->tag_start);
+    if (sub_msgs[idx] == NULL) {
+      sub_msgs[idx] = msg_get(r->owner, r->is_request, __FUNCTION__);
+      if (sub_msgs[idx] == NULL) {
+        dn_free(sub_msgs);
+        return DN_ENOMEM;
+      }
+
+      // Every 'sub_msg' is counted as one fragment.
+      r->nfrag++;
+    }
+
+    // One token for the key
+    sub_msgs[idx]->ntokens++;
+
+    // One token for the value (eg: for MSET)
+    if (key_step != 1) sub_msgs[idx]->ntokens++;
+    r->frag_seq[i] = sub_msgs[idx];
+
+    loga("frag_seq[%d]: %x   ||  idx: %d sub_msgs[idx]: %x", i,
+        r->frag_seq[i], idx, sub_msgs[idx]);
+
+  }
+
   for (i = 0; i < array_n(r->keys); i++) { /* for each key */
     struct msg *sub_msg;
     struct keypos *kpos = array_get(r->keys, i);
@@ -3426,26 +3472,49 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
     uint32_t idx = dnode_peer_idx_for_key_on_rack(
         pool, rack, kpos->tag_start, kpos->tag_end - kpos->tag_start);
 
-    if (sub_msgs[idx] == NULL) {
-      sub_msgs[idx] = msg_get(r->owner, r->is_request, __FUNCTION__);
-      if (sub_msgs[idx] == NULL) {
-        dn_free(sub_msgs);
-        return DN_ENOMEM;
-      }
-    }
-    r->frag_seq[i] = sub_msg = sub_msgs[idx];
+    // We already created the 'sub_msg' in the previous loop.
+    ASSERT(sub_msgs[idx] != NULL);
+    sub_msg = sub_msgs[idx];
 
-    sub_msg->ntokens++;
+    if (STAILQ_EMPTY(&sub_msg->mhdr)) {
+      if (r->type == MSG_REQ_REDIS_MGET) {
+        status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmget\r\n",
+                                    sub_msg->ntokens + 1);
+      } else if (r->type == MSG_REQ_REDIS_DEL) {
+        status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
+                                    sub_msg->ntokens + 1);
+      } else if (r->type == MSG_REQ_REDIS_EXISTS) {
+        status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
+                                    sub_msg->ntokens + 1);
+      } else if (r->type == MSG_REQ_REDIS_MSET) {
+        status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n",
+                                    sub_msg->ntokens + 1);
+      } else {
+        NOT_REACHED();
+      }
+      if (status != DN_OK) {
+        dn_free(sub_msgs);
+        return status;
+      }
+
+      sub_msg->type = r->type;
+      sub_msg->frag_id = r->frag_id;
+      sub_msg->frag_owner = r->frag_owner;
+      sub_msg->is_read = r->is_read;
+
+      log_info("Fragment %d) %s", i, print_obj(sub_msg));
+      TAILQ_INSERT_TAIL(frag_msgq, sub_msg, m_tqe);
+    }
+
     status = redis_append_key(sub_msg, kpos);
     if (status != DN_OK) {
       dn_free(sub_msgs);
       return status;
     }
-
-    if (key_step == 1) { /* mget,del */
+    if (key_step == 1) { // mget,del
       continue;
-    } else {                                    /* mset */
-      status = redis_copy_bulk(NULL, r, false); /* eat key */
+    } else {                                    // mset
+      status = redis_copy_bulk(NULL, r, false); // eat key
       if (status != DN_OK) {
         dn_free(sub_msgs);
         return status;
@@ -3456,47 +3525,8 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
         dn_free(sub_msgs);
         return status;
       }
-
-      sub_msg->ntokens++;
     }
   }
-
-  log_info("Fragmenting %s", print_obj(r));
-  for (i = 0; i < total_peers; i++) { /* prepend mget header, and forward it */
-    struct msg *sub_msg = sub_msgs[i];
-    if (sub_msg == NULL) {
-      continue;
-    }
-
-    if (r->type == MSG_REQ_REDIS_MGET) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmget\r\n",
-                                  sub_msg->ntokens + 1);
-    } else if (r->type == MSG_REQ_REDIS_DEL) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$3\r\ndel\r\n",
-                                  sub_msg->ntokens + 1);
-    } else if (r->type == MSG_REQ_REDIS_EXISTS) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$6\r\nexists\r\n",
-                                  sub_msg->ntokens + 1);
-    } else if (r->type == MSG_REQ_REDIS_MSET) {
-      status = msg_prepend_format(sub_msg, "*%d\r\n$4\r\nmset\r\n",
-                                  sub_msg->ntokens + 1);
-    } else {
-      NOT_REACHED();
-    }
-    if (status != DN_OK) {
-      dn_free(sub_msgs);
-      return status;
-    }
-
-    sub_msg->type = r->type;
-    sub_msg->frag_id = r->frag_id;
-    sub_msg->frag_owner = r->frag_owner;
-
-    log_info("Fragment %d) %s", i, print_obj(sub_msg));
-    TAILQ_INSERT_TAIL(frag_msgq, sub_msg, m_tqe);
-    r->nfrag++;
-  }
-
   dn_free(sub_msgs);
   return DN_OK;
 }
