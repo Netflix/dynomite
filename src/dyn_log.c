@@ -47,7 +47,7 @@ int log_init(int level, char *name) {
   if (name == NULL || !strlen(name)) {
     l->fd = STDERR_FILENO;
   } else {
-    l->fd = open(name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    l->fd = open(name, O_WRONLY | O_APPEND | O_CREAT, 0666);
     if (l->fd < 0) {
       log_stderr("opening log file '%s' failed: %s", name, strerror(errno));
       return -1;
