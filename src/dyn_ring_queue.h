@@ -16,17 +16,20 @@ struct gossip_node;
 typedef rstatus_t (*callback_t)(void *msg);
 typedef void (*data_func_t)(void *);
 
-volatile struct {
+typedef volatile struct {
   long m_getIdx;
   long m_putIdx;
   void *m_entry[C2G_InQ_SIZE];
-} C2G_InQ;
+} _C2G_InQ;
 
-volatile struct {
+typedef volatile struct {
   long m_getIdx;
   long m_putIdx;
   void *m_entry[C2G_OutQ_SIZE];
-} C2G_OutQ;
+} _C2G_OutQ ;
+
+extern _C2G_InQ C2G_InQ;
+extern _C2G_OutQ C2G_OutQ;
 
 struct ring_msg {
   callback_t cb;
