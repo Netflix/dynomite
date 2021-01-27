@@ -170,6 +170,12 @@ struct conn *conn_get(void *owner, func_conn_init_t func_conn_init) {
     return NULL;
   }
 
+  struct server_pool *pool = (struct server_pool *)owner;
+  if (pool->requirepass.len > 0) {
+    // Password configured, authentification required
+    conn->auth_required = 1;
+  }
+
   /* connection handles the data store messages (redis, memcached or other) */
 
   func_conn_init(conn);

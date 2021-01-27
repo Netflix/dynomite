@@ -245,6 +245,7 @@ struct server_pool {
   msec_t g_interval; /* gossip interval */
   struct string dc;  /* server's dc */
   struct string env; /* aws, network, etc */
+  struct string requirepass;
   /* none | datacenter | rack | all in order of increasing number of
    * connections. (default is datacenter) */
   secure_server_option_t secure_server_option;

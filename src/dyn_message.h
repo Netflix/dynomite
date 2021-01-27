@@ -190,7 +190,7 @@
   ACTION(REQ_REDIS_JSONARRLEN)                                                 \
   ACTION(REQ_REDIS_JSONOBJKEYS)                                                \
   ACTION(REQ_REDIS_JSONOBJLEN)                                                 \
-  /* ACTION(REQ_REDIS_AUTH) */                                                 \
+  ACTION(REQ_REDIS_AUTH)                                                       \
   /* ACTION(REQ_REDIS_SELECT)*/ /* only during init */                         \
   ACTION(REQ_REDIS_PFADD)        /* redis requests - hyperloglog */            \
   ACTION(REQ_REDIS_PFCOUNT)                                                    \
@@ -246,6 +246,10 @@ typedef rstatus_t (*func_msg_repair_t)(struct context *ctx, struct response_mgr 
     struct msg **new_msg_ptr);
 typedef rstatus_t (*func_clear_repair_md_t)(struct context *ctx, struct msg *req,
     struct msg **new_msg_ptr);
+typedef void (*func_datatstore_auth_t)(struct context *ctx, struct conn *conn);
+typedef bool (*func_is_authenticated_t)(struct msg *rsp);
+typedef bool (*func_authenticate_conn_t)(struct context *ctx, struct conn *conn, 
+    struct msg *req);
 typedef void (*func_init_datastore_t)();
 
 extern func_msg_coalesce_t g_pre_coalesce;  /* message pre-coalesce */
@@ -260,6 +264,9 @@ extern func_msg_rewrite_t
     g_rewrite_query_with_timestamp_md;
 extern func_msg_repair_t g_make_repair_query; /* Create a repair msg. */
 extern func_clear_repair_md_t g_clear_repair_md_for_key;
+extern func_datatstore_auth_t g_datatstore_auth;
+extern func_is_authenticated_t g_is_authenticated;
+extern func_authenticate_conn_t g_authenticate_conn;
 
 void set_datastore_ops(void);
 

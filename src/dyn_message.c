@@ -162,6 +162,9 @@ func_msg_rewrite_t g_rewrite_query;     /* rewrite query in a msg if necessary *
 func_msg_rewrite_t g_rewrite_query_with_timestamp_md;
 func_msg_repair_t g_make_repair_query;  /* Send a repair msg. */
 func_clear_repair_md_t g_clear_repair_md_for_key; /* Clear repair metadata for a key */
+func_datatstore_auth_t g_datatstore_auth;     /* authenticate in datastore */
+func_is_authenticated_t g_is_authenticated;   /* handle auth response from datastore */
+func_authenticate_conn_t g_authenticate_conn; /* authenticate client connection */
 
 #define DEFINE_ACTION(_name) string(#_name),
 static struct string msg_type_strings[] = {MSG_TYPE_CODEC(DEFINE_ACTION)
@@ -203,6 +206,9 @@ void set_datastore_ops(void) {
       g_rewrite_query_with_timestamp_md = redis_rewrite_query_with_timestamp_md;
       g_make_repair_query = redis_make_repair_query;
       g_clear_repair_md_for_key = redis_clear_repair_md_for_key;
+      g_datatstore_auth = redis_datatstore_auth;
+      g_is_authenticated = redis_is_authenticated;
+      g_authenticate_conn = redis_authenticate_conn;
       break;
     case DATA_MEMCACHE:
       g_pre_coalesce = memcache_pre_coalesce;
@@ -215,6 +221,9 @@ void set_datastore_ops(void) {
       g_rewrite_query_with_timestamp_md = memcache_rewrite_query_with_timestamp_md;
       g_make_repair_query = memcache_make_repair_query;
       g_clear_repair_md_for_key = memcache_clear_repair_md_for_key;
+      g_datatstore_auth = memcache_datatstore_auth;
+      g_is_authenticated = memcache_is_authenticated;
+      g_authenticate_conn = memcache_authenticate_conn;
       break;
     default:
       return;

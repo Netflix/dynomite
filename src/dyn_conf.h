@@ -119,6 +119,7 @@ struct conf_pool {
                              reconciliation */
   struct string dc;       /* this node's dc */
   struct string env;      /* AWS, Google, network, ... */
+  struct string requirepass;
   uint32_t conn_msg_rate; /* conn msg per sec */
   bool enable_gossip;     /* enable/disable gossip */
   size_t mbuf_size;       /* mbuf chunk size */

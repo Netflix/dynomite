@@ -1632,3 +1632,18 @@ rstatus_t memcache_clear_repair_md_for_key(struct context *ctx, struct msg *req,
     struct msg **new_msg_ptr) {
   return DN_OK;
 }
+
+/*
+ * Placeholder functions for authentification against backend.
+ * Not supported today.
+ */
+void memcache_datatstore_auth(struct context *ctx, struct conn *conn) {
+}
+
+bool memcache_is_authenticated(struct msg *rsp) {
+  return false;
+}
+
+bool memcache_authenticate_conn(struct context *ctx, struct conn *conn, struct msg *req) {
+  return false;
+}
