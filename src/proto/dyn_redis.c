@@ -136,6 +136,8 @@ static bool redis_arg1(struct msg *r) {
     case MSG_REQ_REDIS_CONFIG:
     case MSG_REQ_REDIS_SCRIPT_LOAD:
     case MSG_REQ_REDIS_SCRIPT_EXISTS:
+    case MSG_REQ_REDIS_BLPOP:
+    case MSG_REQ_REDIS_BRPOP:
 
       return true;
 
@@ -797,6 +799,7 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
               break;
             }
 
+
             if (str4icmp(m, 'l', 'r', 'e', 'm')) {
               r->type = MSG_REQ_REDIS_LREM;
               r->is_read = 0;
@@ -918,6 +921,19 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
             break;
 
           case 5:
+
+            if (str5icmp(m, 'b', 'l', 'p', 'o', 'p')) {
+              r->type = MSG_REQ_REDIS_BLPOP;
+              r->is_read = 0;
+              break;
+            }
+
+            if (str5icmp(m, 'b', 'r', 'p', 'o', 'p')) {
+              r->type = MSG_REQ_REDIS_BRPOP;
+              r->is_read = 0;
+              break;
+            }
+
             if (str5icmp(m, 'h', 'k', 'e', 'y', 's')) {
               r->type = MSG_REQ_REDIS_HKEYS;
               r->msg_routing = ROUTING_TOKEN_OWNER_LOCAL_RACK_ONLY;

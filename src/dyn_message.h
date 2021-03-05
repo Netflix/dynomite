@@ -119,6 +119,8 @@
   ACTION(REQ_REDIS_KEYS)                                                       \
   ACTION(REQ_REDIS_INFO)                                                       \
   ACTION(REQ_REDIS_LINDEX) /* redis requests - lists */                        \
+  ACTION(REQ_REDIS_BLPOP)                                                      \
+  ACTION(REQ_REDIS_BRPOP)                                                      \
   ACTION(REQ_REDIS_LINSERT)                                                    \
   ACTION(REQ_REDIS_LLEN)                                                       \
   ACTION(REQ_REDIS_LPOP)                                                       \
