@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 from contextlib import ExitStack
-from time import sleep
 from urllib.request import urlopen
 import argparse
 import json
 import random
 import sys
-import yaml
 
 from plumbum import local
 
