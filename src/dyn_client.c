@@ -235,6 +235,8 @@ static void client_close(struct context *ctx, struct conn *conn) {
  */
 static rstatus_t client_handle_response(struct context *ctx, struct conn *conn, msgid_t reqid,
                                         struct msg *rsp) {
+
+
   // now the handler owns the response.
   ASSERT(conn->type == CONN_CLIENT);
   // Fetch the original request
