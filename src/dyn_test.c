@@ -212,6 +212,9 @@ static rstatus_t init_peer(struct node *s) {
   // s->tokens = cseed->tokens;
 
   struct sockinfo *info = malloc(sizeof(struct sockinfo));
+  if (!info) {
+      return DN_ERROR;
+  }
 
   memset(info, 0, sizeof(*info));
   dn_resolve(&name, s->endpoint.port, info);
@@ -659,6 +662,10 @@ int main(int argc, char **argv) {
   init_test(argc, argv);
 
   struct node *peer = malloc(sizeof(struct node));
+  if (!peer) {
+    loga("Out of memory !!!");
+    goto err_out;      
+  }
   memset(peer, 0, sizeof(struct node));
   init_peer(peer);
 
