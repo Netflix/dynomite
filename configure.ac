@@ -15,7 +15,7 @@ AC_CONFIG_HEADERS([config.h:config.h.in])
 AC_CONFIG_MACRO_DIR([m4])
 
 # Initialize automake
-AM_INIT_AUTOMAKE([1.11 foreign])
+AM_INIT_AUTOMAKE([1.11 foreign subdir-objects])
 
 # Checks for language
 AC_LANG([C])

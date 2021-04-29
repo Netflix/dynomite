@@ -1,0 +1,15 @@
+Source: dynomite
+Section: database 
+Priority: optional
+Maintainer: Estelle Poulin <dev@inspiredby.es>
+Build-Depends: debhelper (>= 9.0.0), dh-autoreconf (>= 9), dh-exec (>= 0.12)
+Standards-Version: 3.9.5
+Homepage: https://github.com/netflix/dynomite
+Vcs-Git: git://github.com:netflix/dynomite.git
+Vcs-Browser: https://github.com/netflix/dynomite.git
+
+Package: dynomite
+Architecture: amd64 
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description:Generic dynamo implementation for different
+ k-v storage engines.

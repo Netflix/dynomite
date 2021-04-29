@@ -1,0 +1,7 @@
+--- /dev/null
++++ b/dist/ufw/dynomite
+@@ -0,0 +1,4 @@
++[Dynomite]
++title=Dynomite
++description=Generic dynamo implementation for different k-v storage engines.
++ports=8101,8102/tcp|22222/tcp

@@ -1,0 +1,10 @@
+--- /dev/null
++++ b/dist/firewalld/dynomite.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<service version="0.7">
++  <short>Dynomite</short>
++  <description>Generic dynamo implementation for different k-v storage engines.</description>
++  <port port="8101-8102" protocol="tcp"/>
++  <port port="22222" protocol="tcp"/>
++</service>
