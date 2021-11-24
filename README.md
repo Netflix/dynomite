@@ -92,7 +92,6 @@ For example, the configuration file in [conf/dynomite.yml](conf/dynomite.yml)
 
 Finally, to make writing syntactically correct configuration files easier, dynomite provides a command-line argument -t or --test-conf that can be used to test the YAML configuration file for any syntax error.
 
-
 ## License
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
