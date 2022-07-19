@@ -1,8 +1,12 @@
 language: c
 script: bash ./travis.sh
 
+before_install:
+  - sudo pip3 install --upgrade pip
+  
 addons:
   apt:
+   update: true
    packages:
-   - python3
+   - python3.9
    - python3-pip
