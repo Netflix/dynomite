@@ -1099,6 +1099,12 @@ void req_recv_done(struct context *ctx, struct conn *conn, struct msg *req,
   if (status != DN_OK) goto error;
 
   status = fragment_query_if_necessary(req, conn, &frag_msgq);
+  if (status == DYNOMITE_PAYLOAD_TOO_LARGE) {
+    dictAdd(conn->outstanding_msgs_dict, &req->id, req);
+    req->nfrag = 0; // Since we failed to fragment the payload, we don't have any fragments for this request
+    goto error;
+  }
+
   if (status != DN_OK) goto error;
 
   status = rewrite_query_with_timestamp_md(&req, ctx);
