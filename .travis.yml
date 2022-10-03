@@ -1,8 +1,14 @@
 language: c
 script: bash ./travis.sh
 
+before_install:
+  - sudo apt remove --purge python3-pip
+  - curl -O https://bootstrap.pypa.io/pip/3.5/get-pip.py
+  - sudo -E python3 get-pip.py
+  - sudo -E python3 -m pip install --upgrade "pip < 22.3"
+  
 addons:
   apt:
+   update: true
    packages:
-   - python3
-   - python3-pip
+   - python3.9
