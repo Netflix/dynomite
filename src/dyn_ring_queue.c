@@ -11,6 +11,8 @@
 #include "dyn_gossip.h"
 #include "dyn_token.h"
 
+_C2G_InQ C2G_InQ = {};
+_C2G_OutQ C2G_OutQ = {};
 // should use pooling to store struct ring_message so that we can reuse
 struct ring_msg *create_ring_msg(void) {
   struct ring_msg *msg = dn_alloc(sizeof(*msg));
