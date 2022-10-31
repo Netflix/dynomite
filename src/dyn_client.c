@@ -341,7 +341,7 @@ struct msg *req_recv_next(struct context *ctx, struct conn *conn, bool alloc) {
     conn->rmsg = req;
   }
 
-  // Record timetamps if repairs are enabled.
+  // Record timestamps if repairs are enabled.
   if (is_read_repairs_enabled()) {
     req->timestamp = current_timestamp_in_millis();
   }

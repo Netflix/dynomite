@@ -698,7 +698,7 @@ static rstatus_t finalize_repair_msg(struct context *ctx, struct conn *conn,
 }
 
 /*
- * Finds all the timetamps from responses in rspmgr, updates the respective 'msg'
+ * Finds all the timestamps from responses in rspmgr, updates the respective 'msg'
  * structures with their timestamp, and finds the response that has the latest
  * timestamp.
  *
