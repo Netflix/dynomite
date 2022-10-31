@@ -361,6 +361,16 @@ static bool req_filter(struct context *ctx, struct conn *conn,
   }
 
   /*
+   * Handle "AUTH requirepass\r\n"
+   */
+  if (conn->auth_required) {
+    if (g_authenticate_conn(ctx, conn, req)) {
+      conn->auth_required = 0;
+    };
+    return true;
+  }
+
+  /*
    * Handle "quit\r\n", which is the protocol way of doing a
    * passive close
    */

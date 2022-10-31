@@ -295,6 +295,7 @@ static void server_connected(struct context *ctx, struct conn *conn) {
   conn_pool_connected(conn->conn_pool, conn);
 
   log_notice("%s connected ", print_obj(conn));
+  g_datatstore_auth(ctx, conn);
 }
 
 static void server_ok(struct context *ctx, struct conn *conn) {
@@ -398,6 +399,7 @@ rstatus_t server_pool_init(struct server_pool *sp, struct conf_pool *cp,
   /* sp->continuum = NULL; */
   sp->next_rebuild = 0ULL;
 
+  sp->requirepass = cp->requirepass;
   sp->name = cp->name;
   sp->proxy_endpoint.pname = cp->listen.pname;
   sp->proxy_endpoint.port = (uint16_t)cp->listen.port;
@@ -786,6 +788,22 @@ static void server_rsp_forward(struct context *ctx, struct conn *s_conn,
   c_conn = req->owner;
   log_info("%s %s RECEIVED %s", print_obj(c_conn), print_obj(req),
            print_obj(rsp));
+
+  /* 
+   * If backend requires authentification, it will respond with OK 
+   * after g_authenticate was succesful.
+   * In case auth has failed - error out
+   */ 
+  if (c_conn->type == CONN_SERVER) {
+    bool authenticated = g_is_authenticated(rsp);
+    if (authenticated) {
+      log_debug(LOG_INFO, "AUTH requirepass OK");
+      return;
+    } else {
+      log_debug(LOG_ERR, "%s", rsp->mhdr.stqh_first->start);
+      ASSERT(authenticated == true);
+    }
+  }
 
   ASSERT((c_conn->type == CONN_CLIENT) ||
          (c_conn->type == CONN_DNODE_PEER_CLIENT));

@@ -55,6 +55,9 @@ rstatus_t memcache_make_repair_query(struct context *ctx, struct response_mgr *r
     struct msg **new_msg_ptr);
 rstatus_t memcache_clear_repair_md_for_key(struct context *ctx, struct msg *req,
     struct msg **new_msg_ptr);
+void memcache_datatstore_auth(struct context *ctx, struct conn *conn);
+bool memcache_is_authenticated(struct msg *rsp);
+bool memcache_authenticate_conn(struct context *ctx, struct conn *conn, struct msg *req);
 
 void redis_parse_req(struct msg *r, struct context *ctx);
 void redis_parse_rsp(struct msg *r, struct context *ctx);
@@ -74,5 +77,7 @@ rstatus_t redis_make_repair_query(struct context *ctx, struct response_mgr *rspm
     struct msg **new_msg_ptr);
 rstatus_t redis_clear_repair_md_for_key(struct context *ctx, struct msg *req,
     struct msg **new_msg_ptr);
-
+void redis_datatstore_auth(struct context *ctx, struct conn *conn);
+bool redis_is_authenticated(struct msg *rsp);
+bool redis_authenticate_conn(struct context *ctx, struct conn *conn, struct msg *req);
 #endif
