@@ -357,6 +357,7 @@ rstatus_t entropy_key_iv_load(struct context *ctx) {
   FILE *iv_file = fopen(iv_file_name, "r");
   if (iv_file == NULL) {
     log_error("opening iv.pem file failed %s", pool->recon_iv_file);
+    close(key_file);
     return DN_ERROR;
   }
 
@@ -365,12 +366,14 @@ rstatus_t entropy_key_iv_load(struct context *ctx) {
   if (fstat(fd, &file_stat) < 0) /* Get the file size */
   {
     log_error("Error fstat --> %s", strerror(errno));
+    close(iv_file);
     return DN_ERROR;
   }
 
   if (file_stat.st_size >
       BUFFER_SIZE) { /* Compare file size with BUFFER_SIZE */
     log_error("key file size is bigger then the buffer size");
+    close(iv_file);
     return DN_ERROR;
   }
 
