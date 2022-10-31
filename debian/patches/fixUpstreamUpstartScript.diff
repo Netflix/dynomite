@@ -1,0 +1,17 @@
+--- a/init/upstart_ubuntu__dynomite
++++ b/init/upstart_ubuntu__dynomite
+@@ -17,11 +17,12 @@
+ PATH=/sbin:/usr/sbin:/usr/local/sbin:/bin:/usr/bin
+ PIDFILE=/var/run/${NAME}.pid
+ CONFIG=/etc/dynomite/${NAME}.yml
++LOG=/var/log/${NAME}.log
+ INIT_OPTIONS=/etc/default/${NAME}
+ # RHEL specific file
+ #SYSTEM_CONFIG=/etc/sysconfig/${NAME}
+-DAEMON=/usr/local/sbin/${NAME}
+-DAEMON_OPTS="-d -c ${CONFIG} -p ${PIDFILE}"
++DAEMON=/usr/sbin/${NAME}
++DAEMON_OPTS="-d -c ${CONFIG} -p ${PIDFILE} -o ${LOG}"
+ # TODO: Runas USER
+ #USER="dynomite"
+ #GROUP="dynomite"

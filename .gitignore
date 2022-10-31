@@ -23,6 +23,7 @@ CMakeLists.txt
 # Packages
 *.tar.gz
 *.tar.bz2
+*.pc
 
 # Logs
 *.log

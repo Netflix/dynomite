@@ -1,0 +1,97 @@
+Adds a default configuration file basded on README.md.
+--- /dev/null
++++ b/dist/conf/dynomite.yml
+@@ -0,0 +1,93 @@
++# References:
++# https://github.com/Netflix/dynomite/wiki/Architecture
++# /usr/share/docs/dynomite/notes/recommendation.md#liveness
++
++dyn_o_mite:
++  # Specify environment of a node. Currently supports aws and network (for
++  # physical datacenter).
++  #env:
++
++  # The name of the datacenter. Please refer to architecture document.
++  #datacenter:
++
++  # The name of the rack. Please refer to architecture document.
++  #rack:
++
++  # The port that dynomite nodes use to inter-communicate and gossip.
++  #dyn_listen:
++
++  # Enable gossip instead of static tokens (default: false). Gossip is
++  # experimental.
++  #enable_gossip: false
++
++  # The sleeping time in milliseconds at the end of a gossip round.
++  #gos_interval:
++
++  # The token(s) owned by a node. Currently, we don't support vnode yet so this
++  # only works with one token for the time being.
++  #tokens:
++
++  # A seed provider implementation to provide a list of seed nodes.
++  #dyn_seed_provider:
++
++  # A list of seed nodes in the format: address:port:rack:dc:tokens (note that
++  # vnode is not supported yet).
++  #dyn_seeds:
++  # - address:port:rack:dc:tokens
++
++  # The listening address and port (name:port or ip:port) for this server pool.
++  #listen: name/ip:port
++
++  # The timeout value in msec that we wait for to establish a connection to the
++  # server or receive a response from a server. By default, we wait
++  # indefinitely.
++  #timeout: 0
++
++  # A boolean value that controls if dynomite should preconnect to all the
++  # servers in this pool on process start. Defaults to false.
++  #preconnect: false
++
++  # An integer value that controls if a server pool speaks redis (0) or
++  # memcached (1) or other protocol. Defaults to redis (0).
++  #data_store: 0
++
++  # A boolean value that controls if server should be ejected temporarily when
++  # it fails consecutively server_failure_limit times. See liveness
++  # recommendations for information. Defaults to false.
++  #auto_eject_hosts: false
++
++  # The timeout value in msec to wait for before retrying on a temporarily
++  # ejected server, when auto_eject_host is set to true. Defaults to 30000 msec.
++  #server_retry_timeout: 30000
++
++  # The number of consecutive failures on a server that would lead to it being
++  # temporarily ejected when auto_eject_host is set to true. Defaults to 2.
++  #server_failure_limit: 2
++
++  # A list of local server address, port and weight (name:port:weight or
++  # ip:port:weight) for this server pool. Currently, there is just one.
++  #servers:
++  # - name/ip:port
++  # - name/ip:port:weight
++
++  # Encrypted communication. Must be one of 'none', 'rack', 'datacenter', or
++  # 'all'. Datacenter means all communication between datacenters is encrypted
++  # but within a datacenter it is not. Rack means all communication between
++  # racks and regions is encrypted however communication between nodes within
++  # the same rack is not encrypted. All means all communication between all
++  # nodes is encrypted.  And none means none of the communication is encrypted.
++  #secure_server_option:
++
++  # The address and port number for the REST endpoint and for accessing
++  # statistics.
++  #stats_listen: name/ip:port
++
++  # Set stats aggregation interval in msec (default: 30000 msec).
++  #stats_interval: 30000
++
++  # Size of mbuf chunk in bytes (default: 16384 bytes).
++  #mbuf_size: 16384
++
++  # Max number of messages to allocate (default: 200000).
++  #max_msgs: 200000
++

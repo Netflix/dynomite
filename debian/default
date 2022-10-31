@@ -1,0 +1,2 @@
+# Run /usr/sbin/dynomite --help for options. 
+# DAEMON_OPTS="$DAEMON_OPTS -v 5"
