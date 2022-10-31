@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <unistd.h>
@@ -399,7 +400,9 @@ static rstatus_t aes_test(void) {
     }
     size_t enc_msg_len = (size_t)ret; /* if success, aes_encrypt returns len */
 
-    size_t expected_output_len = 16 * (msg_len / 16 + 1);
+    // Expected output is 2 blocks larger than the original msg_len, due to the
+    // explicit initialization vector and padding.
+    size_t expected_output_len = 16 * (msg_len / 16 + 2);
     if (enc_msg_len != expected_output_len) {
       log_panic("msg:'%s'\nexpected encrypted len: %lu encrypted len %lu\n\n",
                 msg, expected_output_len, enc_msg_len);
@@ -417,15 +420,43 @@ static rstatus_t aes_test(void) {
     if (strcmp(msg, dec_msg) != 0) {
       loga_hexdump(msg, strlen(msg), "Original Message:");
       loga_hexdump(dec_msg, strlen(dec_msg), "Decrypted Message:");
-      log_panic("encryption/Decryption mismatch");
+      log_panic("encryption/decryption mismatch");
     }
 
     free(enc_msg);
     free(dec_msg);
-    if ((i + 1) % 1000000 == 0) {
+    if ((i + 1) % (count / 10) == 0) {
       loga("Completed Running %lu messages", i + 1);
     }
   }
+
+  loga("Making sure encryption is non-deterministic");
+  gen_random(msg, rand() % MAX_MSG_LEN);
+  unsigned int msg_len = strlen(msg) + 1;
+  unsigned char *enc_msg_1 = NULL;
+  unsigned char *enc_msg_2 = NULL;
+
+  rstatus_t ret_1 =
+    aes_encrypt((const unsigned char *)msg, msg_len, &enc_msg_1, aes_key);
+  rstatus_t ret_2 =
+    aes_encrypt((const unsigned char *)msg, msg_len, &enc_msg_2, aes_key);
+  if (ret_1 == DN_ERROR || ret_2 == DN_ERROR) {
+    log_panic("msg:'%s'\nencryption failed aes_key '%s'\n", msg,
+              aes_key_print);
+    return DN_ERROR;
+  }
+
+  if ((size_t)ret_1 == (size_t)ret_2 &&
+      !strncmp(enc_msg_1, enc_msg_2, (size_t)ret_1)) {
+    loga_hexdump(msg, strlen(msg), "Original Message:");
+    loga_hexdump(enc_msg_1, (size_t)ret_1, "Encrypted Message #1:");
+    loga_hexdump(enc_msg_2, (size_t)ret_2, "Encrypted Message #2:");
+    log_panic("Encryption failed to be non-deterministic");
+  }
+
+  free(enc_msg_1);
+  free(enc_msg_2);
+
   return DN_OK;
 }
 /**
