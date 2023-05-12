@@ -149,7 +149,7 @@ uint8_t florida_get_seeds(struct context *ctx, struct mbuf *seeds_buf) {
     }
 
     // Look for a OK response in the first buffer output.
-    if (!ok) ok = (uint8_t *)strstr((char *)buf, "200 OK\r\n");
+    if (!ok) ok = (uint8_t *)strstr((char *)buf, "HTTP/1.1 200");
     if (ok == NULL) {
       log_error("Received Error from Florida while getting seeds");
       loga_hexdump(buf, rx_total, "Florida Response with %ld bytes of data",
